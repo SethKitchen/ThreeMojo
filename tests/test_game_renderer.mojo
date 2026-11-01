@@ -626,6 +626,78 @@ def test_an_interleaved_and_a_replaced_geometry_are_read() raises:
     assert_true(replaced.depth[28 * WIDTH + 50] < 1)
 
 
+def _raised(relative: Bool, normals: Bool) raises -> BufferGeometry:
+    """Return the two triangles with a target that raises them 1.5 meters,
+    and a target that moves nothing; with normals, or without."""
+    var geometry = _triangle_geometry()
+    var up = List[Float32]()
+    var base = geometry.attribute_view(String(POSITION)).packed()
+    for i in range(6):
+        up.append(0 if relative else base[3 * i])
+        up.append(1.5 + (0 if relative else base[3 * i + 1]))
+        up.append(0 if relative else base[3 * i + 2])
+    geometry.morph_relative = relative
+    if normals:
+        var facing = List[Float32](length=18, fill=0)
+        for i in range(6):
+            facing[3 * i + 2] = 1
+        geometry.set_attribute(String(NORMAL), BufferAttribute(facing^, 3))
+        var turned = List[Float32](length=18, fill=0)
+        for i in range(6):
+            turned[3 * i] = 0.5
+            turned[3 * i + 2] = 0 if relative else 1
+        geometry.add_morph_target(
+            BufferAttribute(up^, 3), BufferAttribute(turned^, 3)
+        )
+    else:
+        geometry.add_morph_target(BufferAttribute(up^, 3))
+    if normals and relative:
+        geometry.add_morph_target(
+            BufferAttribute(List[Float32](length=18, fill=0), 3),
+            BufferAttribute(List[Float32](length=18, fill=0), 3),
+        )
+    elif normals:
+        var facing = List[Float32](length=18, fill=0)
+        for i in range(6):
+            facing[3 * i + 2] = 1
+        geometry.add_morph_target(
+            BufferAttribute(base^, 3), BufferAttribute(facing^, 3)
+        )
+    else:
+        geometry.add_morph_target(BufferAttribute(base^, 3))
+    return geometry^
+
+
+def test_a_mesh_wears_its_morph_targets() raises:
+    # Relative with normals, absolute without, and absolute with.
+    for kind in range(3):
+        var assets = Assets()
+        var fast = GameRenderer(WIDTH, HEIGHT)
+        var scene = _facing_scene(
+            assets,
+            _raised(kind == 0, kind != 1),
+            [Material(Color(255, 255, 255))],
+        )
+        var low = 33 * WIDTH + 30
+        var high = 14 * WIDTH + 30
+        var rest = fast.render(scene, assets, _facing(), NOW)
+        assert_true(rest.depth[low] < 1)
+        assert_equal(rest.depth[high], inf[DType.float32]())
+        # The first target raises the triangles; the second moves nothing.
+        scene.meshes[0].morph_influences.set(0, 1)
+        var raised = fast.render(scene, assets, _facing(), NOW)
+        assert_equal(raised.depth[low], inf[DType.float32]())
+        assert_true(raised.depth[high] < 1)
+        # The same weights again draw the same.
+        var again = fast.render(scene, assets, _facing(), NOW)
+        assert_equal(again.depth[high], raised.depth[high])
+        # Worn back to rest, the triangles are where they were.
+        scene.meshes[0].morph_influences.set(0, 0)
+        var back = fast.render(scene, assets, _facing(), NOW)
+        assert_equal(back.depth[low], rest.depth[low])
+        assert_equal(back.depth[high], inf[DType.float32]())
+
+
 def _baked_geometry() raises -> BufferGeometry:
     """Return the two triangles with a baked sun and sky: none and full."""
     var geometry = _triangle_geometry()
@@ -748,6 +820,13 @@ def test_a_skinned_mesh_follows_its_bones() raises:
         if image.depth[i] < 1 and not (still.depth[i] < 1):
             right += 1
     assert_true(right > 20)
+    assert_true(fast.draw_count > 0)
+    # Seen from the other way, the skinned mesh is behind the camera: it is
+    # not drawn at all, so none of it is skinned.
+    _ = fast.render(
+        scene, assets, _camera(Vector3(0, 0, 5), Vector3(0, 0, 10)), NOW
+    )
+    assert_equal(fast.draw_count, 0)
     # A bone the skeleton lacks, a negative weight and a missing skin are
     # refused.
     var far = _skinned_scene(assets, List[Float32](length=24, fill=3), weights)

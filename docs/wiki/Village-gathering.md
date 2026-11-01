@@ -80,11 +80,19 @@ The player's skills change three settings of `Gathering`: `ore_strikes`, `forage
 | The satchel | The bottom left | A swatch and a count for each kind the player holds |
 | The prompt | The bottom middle | What the use button does at the focus, such as `E  MINE ORE 1/3` |
 | The note | Over the prompt | What the player gathered, such as `+3 BERRIES`, for 2 seconds. It fades over its last half second. |
-| The speech | Over the note | What a villager said, for 5 seconds. See [Village errands](Village-errands). |
+| The speech | Over the note | What a villager said, for 5 seconds. The words show as far as the villager's mouth has said them, and keep their width as they show. See [Village errands](Village-errands). |
 | The errands | The top right | Each errand taken and not done |
 | The skills | The top left | Each skill's level and experience. See [Village skills](Village-skills). |
 
 The font has 5 by 7 dots and needs no font file. It draws capitals, digits, and `+ / : . , ! ? ' -`. A dot is `hud_scale` pixels on a side: one pixel for each 270 pixels of the frame's height. So the text keeps its size on the screen. Each line has a dark shadow, so it reads over the sky and the grass.
+
+`draw_compass`, in `extensions/village/compass.mojo`, writes a compass at the top middle:
+
+- A strip of 120° of the turn round the player, 36 % of the frame's width, centered on the way the camera looks. A tick shows each 15°, and `N`, `E`, `S` and `W` show at the four points. North is minus z.
+- A gold mark at each villager with an errand to offer, and a silver mark at each villager whose errand is taken.
+- A red mark at the nearest foe that stands, within `FOE_SIGHT`, 60 meters.
+- A mark past the strip's end stands at that end, half as bright, so the player knows which way to turn.
+- Under the strip, the hour as a twelve-hour clock and the weather, such as `2:00 PM  CLEAR`.
 
 Set `PlayParameters.hud` to False for a frame with no display.
 

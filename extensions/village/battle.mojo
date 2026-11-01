@@ -1130,7 +1130,14 @@ struct Battle(Movable):
             if ground.wet(bandit.x, bandit.z):
                 continue
             var person = Body(
-                scene, assets, bandit.spec, bandit.outfit, triangles, detail
+                scene,
+                assets,
+                bandit.spec,
+                bandit.outfit,
+                triangles,
+                detail,
+                hair=bandit.groom.hair,
+                beard=bandit.groom.beard,
             )
             var arms = Arms(scene, assets, person, swords, DULL_IRON)
             var size = person.person.rig.stature / Float32(1.8288)
@@ -1163,7 +1170,14 @@ struct Battle(Movable):
         self.allies = List[Ally]()
         for ally in parameters.allies:
             var person = Body(
-                scene, assets, ally.spec, ally.outfit, triangles, detail
+                scene,
+                assets,
+                ally.spec,
+                ally.outfit,
+                triangles,
+                detail,
+                hair=ally.groom.hair,
+                beard=ally.groom.beard,
             )
             var arms = Arms(scene, assets, person, swords, BRIGHT_STEEL)
             var size = person.person.rig.stature / Float32(1.8288)
@@ -1370,7 +1384,14 @@ struct Battle(Movable):
         _ = add_stones(scene, assets, looks, home, heights)
         for raider in raid.raiders:
             var body = Body(
-                scene, assets, raider.spec, raider.outfit, triangles, detail
+                scene,
+                assets,
+                raider.spec,
+                raider.outfit,
+                triangles,
+                detail,
+                hair=raider.groom.hair,
+                beard=raider.groom.beard,
             )
             var style = role_style(raider.role)
             var kit = Arms(scene, assets, body, swords, BRIGHT_STEEL, [style])

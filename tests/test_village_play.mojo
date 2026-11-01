@@ -27,8 +27,25 @@ from extensions.village.day import DayCycle
 from extensions.village.foes import Bandit, Den, Post
 from extensions.village.gathering import CHEST, HERBS, Spot
 from extensions.village.house import HouseParameters, house_lot
+from extensions.humanoid.skeleton.head.expression import (
+    ANGER,
+    FEAR,
+    SADNESS,
+    SMILE,
+    FacialExpression,
+)
+from extensions.village.faces import FaceLife
+from extensions.village.battle_hud import DANGER
+from extensions.village.foes import bandit_fighter
+from extensions.village.hud import GOLD_TEXT
+from extensions.village.talk import DONE, TAKEN
 from extensions.village.play import (
     FOCUS_HEIGHT,
+    FOE_SIGHT,
+    SILVER_MARK,
+    GRIMACE,
+    WINDED,
+    player_mood,
     SPECIALTY_MIGHT,
     PlayParameters,
     TRUNK,
@@ -36,7 +53,18 @@ from extensions.village.play import (
     default_residents,
     tree_obstacles,
 )
-from extensions.village.combat import LIGHT_ONE
+from extensions.village.combat import (
+    DODGE,
+    FALL,
+    FLINCH,
+    HEAVY,
+    LIGHT_ONE,
+    STAGGER,
+    WHIRLWIND,
+    CombatMove,
+    Fighter,
+    FighterParameters,
+)
 from extensions.village.progress import (
     Progress,
     pack_progress,
@@ -467,11 +495,118 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
     game.player.position = game.residents.people[0].position + Vector3(
         0.8, 0, 0
     )
+    # Before anyone speaks, the speech is as `Talk` holds it; the compass
+    # points to her errand, in gold.
+    assert_equal(game.speech(), "")
+    var marks = game.compass_marks()
+    assert_equal(len(marks), 1)
+    assert_equal(marks[0].color.r, GOLD_TEXT.r)
     var use = no_input()
     use.use = True
     _ = game.tick(scene, assets, use, Duration(0.1, SECOND))
     assert_true(game.talk.speech != "")
     assert_true(game.residents.holds[0] > 0)
+    # Her words show as far as her mouth has said them, in their full
+    # width; the errand she gave is taken, in silver.
+    assert_equal(game.talker, 0)
+    var said = game.speech()
+    assert_equal(said.byte_length(), game.talk.speech.byte_length())
+    assert_true(said != game.talk.speech)
+    assert_equal(game.compass_marks()[0].color.r, SILVER_MARK.r)
+    for _ in range(40):
+        _ = game.tick(scene, assets, no_input(), Duration(0.1, SECOND))
+    assert_equal(game.speech(), game.talk.speech)
+    # An errand done is not pointed to.
+    game.talk.states[0] = DONE
+    assert_equal(len(game.compass_marks()), 0)
+    game.talk.states[0] = TAKEN
+    # The compass's caption and strip draw over the frame.
+    game.render(scene, assets)
+
+
+def test_the_players_face_shows_the_fight() raises:
+    var life = FaceLife(1)
+    var fighter = Fighter(FighterParameters())
+    player_mood(life, fighter)
+    assert_equal(life.goal_strength, 0)
+    assert_equal(life.breath, 0)
+    var moods: List[CombatMove] = [
+        LIGHT_ONE,
+        HEAVY,
+        WHIRLWIND,
+        FLINCH,
+        STAGGER,
+        FALL,
+    ]
+    var felt: List[FacialExpression] = [
+        ANGER,
+        ANGER,
+        ANGER,
+        FEAR,
+        FEAR,
+        SADNESS,
+    ]
+    var strong: List[Float32] = [0.55, 0.9, 0.9, 0.7, 0.7, 1]
+    for k in range(len(moods)):
+        fighter.move = moods[k]
+        player_mood(life, fighter)
+        assert_true(life.goal == felt[k])
+        assert_almost_equal(life.goal_strength, strong[k], atol=1e-6)
+        assert_almost_equal(life.holding, GRIMACE, atol=1e-6)
+    # A dodge shows nothing new.
+    fighter.move = DODGE
+    life.feel(SMILE, 0.2)
+    player_mood(life, fighter)
+    assert_true(life.goal == SMILE)
+    # Out of stamina, the player pants; with none to lose, never.
+    fighter.stamina = 0
+    player_mood(life, fighter)
+    assert_equal(life.breath, 1)
+    fighter.stamina = fighter.parameters.stamina * WINDED
+    player_mood(life, fighter)
+    assert_equal(life.breath, 0)
+    fighter.parameters.stamina = 0
+    player_mood(life, fighter)
+    assert_equal(life.breath, 0)
+
+
+def test_the_compass_points_to_the_nearest_foe_that_stands() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.gathering.spots = []
+    parameters.battle.bandits = [
+        Bandit(
+            HumanoidSpec(Length(60.0, INCH), FEMALE),
+            Outfit(),
+            -4,
+            -9,
+            Angle(0.0, DEGREE),
+            5,
+            bandit_fighter(),
+            False,
+        )
+    ]
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        64,
+        36,
+    )
+    assert_equal(len(game.battle.foes), 1)
+    var marks = game.compass_marks()
+    assert_equal(len(marks), 1)
+    assert_equal(marks[0].color.r, DANGER.r)
+    # A fallen foe, or one past the compass's sight, is not pointed to.
+    game.battle.foes[0].down = 1
+    assert_equal(len(game.compass_marks()), 0)
+    game.battle.foes[0].down = -1
+    game.battle.foes[0].character.position.z -= FOE_SIGHT * 2
+    assert_equal(len(game.compass_marks()), 0)
 
 
 def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:

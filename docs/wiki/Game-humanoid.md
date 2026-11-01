@@ -60,7 +60,7 @@ motion.update(scene, assets, person, lights, eye, ambient, wind)
 
 With `beard`, the face grows facial hair: a mustache, a goatee, a short or full beard, a chin strap or mutton chops. See [Facial hair](Head#facial-hair). The beard hangs from the head's bone with the hair, in the hair's material, and `person.beard` names its node. It takes 3 % of the triangle budget, and 32 triangles at least, from the body's share.
 
-The game recipe's revision is `v2`, since the skin, the hair and the neck seam changed. A bearded build also records the beard. A hood or a helmet hides the beard with the hair. A face with facial animation does not carry a beard yet.
+The game recipe's revision is `v2`, since the skin, the hair and the neck seam changed. A bearded build also records the beard. A hood or a helmet hides the beard with the hair. On a face with facial animation, the beard rides the face's blend shapes, so it follows the jaw: see [Audio-aligned facial animation](#audio-aligned-facial-animation).
 
 `skin_weights` binds a skin to the bones. It measures distance over the skin, not through the air. So a part is turned only by the bones it joins through the skin.
 
@@ -80,6 +80,14 @@ positions keep the same welds and triangle neighbors.
 A limb's bones never turn the far side of the midline. Each hand is turned only by its own forearm and hand. The body's skin is not turned by the hands, whose own meshes draw them.
 
 The thighs touch, so the skin over them is one surface. For a game the body's skin is meshed with a slot between the legs, about 3 cm wide and rounded. `body_skin_mesh(..., parted=)` cuts it. `part_legs` then gives each leg its own triangles below the crotch.
+
+A hanging arm lies against the side and the hip, and the skin can join them there. Weighed over that joined skin, the inside of the arm followed the trunk, and the hip followed the arm. An arm that swung out then tore open and stretched a web of skin and cloth to the hip. So `part_arms` parts each arm before the skin is weighed:
+
+1. Each vertex goes to the bone it lies nearest through the air, in that bone's own thicknesses.
+2. A triangle that joins an arm's vertex to a vertex of the trunk or a leg is dropped. This applies to a forearm or a hand at any height. It applies to an upper arm when the other vertex lies below the armpit, 4 cm under the shoulder joint on the template. The skin over the shoulder stays joined.
+3. `close_holes` closes each hole this opens, in the arm and in the trunk. It adds a fan of triangles round a new vertex at the middle of the hole, which takes the mean of the hole's attributes.
+
+The skin is then weighed, so no weight passes over the slit.
 
 ## The clips
 
@@ -141,3 +149,26 @@ and glTF bake/load. Low budgets are refused before the scene changes.
 See [Audio-aligned game faces](Audio-aligned-game-faces) for the input,
 transport, correspondence, license and unsupported-combination contracts.
 The timing and speed measurements above describe the default static-face path.
+
+The preserved face is about 42,000 triangles, too many for a crowd. Set
+`face_stand_in` to the triangles of a still copy of the face. The still face
+is the preserved face decimated, without its blend shapes. The budget then
+counts the still face in place of the preserved face, teeth and gums. It
+leaves the eyes out, as a budget without facial animation does.
+
+`GameHumanoid.show_face(scene, near)` shows the preserved parts near the
+camera, and the still face in their place at a distance. The preserved parts
+show first. `dress` also cuts its garments from the still face, so a hood or
+a helmet closes over a speaking head.
+
+`GameFace.apply` checks every vertex of every target before it changes a
+mesh. That costs too much for each frame of a game. Check the face once with
+`validate`, and then call `GameFace.animate` each frame. It checks only the
+weights.
+
+A beard on a face with facial animation takes one relative target for each of the face's. `ride_face` gives each beard vertex the offsets of the nearest face vertex. It also moves the vertex out along that face vertex's normal, to stand 3 mm off the skin on the template, so the preserved face does not show through. `GameHumanoid.move_face` sets the face's weights and the beard's together.
+
+A decimated hair shell lies flat between its vertices, but the preserved
+scalp under it is not decimated. With facial animation, the shell therefore
+stands 6 mm off the scalp on the template, so the scalp does not show
+through the crown.

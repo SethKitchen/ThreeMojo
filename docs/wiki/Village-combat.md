@@ -147,9 +147,9 @@ A strong blow stops the whole fight for 0.06 seconds, as action games freeze a f
 
 ## The bandits
 
-The module is `extensions/village/foes.mojo`. Three hooded bandits keep a camp about 25 meters north-west of the start. A bandit is a person with a sword, as the player is. It has 300 health and 70 stamina, and its blows do 55 percent of a move's damage. Their captain, taller and in red, stands behind them. The captain has 650 health and 120 stamina, and its blows do 80 percent of a move's damage.
+The module is `extensions/village/foes.mojo`. Three barbarians in fur keep a camp about 25 meters north-west of the start, each with the hair and the beard of a barbarian. A bandit is a person with a sword, as the player is. It has 300 health and 70 stamina, and its blows do 55 percent of a move's damage. Their captain, a taller warlock, stands behind them. The captain has 650 health and 120 stamina, and its blows do 80 percent of a move's damage.
 
-A fourth bandit, in gray and weld yellow, throws knives. A thrower keeps 8 meters from the player, and never takes the attack token. About every 3.5 seconds, it draws its free arm back and throws a knife at the player's chest. The knife flies straight at 18 meters a second. A dodge evades it, and a guard blocks it or parries it, as it does a cut.
+A fourth bandit, in a ranger's green, throws knives. A thrower keeps 8 meters from the player, and never takes the attack token. About every 3.5 seconds, it draws its free arm back and throws a knife at the player's chest. The knife flies straight at 18 meters a second. A dodge evades it, and a guard blocks it or parries it, as it does a cut.
 
 Below half its health, the captain rages. `RAGE` shows over it as it begins, and under its bars while it lasts. A raging fighter's attacks take 80 percent of their time. A raging bandit's dice roll high. It makes no plan of two light attacks, and twice as many piercing attacks.
 
@@ -186,7 +186,7 @@ A fallen wolf lies on its side. It gives no coins, but it trains swordplay as a 
 
 ## The companion
 
-The module is `extensions/village/companion.mojo`. A swordswoman in woad blue starts beside the player, and fights with them. The foes do not attack her: she keeps out of their way.
+The module is `extensions/village/companion.mojo`. A swordswoman dressed as a ranger starts beside the player, and fights with them. The foes do not attack her: she keeps out of their way.
 
 Out of a fight, she follows the player. She walks to them from more than 3 meters, and runs from more than 7. In a fight, she faces the player's foe, and stands 6 meters from it, 70 degrees off the line from the foe to the player. So she keeps out of the way of the camera.
 
@@ -268,6 +268,8 @@ The module is `extensions/humanoid/rig/sword_clips.mojo`. Each clip is worked ou
 | `flinch_clip` | 0.4 | The head and the chest thrown back |
 | `stagger_clip` | 1.6 | Bent over, the sword low, swaying for breath |
 | `fall_clip` | 2.0 | The knees give, and the body falls on its back |
+
+The scabbard and the sheathed sword hang back and down from the hip, on the side of the right thigh. A leg that kicks or lunges back would pass through them. So, each frame, `Arms` turns them away from that thigh, in the plane of the two, until they are `SHEATH_CLEARANCE`, 40°, apart. `sheath_turn` gives the turn.
 
 The rig faces plus z, and calls the side on plus x its right. A camera behind the rig sees plus x on its own left. So the poses are written for a sword arm on plus x, and `mirrored` turns them over. The sword is in `LEFT_HAND`, the hand a player sees as the right.
 

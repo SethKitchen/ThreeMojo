@@ -21,6 +21,7 @@ from extensions.village.weather import (
     WeatherKind,
     cloud_cover,
     next_weather,
+    weather_label,
     weather_look,
 )
 from lights.light import ambient_light, directional_light
@@ -36,6 +37,14 @@ from std.testing import (
     assert_true,
 )
 from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
+
+
+def test_each_weather_has_its_name() raises:
+    assert_equal(weather_label(CLEAR), "CLEAR")
+    assert_equal(weather_label(OVERCAST), "OVERCAST")
+    assert_equal(weather_label(RAIN), "RAIN")
+    assert_equal(weather_label(FOG), "FOG")
+    assert_equal(weather_label(WeatherKind(9)), "")
 
 
 def test_each_weather_has_its_look() raises:

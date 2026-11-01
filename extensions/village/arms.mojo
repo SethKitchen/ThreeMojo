@@ -41,7 +41,14 @@ from animation.animation_mixer import ONCE, AnimationAction
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from extensions.humanoid.rig.joints import CHEST, HIPS, LEFT_HAND, RIGHT_HAND
+from extensions.humanoid.rig.joints import (
+    CHEST,
+    HIPS,
+    LEFT_HAND,
+    LEFT_THIGH,
+    RIGHT_HAND,
+    RIGHT_THIGH,
+)
 from extensions.humanoid.rig.giant_clips import (
     giant_call_clip,
     giant_charge_clip,
@@ -92,7 +99,13 @@ from extensions.humanoid.rig.sword_clips import (
     whirlwind_clip,
     throw_clip,
 )
-from extensions.village.blade import SwordLooks, add_scabbard, add_sword
+from extensions.village.blade import (
+    SHEATH_AT,
+    SHEATH_TILT,
+    SwordLooks,
+    add_scabbard,
+    add_sword,
+)
 from extensions.village.character import STANDING, Character
 from extensions.village.combat import (
     AIMED_SHOT,
@@ -136,11 +149,56 @@ from extensions.village.styles import (
     FightingStyle,
 )
 from extensions.village.weapons import add_weapon
+from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from units.si import SECOND, Duration
+from std.math import acos, pi
+from units.si import DEGREE, RADIAN, SECOND, Angle, Duration
 
 comptime QUICK_FADE = Duration(0.08, SECOND)
 """How long a weapon's clip takes to fade in."""
+comptime SHEATH_CLEARANCE = Float32(40)
+"""How far apart, in degrees, the scabbard keeps from the thigh beside
+it."""
+
+
+def sheath_rest() -> Vector3:
+    """Return which way a scabbard points at rest, in the hips' frame.
+
+    Returns:
+        Plus z turned `SHEATH_TILT` degrees about plus x: back and down.
+    """
+    var way = Vector3(0, 0, 1)
+    way.apply_axis_angle(Vector3(1, 0, 0), Angle(SHEATH_TILT, DEGREE))
+    return way
+
+
+def sheath_turn(rest: Vector3, thigh: Vector3) -> Quaternion:
+    """Return the turn that keeps a scabbard `SHEATH_CLEARANCE` from the
+    thigh beside it.
+
+    A scabbard hangs from the belt, and a leg that kicks or lunges back
+    pushes it aside. Nearer the thigh than the clearance, the scabbard is
+    turned away from it, in the plane of the two, to the clearance.
+
+    Args:
+        rest: Which way the scabbard points at rest, of length one.
+        thigh: Which way the thigh points, of length one, in the same
+            frame.
+
+    Returns:
+        No turn while the two are the clearance apart or more; else the
+        turn about their common normal.
+    """
+    var clearance = Float32(SHEATH_CLEARANCE * pi / 180)
+    var apart = acos(max(Float32(-1), min(Float32(1), rest.dot(thigh))))
+    if apart >= clearance:
+        return Quaternion.identity()
+    var axis = thigh
+    axis.cross(rest)
+    if axis.length() < 1.0e-6:
+        axis = Vector3(1, 0, 0)
+    axis = axis * (1 / axis.length())
+    return Quaternion.from_axis_angle(axis, Angle(clearance - apart, RADIAN))
 
 
 def _once(mut body: Body, var clip: AnimationClip) raises -> Int:
@@ -168,6 +226,12 @@ struct Arms(Movable):
     var stowed: List[NodeId]
     # The scabbard, or the hips if the body carries no sword.
     var scabbard: NodeId
+    # What hangs at the hip and swings clear of the thigh beside it: the
+    # scabbard and the sheathed sword. That thigh's bone, and which way it
+    # points at rest, in the hips' frame.
+    var sheathed: List[NodeId]
+    var thigh: NodeId
+    var thigh_rest: Vector3
     # The action of the clip that plays, or -1 while the body plays its
     # own clips.
     var showing: Int
@@ -251,6 +315,13 @@ struct Arms(Movable):
             self.held.append(hips)
             self.stowed.append(hips)
         self.scabbard = hips
+        self.sheathed = List[NodeId]()
+        var side = RIGHT_THIGH if (
+            rig.at(RIGHT_THIGH).x * SHEATH_AT.x > 0
+        ) else LEFT_THIGH
+        self.thigh = bones[side.value]
+        var rest = rig.ends[side.value] - rig.joints[side.value]
+        self.thigh_rest = rest * (1 / max(rest.length(), Float32(1.0e-6)))
         self.showing = -1
         self.seen = FALL
         self.seen_clock = 0
@@ -317,6 +388,8 @@ struct Arms(Movable):
             self.scabbard = add_scabbard(
                 scene, assets, looks, bones[HIPS.value], scale
             )
+            self.sheathed.append(self.stowed[style.value])
+            self.sheathed.append(self.scabbard)
         elif style == HAND_TO_HAND:
             self.held[style.value] = scene.attach(
                 Object3D(), bones[LEFT_HAND.value]
@@ -513,6 +586,7 @@ struct Arms(Movable):
                 body.playing = character.stance
                 self.showing = -1
             body.pose(scene, character, delta)
+            self._swing_clear(scene)
             return
         if want != self.showing or again:
             var last = self.showing
@@ -531,3 +605,17 @@ struct Arms(Movable):
             Vector3(0, 1, 0), facing_turn(character.heading)
         )
         body.mixer.update(scene, delta)
+        self._swing_clear(scene)
+
+    def _swing_clear(self, mut scene: Scene) raises:
+        """Turn the scabbard and the sheathed sword clear of the thigh
+        beside them: see `sheath_turn`."""
+        if len(self.sheathed) == 0:
+            return
+        var thigh = scene.node(self.thigh).quaternion.rotate(self.thigh_rest)
+        var turn = sheath_turn(sheath_rest(), thigh)
+        var held = turn * Quaternion.from_axis_angle(
+            Vector3(1, 0, 0), Angle(SHEATH_TILT, DEGREE)
+        )
+        for node in self.sheathed:  # pragma: no branch
+            scene.node(node).set_quaternion(held)

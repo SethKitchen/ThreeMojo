@@ -12,7 +12,15 @@ from extensions.attire.outfit import Outfit
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.ground import Ground
-from extensions.village.arms import Arms
+from extensions.village.arms import (
+    SHEATH_CLEARANCE,
+    Arms,
+    sheath_rest,
+    sheath_turn,
+)
+from math.quaternion import Quaternion
+from math.vector3 import Vector3
+from std.math import acos, cos, pi, sin
 from extensions.village.blade import BRIGHT_STEEL, SwordLooks
 from extensions.village.character import (
     STANDING,
@@ -54,6 +62,24 @@ from std.testing import (
     assert_true,
 )
 from units.si import METER, RADIAN, SECOND, Angle, Duration, INCH, Length
+
+
+def test_a_scabbard_swings_clear_of_the_thigh() raises:
+    var rest = sheath_rest()
+    # Back and down, as a sheathed sword hangs.
+    assert_true(rest.z < 0 and rest.y < 0)
+    # A thigh that hangs down is clear of it: no turn.
+    var down = Vector3(0, -1, 0)
+    assert_true(sheath_turn(rest, down) == Quaternion.identity())
+    # A thigh swung back along it pushes it to the clearance.
+    var clearance = Float32(SHEATH_CLEARANCE * pi / 180)
+    for way in [rest, Vector3(0, -sin(Float32(1.2)), -cos(Float32(1.2)))]:
+        var turned = sheath_turn(rest, way).rotate(rest)
+        var apart = acos(min(Float32(1), turned.dot(way)))
+        assert_almost_equal(apart, clearance, atol=1e-3)
+    # Pointed the other way, it is clear again.
+    var away = Vector3(-rest.x, -rest.y, -rest.z)
+    assert_true(sheath_turn(rest, away) == Quaternion.identity())
 
 
 def test_a_body_plays_what_its_fighter_does() raises:
@@ -215,6 +241,16 @@ def test_a_body_carries_each_styles_weapon_and_clips() raises:
     )
     for k in range(STYLES):
         assert_false(bare.armed[k])
+    # It has no scabbard to swing.
+    assert_equal(len(bare.sheathed), 0)
+    bare.pose(
+        scene,
+        body,
+        walker,
+        Fighter(FighterParameters()),
+        False,
+        Duration(0.05, SECOND),
+    )
     # A giant plays a giant's clips for the moves of a boss's attacks.
     var maces: List[FightingStyle] = [MACE]
     var giant = Arms(

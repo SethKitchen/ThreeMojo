@@ -86,9 +86,10 @@ The bench walks a scripted player through the village. It prints the median, the
 
 1. **The geometry is read once.** Each geometry is copied into flat arrays the first time it is drawn. `GeometryStore.replace` gives a geometry a new generation, and the renderer reads it again then.
 2. **The light is found at the vertices.** Each vertex keeps its ambient and sky light apart from its sun light. The fog veils both at the vertex.
-3. **The triangles are binned into tiles.** Each triangle is clipped at the near plane and culled by its facing and its bounds. It is listed in each 64-pixel tile it touches.
-4. **Each tile is drawn on its own core, sixteen pixels at a time.** The raster writes only the depth and the triangle's number. A pixel that is drawn over ten times costs ten depth tests and one shading.
-5. **Each tile is resolved.** A pixel's triangle gives its light, and its shadow is looked up. An empty pixel shows the sky. The light is tone mapped and encoded as sRGB bytes.
+3. **What the camera cannot see is left out.** A mesh whose bounding sphere lies outside the view is not drawn. A skinned mesh's sphere is its bound at rest, grown 1.5 times (`POSE_REACH`), so any pose of a person stays inside it. So a person behind the camera costs no skinning and no setup. In the village this saves about a fifth of each frame's draw.
+4. **The triangles are binned into tiles.** Each triangle is clipped at the near plane and culled by its facing and its bounds. It is listed in each 64-pixel tile it touches.
+5. **Each tile is drawn on its own core, sixteen pixels at a time.** The raster writes only the depth and the triangle's number. A pixel that is drawn over ten times costs ten depth tests and one shading.
+6. **Each tile is resolved.** A pixel's triangle gives its light, and its shadow is looked up. An empty pixel shows the sky. The light is tone mapped and encoded as sRGB bytes.
 
 The pond's water is composed into the frame before it is stretched, because the water needs the depth.
 
@@ -136,6 +137,7 @@ The still map keeps the casters as they were when it was drawn. So in the villag
 - `scene.meshes` and `scene.skinned_meshes`, opaque, on a layer that the camera sees. A part whose material is not `visible` is not drawn. The sun's maps use the camera's layers too, as three.js's shadow map does, and the still map is drawn again when the camera's layers change.
 - `BASIC`, `LAMBERT`, `PHONG`, `STANDARD` and `PHYSICAL` materials. A standard or a physical material is lit as a Lambert one.
 - Vertex colors, a color, an emissive color, and a map read at each vertex or at each pixel.
+- Morph targets on a mesh, relative or absolute, with or without normals. The renderer reads only the vertices each target moves. It moves the shape again only when the mesh's weights change. A geometry that two meshes wear at once, in different weights, shows the weights of the mesh drawn last. A skinned mesh's morph targets are not drawn.
 - A node program, only as a `GameShading` registered for it says. It can light a back face as its front, read a baked sun and sky, and sway in the wind.
 - Ambient, hemisphere and directional lights. The cascades of one sun count once.
 - Exponential squared fog, or no fog.

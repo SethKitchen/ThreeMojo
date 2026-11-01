@@ -43,7 +43,9 @@ from std.math import sqrt
 
 from core.assets import Assets
 from core.object3d import NodeId
+from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
+from core.geometry_store import GeometryId
 from core.scene import Scene
 from extensions.attire.cover import cover_values
 from extensions.attire.dye import dye_pattern, paint
@@ -94,7 +96,9 @@ from extensions.attire.skirt import FLARE_FOLDS
 from render.texture_store import NO_TEXTURE
 from extensions.attire.plates import articulate
 from extensions.attire.shell import (
+    CLOSED_REACH,
     COVER_SMOOTHING,
+    UNDER_REACH,
     SkinFrame,
     garment_piece,
     hide_under,
@@ -120,14 +124,25 @@ from extensions.attire.design import (
     design_parts,
     worn_design,
 )
-from extensions.humanoid.rig.joints import HEAD, LEFT_THIGH, RIGHT_THIGH
+from extensions.humanoid.rig.joints import (
+    HEAD,
+    LEFT_THIGH,
+    LEFT_UPPER_ARM,
+    RIGHT_THIGH,
+    RIGHT_UPPER_ARM,
+)
 from extensions.humanoid.rig.game import GameHumanoid
+from extensions.humanoid.rig.joints import HumanoidRig
+from extensions.humanoid.rig.weights import bone_weights
 from extensions.humanoid.skeleton.head.hair.shading import HairLight
 from math.vector3 import Vector3
-from objects.skinned_mesh import SkinnedMesh
+from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from render.framebuffer import Color
 
 
+comptime ARMPIT_GAIN = Float32(5)
+"""How many times the upper arms' weight on a vertex its armpit share is:
+see `arm_shares`."""
 comptime RIM_THINNEST = Float32(0.0015)
 """A fabric at least this thick, in meters, has a rim at its hems: velvet,
 leather, padding, mail and plate."""
@@ -304,6 +319,8 @@ def dress_pieces(
     var detail = garment_detail(skin)
     var clear = top - 2 * SKIRT_RING * skirt_scale(person.rig) / detail
     var hang = List[Float32]()
+    var armpits = arm_shares(skin, person.rig)
+    var closes = List[List[Float32]]()
     var values = List[List[Float32]]()
     var hides = List[List[Float32]]()
     var faces = List[List[Float32]]()
@@ -321,14 +338,17 @@ def dress_pieces(
         )
         # A neckline or an opening cuts the cover away, so what is under
         # it shows there.
+        var closed = List[Float32](length=count, fill=1)
         if is_cut(garment.neckline, garment.opening):
             for v in range(count):  # pragma: no branch
-                mine[v] *= opening_mask(
+                closed[v] = opening_mask(
                     person.rig,
                     garment.neckline,
                     garment.opening,
                     frame.points[v],
                 )
+                mine[v] *= closed[v]
+        closes.append(closed^)
         var lifts = List[Float32](length=count, fill=0)
         if garment.sleeve != FITTED_SLEEVE:
             lifts = sleeve_lifts(skin, person.rig, garment.sleeve)
@@ -476,9 +496,14 @@ def dress_pieces(
         # last over this one hides its lasts.
         var shown = True
         var feet = lasts[i].copy()
+        # Round the armpits, where a layer over this one is closed, this
+        # one is cut deeper: see `CLOSED_REACH`.
         for j in range(i + 1, len(order)):
             for v in range(count):
-                over[v] = max(over[v], hides[j][v])
+                var deep = 1 + (UNDER_REACH / CLOSED_REACH - 1) * (
+                    closes[j][v] * armpits[v]
+                )
+                over[v] = max(over[v], hides[j][v] * deep)
             if skirts[j].rings() > 1 and skirts[j].hem() <= skirts[i].hem():
                 shown = False
             if len(lasts[j]) > 0:
@@ -559,6 +584,11 @@ def _press_under_hats(
         var skin = assets.geometries.get(
             scene.skinned_meshes[person.skins[0]].geometry
         ).clone()
+        # A face that speaks is apart from the body's skin: the hat sits
+        # on its still copy.
+        var still = still_face_geometry(scene, person)
+        if still:
+            skin = _head_skin(assets.geometries.get(still.value()), skin)
         var places = List[Vector3]()
         ref placed = skin.attribute_view(String(POSITION))
         for v in range(placed.count()):  # pragma: no branch
@@ -614,6 +644,88 @@ def _add_part(
     return at
 
 
+def _head_skin(
+    face: BufferGeometry, body: BufferGeometry
+) raises -> BufferGeometry:
+    """Return a face as a skin the head bone alone turns, with the body
+    skin's attributes, so the garments cut from both merge. An attribute
+    the face lacks is zero at each vertex."""
+    var count = face.vertex_count()
+    var out = BufferGeometry()
+    for k in range(len(body.names)):  # pragma: no branch
+        var name = body.names[k]
+        var size = body.values[k].item_size
+        if name == String(SKIN_INDEX) or name == String(SKIN_WEIGHT):
+            var values = List[Float32](capacity=4 * count)
+            var first = Float32(HEAD.value) if name == String(
+                SKIN_INDEX
+            ) else Float32(1)
+            for _ in range(count):  # pragma: no branch
+                values.extend([first, 0, 0, 0])
+            out.set_attribute(name, BufferAttribute(values^, 4))
+        elif face.has_attribute(name):
+            out.set_attribute(name, face.attribute_view(name).clone())
+        else:
+            out.set_attribute(
+                name,
+                BufferAttribute(
+                    List[Float32](length=size * count, fill=0), size
+                ),
+            )
+    out.index = face.index.copy()
+    return out^
+
+
+def arm_shares(skin: BufferGeometry, rig: HumanoidRig) raises -> List[Float32]:
+    """Return how near the upper arms each vertex of a skin lies.
+
+    The skin's own weights do not say: the arms are parted from the trunk
+    before the skin is weighed, so the side of the chest under an arm is
+    the trunk's alone. Nearness through the air says, as `bone_weights`
+    weighs it.
+
+    Args:
+        skin: A mesh at rest, in the rig's frame.
+        rig: The rig.
+
+    Returns:
+        Per vertex, `ARMPIT_GAIN` times the sum of both upper arms' weights
+        through the air, held to one.
+
+    Raises:
+        Error: If the skin has no positions.
+    """
+    ref points = skin.attribute_view(String(POSITION))
+    var out = List[Float32](capacity=points.count())
+    for v in range(points.count()):  # pragma: no branch
+        var near = bone_weights(rig, points.vector3(v))
+        var share = near[RIGHT_UPPER_ARM.value] + near[LEFT_UPPER_ARM.value]
+        out.append(min(Float32(1), share * ARMPIT_GAIN))
+    return out^
+
+
+def still_face_geometry(
+    scene: Scene, person: GameHumanoid
+) -> Optional[GeometryId]:
+    """Return the geometry of a person's still face, if it has one.
+
+    Args:
+        scene: The scene the person is in.
+        person: The person.
+
+    Returns:
+        The geometry of the mesh on the person's `far_face` node, or None
+        if it has no still face.
+    """
+    if not person.far_face:
+        return None
+    var node = person.far_face.value()
+    var k = 0
+    while scene.meshes[k].node != node:
+        k += 1
+    return scene.meshes[k].geometry
+
+
 def dress(
     mut scene: Scene,
     mut assets: Assets,
@@ -624,7 +736,10 @@ def dress(
 
     Each garment becomes a skinned mesh on the person's skeleton, drawn
     with its fabric's look. The person's skin drops the triangles the
-    outfit hides fully.
+    outfit hides fully. A person whose face speaks is dressed over its
+    still face too, which the head bone turns: see
+    `GameHumanoid.show_face`. The still face drops the triangles the
+    outfit hides; the preserved face keeps them, under the garment.
 
     Args:
         scene: The scene the person is in.
@@ -652,9 +767,19 @@ def dress(
     for _ in range(count):
         joined.append(None)
         wholes.append(None)
+    var skins = List[GeometryId]()
     for k in person.skins:  # pragma: no branch
-        var id = scene.skinned_meshes[k].geometry
+        skins.append(scene.skinned_meshes[k].geometry)
+    # A face that speaks hangs from the head bone, apart from the skins,
+    # in the pelvis frame as they are. Its still copy is dressed as a skin
+    # the head bone turns, so a hood or a helm closes over the head.
+    var still = still_face_geometry(scene, person)
+    if still:
+        skins.append(still.value())
+    for id in skins:  # pragma: no branch
         var skin = assets.geometries.get(id).clone()
+        if not skin.has_attribute(String(SKIN_INDEX)):
+            skin = _head_skin(skin, assets.geometries.get(skins[0]))
         var over_skin = List[Float32]()
         var shells = List[BufferGeometry]()
         var pieces = dress_pieces(skin, person, outfit, over_skin, shells)

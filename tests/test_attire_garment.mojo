@@ -68,6 +68,7 @@ from extensions.humanoid.rig.joints import (
     HIPS,
     JOINT_COUNT,
     RIGHT_SHIN,
+    RIGHT_UPPER_ARM,
     SPINE,
     Joint,
 )
@@ -319,6 +320,28 @@ def test_lames_step_from_the_anchor() raises:
     assert_equal(
         Int(all.attribute_view(String(SKIN_INDEX)).component(0, 0)),
         CHEST.value,
+    )
+    # Holding the arms, the anchor takes an arm's weight: a cuirass does
+    # not turn with a raised arm. Not holding them, it does not; nor does
+    # a leg give its weight up.
+    var arm = _shared(RIGHT_UPPER_ARM, 1, SPINE, 0)
+    var cuirass = arm.clone()
+    share_with(cuirass, CHEST, 1, True)
+    assert_equal(
+        Int(cuirass.attribute_view(String(SKIN_INDEX)).component(0, 0)),
+        CHEST.value,
+    )
+    var pauldron = arm.clone()
+    share_with(pauldron, CHEST, 1)
+    assert_equal(
+        Int(pauldron.attribute_view(String(SKIN_INDEX)).component(0, 0)),
+        RIGHT_UPPER_ARM.value,
+    )
+    var fauld = _shared(RIGHT_SHIN, 1, SPINE, 0)
+    share_with(fauld, HIPS, 1, True)
+    assert_equal(
+        Int(fauld.attribute_view(String(SKIN_INDEX)).component(0, 0)),
+        RIGHT_SHIN.value,
     )
     # The anchor's weight falls down the strip, so the lames step down it.
     var falling = strip(0, 4, CHEST)

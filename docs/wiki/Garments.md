@@ -63,6 +63,8 @@ A layer under a garment lifts it in full inside and at that layer's hem. The lif
 
 A garment is cut where a layer over it covers it past 0.75. That layer's hem lies at 0.5, so the garment ends under it. The cut runs along the iso-line, as a hem does, and not along the edges of triangles. So no whole triangle of an inner layer reaches out past the hem of the layer over it.
 
+Round the armpits, where the layer over it is closed, the garment is cut deeper, past 0.6. A raised arm bends the skin hard at the armpit, and there the inner layer can cross the outer one. The deeper cut keeps the inner layer out of that band. The depth passes from 0.75 to 0.6 as the upper arms' weight on the skin rises from none to a fifth. Elsewhere, and at an opening, the shallower cut keeps the garment that shows whole to the edge of the layer over it.
+
 A loose garment hangs from the chest. A shell follows the skin into each hollow, such as under the bust, over the small of the back and below the chest. A loose robe does not: its cloth falls from the widest point above and spans the hollow.
 
 `hangs_loose` says which garments hang. Each is a closed garment of cloth, skirted, that covers the chest, with a round or a slit neck. A robe, a tunic, a gown and a surcoat hang. A tailored coat, a ball gown, a bodice and armor are fitted.

@@ -66,9 +66,22 @@ from extensions.animals.registry import (
     RABBIT,
     SHEEP,
 )
+from extensions.attire.mix import (
+    FARMER,
+    GOODWIFE,
+    MONK,
+    NOBLEWOMAN,
+    PEASANT,
+    dressed_as,
+)
 from extensions.attire.outfit import Outfit
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import random_genome
+from extensions.humanoid.skeleton.head.expression import (
+    ANGER,
+    FEAR,
+    SADNESS,
+)
 from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.field import FieldStats
@@ -89,7 +102,15 @@ from extensions.village.gathering import (
     GatherParameters,
     Gathering,
 )
-from extensions.village.hud import draw_hud, note_text, use_prompt
+from extensions.village.battle_hud import DANGER
+from extensions.village.compass import CompassMark, clock_text, draw_compass
+from extensions.village.hud import (
+    GOLD_TEXT,
+    Rgb,
+    draw_hud,
+    note_text,
+    use_prompt,
+)
 from extensions.village.skills import (
     FISHING,
     FORAGING,
@@ -104,15 +125,33 @@ from extensions.village.skills import (
 )
 from extensions.village.progress import Progress
 from extensions.village.styles import STYLES, FightingStyle
+from extensions.village.combat import (
+    FALL,
+    FLINCH,
+    HEAVY,
+    STAGGER,
+    Fighter,
+    is_attack,
+    is_special,
+)
 from extensions.village.critters import Critters, Haunt, default_haunts
+from extensions.village.faces import FaceLife, face_reach
 from extensions.village.day import DayCycle, dim_water
 from extensions.village.talk import (
+    DONE,
+    OFFERED,
     SPEECH_SECONDS,
     Speaker,
     Talk,
     default_speakers,
+    revealed,
 )
-from extensions.village.weather import CLEAR, Weather, WeatherKind
+from extensions.village.weather import (
+    CLEAR,
+    Weather,
+    WeatherKind,
+    weather_label,
+)
 from extensions.village.residents import (
     Body,
     Herd,
@@ -130,6 +169,7 @@ from extensions.village.clothes import (
     WALNUT,
     WELD,
     WOAD,
+    calling_groom,
     village_outfit,
 )
 from extensions.village.quality import GameQuality, planted
@@ -177,6 +217,14 @@ comptime SHAKEN = Float32(1.0e-3)
 comptime SPECIALTY_MIGHT = Float32(0.1)
 """How much stronger the player's blows are in the style they specialize
 in."""
+comptime FOE_SIGHT = Float32(60)
+"""How near a foe must be for the compass to point to it, in meters."""
+comptime SILVER_MARK = Rgb(200, 205, 215)
+"""The color of the compass's mark at an errand taken."""
+comptime GRIMACE = Float32(0.5)
+"""How long the player's face holds what a move shows, in seconds."""
+comptime WINDED = Float32(0.6)
+"""Below this share of their stamina, the player pants."""
 comptime ARM_EASE = Float32(3)
 """How fast the eye goes back out once a wall is passed: each second it
 closes all but `exp(-ARM_EASE)` of its gap."""
@@ -186,11 +234,11 @@ def default_residents() raises -> ResidentsParameters:
     """Return the people and the animals of the default village.
 
     Returns:
-        A woman in a hooded green tunic by the brick house, who visits
-        it; a man in a blue tunic on the trail, who visits the stone
-        cottage; a child in a yellow tunic who runs around the pond; an
-        old man in a gray tunic, who visits the framed cottage; and a
-        woman in a red tunic by the framed house, who visits it. Four
+        A goodwife by the brick house, who visits it; a peasant on the
+        trail, who visits the stone cottage; a farmer's child who runs
+        around the pond; an old monk, who visits the framed cottage; and
+        a noblewoman by the framed house, who visits it. Each wears the
+        hair and the beard of their calling. Four
         sheep and a goat right of the trail, two cows and a horse left
         of it, a pig by the barn, a dog near the start, two rabbits by
         the trail and two deer past the pond. The deer run from a player
@@ -209,8 +257,9 @@ def default_residents() raises -> ResidentsParameters:
             7,
             41,
             False,
-            village_outfit(NETTLE, WELD, GRAY_WOOL, True),
+            dressed_as(GOODWIFE, FEMALE, 3),
             HouseId(0),
+            calling_groom(GOODWIFE, FEMALE, 3),
         ),
         Villager(
             HumanoidSpec(Length(70.0, INCH), MALE, TONED, random_genome(8)),
@@ -219,8 +268,9 @@ def default_residents() raises -> ResidentsParameters:
             14,
             42,
             False,
-            village_outfit(WOAD, CREAM_WOOL, WALNUT, False),
+            dressed_as(PEASANT, MALE, 8),
             HouseId(2),
+            calling_groom(PEASANT, MALE, 8),
         ),
         Villager(
             HumanoidSpec(
@@ -231,8 +281,9 @@ def default_residents() raises -> ResidentsParameters:
             5,
             43,
             True,
-            village_outfit(WELD, MADDER, WALNUT, False),
+            dressed_as(FARMER, FEMALE, 13),
             NO_HOUSE,
+            calling_groom(FARMER, FEMALE, 13),
         ),
         Villager(
             HumanoidSpec(Length(67.0, INCH), MALE, UNTONED, random_genome(21)),
@@ -241,8 +292,9 @@ def default_residents() raises -> ResidentsParameters:
             6,
             44,
             False,
-            village_outfit(GRAY_WOOL, WALNUT, CREAM_WOOL, True),
+            dressed_as(MONK, MALE, 21),
             HouseId(4),
+            calling_groom(MONK, MALE, 21),
         ),
         Villager(
             HumanoidSpec(Length(64.0, INCH), FEMALE, TONED, random_genome(34)),
@@ -251,8 +303,9 @@ def default_residents() raises -> ResidentsParameters:
             6,
             45,
             False,
-            village_outfit(MADDER, CREAM_WOOL, WOAD, False),
+            dressed_as(NOBLEWOMAN, FEMALE, 34),
             HouseId(3),
+            calling_groom(NOBLEWOMAN, FEMALE, 34),
         ),
     ]
     residents.herds = [
@@ -346,6 +399,34 @@ struct PlayParameters(Copyable, Movable):
         self.battle.fight_reach = quality.fight_reach
 
 
+def player_mood(mut life: FaceLife, fighter: Fighter) raises:
+    """Set the player's face by how their fight goes.
+
+    A blow that lands on them, or stamina run out, shows fear, and a fall
+    sadness. An attack shows anger: the heavy attack and the specials
+    more. Below `WINDED` of their stamina the player pants.
+
+    Args:
+        life: The player's face.
+        fighter: The player in the fight.
+
+    Raises:
+        Error: Never: the expressions are named.
+    """
+    var move = fighter.move
+    if move == FALL:
+        life.feel(SADNESS, 1, GRIMACE)
+    elif move == FLINCH or move == STAGGER:
+        life.feel(FEAR, 0.7, GRIMACE)
+    elif move == HEAVY or is_special(move):
+        life.feel(ANGER, 0.9, GRIMACE)
+    elif is_attack(move):
+        life.feel(ANGER, 0.55, GRIMACE)
+    var top = fighter.parameters.stamina
+    var left = fighter.stamina / top if top > 0 else Float32(1)
+    life.pant((WINDED - left) / WINDED)
+
+
 def tree_obstacles(
     parameters: VillageParameters, lots: List[Lot]
 ) -> List[Obstacle]:
@@ -430,6 +511,10 @@ struct VillageGame(Movable):
     var day: DayCycle
     # The fight: the player's sword, the bandits and the dummies.
     var battle: Battle
+    # How near the camera must be to a face to see it move, in meters.
+    var face_reach: Float32
+    # The villager who last spoke, or -1.
+    var talker: Int
 
     def __init__(
         out self,
@@ -501,6 +586,8 @@ struct VillageGame(Movable):
             parameters.outfit,
             parameters.residents.triangles,
             parameters.residents.detail,
+            speaks=parameters.residents.faces,
+            seed=1,
         )
         self.player = Character(
             player_movement(),
@@ -529,6 +616,8 @@ struct VillageGame(Movable):
         )
         self.village.water.shade_step = self.quality.water_step
         self.village.water.refresh_every = self.quality.water_refresh_every
+        self.face_reach = face_reach(size[1], parameters.field_of_view)
+        self.talker = -1
         self.view = ThirdPersonControls(parameters.heading)
         self.camera = PerspectiveCamera(
             parameters.field_of_view,
@@ -766,8 +855,14 @@ struct VillageGame(Movable):
         )
         if spoke:
             # The villager stops, and turns to the player while they talk.
+            # Their mouth says the words, and their face shows how they
+            # feel.
             var who = self.talk.speakers[self.talk.focus].villager
+            self.talker = who
             self.residents.hold(who, SPEECH_SECONDS, feet)
+            ref life = self.residents.bodies[who].life
+            life.say(self.talk.words)
+            life.feel(self.talk.feeling, self.talk.strength, SPEECH_SECONDS)
         self.view.follow_target(
             Vector3(feet.x, feet.y + FOCUS_HEIGHT, feet.z), delta
         )
@@ -796,6 +891,15 @@ struct VillageGame(Movable):
             var t = self.clock * 47
             var off = Vector3(sin(t) * jolt, cos(t * 1.3) * jolt * 0.7, 0)
             self.camera.place(self.camera.position + off, self.view.focus + off)
+        # The player's face shows the fight, and each face near the camera
+        # moves.
+        player_mood(self.body.life, self.battle.fighter)
+        var viewer = self.camera.position
+        self.body.show_face(scene, viewer, self.face_reach, delta)
+        for index in range(len(self.residents.bodies)):
+            self.residents.bodies[index].show_face(
+                scene, viewer, self.face_reach, delta
+            )
         # A house's inside shows only to a camera near it: from further
         # away, its windows show little of it.
         # The houses' lamps are lit from dusk to dawn.
@@ -901,7 +1005,7 @@ struct VillageGame(Movable):
                 self.prompt(),
                 self.note,
                 self.note_age,
-                self.talk.speech,
+                self.speech(),
                 self.talk.age,
                 self.talk.errands(self.gathering.satchel),
                 self.skills.lines(),
@@ -909,6 +1013,73 @@ struct VillageGame(Movable):
             draw_battle(
                 self.window, self.battle, scene, self.camera, self.view.look()
             )
+            draw_compass(
+                self.window,
+                self.player.position,
+                self.view.yaw,
+                self.compass_marks(),
+                String(
+                    clock_text(self.day.hour),
+                    "  ",
+                    weather_label(self.weather.kind),
+                ),
+            )
+
+    def speech(self) -> String:
+        """Return what the villager last said, for the heads-up display.
+
+        Returns:
+            Their name and their words. The words show as far as the
+            villager's mouth has said them: see `revealed`.
+        """
+        if self.talker < 0:
+            return self.talk.speech.copy()
+        ref life = self.residents.bodies[self.talker].life
+        var total = life.speech.duration()
+        var share = life.spoken / total if total > 0 else Float32(1)
+        var words = self.talk.words.byte_length()
+        var name = self.talk.speech.byte_length() - words
+        var bytes = self.talk.speech.as_bytes()
+        var out = String()
+        for i in range(name):  # pragma: no branch
+            out += chr(Int(bytes[i]))
+        return out + revealed(self.talk.words, share)
+
+    def compass_marks(self) -> List[CompassMark]:
+        """Return the places the compass points to.
+
+        Returns:
+            A gold mark at each villager with an errand to offer, a silver
+            one at each villager whose errand is taken, and a red one at
+            the nearest foe that stands, within `FOE_SIGHT`.
+        """
+        var marks = List[CompassMark]()
+        for index in range(len(self.talk.speakers)):
+            var state = self.talk.states[index]
+            if state == DONE:
+                continue
+            var v = self.talk.speakers[index].villager
+            var color = GOLD_TEXT if state == OFFERED else SILVER_MARK
+            marks.append(CompassMark(self.residents.people[v].position, color))
+        ref feet = self.player.position
+        var nearest = -1
+        var best = FOE_SIGHT * FOE_SIGHT
+        for index in range(len(self.battle.foes)):
+            ref foe = self.battle.foes[index]
+            if foe.down >= 0:
+                continue
+            var d = foe.character.position - feet
+            var far = d.x * d.x + d.z * d.z
+            if far < best:
+                best = far
+                nearest = index
+        if nearest >= 0:
+            marks.append(
+                CompassMark(
+                    self.battle.foes[nearest].character.position, DANGER
+                )
+            )
+        return marks^
 
     def prompt(self) -> String:
         """Return what the use button does now, for the heads-up display.

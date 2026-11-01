@@ -48,6 +48,7 @@ from extensions.attire.kinds import (
 )
 from extensions.humanoid.rig.joints import (
     CHEST,
+    HEAD,
     HIPS,
     LEFT_THIGH,
     RIGHT_THIGH,
@@ -69,9 +70,11 @@ from extensions.attire.outfit import (
     Outfit,
     dress,
     dress_pieces,
+    _head_skin,
     garment_detail,
+    still_face_geometry,
 )
-from objects.skinned_mesh import SKIN_INDEX
+from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 from extensions.attire.tailor import chemise, doublet, skirt
 from extensions.attire.apparel import trousers
 from core.deform import skin_carriers, skin_pose
@@ -365,6 +368,108 @@ def test_a_hood_hides_a_beard() raises:
     _ = dress(scene, assets, bearded, hooded)
     assert_false(scene.node(bearded.beard.value()).visible)
     assert_false(scene.node(bearded.hair.value()).visible)
+
+
+def test_a_hood_closes_over_a_speaking_face() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var speaker = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        coarse_spec(),
+        2400,
+        12,
+        8,
+        8,
+        workers=1,
+        facial_animation=True,
+        face_stand_in=400,
+    )
+    var still = still_face_geometry(scene, speaker).value()
+    var before = assets.geometries.get(still).triangle_count()
+    var hooded = Outfit()
+    hooded.add(hood())
+    var dressed = dress(scene, assets, speaker, hooded)
+    # The hood is cut from the still face too: some of its vertices only
+    # the head bone turns. It hides the still face's scalp.
+    ref piece = assets.geometries.get(
+        scene.skinned_meshes[dressed.meshes[0]].geometry
+    )
+    ref bones = piece.attribute_view(String(SKIN_INDEX))
+    ref weights = piece.attribute_view(String(SKIN_WEIGHT))
+    var headed = 0
+    for v in range(piece.vertex_count()):
+        if Int(bones.component(v, 0)) == HEAD.value and (
+            weights.component(v, 0) == 1
+        ):
+            headed += 1
+    assert_true(headed > 0)
+    assert_true(assets.geometries.get(still).triangle_count() < before)
+    assert_false(scene.node(speaker.hair.value()).visible)
+    # A person without a still face has none to dress.
+    var plain = coarse_person(scene, assets)
+    assert_false(Bool(still_face_geometry(scene, plain)))
+
+
+def test_a_face_is_dressed_as_a_skin_the_head_turns() raises:
+    var body = BufferGeometry()
+    body.set_attribute(String(POSITION), BufferAttribute([0, 0, 0], 3))
+    body.set_attribute(String(UV), BufferAttribute([0.5, 0.5], 2))
+    body.set_attribute("thinness", BufferAttribute([0.2], 1))
+    body.set_attribute(String(SKIN_INDEX), BufferAttribute([3, 0, 0, 0], 4))
+    body.set_attribute(String(SKIN_WEIGHT), BufferAttribute([1, 0, 0, 0], 4))
+    var face = BufferGeometry()
+    face.set_attribute(
+        String(POSITION), BufferAttribute([0, 1, 0, 1, 1, 0, 0, 2, 0], 3)
+    )
+    face.set_attribute(String(UV), BufferAttribute([0, 0, 1, 0, 0, 1], 2))
+    face.set_index([0, 1, 2])
+    var skin = _head_skin(face, body)
+    # The head turns each vertex wholly; the face keeps what it has, and
+    # what it lacks is zero.
+    assert_equal(skin.vertex_count(), 3)
+    for v in range(3):
+        assert_equal(
+            Int(skin.attribute_view(String(SKIN_INDEX)).component(v, 0)),
+            HEAD.value,
+        )
+        assert_equal(
+            skin.attribute_view(String(SKIN_WEIGHT)).component(v, 0), 1
+        )
+        assert_equal(skin.attribute_view("thinness").component(v, 0), 0)
+    assert_equal(skin.attribute_view(String(UV)).component(1, 0), 1)
+    assert_equal(len(skin.index), 3)
+
+
+def test_a_hat_sits_on_a_speaking_head() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var speaker = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        coarse_spec(),
+        2400,
+        12,
+        8,
+        8,
+        workers=1,
+        facial_animation=True,
+        face_stand_in=400,
+    )
+    var hatted = Outfit()
+    hatted.add(straw_hat())
+    var dressed = dress(scene, assets, speaker, hatted)
+    # The hat is made round the still face's head.
+    assert_true(
+        assets.geometries.get(
+            scene.skinned_meshes[dressed.meshes[0]].geometry
+        ).triangle_count()
+        > 0
+    )
 
 
 def test_an_outfit_that_does_not_check_is_refused() raises:
