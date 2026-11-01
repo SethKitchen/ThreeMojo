@@ -155,6 +155,15 @@
 - [Attire estimates](Attire-estimates)
 - [Segment inertia](Segment-inertia)
 - [Process chemistry](Process-chemistry)
+- [Thermochemical data](Thermochemical-data)
+- [Chemical equilibrium](Chemical-equilibrium)
+- [Process maps](Process-maps)
+- [Rates and transport](Rates-and-transport)
+- [Electrolysis and film color](Electrolysis-and-film-color)
+- [Binary solutions](Binary-solutions)
+- [Flowsheets and routes](Flowsheets-and-routes)
+- [Materials and coatings](Materials-and-coatings)
+- [Crystals and figures](Crystals-and-figures)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)

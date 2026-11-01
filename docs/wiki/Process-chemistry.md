@@ -1,8 +1,24 @@
 # Process chemistry
 
-`extensions/chemistry/` is a library that models the requirements of a process step: what must hold for a material to become a product. It computes driving forces and phase changes from thermochemical data. It checks stated bounds from experiments and from the equipment. It returns the operating window, the temperatures where every requirement holds, and a report that says why each bound is there.
+`extensions/chemistry/` is a library that models the requirements of a process step: what must hold for a material to become a product. It computes driving forces, equilibria and phase changes from thermochemical data. It checks stated bounds from experiments and from the equipment. It returns the operating window, the temperatures where every requirement holds, and a report that says why each bound is there.
 
 This is not a three.js port. See [Extensions](Extensions). For the reasons behind the method, see [Why a process runs where it does](Why-a-process-runs-where-it-does).
+
+## Pages
+
+This page covers steps, requirements, windows and reactions. Each area of the library has its own page:
+
+| Page | What it covers |
+|---|---|
+| [Thermochemical data](Thermochemical-data) | NASA-7, NASA-9 and Shomate fits, CHEMKIN and CEA files, fitting a table, uncertainty |
+| [Chemical equilibrium](Chemical-equilibrium) | The composition of a charge at a temperature and a pressure |
+| [Process maps](Process-maps) | Scans of two variables, Ellingham diagrams and predominance maps |
+| [Rates and transport](Rates-and-transport) | Arrhenius rates, the shrinking core, evaporation, case depth and heating |
+| [Electrolysis and film color](Electrolysis-and-film-color) | Cell voltages, Faraday's law and the color of thin oxides |
+| [Binary solutions](Binary-solutions) | Activities and phase boundaries of alloys |
+| [Flowsheets and routes](Flowsheets-and-routes) | Steps joined by streams with recycle, and the search for routes |
+| [Materials and coatings](Materials-and-coatings) | Expansion curves, melting points, eutectics and coating mechanics |
+| [Crystals and figures](Crystals-and-figures) | A CIF reader, chart axes and the gallery figures |
 
 ## Layers
 
@@ -10,18 +26,32 @@ Each layer uses only the layers above it in this table. Extend the library at th
 
 | Module | What it gives |
 |---|---|
-| `quantities` | `Molar` values per mole, `Amount64`, `GAS_CONSTANT`, `STANDARD_PRESSURE`, `BAR`, `ATMOSPHERE`, `TORR`, `MICROMETER`, `FractureEnergy64` and `amount_of` |
+| `quantities` | `Molar` values per mole, `Amount64`, `GAS_CONSTANT`, `STANDARD_PRESSURE`, `BAR`, `ATMOSPHERE`, `TORR`, `MICROMETER`, `ANGSTROM`, `FractureEnergy64` and `amount_of` |
 | `kinds` | `Phase`, `RequirementKind`, `Check` and `Hazard` |
 | `elements` | `Element` for the 84 elements with an IUPAC standard atomic weight, `element_from_symbol`, `Formula` and `parse_formula` |
-| `thermo` | `Nasa7`, `Species` and `Substance` |
-| `chemkin` | `read_chemkin_thermo`, a reader for CHEMKIN thermo files |
-| `catalog` | Built-in substances, with NASA TM-4513 data |
-| `reaction` | `Term`, `reactant`, `product` and `Reaction`, with `delta_g`, `delta_h`, `equilibrium_temperature`, `equilibrium_pressure` and `mass_ratio` |
+| `thermo` | `ThermoFit` with `nasa7`, `nasa9` and `shomate`, `Species` and `Substance` |
+| `chemkin` | `read_chemkin_thermo` and `write_chemkin_thermo` |
+| `cea` | `read_cea_thermo`, a reader for NASA CEA `thermo.inp` files |
+| `fitting` | `ThermoPoint` and `fit_nasa7` |
+| `catalog` | Built-in substances, with NASA data |
+| `reaction` | `Term`, `reactant`, `product` and `Reaction`, with `delta_g`, `delta_h`, `equilibrium_temperature`, `equilibrium_pressure`, `mass_ratio` and their uncertainties |
 | `requirement` | The `Constraint` trait, `Requirement` and its constructors |
 | `window` | `Interval`, `met_intervals`, `intersect` and `window_of`, for any constraint |
 | `step` | `Step`, `operating_window`, `unmet` and `report` |
-| `coating` | `ElasticLayer`, `mismatch_stress` and `delamination_thickness` |
+| `equilibrium` | `Charge`, `equilibrate`, `Equilibrium` and `EquilibriumShare` |
+| `maps` | `scan`, `boundary`, `ellingham`, `oxygen_pressure`, `reducing_ratio`, `predominance` and `oxide_map` |
+| `kinetics` | `Arrhenius`, `RateAtLeast` and `ShrinkingCore` |
+| `transport` | `vapor_pressure`, `evaporation_flux`, `Diffusivity`, `case_depth` and `heating_time` |
+| `electrochemistry` | `reversible_voltage`, `decomposition_voltage`, `faraday_mass`, `CellVoltage` and `specific_energy` |
+| `optics` | `film_reflectance`, `film_color`, `linear_srgb` and `anodic_thickness` |
+| `solution` | `Linear`, `PhaseModel` and `phase_boundaries` |
 | `balance` | `StreamItem`, `stream_enthalpy` and `heat_duty` |
+| `flowsheet` | `Flowsheet`, `StreamId` and `UnitKind` |
+| `routes` | `find_routes` |
+| `materials` | `ExpansionCurve`, `melting_point` and `eutectic_temperature` |
+| `coating` | `ElasticLayer`, the coating stresses, and the peeling, buckling and cracking limits |
+| `crystal` | `read_cif`, `Crystal` and `bonds` |
+| `plot` | `Axes`, `nice_ticks` and `tick_text` |
 | `processes` | Worked processes: `titanium`, `diamond` and `lime` |
 
 ## Model a step
@@ -130,21 +160,21 @@ var species = read_chemkin_thermo(Path("thermo.dat").read_text())
 var methane = Substance("CH4(g)", [species[0].copy()])
 ```
 
-The reader accepts comment lines that start with `!`, a `THERMO` line with its line of default temperatures, and an `END` line. It refuses a short or misnumbered record with its line number. It does not read the fifth element pair of some extended files. A loaded species has no molar volume. Set one where the pressure term of a condensed phase matters.
+The reader refuses a short or misnumbered record with its line number. A loaded species has no molar volume. Set one where the pressure term of a condensed phase matters. For NASA-9 and Shomate data, CEA files, fitted tables and uncertainties, see [Thermochemical data](Thermochemical-data).
 
 `parse_formula` reads a formula from text, with groups: `parse_formula("Ca(OH)2")` has one calcium, two oxygen and two hydrogen. `element_from_symbol` accepts either case, as data files write `TI` for titanium.
 
 ## The driving force
 
-A `Term` is a substance with a coefficient: `reactant` makes it negative and `product` makes it positive. A gas term also has a mole fraction of the total pressure. `Reaction` refuses terms that do not balance every element.
+A `Term` is a substance with a coefficient: `reactant` makes it negative and `product` makes it positive. A gas term also has a mole fraction of the total pressure. A condensed term has an activity, one for a pure phase. `Reaction` refuses terms that do not balance every element.
 
-The change is the sum of coefficient times chemical potential. For an ideal gas, the potential is `G(T) + R T ln(x P / p0)`. For a pure condensed phase that does not compress, it is `G(T) + V (P - p0)`. `p0` is one bar. Below zero, the reaction proceeds.
+The change is the sum of coefficient times chemical potential. For an ideal gas, the potential is `G(T) + R T ln(x P / p0)`. For a condensed phase that does not compress, it is `G(T) + V (P - p0) + R T ln a`. `p0` is one bar. Below zero, the reaction proceeds.
 
 `equilibrium_temperature` finds where the change crosses zero between two temperatures. `equilibrium_pressure` finds where it crosses zero between two pressures, on a logarithmic scale. For an evaporation into a pure vapor, that is the vapor pressure. `mass_ratio` gives the kilograms of one substance per kilogram of another.
 
 ## The built-in data
 
-The built-in coefficients are the NASA polynomials of McBride, Gordon and Reno, NASA TM-4513, 1993. They were copied unchanged from the conversion that Cantera 3.2 ships. The comment above each species gives the source code that TM-4513 assigns to it. See [THIRD-PARTY-NOTICES.md](https://github.com/SethKitchen/ThreeMojo/blob/main/THIRD-PARTY-NOTICES.md).
+The built-in coefficients are the NASA polynomials of McBride, Gordon and Reno, NASA TM-4513, 1993. Iron's solid phase uses the NASA-9 data of NASA TP-2002-211556. All were copied unchanged from the conversion that Cantera 3.2 ships. The comment above each species gives its source code. See [Thermochemical data](Thermochemical-data#the-catalog) and [THIRD-PARTY-NOTICES.md](https://github.com/SethKitchen/ThreeMojo/blob/main/THIRD-PARTY-NOTICES.md).
 
 A `Species` is one phase of one formula, valid over the range of its data. A `Substance` joins the condensed phases of one formula, or holds one gas. It uses the phase whose range holds the temperature. The ends of adjacent ranges are the transitions, so `melting_point` reads the data.
 
@@ -182,15 +212,7 @@ The diamond step shows a metastable product. Graphite to diamond does not procee
 
 ## Coatings
 
-`mismatch_stress` gives the biaxial stress in a thin coating on a thick substrate after cooling. Positive is compression in the coating:
-
-```text
-sigma = E_c / (1 - nu_c) * (alpha_s - alpha_c) * (T_deposition - T_service)
-```
-
-`delamination_thickness` gives the thickest coating that does not peel from an edge. It uses the plane-strain energy release rate of Hutchinson and Suo (1992), `G = (1 - nu_c^2) sigma^2 h / (2 E_c)`. The coating peels when `G` reaches the interface fracture energy.
-
-`processes.diamond` holds typical properties in `CVD_DIAMOND` and `CEMENTED_CARBIDE`. Diamond deposited at 850 degC on carbide with 6 % cobalt cools to about 2.5 GPa of compression. At a fracture energy of 30 J/m², the limit is about 11 micrometers. The fracture energy depends on the surface preparation, so measure it on the real surface.
+`mismatch_stress` gives the biaxial stress in a thin coating on a thick substrate after cooling. `delamination_thickness` gives the thickest coating that does not peel from an edge. `processes.diamond` holds typical properties in `CVD_DIAMOND` and `CEMENTED_CARBIDE`. Diamond on carbide cools to about 2.5 GPa of compression, which limits it to about 11 micrometers at 30 J/m². For expansion curves, Stoney's stress, buckling and thermal shock, see [Materials and coatings](Materials-and-coatings).
 
 ## Energy balances
 
@@ -215,6 +237,6 @@ The MgCl2 vapor data gives a boiling point of 1631 K at one atmosphere. The meas
 
 ## Limits
 
-Gases are ideal. Condensed phases are pure and do not compress. There are no solutions, alloys, slags or aqueous species, and no activity coefficients. The library does not compute rates or mass transfer. Experiments supply kinetic bounds as stated values.
+Gases are ideal. A condensed phase is pure, or a binary solution with given parameters. There are no slags or aqueous species, so there are no Pourbaix diagrams. Rates come from measured constants. The library does not predict them.
 
 A hazard list names the dangers of a step. It is not a risk assessment. The worked processes are models of requirements, not operating procedures. Chemistry separates and combines elements. It does not change one element into another.

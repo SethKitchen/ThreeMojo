@@ -12,7 +12,7 @@ expands each from its symmetry operations: diamond from the face-centered
 translations on a basis of two atoms, graphite from the 24 operations of
 P6_3/mmc. `bonds` joins the atoms 1.3 to 1.6 angstroms apart. Diamond's
 bonds go out in four directions, so it is hard. Graphite's lie in flat
-sheets, 3.35 angstroms apart with no bond between them, so the sheets
+sheets, 3.36 angstroms apart with no bond between them, so the sheets
 slide and graphite is soft.
 """
 

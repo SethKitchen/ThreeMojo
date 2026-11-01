@@ -14,6 +14,10 @@ The data gives most of the answer. The reaction proceeds strongly at every tempe
 
 The window is 714 to 1085 degC. Practice runs near 800 to 900 degC, inside it, with room for the heat that the reaction gives off.
 
+![Each Kroll step's requirements as bars over temperature, with the window where all hold and the planned temperature](out/process-windows.png)
+
+The figure shows each requirement of the four Kroll steps as a bar where it holds. The white bar is the window where all of them hold, and the dot is the planned temperature. `examples/process_windows.mojo` draws it from the steps in `processes.titanium`.
+
 ## Each step has its own reason
 
 Rutile does not react with chlorine alone. The Gibbs energy change of `TiO2 + 2 Cl2 -> TiCl4 + O2` is about +100 kJ/mol. With carbon, the change is about -290 kJ/mol, because carbon takes the oxygen. So the chlorinator burns coke with the ore.
@@ -25,6 +29,8 @@ Titanium takes up oxygen strongly. The change of `Ti + O2 -> TiO2` is about -740
 ## Some limits come only from experiments
 
 Thermodynamics says what can happen. It does not say how fast. A chlorinator runs near 1000 degC because the rate is too slow far below that, and practice measured that rate. Kroll and later engineers needed years of experiments to find these bounds and to control contamination.
+
+A measured rate constant can replace a stated bound. [Rates and transport](Rates-and-transport) turns an Arrhenius law into a temperature bound with `RateAtLeast`.
 
 The model keeps that difference visible. A computed bound says "computed from NASA TM-4513 data". A stated bound names its source. A kinetic limit that no number captures is an action in the report.
 

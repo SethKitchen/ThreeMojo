@@ -20,7 +20,7 @@ The scan subject reads splat scans of real places, in SOG and other formats, and
 
 The geotech subject analyzes earth-retaining walls: earth and water pressure, LRFD stability and slip circles. The visual subject draws engineering results with meshes, labels and textures. See [Retaining walls](Retaining-walls) and [Engineering views](Engineering-views).
 
-The chemistry subject is a library for the steps of a process. It models the thermodynamic, phase, kinetic, physical and engineering requirements that turn a material into a product. Each step has an operating window, and new constraints and data plug in. See [Process chemistry](Process-chemistry) and [Why a process runs where it does](Why-a-process-runs-where-it-does).
+The chemistry subject is a library for the steps of a process. It models the thermodynamic, phase, kinetic, physical and engineering requirements that turn a material into a product. Each step has an operating window, and new constraints and data plug in. It also solves equilibria, draws process maps and solves flowsheets. See [Process chemistry](Process-chemistry) and [Why a process runs where it does](Why-a-process-runs-where-it-does).
 
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
@@ -169,19 +169,33 @@ extensions/
     tags.mojo       the check of a frame's tagged buffers
     upscaler.mojo   the upscaler trait and a CPU fallback
   chemistry/
-    quantities.mojo  molar values, amounts, pressures, fracture energy
-    kinds.mojo       phases, requirement kinds, checks and hazards
-    elements.mojo    elements, atomic weights, formulas and their parser
-    thermo.mojo      NASA polynomials, species and substances
-    chemkin.mojo     a reader for CHEMKIN thermo files
-    catalog.mojo     built-in substances
-    reaction.mojo    reactions, their driving force and equilibria
-    requirement.mojo the Constraint trait and the built-in requirements
-    window.mojo      operating windows for any constraint
-    step.mojo        process steps and their reports
-    coating.mojo     coating stress and the delamination limit
-    balance.mojo     stream enthalpies and heat duties
-    processes/       worked processes: titanium, diamond and lime
+    quantities.mojo       molar values, amounts, pressures, angstroms
+    kinds.mojo            phases, requirement kinds, checks and hazards
+    elements.mojo         elements, atomic weights, formulas and their parser
+    thermo.mojo           NASA-7, NASA-9 and Shomate fits, species, substances
+    chemkin.mojo          CHEMKIN thermo files, read and written
+    cea.mojo              a reader for NASA CEA thermo.inp files
+    fitting.mojo          NASA-7 fits to tabulated data
+    catalog.mojo          built-in substances
+    reaction.mojo         reactions, their driving force, equilibria, uncertainty
+    requirement.mojo      the Constraint trait and the built-in requirements
+    window.mojo           operating windows for any constraint
+    step.mojo             process steps and their reports
+    equilibrium.mojo      multiphase chemical equilibrium
+    maps.mojo             scans, Ellingham diagrams and predominance maps
+    kinetics.mojo         Arrhenius rates and the shrinking core
+    transport.mojo        evaporation, case depth and heating time
+    electrochemistry.mojo cell voltages, Faraday's law and cell energy
+    optics.mojo           the color of a thin film on a metal
+    solution.mojo         binary solutions and their phase boundaries
+    balance.mojo          stream enthalpies and heat duties
+    flowsheet.mojo        units joined by streams, with recycle
+    routes.mojo           the search for reaction routes
+    materials.mojo        expansion curves, melting points, eutectics
+    coating.mojo          coating stress, peeling, buckling and thermal shock
+    crystal.mojo          a CIF reader, unit cells and bonds
+    plot.mojo             chart axes for process figures
+    processes/            worked processes: titanium, diamond and lime
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.
