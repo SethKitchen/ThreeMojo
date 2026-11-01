@@ -8,6 +8,9 @@ shows."""
 
 from core.assets import Assets
 from core.scene import Scene
+from extensions.attire.apparel import wizard_robe
+from extensions.attire.garment import shirt, tunic
+from extensions.attire.kinds import OPEN_BELOW
 from extensions.attire.outfit import Outfit
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
@@ -32,6 +35,10 @@ from extensions.village.combat import (
     BITE,
     GROUND_WAVE,
     DODGE,
+    HEAVY,
+    LIGHT_THREE,
+    RISING_EDGE,
+    WHIRLWIND,
     FREE,
     HIGH_STANCE,
     LIGHT_ONE,
@@ -42,7 +49,7 @@ from extensions.village.combat import (
     Fighter,
     FighterParameters,
 )
-from extensions.village.residents import Body
+from extensions.village.residents import Body, hobbles
 from extensions.village.styles import (
     ARCHERY,
     AXE,
@@ -263,6 +270,52 @@ def test_a_body_carries_each_styles_weapon_and_clips() raises:
     var bad: List[FightingStyle] = [FightingStyle(6)]
     with assert_raises(contains="six"):
         _ = Arms(scene, assets, body, SwordLooks(assets), BRIGHT_STEEL, bad)
+
+
+def test_a_robe_hobbles_its_wearer_s_kicks() raises:
+    # Only a closed skirt that covers the shins hobbles.
+    var bare = Outfit()
+    bare.add(shirt())
+    bare.add(tunic())
+    assert_false(hobbles(bare))
+    var parted = wizard_robe()
+    parted.opening = OPEN_BELOW
+    var open = Outfit()
+    open.add(parted^)
+    assert_false(hobbles(open))
+    var robed = Outfit()
+    robed.add(wizard_robe())
+    assert_true(hobbles(robed))
+    # A hobbled body swings a fist where a free one kicks.
+    var assets = Assets()
+    var scene = Scene()
+    var body = Body(
+        scene,
+        assets,
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        Outfit(),
+        500,
+        8,
+    )
+    assert_false(body.hobbled)
+    var free = Arms(
+        scene, assets, body, SwordLooks(assets), BRIGHT_STEEL, [HAND_TO_HAND]
+    )
+    var fists = HAND_TO_HAND.value * MOVES
+    assert_true(
+        free.table[fists + LIGHT_THREE.value] != free.table[fists + HEAVY.value]
+    )
+    body.hobbled = True
+    var held = Arms(
+        scene, assets, body, SwordLooks(assets), BRIGHT_STEEL, [HAND_TO_HAND]
+    )
+    assert_equal(
+        held.table[fists + LIGHT_THREE.value], held.table[fists + HEAVY.value]
+    )
+    assert_equal(
+        held.table[fists + WHIRLWIND.value],
+        held.table[fists + RISING_EDGE.value],
+    )
 
 
 def main() raises:

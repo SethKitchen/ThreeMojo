@@ -31,6 +31,7 @@ from extensions.attire.garment import (
     tunic,
 )
 from extensions.attire.kinds import (
+    OPEN_BELOW,
     NO_RUFFLES,
     ARMOR_LAYER,
     LEGS_SLOT,
@@ -213,6 +214,26 @@ def _pieces(
         over,
         shells,
     )
+
+
+def test_a_shorter_closed_skirt_hides_the_top_of_the_one_under_it() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var closed = Outfit()
+    closed.add(tunic())
+    closed.add(jerkin())
+    var parted = jerkin()
+    parted.opening = OPEN_BELOW
+    var open = Outfit()
+    open.add(tunic())
+    open.add(parted^)
+    # Under the closed jerkin, the tunic's skirt draws only below its hem;
+    # under the parted one, it draws whole, to show in the parting.
+    var under_closed = _pieces(scene, assets, person, closed)[0].clone()
+    var under_open = _pieces(scene, assets, person, open)[0].clone()
+    assert_true(under_closed.triangle_count() > 0)
+    assert_true(under_closed.triangle_count() < under_open.triangle_count())
 
 
 def test_a_last_over_a_last_hides_it() raises:

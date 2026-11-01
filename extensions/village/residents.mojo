@@ -30,6 +30,7 @@ legs keeps its standing mesh. A shy herd runs from the player, at
 
 from animation.animation_mixer import ONCE, AnimationAction, AnimationMixer
 from core.assets import Assets
+from extensions.attire.kinds import CLOSED, SKIRTED
 from extensions.attire.outfit import Outfit, dress
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
@@ -50,7 +51,7 @@ from extensions.humanoid.rig.clips import (
     walk_clip,
 )
 from extensions.humanoid.rig.game import GameHumanoid, add_game_humanoid
-from extensions.humanoid.rig.joints import RIGHT_TOES
+from extensions.humanoid.rig.joints import RIGHT_SHIN, RIGHT_TOES
 from extensions.humanoid.skeleton.head.hair.beard import (
     CLEAN_SHAVEN,
     Beard,
@@ -197,6 +198,33 @@ def facing_turn(heading: Angle) -> Angle:
     return Angle(heading.to(RADIAN) + pi, RADIAN)
 
 
+def hobbles(outfit: Outfit) raises -> Bool:
+    """Return whether an outfit has a closed skirt that falls past the
+    knees, as a robe or a gown does.
+
+    A leg that kicks in such a skirt would pass out through its front,
+    so its wearer does not kick: see `Arms`.
+
+    Args:
+        outfit: The outfit.
+
+    Returns:
+        Whether a skirted garment closed all round covers the shins. A
+        neckline does not part the skirt, so it does not count.
+
+    Raises:
+        Error: Never: each joint is named.
+    """
+    for garment in outfit.garments:
+        if (
+            garment.form == SKIRTED
+            and garment.opening == CLOSED
+            and garment.cover.covers(RIGHT_SHIN)
+        ):
+            return True
+    return False
+
+
 struct Body(Movable):
     """A person's skinned body, its clothes, its clips, and the node that
     carries it."""
@@ -219,6 +247,8 @@ struct Body(Movable):
     var speaks: Bool
     var life: FaceLife
     var near: Bool
+    # Whether a closed skirt falls past the knees: see `hobbles`.
+    var hobbled: Bool
 
     def __init__(
         out self,
@@ -264,6 +294,7 @@ struct Body(Movable):
         self.speaks = speaks
         self.life = FaceLife(seed)
         self.near = False
+        self.hobbled = hobbles(outfit)
         if speaks:
             self.person = add_game_humanoid(
                 scene,

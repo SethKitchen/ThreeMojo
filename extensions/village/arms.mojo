@@ -30,6 +30,11 @@ its `Fighter` and the fighter's style:
 | Magic | A bolt, a blast, a nova and a mend; the staff's stance | The weapon hand | Across the back |
 | Archery | A quick shot, an aimed shot, a volley, a leap shot and a rain; the bow's stance | The other hand | Across the back |
 
+A body in a closed skirt that falls past the knees, such as a robe, is
+`hobbled`: its hand-to-hand style plays the haymaker for the kick and
+the uppercut for the spinning heel kick. A kicking leg would pass out
+through the skirt's front.
+
 A move a style has no clip of plays the sword's. A clip fades in over
 `QUICK_FADE`, and back to the body's own clips over the body's fade. The
 weapon in the hand shows while it is drawn, and the stowed one while it is
@@ -399,12 +404,19 @@ struct Arms(Movable):
             )
             self._set(style, LIGHT_ONE, _once(body, jab_clip(bones, rig)))
             self._set(style, LIGHT_TWO, _once(body, cross_clip(bones, rig)))
-            self._set(style, LIGHT_THREE, _once(body, kick_clip(bones, rig)))
-            self._set(style, HEAVY, _once(body, haymaker_clip(bones, rig)))
-            self._set(
-                style, RISING_EDGE, _once(body, uppercut_clip(bones, rig))
-            )
-            self._set(style, WHIRLWIND, _once(body, spin_kick_clip(bones, rig)))
+            var haymaker = _once(body, haymaker_clip(bones, rig))
+            var uppercut = _once(body, uppercut_clip(bones, rig))
+            # In a robe or a gown, a kicking leg would pass out through
+            # the skirt's front: the wearer swings a fist instead.
+            var kick = haymaker
+            var spin = uppercut
+            if not body.hobbled:
+                kick = _once(body, kick_clip(bones, rig))
+                spin = _once(body, spin_kick_clip(bones, rig))
+            self._set(style, LIGHT_THREE, kick)
+            self._set(style, HEAVY, haymaker)
+            self._set(style, RISING_EDGE, uppercut)
+            self._set(style, WHIRLWIND, spin)
             var punch = _once(body, ground_punch_clip(bones, rig))
             self._set(style, GROUND_WAVE, punch)
             self._set(style, PLUNGE, punch)

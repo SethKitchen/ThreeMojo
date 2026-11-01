@@ -270,6 +270,8 @@ The module is `extensions/humanoid/rig/sword_clips.mojo`. Each clip is worked ou
 | `stagger_clip` | 1.6 | Bent over, the sword low, swaying for breath |
 | `fall_clip` | 2.0 | The knees give, and the body falls on its back |
 
+A fighter in a closed skirt that covers the shins, such as a robe or a gown, is hobbled. `hobbles` tells. In the hand-to-hand style, such a fighter swings the haymaker where others kick, and the uppercut where others spin and kick. A kicking leg would pass out through the front of the skirt. The moves keep their timing and their damage.
+
 The scabbard and the sheathed sword hang back and down from the hip, on the side of the right thigh. A leg that kicks or lunges back would pass through them. So, each frame, `Arms` turns them away from that thigh, in the plane of the two, until they are `SHEATH_CLEARANCE`, 40°, apart. `sheath_turn` gives the turn.
 
 The rig faces plus z, and calls the side on plus x its right. A camera behind the rig sees plus x on its own left. So the poses are written for a sword arm on plus x, and `mirrored` turns them over. The sword is in `LEFT_HAND`, the hand a player sees as the right.

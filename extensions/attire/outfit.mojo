@@ -507,8 +507,10 @@ def dress_pieces(
     for i in range(len(order)):
         var over = List[Float32](length=count, fill=0)
         # A skirt over this one that falls as far hides its skirt, and a
-        # last over this one hides its lasts.
+        # shorter closed one hides the skirt's top. A last over this one hides
+        # its lasts.
         var shown = True
+        var covered = Float32.MAX
         var feet = lasts[i].copy()
         # Under a layer with no opening, this one is cut deeper: see
         # `CLOSED_REACH`.
@@ -516,8 +518,12 @@ def dress_pieces(
             var deep = UNDER_REACH / CLOSED_REACH if closes[j] else Float32(1)
             for v in range(count):
                 over[v] = max(over[v], hides[j][v] * deep)
-            if skirts[j].rings() > 1 and skirts[j].hem() <= skirts[i].hem():
-                shown = False
+            if skirts[j].rings() > 1:
+                if skirts[j].hem() <= skirts[i].hem():
+                    shown = False
+                # A skirt parted open shows the skirt under it.
+                if closes[j]:
+                    covered = min(covered, skirts[j].hem())
             if len(lasts[j]) > 0:
                 feet.clear()
         for v in range(count):
@@ -538,6 +544,7 @@ def dress_pieces(
             person.rig,
             True,
             shown,
+            covered,
         )
         if garment.form == SKIRTED and is_cut(
             garment.neckline, garment.opening

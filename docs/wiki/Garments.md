@@ -155,6 +155,8 @@ The cover value falls from one to one half over the 4 cm above the hem. So a tri
 
 Below the top, a skirt hangs clear of the legs. So it hides neither the skin nor the garments under it there, and the hose and the legs draw under it. A band 6 cm deep below the top stays hidden, so no triangle that crosses the top shows through the shell over it. A skirt over another that falls as far hides it. The inner skirt is then not drawn.
 
+A shorter skirt with no opening over another hides that skirt's top. The inner skirt is cut `SKIRT_UNDERLAP`, 3 cm, over the hem of the skirt over it. Only the part below is drawn. The two skirts take their weights apart, so they cross as the legs swing. Then the inner skirt's hidden top would show through.
+
 ### Lasts
 
 `extensions/attire/last.mojo` shoes each foot in four steps.
