@@ -298,6 +298,10 @@ def test_a_robe_hobbles_its_wearer_s_kicks() raises:
         8,
     )
     assert_false(body.hobbled)
+    # A body that does not speak keeps its face as it is, near or far.
+    assert_false(body.speaks)
+    body.show_face(scene, Vector3(0, 1.5, 0.5), 5, Duration(0.1, SECOND))
+    assert_false(body.near)
     var free = Arms(
         scene, assets, body, SwordLooks(assets), BRIGHT_STEEL, [HAND_TO_HAND]
     )
