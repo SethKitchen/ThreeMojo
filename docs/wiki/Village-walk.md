@@ -8,14 +8,58 @@
 
 ## Play the game
 
-The game needs an X11 window. Linux has one. Windows under WSL 2 with WSLg and macOS with XQuartz have one too.
+The game runs in a macOS window or in an X11 window. Both read the keys of the table below.
+
+### On a Mac
+
+The macOS window needs no XQuartz. It needs macOS 14 or later, and the Xcode command line tools.
+
+```sh
+examples/capi/run.sh native village
+examples/capi/run.sh native village 1280 720 --quality low
+```
+
+The script builds the game first. The window is 1280 by 720 points by default. Give a width and a height for a different size. `--quality` takes `low`, `medium`, `high` or `ultra`. The default is `medium`. See [Game renderer](Game-renderer).
+
+The game builds the village for about 10 seconds. Then the window shows its first frame.
+
+A Retina display has two pixels for each point. The game draws a frame of the display's own pixels, so the picture is sharp. A window of 1280 by 720 points shows a frame of 2560 by 1440 pixels. On a Mac with 16 cores, `low` draws that frame at 74 frames a second and `medium` at 39. `high` draws 15 frames a second, and `ultra` draws 4.
+
+`--scale 1` draws a frame of the window's own size. `medium` then draws 65 frames a second, but the display stretches the frame, and it looks blurry. `--scale 2` or `--scale 3` sets the factor by hand.
+
+`--gpu` draws the frame on the Mac's GPU. The library prepares the triangles, the shadow maps and the water's tables on the CPU. Metal then draws the sky with its clouds and stars, and the triangles with a depth test. Metal also composes the pond's water and smooths the edges.
+
+The CPU adds the rain and the heads-up display. The window shows `CPU` and `GPU` milliseconds for each frame. See [Game renderer](Game-renderer#draw-on-the-gpu).
+
+```sh
+examples/capi/run.sh native village --gpu
+```
+
+The GPU frame has the size of the window's pixels, so `--scale` does not change it. The CPU path draws the 3D scene at a smaller size and stretches it. The GPU path draws every pixel of the 3D scene. At 2560 by 1440 pixels, the library needs 10 ms for a `low` frame and 18 ms for `medium`. A `high` frame takes 45 ms, and an `ultra` frame takes 141 ms. That is 95, 57, 22 and 7 frames a second.
+
+The CPU draws `medium` at 18 frames a second when it draws every pixel too. The stretched CPU frame draws `medium` at 39 frames a second, but it is softer. So the GPU path is both faster and sharper. If the Mac has no Metal device, the host says so and draws on the CPU.
+
+`--hour H` starts the day at hour H, from 0 to less than 24. `--weather NAME` starts in `clear`, `overcast`, `rain` or `fog`. Both work with or without `--gpu`. They show the night or the rain at once:
+
+```sh
+examples/capi/run.sh native village --gpu --hour 22
+examples/capi/run.sh native village --gpu --weather rain
+```
+
+Escape and Command+Q quit. `Q` is the companion's assist attack, and does not quit here. The window reads the keyboard only. It does not read a gamepad yet. The window code is in [C ABI and hosts](C-ABI-and-hosts).
+
+### On Linux
+
+The game needs an X11 window. Linux has one. Windows under WSL 2 with WSLg has one too. A Mac can use XQuartz, but the macOS window above is faster to set up.
 
 ```sh
 mojo run -I . examples/village_walk.mojo --play
 mojo run -I . examples/village_walk.mojo --play 1280 720 medium
 ```
 
-The window is 1920 by 1080 pixels by default. Give a width and a height for a different size. After the size, give a quality: `low`, `medium`, `high` or `ultra`. The default is `low`. See [Game renderer](Game-renderer). The game reads every gamepad on the machine, and the keyboard:
+The window is 1920 by 1080 pixels by default. Give a width and a height for a different size. After the size, give a quality: `low`, `medium`, `high` or `ultra`. The default is `low`. See [Game renderer](Game-renderer). The X11 game reads every gamepad on the machine, and the keyboard.
+
+### The controls
 
 | Control | Gamepad | Keyboard |
 |---|---|---|
@@ -40,13 +84,13 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Show the combo book | Hold the left trigger, and press the back button | `K` |
 | Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
 | Time | | `5` moves the day on three hours |
-| Quit | The start button | Escape |
+| Quit | The start button | Escape. Command+Q in the macOS window. |
 
 The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller. The fight's controls are on [Village combat](Village-combat#the-controls). The styles and the combos are on [Village fighting styles](Village-styles) and [Village combos](Village-combos), and the raid on [Village raid](Village-raid).
 
-The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 34 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
+The X11 game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 34 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do. This holds in the macOS window too, where a step is at most a tenth of a second.
 
-The game prints the frames a second to the standard error.
+The X11 game prints the frames a second to the standard error. The macOS window shows them in its title bar and prints them each second.
 
 ## Saved progress
 

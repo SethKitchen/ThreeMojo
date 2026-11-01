@@ -470,6 +470,13 @@ def test_metal_header_escapes_and_matches_the_shader() raises:
     assert_equal(metal_command([source, out]), 0)
     assert_true(Path(out).read_text().find("void f() {}") > 0)
     assert_equal(metal_command([source]), 1)
+    # The string is named for the file.
+    var village = tree.root + "/village.metal"
+    Path(village).write_text("void g() {}\n")
+    assert_equal(metal_command([village, out]), 0)
+    var named = Path(out).read_text()
+    assert_true(named.find("static const char VILLAGE_MSL[] =") > 0)
+    assert_true(named.find("from village.metal") > 0)
     tree.close()
 
 

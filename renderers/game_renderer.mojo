@@ -84,6 +84,52 @@ from math.bounds import Sphere
 from math.cross import cross_vectors
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor, Framebuffer, SrgbBytes
+from renderers.game_gpu import (
+    address,
+    FLOAT_BIAS,
+    FLOAT_EXPOSURE,
+    FLOAT_FOG_BLUE,
+    FLOAT_FOG_GREEN,
+    FLOAT_FOG_RED,
+    FLOAT_MOVING_PER_METER,
+    FLOAT_STILL_PER_METER,
+    GpuFrame,
+    INT_FOG,
+    INT_HEIGHT,
+    INT_MAP_FLOATS,
+    INT_MAP_LEVELS,
+    INT_MAP_SLOTS,
+    INT_MOVING_MADE,
+    INT_MOVING_ON,
+    INT_MOVING_SIZE,
+    INT_MOVING_STRIDE,
+    INT_SKY_COLUMNS,
+    INT_SKY_ROWS,
+    INT_SKY_STEP,
+    INT_STILL_MADE,
+    INT_STILL_ON,
+    INT_STILL_SIZE,
+    INT_STILL_STRIDE,
+    INT_TRIANGLES,
+    INT_VERTICES,
+    INT_WIDTH,
+    POINTER_CODES,
+    POINTER_CORNERS,
+    POINTER_MAP_COUNTS,
+    POINTER_MAP_FIRSTS,
+    POINTER_MAP_HEIGHTS,
+    POINTER_MAP_STARTS,
+    POINTER_MAP_TEXELS,
+    POINTER_MAP_WIDTHS,
+    POINTER_MAP_WRAPS_S,
+    POINTER_MAP_WRAPS_T,
+    POINTER_MOVING_CLIP,
+    POINTER_MOVING_DEPTH,
+    POINTER_SKY,
+    POINTER_STILL_CLIP,
+    POINTER_STILL_DEPTH,
+    POINTER_VERTICES,
+)
 from render.game_math import (
     GAME_LANES,
     fast_sin,
@@ -670,6 +716,20 @@ struct _Frame(ImplicitlyCopyable):
 
 
 @fieldwise_init
+struct _Prepared(Copyable, Movable):
+    """What the stages that the CPU and a GPU share leave: the frame, whether
+    the sun's shadows shade it, and the time each stage ended, in
+    nanoseconds."""
+
+    var frame: _Frame
+    var shadowing: Bool
+    var mapped: Int
+    var gathered: Int
+    var lit: Int
+    var set_up: Int
+
+
+@fieldwise_init
 struct ShadowMode(Equatable, ImplicitlyCopyable, Writable):
     """How the sun's shadows are drawn, as a type rather than a bare int."""
 
@@ -837,6 +897,19 @@ struct GameRenderer(Movable):
     # the maps read so.
     var pixel_maps: Bool
     var _pixel: _PixelMaps
+    # What `prepare_gpu` leaves for a GPU: the triangles' corners and map
+    # codes, packed one after another; the sky's grid; how many vertices
+    # the frame holds; whether the sun's shadows shade it; and how many
+    # times each shadow map has been drawn.
+    var _gpu_corners: List[Int32]
+    var _gpu_codes: List[Float32]
+    var _gpu_sky: List[Float32]
+    var _gpu_vertices: Int
+    var _gpu_shadowing: Bool
+    var _gpu_fog: Bool
+    var _gpu_fog_color: SIMD[DType.float32, 4]
+    var _still_made: Int
+    var _moving_made: Int
 
     def __init__(
         out self, width: Int, height: Int, exposure: Float32 = 1
@@ -893,6 +966,15 @@ struct GameRenderer(Movable):
         self._moving_map = _SunMap(1)
         self.pixel_maps = False
         self._pixel = _PixelMaps()
+        self._gpu_corners = List[Int32]()
+        self._gpu_codes = List[Float32]()
+        self._gpu_sky = List[Float32]()
+        self._gpu_vertices = 0
+        self._gpu_shadowing = False
+        self._gpu_fog = False
+        self._gpu_fog_color = SIMD[DType.float32, 4](0)
+        self._still_made = 0
+        self._moving_made = 0
 
     def register(mut self, program: Int, var shading: GameShading):
         """Say what a node program does, so materials naming it are drawn.
@@ -935,6 +1017,52 @@ struct GameRenderer(Movable):
                 a geometry or a node is not there.
         """
         var began = perf_counter_ns()
+        var ready = self._prepare(scene, assets, camera, time)
+        var set_up = ready.set_up
+        var shadowing = ready.shadowing
+        var frame = ready.frame
+        var bins = self._bin(self.width, self.height)
+        var binned = perf_counter_ns()
+        self._raster(
+            bins,
+            self.width,
+            self.height,
+            self._stride,
+            self._depth.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            self._ids.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        )
+        var drawn = 0
+        for i in range(len(self._ids)):  # pragma: no branch
+            if self._ids[i] != NO_TRIANGLE:
+                drawn += 1
+        self.drawn = drawn
+        var rastered = perf_counter_ns()
+        var sky = self._sky(scene, assets, camera)
+        var skied = perf_counter_ns()
+        var image = self._resolve(frame, sky, shadowing)
+        var resolved = perf_counter_ns()
+        self.timings = [
+            _ms(ready.mapped - began),
+            _ms(ready.gathered - ready.mapped),
+            _ms(ready.lit - ready.gathered),
+            _ms(set_up - ready.lit),
+            _ms(binned - set_up),
+            _ms(rastered - binned),
+            _ms(skied - rastered),
+            _ms(resolved - skied),
+        ]
+        return image^
+
+    def _prepare(
+        mut self,
+        scene: Scene,
+        assets: Assets,
+        camera: PerspectiveCamera,
+        time: Duration,
+    ) raises -> _Prepared:
+        """Do the stages that the CPU and a GPU share: the shadow maps, the
+        gathering, the light at the vertices and the setup of each triangle.
+        """
         self._looks.clear()
         self._skins = [[Float32(0)]]
         self._skin_of.clear()
@@ -959,12 +1087,14 @@ struct GameRenderer(Movable):
                 self._draw_map(
                     scene, assets, frame, False, center, reach, layers
                 )
+                self._still_made += 1
             if self.shadows != STILL_SHADOWS:
                 if self._moving_map.size != self.moving_size:
                     self._moving_map = _SunMap(self.moving_size)
                 var focus = self.focus
                 var reach = self.moving_reach
                 self._draw_map(scene, assets, frame, True, focus, reach, layers)
+                self._moving_made += 1
         var mapped = perf_counter_ns()
         var view = camera.view_matrix()
         var clip = camera.projection_matrix()
@@ -985,38 +1115,162 @@ struct GameRenderer(Movable):
         self._light_vertices(draws, assets, scene, frame)
         var lit = perf_counter_ns()
         self._setup(draws, frame)
-        var set_up = perf_counter_ns()
-        var bins = self._bin(self.width, self.height)
-        var binned = perf_counter_ns()
-        self._raster(
-            bins,
-            self.width,
-            self.height,
-            self._stride,
-            self._depth.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-            self._ids.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        return _Prepared(
+            frame, shadowing, mapped, gathered, lit, perf_counter_ns()
         )
-        var drawn = 0
-        for i in range(len(self._ids)):  # pragma: no branch
-            if self._ids[i] != NO_TRIANGLE:
-                drawn += 1
-        self.drawn = drawn
-        var rastered = perf_counter_ns()
-        var sky = self._sky(scene, assets, camera)
+
+    def prepare_gpu(
+        mut self,
+        scene: Scene,
+        assets: Assets,
+        camera: PerspectiveCamera,
+        time: Duration,
+    ) raises:
+        """Do the work of `render` that a CPU does best, and leave the rest
+        for a GPU: the shadow maps, the gathering, the light at the vertices
+        and the setup of each triangle, and the sky's grid. The triangles are
+        packed one after another. `gpu_frame` then describes the frame.
+
+        The GPU does what `render` does after the setup: it rasters the
+        triangles, shades each pixel from its vertices, the shadow maps and
+        the maps, tone maps it, and encodes it. The image is as large as the
+        renderer.
+
+        Args:
+            scene: The scene, updated.
+            assets: The stores.
+            camera: The camera, placed.
+            time: The time of the frame, for the wind's sway.
+
+        Raises:
+            Error: If a drawn material cannot be drawn by this renderer, or
+                a geometry or a node is not there.
+        """
+        var began = perf_counter_ns()
+        var ready = self._prepare(scene, assets, camera, time)
+        self._pack()
+        var packed = perf_counter_ns()
+        self._gpu_sky = self._sky(scene, assets, camera)
+        self._gpu_shadowing = ready.shadowing
+        self._gpu_fog = ready.frame.fog
+        self._gpu_fog_color = ready.frame.fog_color
         var skied = perf_counter_ns()
-        var image = self._resolve(frame, sky, shadowing)
-        var resolved = perf_counter_ns()
         self.timings = [
-            _ms(mapped - began),
-            _ms(gathered - mapped),
-            _ms(lit - gathered),
-            _ms(set_up - lit),
-            _ms(binned - set_up),
-            _ms(rastered - binned),
-            _ms(skied - rastered),
-            _ms(resolved - skied),
+            _ms(ready.mapped - began),
+            _ms(ready.gathered - ready.mapped),
+            _ms(ready.lit - ready.gathered),
+            _ms(ready.set_up - ready.lit),
+            _ms(packed - ready.set_up),
+            0,
+            _ms(skied - packed),
+            0,
         ]
-        return image^
+
+    def _pack(mut self):
+        """Copy the frame's triangles, which the setup left in batches with
+        gaps between, into arrays with none: their corners, and their map
+        codes from the planes."""
+        var total = self.triangles
+        if len(self._gpu_corners) < total * 3:
+            _grow(self._gpu_corners, total * 3)
+        if len(self._gpu_codes) < total:
+            _grow(self._gpu_codes, total)
+        var corners = self._gpu_corners.unsafe_ptr()
+        var codes = self._gpu_codes.unsafe_ptr()
+        var planes = self._planes.unsafe_ptr()
+        var at = 0
+        for j in range(self._jobs):
+            ref batch = self._batches[j]
+            unsafe_memcpy(
+                dest=corners.unsafe_offset(at * 3),
+                src=self._corners.unsafe_ptr().unsafe_offset(batch.first * 3),
+                count=batch.count * 3,
+            )
+            for k in range(batch.count):
+                codes[unsafe_offset=at + k] = planes[
+                    unsafe_offset=(batch.first + k) * PLANE + 15
+                ]
+            at += batch.count
+
+    def gpu_frame(self) -> GpuFrame:
+        """Describe the frame that `prepare_gpu` left, for a GPU.
+
+        Returns:
+            The counts, the scalars and the addresses of the data. The data
+            stays valid until the next frame is drawn or prepared.
+        """
+        var out = GpuFrame()
+        var step = max(1, self.sky_step)
+        var columns = (self.width + step - 1) // step + 1
+        var rows = (self.height + step - 1) // step + 1
+        out.ints[INT_WIDTH] = Int64(self.width)
+        out.ints[INT_HEIGHT] = Int64(self.height)
+        out.ints[INT_VERTICES] = Int64(self._gpu_vertices)
+        out.ints[INT_TRIANGLES] = Int64(self.triangles)
+        out.ints[INT_SKY_COLUMNS] = Int64(columns)
+        out.ints[INT_SKY_ROWS] = Int64(rows)
+        out.ints[INT_SKY_STEP] = Int64(step)
+        out.ints[INT_FOG] = Int64(1 if self._gpu_fog else 0)
+        var moving = self._gpu_shadowing and self.shadows != STILL_SHADOWS
+        out.ints[INT_STILL_ON] = Int64(1 if self._gpu_shadowing else 0)
+        out.ints[INT_STILL_SIZE] = Int64(self._still_map.size)
+        out.ints[INT_STILL_STRIDE] = Int64(self._still_map.stride)
+        out.ints[INT_STILL_MADE] = Int64(self._still_made)
+        out.ints[INT_MOVING_ON] = Int64(1 if moving else 0)
+        out.ints[INT_MOVING_SIZE] = Int64(self._moving_map.size)
+        out.ints[INT_MOVING_STRIDE] = Int64(self._moving_map.stride)
+        out.ints[INT_MOVING_MADE] = Int64(self._moving_made)
+        out.ints[INT_MAP_SLOTS] = Int64(len(self._pixel.levels))
+        out.ints[INT_MAP_LEVELS] = Int64(len(self._pixel.starts))
+        out.ints[INT_MAP_FLOATS] = Int64(len(self._pixel.texels))
+        out.floats[FLOAT_EXPOSURE] = self.exposure
+        out.floats[FLOAT_BIAS] = self.shadow_bias
+        out.floats[FLOAT_FOG_RED] = self._gpu_fog_color[0]
+        out.floats[FLOAT_FOG_GREEN] = self._gpu_fog_color[1]
+        out.floats[FLOAT_FOG_BLUE] = self._gpu_fog_color[2]
+        out.floats[FLOAT_STILL_PER_METER] = self._still_map.per_meter
+        out.floats[FLOAT_MOVING_PER_METER] = self._moving_map.per_meter
+        out.pointers[POINTER_VERTICES] = address(self._vertices.unsafe_ptr())
+        out.pointers[POINTER_CORNERS] = address(self._gpu_corners.unsafe_ptr())
+        out.pointers[POINTER_CODES] = address(self._gpu_codes.unsafe_ptr())
+        out.pointers[POINTER_SKY] = address(self._gpu_sky.unsafe_ptr())
+        out.pointers[POINTER_STILL_DEPTH] = address(
+            self._still_map.depth.unsafe_ptr()
+        )
+        out.pointers[POINTER_STILL_CLIP] = address(
+            self._still_map.clip.elements.unsafe_ptr()
+        )
+        out.pointers[POINTER_MOVING_DEPTH] = address(
+            self._moving_map.depth.unsafe_ptr()
+        )
+        out.pointers[POINTER_MOVING_CLIP] = address(
+            self._moving_map.clip.elements.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_TEXELS] = address(
+            self._pixel.texels.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_STARTS] = address(
+            self._pixel.starts.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_WIDTHS] = address(
+            self._pixel.widths.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_HEIGHTS] = address(
+            self._pixel.heights.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_FIRSTS] = address(
+            self._pixel.firsts.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_COUNTS] = address(
+            self._pixel.levels.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_WRAPS_S] = address(
+            self._pixel.wraps_s.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_WRAPS_T] = address(
+            self._pixel.wraps_t.unsafe_ptr()
+        )
+        return out^
 
     def set_moving(mut self, scene: Scene, roots: List[NodeId]) raises:
         """Say which nodes move, so their meshes cast into the moving map.
@@ -1686,6 +1940,7 @@ struct GameRenderer(Movable):
             next_extra += made // STRIDE
         self._jobs = len(jobs)
         self.triangles = triangles
+        self._gpu_vertices = next_extra
 
     def _bin(self, width: Int, height: Int) raises -> List[List[Int32]]:
         """List each tile's triangles, in order, for an image of a size."""
