@@ -24,11 +24,14 @@ from extensions.village.boss import (
 from extensions.village.combat import Blow
 from extensions.village.combos import LIGHT_KEY
 from extensions.village.missiles import ARROW, ORB, SPARK, Missile
+from extensions.village.battle import Hurt
 from extensions.village.battle_hud import (
     BOSS_ROOM,
     boss_fights,
+    draw_hurts,
     draw_target,
     hud_drop,
+    hurt_way,
     target_name,
 )
 from extensions.village.raid_hud import draw_raid, draw_zone, zone_corners
@@ -207,6 +210,36 @@ def test_the_foe_locked_on_to_is_named_and_shown() raises:
     battle.lock = bandit
     draw_target(shown, battle, 30)
     assert_true(_changed(shown) > 0)
+
+
+def test_a_blow_on_the_player_marks_its_way_at_the_edge() raises:
+    # Ahead is up the frame, the camera's right is right, and a blow from
+    # where the player stands has no way.
+    var look = Vector3(0, 0, -1)
+    var feet = Vector3(1, 0, 1)
+    var ahead = hurt_way(feet, Vector3(1, 0, -4), look)
+    assert_almost_equal(ahead.x, 0, atol=1e-6)
+    assert_almost_equal(ahead.y, -1, atol=1e-6)
+    var right = hurt_way(feet, Vector3(5, 0, 1), look)
+    assert_almost_equal(right.x, 1, atol=1e-6)
+    assert_almost_equal(right.y, 0, atol=1e-6)
+    var none = hurt_way(feet, feet, look)
+    assert_equal(none.x, 0)
+    assert_equal(none.y, 0)
+    # A blow from the right marks the right edge, and fades with age.
+    var arena = Arena(arena_parameters(0, 0, 6))
+    arena.battle.feet = feet
+    var bare = _frame()
+    draw_hurts(bare, arena.battle, look)
+    assert_equal(_changed(bare), 0)
+    arena.battle.hurts.append(Hurt(Vector3(5, 0, 1), 0))
+    arena.battle.hurts.append(Hurt(feet, 0))
+    var fresh = _frame()
+    draw_hurts(fresh, arena.battle, look)
+    assert_true(_changed(fresh) > 0)
+    var x = Int(Float32(fresh.width) * 0.9)
+    var at = (fresh.height // 2 * fresh.width + x) * 4
+    assert_true(Int(fresh.pixels[at]) > Int(fresh.pixels[at + 2]))
 
 
 def test_a_rockfalls_mark_rings_the_marked() raises:
