@@ -3,14 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Tests for the reactions, requirements, windows, coatings, energy
-balances and recipes of `extensions.chemistry`.
+"""Tests for the reactions, requirements, windows, steps, coatings,
+energy balances and worked processes of `extensions.chemistry`.
 
 References, independent of the NASA data the module reads:
 
 - Normal boiling points, CRC Handbook: TiCl4 136.4 degC (409.6 K) and Mg
   1090 degC (1363 K).
 - Limestone calcines in one atmosphere of CO2 near 898 degC (1171 K).
+- Magnesium's vapor pressure, CRC Handbook: 1 Pa at 701 K, 10 Pa at
+  773 K, 100 Pa at 861 K, 1 kPa at 971 K, 10 kPa at 1132 K and 100 kPa
+  at 1361 K.
 - The Boudouard reaction C + CO2 = 2 CO balances near 700 degC (973 K).
 - Methane cracks to graphite and hydrogen above about 545 degC (818 K).
 - The Berman-Simon line puts graphite and diamond in balance at about
@@ -51,12 +54,8 @@ from extensions.chemistry.coating import (
     delamination_thickness,
     mismatch_stress,
 )
-from extensions.chemistry.economics import (
-    EnergyPrice64,
-    Ledger,
-    Money64,
+from extensions.chemistry.balance import (
     StreamItem,
-    UnitPrice64,
     heat_duty,
     stream_enthalpy,
 )
@@ -66,34 +65,47 @@ from extensions.chemistry.kinds import (
     Check,
     ENGINEERING,
     Hazard,
-    HOME_WORKSHOP,
-    INDUSTRIAL_PLANT,
     KINETIC,
     PHASE,
     PHYSICAL,
     PROCEEDS,
     RequirementKind,
-    Setting,
     THERMODYNAMIC,
 )
-from extensions.chemistry.process import (
-    Interval,
+from extensions.chemistry.processes.diamond import (
+    CEMENTED_CARBIDE,
+    CVD_DIAMOND,
+    diamond_coating,
+    hydrogen_filament,
+)
+from extensions.chemistry.processes.lime import lime_burning
+from extensions.chemistry.processes.titanium import (
+    kroll_reduction,
+    kroll_route,
+    tetrachloride_distillation,
+    titanium_chlorination,
+    vacuum_distillation,
+)
+from extensions.chemistry.requirement import (
+    Constraint,
     Requirement,
-    Step,
-    _intersect,
     above,
     action,
     below,
     held_back,
-    interval_text,
     kelvin_text,
-    met_intervals,
-    operating_window,
     pressure_above,
     pressure_below,
     proceeds,
-    report,
-    unmet,
+    signed_text,
+)
+from extensions.chemistry.step import Step, operating_window, report, unmet
+from extensions.chemistry.window import (
+    Interval,
+    interval_text,
+    intersect,
+    met_intervals,
+    window_of,
 )
 from extensions.chemistry.quantities import (
     ATMOSPHERE,
@@ -105,25 +117,9 @@ from extensions.chemistry.quantities import (
     TORR,
 )
 from extensions.chemistry.reaction import Reaction, Term, product, reactant
-from extensions.chemistry.recipes import (
-    CEMENTED_CARBIDE,
-    CVD_DIAMOND,
-    bismuth_crystals,
-    diamond_coating,
-    hydrogen_filament,
-    kroll_reduction,
-    kroll_route,
-    lime_burning,
-    tetrachloride_distillation,
-    titanium_chlorination,
-    vacuum_distillation,
-)
 from units.si import (
     GIGAPASCAL,
-    KILOGRAM,
-    KILOWATT_HOUR,
     Energy64,
-    Mass64,
     Pressure64,
     ThermalExpansion64,
 )
@@ -248,6 +244,39 @@ def test_equilibrium_temperatures() raises:
         _ = _calcination().equilibrium_temperature(_t(900), _t(1000), atm)
 
 
+def test_equilibrium_pressures() raises:
+    var boil = _boiling()
+    var temperatures: List[Float64] = [
+        701.0,
+        773.0,
+        861.0,
+        971.0,
+        1132.0,
+        1361.0,
+    ]
+    var pressure = 1.0
+    for t in temperatures:
+        var p = boil.equilibrium_pressure(
+            _t(t), Pressure64(1e-3), Pressure64(1e7)
+        )
+        assert_almost_equal(p.value / pressure, 1.0, atol=0.12)
+        pressure *= 10
+    # At its computed boiling point, TiCl4's vapor pressure is 1 atm.
+    var ticl4 = Reaction(
+        [
+            reactant(titanium_tetrachloride()),
+            product(titanium_tetrachloride_gas()),
+        ]
+    )
+    var bp = ticl4.equilibrium_temperature(_t(350), _t(500), _atm())
+    var p = ticl4.equilibrium_pressure(bp, Pressure64(1), Pressure64(1e7))
+    assert_almost_equal(p.value, 101325.0, atol=1e-3)
+    with assert_raises(contains="one sign"):
+        _ = boil.equilibrium_pressure(_t(900), Pressure64(1), Pressure64(2))
+    with assert_raises(contains="pressure must be finite"):
+        _ = boil.equilibrium_pressure(_t(900), Pressure64(0), Pressure64(2))
+
+
 def test_diamond_needs_pressure() raises:
     var change = Reaction([reactant(graphite()), product(diamond())])
     # Diamond is metastable at one bar...
@@ -299,26 +328,26 @@ def test_requirement_construction() raises:
 def test_requirement_checks() raises:
     var atm = _atm()
     var go = proceeds(THERMODYNAMIC, _calcination(), "go")
-    assert_true(go.is_met(_t(1190), atm))
-    assert_false(go.is_met(_t(1000), atm))
+    assert_true(go.holds(_t(1190), atm))
+    assert_false(go.holds(_t(1000), atm))
     # Outside the data, a reaction check is not met.
-    assert_false(go.is_met(_t(1300), atm))
+    assert_false(go.holds(_t(1300), atm))
     var stay = held_back(PHASE, _boiling(), "stay")
-    assert_true(stay.is_met(_t(1200), atm))
-    assert_false(stay.is_met(_t(1400), atm))
+    assert_true(stay.holds(_t(1200), atm))
+    assert_false(stay.holds(_t(1400), atm))
     var hot = above(KINETIC, _t(900), "hot", "src")
-    assert_true(hot.is_met(_t(901), atm))
-    assert_false(hot.is_met(_t(900), atm))
+    assert_true(hot.holds(_t(901), atm))
+    assert_false(hot.holds(_t(900), atm))
     var cool = below(ENGINEERING, _t(900), "cool", "src")
-    assert_true(cool.is_met(_t(899), atm))
-    assert_false(cool.is_met(_t(900), atm))
+    assert_true(cool.holds(_t(899), atm))
+    assert_false(cool.holds(_t(900), atm))
     var dense = pressure_above(PHYSICAL, Pressure64(1000), "dense", "src")
-    assert_true(dense.is_met(_t(900), atm))
-    assert_false(dense.is_met(_t(900), Pressure64(1000)))
+    assert_true(dense.holds(_t(900), atm))
+    assert_false(dense.holds(_t(900), Pressure64(1000)))
     var thin = pressure_below(PHYSICAL, Pressure64(1000), "thin", "src")
-    assert_true(thin.is_met(_t(900), Pressure64(10)))
-    assert_false(thin.is_met(_t(900), atm))
-    assert_true(action(ENGINEERING, "do", "src").is_met(_t(900), atm))
+    assert_true(thin.holds(_t(900), Pressure64(10)))
+    assert_false(thin.holds(_t(900), atm))
+    assert_true(action(ENGINEERING, "do", "src").holds(_t(900), atm))
 
 
 def test_requirement_descriptions() raises:
@@ -358,24 +387,24 @@ def test_text() raises:
 
 
 def _step() raises -> Step:
-    return Step("test", HOME_WORKSHOP, _atm(), _t(300), _t(1000), _t(500))
+    return Step("test", _atm(), _t(300), _t(1000), _t(500))
 
 
 def test_step_refuses_bad_values() raises:
-    with assert_raises(contains="setting is not valid"):
-        _ = Step("x", Setting(4), _atm(), _t(300), _t(1000), _t(500))
     with assert_raises(contains="pressure must be finite"):
-        _ = Step("x", HOME_WORKSHOP, Pressure64(0), _t(300), _t(1000), _t(500))
+        _ = Step("x", Pressure64(0), _t(300), _t(1000), _t(500))
+    with assert_raises(contains="pressure must be finite"):
+        _ = Step("x", Pressure64(NAN), _t(300), _t(1000), _t(500))
     with assert_raises(contains="physical temperatures"):
-        _ = Step("x", HOME_WORKSHOP, _atm(), _t(-1), _t(1000), _t(500))
+        _ = Step("x", _atm(), _t(-1), _t(1000), _t(500))
     with assert_raises(contains="physical temperatures"):
-        _ = Step("x", HOME_WORKSHOP, _atm(), _t(300), _t(INF), _t(500))
+        _ = Step("x", _atm(), _t(300), _t(INF), _t(500))
     with assert_raises(contains="must increase"):
-        _ = Step("x", HOME_WORKSHOP, _atm(), _t(300), _t(300), _t(300))
+        _ = Step("x", _atm(), _t(300), _t(300), _t(300))
     with assert_raises(contains="planned"):
-        _ = Step("x", HOME_WORKSHOP, _atm(), _t(300), _t(1000), _t(200))
+        _ = Step("x", _atm(), _t(300), _t(1000), _t(200))
     with assert_raises(contains="planned"):
-        _ = Step("x", HOME_WORKSHOP, _atm(), _t(300), _t(1000), _t(2000))
+        _ = Step("x", _atm(), _t(300), _t(1000), _t(2000))
     var step = _step()
     with assert_raises(contains="hazard is not valid"):
         step.add_hazard(Hazard(12))
@@ -397,6 +426,8 @@ def test_met_intervals() raises:
     assert_equal(len(met), 0)
     with assert_raises(contains="pressure must be finite"):
         _ = met_intervals(cool, _t(300), _t(1000), Pressure64(NAN))
+    with assert_raises(contains="pressure must be finite"):
+        _ = met_intervals(cool, _t(300), _t(1000), Pressure64(0))
     with assert_raises(contains="physical and increase"):
         _ = met_intervals(cool, _t(-1), _t(1000), atm)
     with assert_raises(contains="physical and increase"):
@@ -405,18 +436,68 @@ def test_met_intervals() raises:
         _ = met_intervals(cool, _t(1000), _t(300), atm)
 
 
-def test_intersect() raises:
+def testintersect() raises:
     var short: List[Interval] = [Interval(_t(1), _t(2))]
     var long: List[Interval] = [Interval(_t(0), _t(5))]
-    var a = _intersect(short, long)
+    var a = intersect(short, long)
     assert_equal(len(a), 1)
     assert_almost_equal(a[0].low.kelvin, 1.0, atol=0)
-    var b = _intersect(long, short)
+    var b = intersect(long, short)
     assert_equal(len(b), 1)
     assert_almost_equal(b[0].high.kelvin, 2.0, atol=0)
     var apart: List[Interval] = [Interval(_t(3), _t(4))]
-    assert_equal(len(_intersect(apart, short)), 0)
-    assert_equal(len(_intersect(List[Interval](), short)), 0)
+    assert_equal(len(intersect(apart, short)), 0)
+    assert_equal(len(intersect(List[Interval](), short)), 0)
+
+
+@fieldwise_init
+struct _Near(Constraint):
+    """A constraint defined outside the package: within 50 K of a target."""
+
+    var target: Float64
+
+    def holds(
+        self, temperature: Temperature64, pressure: Pressure64
+    ) raises -> Bool:
+        return abs(temperature.kelvin - self.target) < 50
+
+    def describe(
+        self, temperature: Temperature64, pressure: Pressure64
+    ) raises -> String:
+        return String("within 50 K of ", self.target)
+
+
+def test_custom_constraint() raises:
+    var atm = _atm()
+    var near = _Near(1100)
+    var met = met_intervals(near, _t(800), _t(1500), atm)
+    assert_equal(len(met), 1)
+    assert_almost_equal(met[0].low.kelvin, 1050.0, atol=1e-6)
+    assert_almost_equal(met[0].high.kelvin, 1150.0, atol=1e-6)
+    assert_equal(near.describe(_t(1), atm), "within 50 K of 1100.0")
+    # Two of them, then the Kroll window narrowed by a custom one.
+    var both: List[_Near] = [_Near(1100), _Near(1140)]
+    var w = window_of(both, _t(800), _t(1500), atm)
+    assert_equal(len(w), 1)
+    assert_almost_equal(w[0].low.kelvin, 1090.0, atol=1e-6)
+    var kroll = kroll_reduction()
+    var narrowed = intersect(
+        operating_window(kroll),
+        met_intervals(_Near(1000), kroll.low, kroll.high, kroll.pressure),
+    )
+    assert_almost_equal(narrowed[0].low.kelvin, 987.0, atol=1e-3)
+    assert_almost_equal(narrowed[0].high.kelvin, 1050.0, atol=1e-6)
+
+
+def test_window_of_no_constraints() raises:
+    var none = List[Requirement]()
+    var w = window_of(none, _t(300), _t(400), _atm())
+    assert_equal(len(w), 1)
+    assert_almost_equal(w[0].high.kelvin, 400.0, atol=0)
+    with assert_raises(contains="physical and increase"):
+        _ = window_of(none, _t(400), _t(300), _atm())
+    assert_equal(signed_text(-2.25), "-2.3")
+    assert_equal(signed_text(0), "+0.0")
 
 
 def test_window_and_report_edges() raises:
@@ -457,7 +538,6 @@ def test_kroll_route() raises:
     var route = kroll_route()
     assert_equal(len(route), 4)
     for s in route:
-        assert_true(s.setting == INDUSTRIAL_PLANT)
         assert_equal(unmet(s), 0)
     # Chlorination: a kinetic floor at 900 degC.
     var chlorinate = _window(titanium_chlorination())
@@ -504,12 +584,8 @@ def test_diamond_recipe() raises:
     assert_almost_equal(filament.high.to(CELSIUS), 3422.0, atol=1e-3)
 
 
-def test_home_recipes() raises:
-    var bismuth = bismuth_crystals()
-    assert_true(bismuth.setting == HOME_WORKSHOP)
-    assert_almost_equal(_window(bismuth).low.kelvin, 544.55, atol=1e-3)
-    var lime_step = lime_burning()
-    var w = _window(lime_step)
+def test_lime() raises:
+    var w = _window(lime_burning())
     assert_almost_equal(w.low.kelvin, 1171.0, atol=6.0)
     # The calcite data stops at 1200 K, so the window does too.
     assert_almost_equal(w.high.kelvin, 1200.0, atol=1e-6)
@@ -607,37 +683,6 @@ def test_heat_duty() raises:
     negative.append(StreamItem(lime(), Amount64(-1), _t(300)))
     with assert_raises(contains="amount"):
         _ = stream_enthalpy(negative)
-
-
-def test_ledger() raises:
-    var book = Ledger()
-    book.buy(Mass64(2, KILOGRAM), UnitPrice64(0.5))
-    book.heat(
-        Energy64(1, KILOWATT_HOUR), EnergyPrice64.per_kilowatt_hour(0.2), 0.5
-    )
-    # Heat given off costs nothing.
-    book.heat(
-        Energy64(-5, KILOWATT_HOUR), EnergyPrice64.per_kilowatt_hour(0.2), 0.5
-    )
-    book.sell(Mass64(1, KILOGRAM), UnitPrice64(3))
-    assert_almost_equal(book.spent.value, 1.0 + 0.4, atol=1e-12)
-    assert_almost_equal(book.earned.value, 3.0, atol=1e-12)
-    assert_almost_equal(book.margin().value, 1.6, atol=1e-12)
-    assert_almost_equal((Money64(2) + Money64(1)).value, 3.0, atol=0)
-    var price = EnergyPrice64.per_kilowatt_hour(0.36)
-    assert_almost_equal(price.cost(Energy64(1e7)).value, 1.0, atol=1e-12)
-    with assert_raises(contains="mass must be finite"):
-        book.buy(Mass64(NAN), UnitPrice64(1))
-    with assert_raises(contains="price must be finite"):
-        book.sell(Mass64(1), UnitPrice64(-1))
-    with assert_raises(contains="heat duty"):
-        book.heat(Energy64(INF), price, 0.5)
-    with assert_raises(contains="price must be finite"):
-        book.heat(Energy64(1), EnergyPrice64(NAN), 0.5)
-    with assert_raises(contains="efficiency"):
-        book.heat(Energy64(1), price, 0)
-    with assert_raises(contains="efficiency"):
-        book.heat(Energy64(1), price, 1.5)
 
 
 def main() raises:

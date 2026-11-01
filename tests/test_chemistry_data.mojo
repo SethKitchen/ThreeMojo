@@ -42,6 +42,13 @@ from extensions.chemistry.catalog import (
     titanium_tetrachloride_gas,
 )
 from extensions.chemistry.elements import (
+    ALUMINUM,
+    COBALT,
+    FLUORINE,
+    SILICON,
+    URANIUM,
+    element_from_symbol,
+    parse_formula,
     BISMUTH,
     CARBON,
     CHLORINE,
@@ -65,13 +72,10 @@ from extensions.chemistry.kinds import (
     Check,
     ELECTRICAL,
     ENGINEERING,
-    EQUIPPED_LAB,
     FLAMMABLE_GAS,
     GAS,
     HELD_BACK,
-    HOME_WORKSHOP,
     Hazard,
-    INDUSTRIAL_PLANT,
     KINETIC,
     LIQUID,
     PHASE,
@@ -84,7 +88,6 @@ from extensions.chemistry.kinds import (
     Phase,
     RequirementKind,
     SOLID,
-    Setting,
     THERMODYNAMIC,
     TOXIC_GAS,
 )
@@ -177,15 +180,6 @@ def test_hazard() raises:
     assert_equal(Hazard(70).name(), "?")
 
 
-def test_setting() raises:
-    assert_true(INDUSTRIAL_PLANT.is_valid())
-    assert_false(Setting(3).is_valid())
-    assert_equal(HOME_WORKSHOP.name(), "home workshop")
-    assert_equal(EQUIPPED_LAB.name(), "equipped lab")
-    assert_equal(INDUSTRIAL_PLANT.name(), "industrial plant")
-    assert_equal(Setting(3).name(), "?")
-
-
 # --- quantities -------------------------------------------------------------
 
 
@@ -242,11 +236,19 @@ def test_elements() raises:
     assert_true(HYDROGEN.is_valid())
     assert_true(ZINC.is_valid())
     assert_true(BISMUTH.is_valid())
-    assert_false(Element(31).is_valid())
+    assert_true(URANIUM.is_valid())
+    # Technetium, promethium and polonium have no standard atomic weight.
+    assert_false(Element(43).is_valid())
+    assert_false(Element(61).is_valid())
+    assert_false(Element(84).is_valid())
     assert_false(Element(0).is_valid())
+    assert_false(Element(93).is_valid())
     assert_equal(TITANIUM.symbol(), "Ti")
     assert_equal(GOLD.symbol(), "Au")
     assert_equal(Element(43).symbol(), "?")
+    assert_almost_equal(
+        URANIUM.atomic_weight().to(GRAM_PER_MOLE), 238.03, atol=1e-12
+    )
     assert_almost_equal(
         TITANIUM.atomic_weight().to(GRAM_PER_MOLE), 47.867, atol=1e-12
     )
@@ -281,6 +283,68 @@ def test_formula() raises:
         _ = Formula([ElementCount(CARBON, 0)])
     with assert_raises(contains="once"):
         _ = Formula([ElementCount(CARBON, 1), ElementCount(CARBON, 2)])
+
+
+def test_element_symbols() raises:
+    assert_true(element_from_symbol("Ti") == TITANIUM)
+    assert_true(element_from_symbol("TI") == TITANIUM)
+    assert_true(element_from_symbol("cl") == CHLORINE)
+    assert_true(element_from_symbol("U") == URANIUM)
+    with assert_raises(contains="symbol 'Xx'"):
+        _ = element_from_symbol("Xx")
+    with assert_raises(contains="symbol 'Tc'"):
+        _ = element_from_symbol("Tc")
+
+
+def test_parse_formula() raises:
+    var ticl4 = parse_formula("TiCl4")
+    assert_equal(String(ticl4), "TiCl4")
+    var hydroxide = parse_formula("Ca(OH)2")
+    assert_equal(String(hydroxide), "CaO2H2")
+    assert_equal(hydroxide.count_of(HYDROGEN), 2)
+    # A repeated element is counted once, where it first appears.
+    var acid = parse_formula("CH3COOH")
+    assert_equal(String(acid), "C2H4O2")
+    # Nested groups multiply.
+    var nested = parse_formula("Mg3(Si2(O5))2")
+    assert_equal(nested.count_of(OXYGEN), 10)
+    assert_equal(nested.count_of(SILICON), 4)
+    assert_equal(parse_formula("CO").count_of(CARBON), 1)
+    assert_equal(parse_formula("Co").count_of(COBALT), 1)
+    assert_equal(parse_formula("Al2O3").count_of(ALUMINUM), 2)
+    assert_equal(parse_formula("UF6").count_of(FLUORINE), 6)
+    assert_equal(parse_formula("C999999").count_of(CARBON), 999999)
+
+
+def test_parse_formula_refuses_bad_text() raises:
+    with assert_raises(contains="at least one element"):
+        _ = parse_formula("")
+    with assert_raises(contains="unmatched '('"):
+        _ = parse_formula("Ca(OH")
+    with assert_raises(contains="unmatched ')'"):
+        _ = parse_formula("CaOH)2")
+    with assert_raises(contains="must hold an element"):
+        _ = parse_formula("Ca()2")
+    with assert_raises(contains="must be positive"):
+        _ = parse_formula("H0")
+    with assert_raises(contains="too large"):
+        _ = parse_formula("C1234567")
+    with assert_raises(contains="too large"):
+        _ = parse_formula("(C999999)999999(C999999)999999")
+    with assert_raises(contains="only element symbols"):
+        _ = parse_formula("H2O!")
+    with assert_raises(contains="only element symbols"):
+        _ = parse_formula("[H2O]")
+    with assert_raises(contains="only element symbols"):
+        _ = parse_formula("h2o")
+    with assert_raises(contains="symbol 'Q'"):
+        _ = parse_formula("Q2")
+    # A small letter that follows a symbol is part of it.
+    with assert_raises(contains="symbol 'Hz'"):
+        _ = parse_formula("Hz")
+    # A brace after a symbol is not a small letter.
+    with assert_raises(contains="only element symbols"):
+        _ = parse_formula("H{")
 
 
 def test_formula_index() raises:

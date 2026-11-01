@@ -3,23 +3,23 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Print the requirements and operating windows of the process recipes.
+"""Print the requirements and operating windows of the worked processes.
 
-    mojo run -I . tools/process_report.mojo [titanium|diamond|bismuth|lime]
+    mojo run -I . tools/process_report.mojo [titanium|diamond|lime]
 
-With no name, the tool prints every recipe. Each step gives its setting,
-its hazards, its operating window, and each requirement at the planned
-temperature. The titanium recipe adds the magnesium and the heat per
-kilogram of titanium. The diamond recipe adds the residual stress of the
-coating and the thickest coating that does not peel. The lime recipe adds
-a ledger.
+With no name, the tool prints every process. Each step gives its hazards,
+its pressure, its operating window, and each requirement at the planned
+temperature. The titanium process adds the magnesium and the heat duty
+per kilogram of titanium. The diamond process adds the residual stress of
+the coating and the thickest coating that does not peel, for an example
+interface fracture energy. The lime process adds its heat duty.
 
-The fracture energy and the prices are example inputs, not data. Replace
-them with measured values and quotes. See the wiki page Process chemistry.
+See the wiki page Process chemistry.
 """
 
 from std.sys import argv, exit, stderr
 
+from extensions.chemistry.balance import StreamItem, heat_duty
 from extensions.chemistry.catalog import (
     calcite,
     carbon_dioxide,
@@ -33,39 +33,27 @@ from extensions.chemistry.coating import (
     delamination_thickness,
     mismatch_stress,
 )
-from extensions.chemistry.economics import (
-    EnergyPrice64,
-    Ledger,
-    StreamItem,
-    UnitPrice64,
-    heat_duty,
+from extensions.chemistry.processes.diamond import (
+    CEMENTED_CARBIDE,
+    CVD_DIAMOND,
+    diamond_coating,
+    hydrogen_filament,
 )
-from extensions.chemistry.process import report
+from extensions.chemistry.processes.lime import lime_burning
+from extensions.chemistry.processes.titanium import kroll_route
 from extensions.chemistry.quantities import (
     FractureEnergy64,
     MICROMETER,
     amount_of,
 )
 from extensions.chemistry.reaction import Reaction, product, reactant
-from extensions.chemistry.recipes import (
-    CEMENTED_CARBIDE,
-    CVD_DIAMOND,
-    bismuth_crystals,
-    diamond_coating,
-    hydrogen_filament,
-    kroll_route,
-    lime_burning,
-)
+from extensions.chemistry.step import report
 from loaders.js_number import js_to_fixed
 from units.si import GIGAPASCAL, KILOGRAM, KILOWATT_HOUR, Mass64
 from units.temperature import CELSIUS, Temperature64
 
-# Example inputs. They are not market data or measurements.
+# An example interface fracture energy, J/m^2. Measure it on the surface.
 comptime _TOUGHNESS = 30.0
-comptime _LIMESTONE_PRICE = 0.10
-comptime _QUICKLIME_PRICE = 0.40
-comptime _ELECTRICITY_PRICE = 0.15
-comptime _KILN_EFFICIENCY = 0.25
 
 
 def _titanium() raises:
@@ -105,7 +93,7 @@ def _titanium() raises:
 
 
 def _diamond() raises:
-    """Print the diamond recipe, then the coating's stress and limit."""
+    """Print the diamond process, then the coating's stress and limit."""
     print(report(diamond_coating()))
     print(report(hydrogen_filament()))
     var stress = mismatch_stress(
@@ -131,7 +119,7 @@ def _diamond() raises:
 
 
 def _lime() raises:
-    """Print the lime recipe, then the heat and a ledger for one kg."""
+    """Print the lime process, then its heat duty per kg of limestone."""
     print(report(lime_burning()))
     var n = amount_of(Mass64(1, KILOGRAM), calcite().molar_mass())
     var feed = List[StreamItem]()
@@ -141,19 +129,13 @@ def _lime() raises:
     out.append(StreamItem(lime(), n, hot))
     out.append(StreamItem(carbon_dioxide(), n, hot))
     var duty = heat_duty(feed, out)
-    var quicklime = lime().molar_mass().times(n)
-    var book = Ledger()
-    book.buy(Mass64(1, KILOGRAM), UnitPrice64(_LIMESTONE_PRICE))
-    book.heat(
-        duty,
-        EnergyPrice64.per_kilowatt_hour(_ELECTRICITY_PRICE),
-        _KILN_EFFICIENCY,
-    )
-    book.sell(quicklime, UnitPrice64(_QUICKLIME_PRICE))
-    print("Per kilogram of limestone, with example prices:")
+    print("Per kilogram of limestone, from 25 degC to 900 degC:")
     print("  Heat duty:", js_to_fixed(duty.to(KILOWATT_HOUR), 3), "kWh")
-    print("  Quicklime:", js_to_fixed(quicklime.to(KILOGRAM), 3), "kg")
-    print("  Margin:", js_to_fixed(book.margin().value, 3), "\n")
+    print(
+        "  Quicklime:",
+        js_to_fixed(lime().molar_mass().times(n).to(KILOGRAM), 3),
+        "kg\n",
+    )
 
 
 def main() raises:
@@ -167,12 +149,9 @@ def main() raises:
     if name == "all" or name == "diamond":
         _diamond()
         known = True
-    if name == "all" or name == "bismuth":
-        print(report(bismuth_crystals()))
-        known = True
     if name == "all" or name == "lime":
         _lime()
         known = True
     if not known:
-        print("Name a recipe: titanium, diamond, bismuth or lime.", file=stderr)
+        print("Name a process: titanium, diamond or lime.", file=stderr)
         exit(2)

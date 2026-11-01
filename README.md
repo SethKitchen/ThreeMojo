@@ -769,9 +769,9 @@ Earth-retaining structures and the pictures that explain them. A checked box rec
 
 ### Process chemistry
 
-The requirements that turn a raw material into a product. A checked box records implemented scope. It is not an operating procedure.
+A library for the requirements that turn a material into a product. A checked box records implemented scope. It is not an operating procedure.
 
-- [x] [Process chemistry](https://github.com/SethKitchen/ThreeMojo/wiki/Process-chemistry): NASA thermochemical data, reactions, and process steps with thermodynamic, phase, kinetic, physical and engineering requirements. Operating windows, hazards, coating stress, heat duties and a ledger. Kroll titanium, a diamond-coated tool, bismuth crystals and lime [#929](https://github.com/SethKitchen/ThreeMojo/issues/929)
+- [x] [Process chemistry](https://github.com/SethKitchen/ThreeMojo/wiki/Process-chemistry): NASA thermochemical data and a CHEMKIN reader, formulas, reactions and their equilibrium temperature and pressure. Steps with thermodynamic, phase, kinetic, physical and engineering requirements, a `Constraint` trait, operating windows, coating stress and heat duties. Worked processes: Kroll titanium, a diamond-coated tool and lime [#929](https://github.com/SethKitchen/ThreeMojo/issues/929)
 
 ### Out of scope
 

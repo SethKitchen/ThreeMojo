@@ -3583,16 +3583,6 @@
       "function declared here"
     ]
   },
-  "tests/compile_fail/a_setting_is_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 28,
-        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Setting'"
-      }
-    ],
-    "notes": []
-  },
   "tests/compile_fail/a_sex_is_not_a_bare_int.mojo": {
     "errors": [
       {

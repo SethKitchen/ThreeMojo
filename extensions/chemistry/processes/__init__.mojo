@@ -3,11 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A setting must be a `Setting`, not a bare integer."""
+"""Worked processes, one module each: titanium, diamond and lime.
 
-from extensions.chemistry.kinds import Setting
-
-
-def main():
-    var setting: Setting = 0
-    _ = setting.is_valid()
+Each function returns a `Step` with its requirements. Add a process as a
+new module here, built from the public layers of `extensions.chemistry`.
+"""

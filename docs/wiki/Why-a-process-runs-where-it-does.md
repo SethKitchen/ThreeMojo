@@ -34,8 +34,6 @@ Diamond is not the stable form of carbon at low pressure. Graphite to diamond ha
 
 A hot-filament reactor still grows diamond coatings at 30 Torr. Methane at 1 % in hydrogen can deposit either form, because both changes are negative. Atomic hydrogen from the filament etches graphite much faster than diamond. So the diamond survives, and kinetics chooses the product that thermodynamics does not prefer.
 
-## Value comes from the whole chain
+## Chemistry keeps the elements
 
-A process makes money only when the product is worth more than its inputs, its energy and its equipment. The model computes the mass of each reagent and the heat of each step. A ledger then compares them with prices. The prices are your inputs, because markets change and the model does not know them.
-
-Chemistry can separate and combine elements. It cannot change one element into another. Transmutation of mercury into gold needs nuclear reactions, such as those of fusion neutrons, and is outside this model.
+Chemistry can separate and combine elements. It cannot change one element into another. Transmutation, such as mercury into gold, needs nuclear reactions and is outside this model.

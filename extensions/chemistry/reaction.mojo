@@ -30,7 +30,7 @@ proceeds.
                               Pressure64(1, ATMOSPHERE))   # 1167 K
 """
 
-from std.math import isfinite, log
+from std.math import exp, isfinite, log
 from extensions.chemistry.elements import ElementCount, formula_index
 from extensions.chemistry.quantities import (
     GAS_CONSTANT,
@@ -271,6 +271,44 @@ struct Reaction(Copyable, Movable, Writable):
             else:
                 hi = mid
         return Temperature64(0.5 * (lo + hi))
+
+    def equilibrium_pressure(
+        self, temperature: Temperature64, low: Pressure64, high: Pressure64
+    ) raises -> Pressure64:
+        """Return the total pressure where the change crosses zero.
+
+        The search halves the range on a logarithmic scale, so it can span
+        many decades. For an evaporation with a pure vapor, the result is
+        the vapor pressure. For a decomposition that gives off one gas, it
+        is the decomposition pressure.
+
+        Args:
+            temperature: The temperature.
+            low: The low end of the search.
+            high: The high end of the search.
+
+        Returns:
+            The crossing, to far better than a part in a million.
+
+        Raises:
+            Error: If the temperature or an end is not physical, the data
+                does not reach the temperature, or the change has the same
+                sign at both ends.
+        """
+        var g_lo = self.delta_g(temperature, low).value
+        var g_hi = self.delta_g(temperature, high).value
+        if (g_lo < 0) == (g_hi < 0):
+            raise Error("The change has one sign over the search range")
+        var lo = log(low.value)
+        var hi = log(high.value)
+        for _ in range(_BISECTIONS):  # pragma: no branch
+            var mid = 0.5 * (lo + hi)
+            var g = self.delta_g(temperature, Pressure64(exp(mid))).value
+            if (g < 0) == (g_lo < 0):
+                lo = mid
+            else:
+                hi = mid
+        return Pressure64(exp(0.5 * (lo + hi)))
 
     def mass_ratio(self, of: Substance, per: Substance) raises -> Float64:
         """Return the mass of one substance per mass of another.

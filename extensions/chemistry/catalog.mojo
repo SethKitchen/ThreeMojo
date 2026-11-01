@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The substances of the process recipes, with their NASA data.
+"""Built-in substances, with their NASA data.
 
 The coefficients are copied unchanged from McBride, Gordon and Reno,
 "Coefficients for Calculating Thermodynamic and Transport Properties of

@@ -1,76 +1,48 @@
 # Process chemistry
 
-`extensions/chemistry/` models the requirements of a process step: what must hold for a material to become a product. It computes driving forces and phase changes from NASA thermochemical data. It checks stated bounds from practice and from the equipment. It returns the operating window, the temperatures where every requirement holds, and a report that says why each bound is there.
+`extensions/chemistry/` is a library that models the requirements of a process step: what must hold for a material to become a product. It computes driving forces and phase changes from thermochemical data. It checks stated bounds from experiments and from the equipment. It returns the operating window, the temperatures where every requirement holds, and a report that says why each bound is there.
 
 This is not a three.js port. See [Extensions](Extensions). For the reasons behind the method, see [Why a process runs where it does](Why-a-process-runs-where-it-does).
 
-## Print the recipes
+## Layers
 
-```sh
-.venv/bin/mojo run -I . tools/process_report.mojo            # every recipe
-.venv/bin/mojo run -I . tools/process_report.mojo titanium   # one recipe
-```
-
-The names are `titanium`, `diamond`, `bismuth` and `lime`. Each step prints its setting, its hazards, its window and each requirement at the planned temperature:
-
-```text
-Reduce TiCl4 with magnesium (Kroll)
-  Setting: industrial plant
-  Hazards: toxic gas, pyrophoric, burn
-  Pressure: 101.325 kPa
-  Window: 987.0 K (713.9 degC) to 1358.2 K (1085.0 degC)
-  Planned: 1123.2 K (850.0 degC), every requirement met
-  [met] thermodynamic: Magnesium must reduce the chloride.
-      TiCl4(g) + 2 Mg -> Ti + 2 MgCl2: dG -309.9 kJ/mol; computed from NASA TM-4513 data
-  [met] phase: MgCl2 must be liquid, so it can be drained from the retort.
-      bound 987.0 K (713.9 degC); melting point in the NASA TM-4513 data
-  [met] phase: Magnesium must not boil away at the retort pressure.
-      Mg -> Mg(g): dG +23.0 kJ/mol; computed from NASA TM-4513 data
-  [met] engineering: The steel retort must stay below the Fe-Ti eutectic.
-      bound 1358.2 K (1085.0 degC); Murray (1981), the Fe-Ti phase diagram: 1085 degC
-  [do] engineering: Fill the retort with argon. ...
-  Fact: Ti + O2(g) -> TiO2: dG -741.0 kJ/mol, proceeds
-```
-
-The titanium recipe also prints the magnesium and the heat per kilogram of titanium. The diamond recipe prints the stress in the coating and the thickest coating that does not peel. The lime recipe prints a ledger. The fracture energy and the prices in the tool are example inputs. Replace them with your own measurements and quotes.
-
-## Modules
+Each layer uses only the layers above it in this table. Extend the library at the layer that owns the concept.
 
 | Module | What it gives |
 |---|---|
-| `kinds` | `Phase`, `RequirementKind`, `Check`, `Hazard` and `Setting` |
 | `quantities` | `Molar` values per mole, `Amount64`, `GAS_CONSTANT`, `STANDARD_PRESSURE`, `BAR`, `ATMOSPHERE`, `TORR`, `MICROMETER`, `FractureEnergy64` and `amount_of` |
-| `elements` | `Element` for 41 elements, with IUPAC 2021 atomic weights, and `Formula` |
+| `kinds` | `Phase`, `RequirementKind`, `Check` and `Hazard` |
+| `elements` | `Element` for the 84 elements with an IUPAC standard atomic weight, `element_from_symbol`, `Formula` and `parse_formula` |
 | `thermo` | `Nasa7`, `Species` and `Substance` |
-| `catalog` | The substances of the recipes, with NASA TM-4513 data |
-| `reaction` | `Term`, `reactant`, `product` and `Reaction`, with `delta_g`, `delta_h`, `equilibrium_temperature` and `mass_ratio` |
-| `process` | `Requirement`, its constructors, `Step`, `met_intervals`, `operating_window`, `unmet` and `report` |
+| `chemkin` | `read_chemkin_thermo`, a reader for CHEMKIN thermo files |
+| `catalog` | Built-in substances, with NASA TM-4513 data |
+| `reaction` | `Term`, `reactant`, `product` and `Reaction`, with `delta_g`, `delta_h`, `equilibrium_temperature`, `equilibrium_pressure` and `mass_ratio` |
+| `requirement` | The `Constraint` trait, `Requirement` and its constructors |
+| `window` | `Interval`, `met_intervals`, `intersect` and `window_of`, for any constraint |
+| `step` | `Step`, `operating_window`, `unmet` and `report` |
 | `coating` | `ElasticLayer`, `mismatch_stress` and `delamination_thickness` |
-| `economics` | `StreamItem`, `stream_enthalpy`, `heat_duty`, `Money64`, `UnitPrice64`, `EnergyPrice64` and `Ledger` |
-| `recipes` | The Kroll route, a diamond coating on a carbide tool, bismuth crystals and lime |
+| `balance` | `StreamItem`, `stream_enthalpy` and `heat_duty` |
+| `processes` | Worked processes: `titanium`, `diamond` and `lime` |
 
 ## Model a step
 
-Make a `Step` with its setting, its pressure, a range to search and the planned temperature. Add one requirement for each condition. Then ask for the window and the report.
+Make a `Step` with its pressure, a range to search and the planned temperature. Add one requirement for each condition. Then ask for the window and the report.
 
 ```mojo
 from extensions.chemistry.catalog import (
     magnesium, magnesium_chloride, magnesium_gas, titanium,
     titanium_tetrachloride_gas,
 )
-from extensions.chemistry.kinds import (
-    ENGINEERING, INDUSTRIAL_PLANT, PHASE, THERMODYNAMIC,
-)
-from extensions.chemistry.process import (
-    Step, above, below, held_back, operating_window, proceeds, report,
-)
+from extensions.chemistry.kinds import ENGINEERING, PHASE, THERMODYNAMIC
 from extensions.chemistry.quantities import ATMOSPHERE
 from extensions.chemistry.reaction import Reaction, product, reactant
+from extensions.chemistry.requirement import above, below, held_back, proceeds
+from extensions.chemistry.step import Step, operating_window, report
 from units.si import Pressure64
 from units.temperature import CELSIUS, Temperature64
 
 var step = Step(
-    "Reduce TiCl4", INDUSTRIAL_PLANT, Pressure64(1, ATMOSPHERE),
+    "Reduce TiCl4", Pressure64(1, ATMOSPHERE),
     Temperature64(800), Temperature64(1500), Temperature64(850, CELSIUS),
 )
 step.add(proceeds(THERMODYNAMIC, Reaction([
@@ -88,23 +60,79 @@ var window = operating_window(step)   # 987 K to 1358 K
 print(report(step))
 ```
 
+The report gives each requirement at the planned temperature, with its number and its source:
+
+```text
+Reduce TiCl4
+  Hazards: none listed
+  Pressure: 101.325 kPa
+  Window: 987.0 K (713.9 degC) to 1358.2 K (1085.0 degC)
+  Planned: 1123.2 K (850.0 degC), every requirement met
+  [met] thermodynamic: Magnesium must reduce the chloride.
+      TiCl4(g) + 2 Mg -> Ti + 2 MgCl2: dG -309.9 kJ/mol; computed from the thermochemical data
+  [met] phase: MgCl2 must drain as a liquid.
+      bound 987.0 K (713.9 degC); NASA TM-4513
+  ...
+```
+
 `step.add_hazard` adds a `Hazard`. `step.add_fact` adds a reaction that the report evaluates at the planned temperature. A fact does not limit the window. `unmet(step)` counts the requirements that fail at the planned temperature.
 
 ## Requirements
 
-Each requirement has a `RequirementKind`: `THERMODYNAMIC`, `PHASE`, `KINETIC`, `PHYSICAL` or `ENGINEERING`. The kind names the science that the requirement comes from. The `Check` says how the module tests it:
+Each requirement has a `RequirementKind`: `THERMODYNAMIC`, `PHASE`, `KINETIC`, `PHYSICAL` or `ENGINEERING`. The kind names the science that the requirement comes from. The `Check` says how the library tests it:
 
 | Constructor | Check | Holds where |
 |---|---|---|
 | `proceeds` | `PROCEEDS` | The reaction's Gibbs energy change is below zero |
 | `held_back` | `HELD_BACK` | The change is above zero |
 | `above`, `below` | `ABOVE`, `BELOW` | The temperature is above or below the stated bound |
-| `pressure_above`, `pressure_below` | `PRESSURE_ABOVE`, `PRESSURE_BELOW` | The step's pressure is above or below the bound |
+| `pressure_above`, `pressure_below` | `PRESSURE_ABOVE`, `PRESSURE_BELOW` | The pressure is above or below the bound |
 | `action` | `ACTION` | Always. The report lists it as a thing to do |
 
 A reaction check computes its result. A phase change is a reaction too, so a boiling point at the step's pressure comes from the data. A stated bound names its source. A reaction check is not met where a substance's data does not reach.
 
-`met_intervals` samples a requirement at 400 points in the range and finds each change by bisection. `operating_window` intersects the intervals of every requirement. A feature narrower than a 400th of the range can be missed.
+## Add a constraint
+
+`Constraint` is the extension point for a new kind of requirement. A type that implements `holds` and `describe` works with `met_intervals`, `intersect` and `window_of`. It needs no change to the library.
+
+```mojo
+from extensions.chemistry.requirement import Constraint
+from extensions.chemistry.window import intersect, met_intervals
+
+@fieldwise_init
+struct Near(Constraint):
+    var target: Float64
+
+    def holds(self, temperature: Temperature64, pressure: Pressure64) raises -> Bool:
+        return abs(temperature.kelvin - self.target) < 50
+
+    def describe(self, temperature: Temperature64, pressure: Pressure64) raises -> String:
+        return String("within 50 K of ", self.target)
+
+var narrowed = intersect(
+    operating_window(step),
+    met_intervals(Near(1000), step.low, step.high, step.pressure),
+)
+```
+
+`window_of(constraints, low, high, pressure)` intersects a list of constraints of one type. `met_intervals` samples a constraint at 400 points in the range and finds each change by bisection. A feature narrower than a 400th of the range can be missed.
+
+## Load your own data
+
+`read_chemkin_thermo` reads NASA seven-coefficient data in the CHEMKIN thermo format. GRI-Mech, the Burcat tables and most combustion codes publish their data in this format. Each record gives one `Species`. Join the phases of one formula in a `Substance`, coldest first:
+
+```mojo
+from std.pathlib import Path
+from extensions.chemistry.chemkin import read_chemkin_thermo
+from extensions.chemistry.thermo import Substance
+
+var species = read_chemkin_thermo(Path("thermo.dat").read_text())
+var methane = Substance("CH4(g)", [species[0].copy()])
+```
+
+The reader accepts comment lines that start with `!`, a `THERMO` line with its line of default temperatures, and an `END` line. It refuses a short or misnumbered record with its line number. It does not read the fifth element pair of some extended files. A loaded species has no molar volume. Set one where the pressure term of a condensed phase matters.
+
+`parse_formula` reads a formula from text, with groups: `parse_formula("Ca(OH)2")` has one calcium, two oxygen and two hydrogen. `element_from_symbol` accepts either case, as data files write `TI` for titanium.
 
 ## The driving force
 
@@ -112,34 +140,45 @@ A `Term` is a substance with a coefficient: `reactant` makes it negative and `pr
 
 The change is the sum of coefficient times chemical potential. For an ideal gas, the potential is `G(T) + R T ln(x P / p0)`. For a pure condensed phase that does not compress, it is `G(T) + V (P - p0)`. `p0` is one bar. Below zero, the reaction proceeds.
 
-`equilibrium_temperature` finds where the change crosses zero between two temperatures. `mass_ratio` gives the kilograms of one substance per kilogram of another.
+`equilibrium_temperature` finds where the change crosses zero between two temperatures. `equilibrium_pressure` finds where it crosses zero between two pressures, on a logarithmic scale. For an evaporation into a pure vapor, that is the vapor pressure. `mass_ratio` gives the kilograms of one substance per kilogram of another.
 
-## The data
+## The built-in data
 
-The coefficients are the seven-coefficient NASA polynomials of McBride, Gordon and Reno, NASA TM-4513, 1993. They were copied unchanged from the conversion that Cantera 3.2 ships. The comment above each species gives the source code that TM-4513 assigns to it. See [THIRD-PARTY-NOTICES.md](https://github.com/SethKitchen/ThreeMojo/blob/main/THIRD-PARTY-NOTICES.md).
+The built-in coefficients are the NASA polynomials of McBride, Gordon and Reno, NASA TM-4513, 1993. They were copied unchanged from the conversion that Cantera 3.2 ships. The comment above each species gives the source code that TM-4513 assigns to it. See [THIRD-PARTY-NOTICES.md](https://github.com/SethKitchen/ThreeMojo/blob/main/THIRD-PARTY-NOTICES.md).
 
-A `Species` is one phase of one formula, valid over the range of its data. A `Substance` joins the condensed phases of one formula, solid to liquid, or holds one gas. It uses the phase whose range holds the temperature. The ends of adjacent ranges are the transitions, so `melting_point` reads the data.
+A `Species` is one phase of one formula, valid over the range of its data. A `Substance` joins the condensed phases of one formula, or holds one gas. It uses the phase whose range holds the temperature. The ends of adjacent ranges are the transitions, so `melting_point` reads the data.
 
-TM-4513 has no diamond. `diamond` is graphite's data, moved by the CODATA change at 298.15 K: 1.895 kJ/mol and -3.363 J/(mol K). That assumes equal heat capacities, so the change is low by roughly 1 kJ/mol at 1000 K. TM-4513 has no bismuth, so the bismuth recipe uses the CRC Handbook melting point as a stated bound.
+TM-4513 has no diamond. `diamond` is graphite's data, moved by the CODATA change at 298.15 K: 1.895 kJ/mol and -3.363 J/(mol K). That assumes equal heat capacities, so the change is low by roughly 1 kJ/mol at 1000 K.
 
 Each piece of data stops at its range. The calcite data ends at 1200 K, and the liquid TiCl4 data starts at 300 K. A computation outside a range raises an error.
 
-## The recipes
+## Worked processes
 
-| Step | Setting | Window | Lower bound | Upper bound |
-|---|---|---|---|---|
-| Chlorinate rutile with coke | Industrial plant | 900 to 1227 degC | Rate (kinetic, stated) | End of the search |
-| Distill TiCl4 | Industrial plant | From 136 degC | TiCl4 boils (computed) | End of the search |
-| Reduce TiCl4 with Mg (Kroll) | Industrial plant | 714 to 1085 degC | MgCl2 melts (data) | Fe-Ti eutectic (stated) |
-| Vacuum distillation at 10 Pa | Industrial plant | 702 to 1085 degC | MgCl2 evaporates (computed) | Fe-Ti eutectic (stated) |
-| Diamond on carbide at 30 Torr | Equipped lab | 700 to 1000 degC | Growth rate (stated) | Cobalt (stated) |
-| Hydrogen filament at 30 Torr | Equipped lab | 1758 to 3422 degC | 1 % atomic hydrogen (computed) | Tungsten melts (stated) |
-| Bismuth crystals | Home workshop | From 271 degC | Bismuth melts (stated) | End of the search |
-| Lime | Home workshop | 894 to 927 degC | CaCO3 gives off CO2 (computed) | The calcite data ends |
+| Step | Window | Lower bound | Upper bound |
+|---|---|---|---|
+| Chlorinate rutile with coke | 900 to 1227 degC | Rate (kinetic, stated) | End of the search |
+| Distill TiCl4 | From 136 degC | TiCl4 boils (computed) | End of the search |
+| Reduce TiCl4 with Mg (Kroll) | 714 to 1085 degC | MgCl2 melts (data) | Fe-Ti eutectic (stated) |
+| Vacuum distillation at 10 Pa | 702 to 1085 degC | MgCl2 evaporates (computed) | Fe-Ti eutectic (stated) |
+| Diamond on carbide at 30 Torr | 700 to 1000 degC | Growth rate (stated) | Cobalt (stated) |
+| Hydrogen filament at 30 Torr | 1758 to 3422 degC | 1 % atomic hydrogen (computed) | Tungsten melts (stated) |
+| Lime burning | 894 to 927 degC | CaCO3 gives off CO2 (computed) | The calcite data ends |
 
-The diamond step shows a metastable product. Graphite to diamond does not proceed at 30 Torr: its change is +5.7 kJ/mol at 850 degC. Methane at 1 % in hydrogen can still deposit diamond, at -14.5 kJ/mol. Atomic hydrogen from the filament etches graphite faster than diamond, so the diamond survives. That last requirement is kinetic, so the recipe states it as an action.
+Print them with `tools/process_report.mojo`:
 
-The recipes are models for learning and planning. They are not operating procedures. Check each bound against your equipment's own limits.
+```sh
+.venv/bin/mojo run -I . tools/process_report.mojo            # every process
+.venv/bin/mojo run -I . tools/process_report.mojo titanium   # titanium, diamond or lime
+```
+
+The diamond step shows a metastable product. Graphite to diamond does not proceed at 30 Torr: its change is +5.7 kJ/mol at 850 degC. Methane at 1 % in hydrogen can still deposit diamond, at -14.5 kJ/mol. Atomic hydrogen from the filament etches graphite faster than diamond, so the diamond survives. That last requirement is kinetic, so the step states it as an action.
+
+## Add a process
+
+1. Add a module to `extensions/chemistry/processes/`.
+2. Build each step from the public layers: substances from `catalog` or from your own data, reactions, and requirements.
+3. Give each stated bound its source. Leave a computed bound to the data.
+4. Test each window edge against a reference that does not come from the same data.
 
 ## Coatings
 
@@ -151,13 +190,11 @@ sigma = E_c / (1 - nu_c) * (alpha_s - alpha_c) * (T_deposition - T_service)
 
 `delamination_thickness` gives the thickest coating that does not peel from an edge. It uses the plane-strain energy release rate of Hutchinson and Suo (1992), `G = (1 - nu_c^2) sigma^2 h / (2 E_c)`. The coating peels when `G` reaches the interface fracture energy.
 
-`CVD_DIAMOND` and `CEMENTED_CARBIDE` hold typical values. Diamond deposited at 850 degC on carbide with 6 % cobalt cools to about 2.5 GPa of compression. At an example fracture energy of 30 J/m², the limit is about 11 micrometers. The fracture energy depends on the surface preparation. Measure it on the real surface, for example with a scratch test.
+`processes.diamond` holds typical properties in `CVD_DIAMOND` and `CEMENTED_CARBIDE`. Diamond deposited at 850 degC on carbide with 6 % cobalt cools to about 2.5 GPa of compression. At a fracture energy of 30 J/m², the limit is about 11 micrometers. The fracture energy depends on the surface preparation, so measure it on the real surface.
 
-## Energy and money
+## Energy balances
 
 A `StreamItem` is an amount of a substance at a temperature. `heat_duty` returns the enthalpy that leaves minus the enthalpy that enters. Above zero, the step needs heat. Below zero, it gives off heat that the equipment must remove. The Kroll reduction gives off about 1.35 kWh per kilogram of titanium, from a feed at 300 K to products at 850 degC.
-
-A `Ledger` records purchases, the energy bought for a heat duty, and sales. `heat` divides the duty by an efficiency, and a duty of zero or below costs nothing. `margin` returns earnings minus spending. The ledger leaves out labor, equipment, waste, losses and taxes. `Money64` holds one currency, which you choose.
 
 ## Checks against references
 
@@ -167,25 +204,17 @@ The tests compare computed values with references that do not come from TM-4513:
 |---|---|---|
 | TiCl4 normal boiling point | 409.2 K | 409.6 K, CRC Handbook |
 | Mg normal boiling point | 1365.7 K | 1363 K, CRC Handbook |
+| Mg vapor pressure, 701 K to 1361 K | Within 10 % | 1 Pa to 100 kPa, CRC Handbook |
 | CaCO3 to CaO in 1 atm of CO2 | 1167 K | About 1171 K |
 | Boudouard balance at 1 bar | 973 K | About 973 K |
 | Methane to graphite and H2 at 1 bar | 818 K | About 818 K |
 | Graphite to diamond at 298 K | 1.54 GPa | About 1.5 GPa, Berman and Simon |
+| Methane read from a CHEMKIN record | The catalog's G | Equal to 1e-6 J/mol |
 
 The MgCl2 vapor data gives a boiling point of 1631 K at one atmosphere. The measured value is about 1685 K, so treat MgCl2 evaporation as an estimate.
 
-## Add a substance
-
-1. Find the species in NASA TM-4513, or in another public-domain table.
-2. Make one `Species` for each phase, with its `Formula`, `Phase`, `Nasa7` data and molar volume.
-3. Join condensed phases in a `Substance`, coldest first. Each range must start where the last ends.
-4. Keep each gas a `Substance` of its own.
-5. Test it at 298.15 K against the CODATA or NBS enthalpy and entropy.
-
 ## Limits
 
-Gases are ideal. Condensed phases are pure and do not compress. There are no solutions, alloys, slags or aqueous species, and no activity coefficients. The module does not compute rates or mass transfer. Practice supplies kinetic bounds as stated values.
+Gases are ideal. Condensed phases are pure and do not compress. There are no solutions, alloys, slags or aqueous species, and no activity coefficients. The library does not compute rates or mass transfer. Experiments supply kinetic bounds as stated values.
 
-A hazard list names the dangers of a step. It is not a risk assessment. The `Setting` names the least equipped place where a step can be done safely. Do not do an `INDUSTRIAL_PLANT` step anywhere else.
-
-Prices, fracture energies and material properties in the recipes are example inputs. Replace them with data for your materials and your supplier.
+A hazard list names the dangers of a step. It is not a risk assessment. The worked processes are models of requirements, not operating procedures. Chemistry separates and combines elements. It does not change one element into another.

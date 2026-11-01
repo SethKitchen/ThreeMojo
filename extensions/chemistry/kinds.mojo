@@ -7,8 +7,7 @@
 
 A `Phase` says whether a species is a solid, a liquid or a gas. A
 `RequirementKind` says which science a requirement comes from. A `Check`
-says how a requirement is tested. A `Hazard` names a danger of a step. A
-`Setting` names the least equipped place where a step can be done.
+says how a requirement is tested. A `Hazard` names a danger of a step.
 """
 
 from core.ordinal import ordinal_label, ordinal_valid
@@ -182,39 +181,3 @@ comptime PYROPHORIC = Hazard(4)
 comptime ELECTRICAL = Hazard(5)
 # A vessel under vacuum or pressure, which can implode or burst.
 comptime PRESSURE_VESSEL = Hazard(6)
-
-
-@fieldwise_init
-struct Setting(Equatable, ImplicitlyCopyable, Writable):
-    """The least equipped place where a step can be done safely."""
-
-    var value: Int
-
-    def is_valid(self) -> Bool:
-        """Return True if this names one of the three settings.
-
-        Returns:
-            Whether the value is 0 to 2.
-        """
-        return ordinal_valid(self.value, 2)
-
-    def name(self) -> String:
-        """Return the setting's name.
-
-        Returns:
-            The name, or "?" if not valid.
-        """
-        var names: List[String] = [
-            "home workshop",
-            "equipped lab",
-            "industrial plant",
-        ]
-        return ordinal_label(self.is_valid(), self.value, names, "?")
-
-
-# A garage or a kitchen with a kiln, a torch and ordinary protection.
-comptime HOME_WORKSHOP = Setting(0)
-# A laboratory with fume extraction, gas handling and trained people.
-comptime EQUIPPED_LAB = Setting(1)
-# A licensed plant with engineered controls. Do not try it elsewhere.
-comptime INDUSTRIAL_PLANT = Setting(2)

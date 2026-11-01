@@ -5,11 +5,18 @@
 
 """Process chemistry: the requirements that turn a material into a product.
 
-Elements and formulas, NASA thermochemical data for species and the
-substances they form, reactions and their driving force, and the steps of
-a process. Each step lists its thermodynamic, phase, kinetic, physical and
-engineering requirements. The operating window of a step is the range of
-temperature where every requirement holds. Coating mechanics, energy
-balances and a ledger complete the picture. See the wiki page Process
-chemistry.
+The package is in layers. Each layer uses only the ones before it:
+
+- `quantities`, `kinds` and `elements`: units, kinds, elements and
+  formulas.
+- `thermo`, `chemkin` and `catalog`: NASA polynomials, species and
+  substances, a reader for CHEMKIN thermo files, and built-in data.
+- `reaction`: reactions, their driving force, and the temperature and
+  pressure where it crosses zero.
+- `requirement`, `window` and `step`: the `Constraint` trait, the built-in
+  requirements, operating windows and process steps.
+- `coating` and `balance`: coating mechanics and energy balances.
+- `processes`: worked processes built from the layers above.
+
+See the wiki page Process chemistry.
 """
