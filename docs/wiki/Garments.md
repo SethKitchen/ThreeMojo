@@ -141,6 +141,8 @@ A drawn skirt is lined: it has an inner face one fabric thickness inside, and a 
 
 A long skirt, whose hem falls below the knees, hides the legs inside it from 15 cm over its hem (`SKIRT_SHOW`). A shorter skirt with no opening, such as a tunic's or a surcoat's, hides them from 6 cm over its hem (`SHORT_SKIRT_SHOW`). Both thighs share the middle of its front. So a thigh that lifts would push out through it as the person runs or jumps. With the legs hidden, nothing is left to push out. The skin and every garment under the skirt are hidden there.
 
+So are the legs of a garment dressed after the skirt, such as a boot's shaft or a greave inside a robe.
+
 A short skirt, as a tunic's, hides no leg: a kick lifts the thigh out under its hem. A skirt parted open, as a frock coat's, shows the legs, so it hides none.
 
 Each vertex at the top takes the weights of the nearest vertex of the shell. Down the skirt the weights pass to the thighs: at the hem the thighs hold 0.9 of each vertex. The right thigh turns the right side and the left thigh the left side. The two share a band 10 cm wide at the middle of the front and the back. So the skirt opens as a leg lifts.

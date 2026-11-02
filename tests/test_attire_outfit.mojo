@@ -59,7 +59,7 @@ from extensions.humanoid.rig.joints import (
 from render.framebuffer import Color
 from extensions.attire.skirt import skirt_top
 from math.vector3 import Vector3
-from extensions.attire.apparel import cassock, crown, straw_hat
+from extensions.attire.apparel import cassock, crown, straw_hat, tall_boots
 from extensions.attire.armory import (
     great_helm,
     great_pauldrons,
@@ -529,6 +529,19 @@ def test_a_long_skirt_hides_the_legs_inside_it() raises:
     _ = dress(scene, assets, bare, robed)
     var under_robe = _legs_drawn(scene, assets, bare)
     assert_true(under_robe * 8 < before)
+    # Tall boots, dressed over the robe, lose their shafts inside it too:
+    # a shaft would push out through the robe's front.
+    var fresh = coarse_person(scene, assets)
+    var shod = Outfit()
+    shod.add(tall_boots())
+    var alone = _pieces(scene, assets, fresh, shod)[0].triangle_count()
+    var robe_and_boots = Outfit()
+    robe_and_boots.add(cassock())
+    robe_and_boots.add(tall_boots())
+    var inside = _pieces(scene, assets, fresh, robe_and_boots)[
+        1
+    ].triangle_count()
+    assert_true(inside * 10 < alone * 9)
     # A tunic's short skirt hides them only from `SHORT_SKIRT_SHOW` over
     # its hem up: less than the robe does, and the knees still show.
     var other = coarse_person(scene, assets)
