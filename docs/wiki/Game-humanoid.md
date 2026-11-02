@@ -128,7 +128,9 @@ The body's skin, each hand's and the hair's shell are decimated at once, one on 
 
 A decimated skin keeps the normals of the full skin too, so it shades as the full skin does. The body, the head and the hands then shade alike across their seams. A vertex keeps its own normal where the nearest full vertex faces more than 60° away, as across the gap between the lips. The hair's shell keeps the normals the simplifier makes.
 
-The hair's shell is drawn in a Phong material with a map of strands, six times round the head and twice down it. Its texture coordinates run down the hair, so the strands do too. Decimation moves the shell's vertices but keeps their coordinates, which bent the strands into zigzags. So `reproject_uvs` lays the coordinates again where the vertices end up, and the strands stay straight.
+The hair's shell is drawn in a Phong material with a map of strands, six times round the head and twice down it.
+
+The shell's highlight is broad: its shininess is `GAME_HAIR_SHININESS`, 8. The game renderer lights each vertex. A sharper highlight lit a whole triangle of the decimated shell, a bright wedge on the crown. Its texture coordinates run down the hair, so the strands do too. Decimation moves the shell's vertices but keeps their coordinates, which bent the strands into zigzags. So `reproject_uvs` lays the coordinates again where the vertices end up, and the strands stay straight.
 
 The hair's shell keeps only its outer face. Its inner face lies 0.8 mm under the scalp, so the skin always hides it. With `outer_only=True`, `head_hair_from_dimensions` drops each triangle whose three corners lie more than 0.4 mm under the skin. That is about 40 % of the shell's triangles. So the hair's whole budget goes to the face that shows, and the decimation has less to do.
 

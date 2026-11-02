@@ -428,6 +428,13 @@ def _stand_off(mut mesh: BufferGeometry, distance: Float32) raises:
     mesh.set_attribute(String(POSITION), BufferAttribute(points^, 3))
 
 
+comptime GAME_HAIR_SHININESS = Float32(8)
+"""How sharp the highlight on a game humanoid's hair shell is. The game
+renderer lights each vertex, and a shell decimated to its budget has
+triangles a few centimeters across: a highlight as sharp as
+`hair_phong`'s lit a whole triangle, a bright wedge on the crown."""
+
+
 comptime STUBBLE_SHADE = Float32(0.5)
 """How much darker stubble makes the skin it grows on, where it grows in
 full."""
@@ -1029,9 +1036,11 @@ def add_game_humanoid(
     if hair.value < 0:
         var strands = hair_albedo(HAIR_TEXELS, spec.genome)
         strands.repeat = Vector2(6, 2)
-        hair = assets.materials.add(
-            hair_phong(spec.genome, assets.textures.add(strands^))
-        )
+        var look = hair_phong(spec.genome, assets.textures.add(strands^))
+        # The game lights each vertex: a sharp highlight on a coarse
+        # shell lights a whole triangle, a bright wedge in the hair.
+        look.shininess = GAME_HAIR_SHININESS
+        hair = assets.materials.add(look)
     var hair_node = place_mesh_node(scene, assets, holder_id, shell^, hair)
     # The shells are drawn before the cards over them.
     var full_beard = Optional[BufferGeometry](None)
