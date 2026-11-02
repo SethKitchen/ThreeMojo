@@ -10,7 +10,7 @@
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "60b11433b9287fb139bfffd1898fb016528e7b4ea2aa2a2a0a440992c0221aa3"
+    "binary_sha256": "827af41d78b00f5552c17ad4ae7ea291f2a64d3aa791aced27d130b5e2717237"
   },
   "tool_sha256": "ba9b800a26222354c051ac85ea5532e947887a7e12fc5195d6b94cd046d98343",
   "spec": {
