@@ -37,10 +37,14 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.anatomy.locomotion import WALK_FROUDE, stride_frequency
 from extensions.animals.build import (
+    Animal,
     animal_materials,
     create_animal,
     mesh_animal,
 )
+from extensions.animals.rig import Pose
+from core.buffer_geometry import BufferGeometry
+from render.tasks import TaskGroup
 from extensions.animals.gait import is_quadruped, walk_pose, walk_stride
 from extensions.animals.options import CROWD, Quality, animal_options
 from extensions.animals.registry import SpeciesId, require_species
@@ -914,6 +918,62 @@ struct AnimalLook(Movable):
         self.walker = walker
 
 
+__async def _pose_task(
+    animal: Pointer[Animal, ImmutAnyOrigin],
+    poses: Pointer[List[Pose], ImmutAnyOrigin],
+    meshes: Pointer[List[BufferGeometry], MutAnyOrigin],
+    failures: Pointer[List[String], MutAnyOrigin],
+    index: Int,
+):
+    """Mesh an animal in one of its poses, or record why it failed."""
+    try:
+        meshes[][index] = mesh_animal(animal[], poses[][index], workers=0)
+    except e:
+        failures[][index] = String(e)
+
+
+def mesh_poses(
+    animal: Animal, poses: List[Pose]
+) raises -> List[BufferGeometry]:
+    """Return an animal's mesh in each pose, the poses meshed at once.
+
+    Each mesh is the same as `mesh_animal` makes alone: the poses only
+    share the threads.
+
+    Args:
+        animal: The animal.
+        poses: Its poses.
+
+    Returns:
+        One mesh per pose, in their order.
+
+    Raises:
+        Error: The first pose's error, in their order, if `mesh_animal`
+            refuses one.
+    """
+    var meshes = List[BufferGeometry]()
+    var failures = List[String]()
+    for _ in range(len(poses)):  # pragma: no branch
+        meshes.append(BufferGeometry())
+        failures.append(String())
+    var group = TaskGroup()
+    for index in range(len(poses)):  # pragma: no branch
+        group.create_task(
+            _pose_task(
+                Pointer(to=animal).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=poses).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=meshes).unsafe_origin_cast[MutAnyOrigin](),
+                Pointer(to=failures).unsafe_origin_cast[MutAnyOrigin](),
+                index,
+            )
+        )
+    group.wait()
+    for failure in failures:  # pragma: no branch
+        if failure != "":
+            raise Error(failure)
+    return meshes^
+
+
 def animal_look(
     mut assets: Assets,
     species: SpeciesId,
@@ -951,9 +1011,17 @@ def animal_look(
     # The eyes have their own finer cell. Left fine, they made half of a
     # coarse rabbit's vertices.
     animal.eye_cell = min(animal.cell, animal.eye_cell * coarseness)
-    var stand = assets.geometries.add(
-        mesh_animal(animal, animal.bind_pose(), workers=0)
-    )
+    # The standing pose first, then the walk's.
+    var poses = List[Pose]()
+    poses.append(animal.bind_pose())
+    var quadruped = is_quadruped(animal.rig)
+    if quadruped:
+        for phase in range(phases):  # pragma: no branch
+            poses.append(
+                walk_pose(animal.rig, Float64(phase) / Float64(phases))
+            )
+    var meshes = mesh_poses(animal, poses)
+    var stand = assets.geometries.add(meshes.pop(0))
     var box = assets.geometries.get(stand).bounding_box()
     var frames = List[GeometryId]()
     var stride = Float32(0)
@@ -962,19 +1030,13 @@ def animal_look(
         max(Float32(0.1), (box.max.x - box.min.x) * 0.5), METER
     )
     walker.jump_speed = Velocity(0.0, METER_PER_SECOND)
-    if is_quadruped(animal.rig):
+    if quadruped:
         stride = walk_stride(animal.rig).to(METER)
         var hip = length_meters(animal.rig.j("hipL").y)
         var pace = stride * stride_frequency(WALK_FROUDE, hip).value
         walker.walk_speed = Velocity(max(Float32(0.2), pace), METER_PER_SECOND)
-        for phase in range(phases):  # pragma: no branch
-            var pose = walk_pose(
-                animal.rig,
-                Float64(phase) / Float64(phases),
-            )
-            frames.append(
-                assets.geometries.add(mesh_animal(animal, pose, workers=0))
-            )
+        for _ in range(len(meshes)):  # pragma: no branch
+            frames.append(assets.geometries.add(meshes.pop(0)))
     else:
         walker.walk_speed = Velocity(0.3, METER_PER_SECOND)
     # An animal runs only when it flees, at three times its walk.

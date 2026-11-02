@@ -19,7 +19,9 @@ from extensions.attire.kinds import (
 from extensions.attire.outfit import Outfit
 from core.scene import Scene
 from extensions.animals.coat import EYE
-from extensions.animals.options import CROWD
+from extensions.animals.build import create_animal
+from extensions.animals.options import CROWD, animal_options
+from extensions.animals.rig import Pose
 from extensions.animals.registry import CHICKEN, RABBIT, SpeciesId
 from core.buffer_geometry import MaterialIndex
 from extensions.humanoid.rig.joints import CHEST, HIPS, SPINE
@@ -55,6 +57,7 @@ from extensions.village.residents import (
     Villager,
     animal_look,
     clip_of,
+    mesh_poses,
     facing_turn,
     play_rate,
     visit,
@@ -349,6 +352,16 @@ def _eye_triangles(coarseness: Float64) raises -> Int:
         if group.material_index == MaterialIndex(EYE.value):
             count += group.count // 3
     return count
+
+
+def test_poses_are_meshed_at_once_and_a_foreign_pose_is_refused() raises:
+    var rabbit = create_animal(RABBIT, animal_options(3, quality=CROWD))
+    var chicken = create_animal(CHICKEN, animal_options(3, quality=CROWD))
+    var poses = List[Pose]()
+    poses.append(rabbit.bind_pose())
+    poses.append(chicken.bind_pose())
+    with assert_raises(contains="another rig"):
+        _ = mesh_poses(rabbit, poses)
 
 
 def test_a_coarse_animals_eyes_are_as_coarse() raises:
