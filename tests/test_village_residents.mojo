@@ -18,7 +18,10 @@ from extensions.attire.kinds import (
 )
 from extensions.attire.outfit import Outfit
 from core.scene import Scene
+from extensions.animals.coat import EYE
+from extensions.animals.options import CROWD
 from extensions.animals.registry import CHICKEN, RABBIT, SpeciesId
+from core.buffer_geometry import MaterialIndex
 from extensions.humanoid.rig.joints import CHEST, HIPS, SPINE
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
@@ -50,6 +53,7 @@ from extensions.village.residents import (
     ResidentsParameters,
     Route,
     Villager,
+    animal_look,
     clip_of,
     facing_turn,
     play_rate,
@@ -334,6 +338,25 @@ def test_residents_that_cannot_be_built_are_refused() raises:
         p.animal_coarseness = coarseness
         with assert_raises(contains="coarseness"):
             p.check()
+
+
+def _eye_triangles(coarseness: Float64) raises -> Int:
+    """Return how many triangles a rabbit's standing mesh's eyes have."""
+    var store = Assets()
+    var look = animal_look(store, RABBIT, 3, 1, CROWD, coarseness)
+    var count = 0
+    for group in store.geometries.get(look.book.stand).groups:
+        if group.material_index == MaterialIndex(EYE.value):
+            count += group.count // 3
+    return count
+
+
+def test_a_coarse_animals_eyes_are_as_coarse() raises:
+    var fine = _eye_triangles(1)
+    var coarse = _eye_triangles(3)
+    assert_true(coarse > 0)
+    # Three times the cell is about a ninth of the triangles.
+    assert_true(coarse * 5 < fine)
 
 
 def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
