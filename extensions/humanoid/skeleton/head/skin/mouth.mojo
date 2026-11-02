@@ -26,7 +26,7 @@ from extensions.humanoid.skeleton.head.face_model import (
 )
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.head.skin.scan import (
-    place,
+    place_each,
     rest_expression,
     scan_model,
 )
@@ -100,14 +100,26 @@ def _placed(
     """Return the model placed on the person at rest, then worn in each
     shape in full."""
     dimensions.validate()
-    var h = dimensions.head.copy()
-    var count = model.vertex_count()
-    var placed = List[List[Vector3]](capacity=len(shapes) + 1)
-    placed.append(place(h, model, count))
+    var weights = List[List[Float32]](capacity=len(shapes) + 1)
+    weights.append(rest_expression(model))
     for name in shapes:  # pragma: no branch
-        var weights = rest_expression(model)
-        weights[model.expression(name)] = 1
-        placed.append(place(h, model, count, weights))
+        var worn = rest_expression(model)
+        worn[model.expression(name)] = 1
+        weights.append(worn^)
+    # Only the inside of the mouth is placed: the gums, the tongue and the
+    # teeth, a quarter of the model. A part reads one point per vertex of
+    # the model, so the rest stay at the origin.
+    var placed = place_each(
+        dimensions.head,
+        model,
+        TEETH.end,
+        weights,
+        GUMS_AND_TONGUE.first,
+    )
+    var total = model.vertex_count()
+    for k in range(len(placed)):  # pragma: no branch
+        for _ in range(TEETH.end, total):  # pragma: no branch
+            placed[k].append(Vector3(0, 0, 0))
     return placed^
 
 
