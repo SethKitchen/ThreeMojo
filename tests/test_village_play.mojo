@@ -51,6 +51,7 @@ from extensions.village.play import (
     TRUNK,
     VillageGame,
     default_residents,
+    game_residents,
     tree_obstacles,
 )
 from extensions.village.combat import (
@@ -718,6 +719,18 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     _ = before.mastery.pop()
     with assert_raises(contains="mastery"):
         game.restore(before)
+
+
+def test_a_game_builds_its_animals_no_finer_than_its_quality() raises:
+    var game = PlayParameters(game_quality(LOW))
+    game.residents = ResidentsParameters()
+    assert_almost_equal(game.residents.animal_coarseness, 1, atol=1e-9)
+    # The low preset's animals are three times coarser.
+    var built = game_residents(game)
+    assert_almost_equal(built.animal_coarseness, 3, atol=1e-6)
+    # A coarser choice of the game's own is kept.
+    game.residents.animal_coarseness = 5
+    assert_almost_equal(game_residents(game).animal_coarseness, 5, atol=1e-9)
 
 
 def main() raises:

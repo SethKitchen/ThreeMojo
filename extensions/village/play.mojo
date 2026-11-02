@@ -462,6 +462,30 @@ def tree_obstacles(
     return out^
 
 
+def game_residents(parameters: PlayParameters) -> ResidentsParameters:
+    """Return the residents a game builds: its own, with animals no finer
+    than its quality's preset meshes them.
+
+    A game given residents of its own keeps their animals' coarseness
+    where it is coarser than the preset's. Where it is finer, the preset's
+    holds: a game at a low quality builds its animals coarse, whoever
+    chose its residents.
+
+    Args:
+        parameters: The game's parameters.
+
+    Returns:
+        The residents, with their animal coarseness at least the
+        quality's.
+    """
+    var residents = parameters.residents.copy()
+    residents.animal_coarseness = max(
+        residents.animal_coarseness,
+        Float64(parameters.quality.animal_coarseness),
+    )
+    return residents^
+
+
 struct VillageGame(Movable):
     """The village, its residents and the player, and the camera on the
     player."""
@@ -594,7 +618,7 @@ struct VillageGame(Movable):
         self.residents = Residents(
             scene,
             assets,
-            parameters.residents,
+            game_residents(parameters),
             self.terrain,
             keep_off,
             homes,

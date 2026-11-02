@@ -52,7 +52,7 @@ quality.check()
 - **`sky_step`** is the step between two samples of the sky, from 1 to 32 pixels. The samples between are mixed bilinearly. A cloud of the sky cube is smaller than 8 pixels across its edge, so a coarser step draws it as boxes. Each task finds the samples of one band of rows. A sample's direction is mixed from the directions through three corners of the window.
 - **`water_step`** is the step between two shaded samples of the pond's water, from 1 to 64 pixels. The pixels between are mixed from the four samples round them.
 - **`water_refresh_every`** sets how many frames share one ocean surface and its caustics. From two frames, one frame finds the next surface and the next frame finds its caustics.
-- **`animal_coarseness`** multiplies the cell of each animal's mesh, from 1 to 8. A coarser animal has fewer triangles.
+- **`animal_coarseness`** multiplies the cell of each animal's mesh, from 1 to 8. A coarser animal has fewer triangles. A game given residents of its own meshes their animals no finer than its preset: `game_residents` keeps the coarser of the two.
 - **`shadows`** and **`shadow_size`** set how the sun's shadows are drawn. See [Shadows](#shadows).
 - **`smooth_edges`** smooths the stair steps along the frame's edges before the frame is stretched. See [Smooth edges](#smooth-edges).
 - **`fight_reach`** sets how far from the player a fighter is posed each frame, from 5 to 10,000 meters. A fighter further away is posed every third frame, for all the time it waited, and leaves no trail. Between, it only stands where its character stands. So a crowded fight costs less on a slow machine.

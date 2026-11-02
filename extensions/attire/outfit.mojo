@@ -141,6 +141,11 @@ comptime SKIRT_SHOW = Float32(0.15)
 """How far over a long skirt's hem the legs inside it still show, in
 meters on the template: as a leg swings, this much of it can pass the
 hem."""
+comptime SHORT_SKIRT_SHOW = Float32(0.06)
+"""How far over the hem of a closed skirt that ends above the knees the
+legs inside it still show, in meters on the template. A thigh that lunges
+forward bends the middle of the skirt's front only half as far, and the
+legwear above this would show through it."""
 comptime RIM_THINNEST = Float32(0.0015)
 """A fabric at least this thick, in meters, has a rim at its hems: velvet,
 leather, padding, mail and plate."""
@@ -492,18 +497,21 @@ def dress_pieces(
     # the legs, so it hides none.
     var knee = person.rig.at(RIGHT_SHIN).y
     var show = SKIRT_SHOW * skirt_scale(person.rig)
+    var short = SHORT_SKIRT_SHOW * skirt_scale(person.rig)
+    # Each skirt's hidden legs, apart, for the layers dressed after it.
+    var inside = List[List[Float32]]()
+    for _ in range(len(order)):  # pragma: no branch
+        inside.append(List[Float32](length=count, fill=0))
     for i in range(len(order)):
         ref garment = outfit.garments[order[i]]
-        if (
-            garment.form != SKIRTED
-            or skirts[i].hem() >= knee
-            or is_cut(garment.neckline, garment.opening)
-        ):
+        if garment.form != SKIRTED or is_cut(garment.neckline, garment.opening):
             continue
+        var band = show if skirts[i].hem() < knee else short
         for v in range(count):  # pragma: no branch
             var y = frame.points[v].y
-            if legs[v] and y > skirts[i].hem() + show and y < clear:
+            if legs[v] and y > skirts[i].hem() + band and y < clear:
                 hides[i][v] = 1
+                inside[i][v] = 1
     for i in range(len(order)):
         var over = List[Float32](length=count, fill=0)
         # A skirt over this one that falls as far hides its skirt, and a
@@ -512,6 +520,12 @@ def dress_pieces(
         var shown = True
         var covered = Float32.MAX
         var feet = lasts[i].copy()
+        # A skirt dressed before this layer hides the legs of it too: a
+        # boot's shaft or a greave inside a robe would push out through
+        # the robe's front.
+        for j in range(i):
+            for v in range(count):
+                over[v] = max(over[v], inside[j][v])
         # Under a layer with no opening, this one is cut deeper: see
         # `CLOSED_REACH`.
         for j in range(i + 1, len(order)):
