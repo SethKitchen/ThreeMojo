@@ -33,6 +33,7 @@ from extensions.humanoid.skeleton.head.hair.beard import (
     GOATEE,
     MUSTACHE,
     SHORT_BEARD,
+    STUBBLE,
     Beard,
 )
 from extensions.humanoid.skeleton.head.expression import (
@@ -49,6 +50,7 @@ from extensions.humanoid.rig.game import (
     budget_detail,
     game_build_settings,
     carry_attributes,
+    shade_stubble,
 )
 from extensions.humanoid.rig.joints import (
     CHEST,
@@ -90,7 +92,11 @@ from extensions.humanoid.rig.weights import (
     skin_weights,
 )
 from extensions.humanoid.sex import MALE
-from extensions.humanoid.skeleton.torso.body import body_skin_mesh
+from extensions.humanoid.skeleton.torso.body import (
+    body_skin_mesh,
+    body_skin_parts,
+)
+from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
@@ -1034,6 +1040,46 @@ def test_a_part_is_meshed_about_ten_times_finer_than_its_budget() raises:
     assert_equal(budget_detail(1, SHELL_DENSITY, 32), LEAST_BUDGET_DETAIL)
     assert_equal(budget_detail(1000000, SHELL_DENSITY, 32), 32)
     assert_equal(budget_detail(1920, SHELL_DENSITY, 10), 10)
+
+
+def test_stubble_shades_the_skin_it_grows_on() raises:
+    # Stubble darkens the face round the mouth and the jaw, and leaves the
+    # brow as it is.
+    var spec = _spec()
+    var face = body_skin_parts(spec, 8, 1, 0.0, List[String]())[1].clone()
+    var before = face.clone_attribute(String(COLOR))
+    shade_stubble(face, head_muscle_dimensions(spec))
+    ref after = face.attribute_view(String(COLOR))
+    var darker = 0
+    var same = 0
+    for v in range(after.count()):
+        if after.component(v, 0) < before.component(v, 0):
+            darker += 1
+        elif after.component(v, 0) == before.component(v, 0):
+            same += 1
+    assert_true(darker > 0)
+    assert_true(same > 0)
+    assert_equal(darker + same, after.count())
+    # A speaking face with stubble grows no beard mesh: the face is shaded.
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var person = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        spec,
+        2500,
+        12,
+        8,
+        8,
+        workers=1,
+        facial_animation=True,
+        beard=STUBBLE,
+        face_stand_in=300,
+    )
+    assert_false(person.beard)
+    assert_equal(len(person.riders), 0)
 
 
 def main() raises:

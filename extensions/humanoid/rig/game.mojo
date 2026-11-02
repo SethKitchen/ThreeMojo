@@ -81,12 +81,16 @@ from extensions.humanoid.skeleton.hand.skin.geometry import (
 )
 from extensions.humanoid.skeleton.complexion import hair_albedo, iris_albedo
 from extensions.humanoid.skeleton.head.eyes import eyeball_mesh
-from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
+from extensions.humanoid.skeleton.head.frame import (
+    HeadMuscleDimensions,
+    head_muscle_dimensions,
+)
 from extensions.humanoid.skeleton.head.hair.dimensions import SCALP_HAIR
 from extensions.humanoid.skeleton.head.hair.beard import (
     CLEAN_SHAVEN,
     STUBBLE,
     Beard,
+    BeardShape,
     beard_label,
     beard_mesh,
     require_beard,
@@ -122,6 +126,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
+from math.utils import clamp
 from math.vector3 import Vector3, append_vector3
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
@@ -421,6 +426,47 @@ def _stand_off(mut mesh: BufferGeometry, distance: Float32) raises:
         points[3 * v + 1] += n.y * distance
         points[3 * v + 2] += n.z * distance
     mesh.set_attribute(String(POSITION), BufferAttribute(points^, 3))
+
+
+comptime GAME_HAIR_SHININESS = Float32(8)
+"""How sharp the highlight on a game humanoid's hair shell is. The game
+renderer lights each vertex, and a shell decimated to its budget has
+triangles a few centimeters across: a highlight as sharp as
+`hair_phong`'s lit a whole triangle, a bright wedge on the crown."""
+
+
+comptime STUBBLE_SHADE = Float32(0.5)
+"""How much darker stubble makes the skin it grows on, where it grows in
+full."""
+comptime STUBBLE_EDGE = Float32(0.8)
+"""Over how many template centimeters stubble fades out at the edge of its
+zone."""
+
+
+def shade_stubble(mut skin: BufferGeometry, dims: HeadMuscleDimensions) raises:
+    """Darken a skin's colors where stubble grows, fading at the zone's
+    edge, in place of a stubble mesh.
+
+    Args:
+        skin: The skin under the beard, with colors, in the pelvis frame.
+        dims: Landmarks from `head_muscle_dimensions`.
+
+    Raises:
+        Error: If the skin has no positions or no colors.
+    """
+    var shape = BeardShape(dims, STUBBLE)
+    ref places = skin.attribute_view(String(POSITION))
+    var colors = skin.clone_attribute(String(COLOR))
+    var size = colors.item_size
+    for v in range(places.count()):  # pragma: no branch
+        var zone = shape.zone(shape.template(places.vector3(v)))
+        var grown = clamp((STUBBLE_EDGE - zone) / (2 * STUBBLE_EDGE), 0, 1)
+        if grown <= 0:
+            continue
+        var keep = 1 - STUBBLE_SHADE * grown
+        for c in range(min(size, 3)):  # pragma: no branch
+            colors.set_component(v, c, colors.component(v, c) * keep)
+    skin.set_attribute(String(COLOR), colors^)
 
 
 def ride_face(
@@ -781,7 +827,14 @@ def add_game_humanoid(
     # again where its vertices end up.
     var meshed = shell.clone()
     var whiskers = Optional[BufferGeometry](None)
-    if beard != CLEAN_SHAVEN:
+    if beard == STUBBLE:
+        # Stubble is a shade of the skin it grows on: its shell is too
+        # thin for any game mesh to hold, and shows as torn shards.
+        if facial_animation:
+            shade_stubble(facial_meshes[0], dims)
+        else:
+            shade_stubble(body, dims)
+    elif beard != CLEAN_SHAVEN:
         whiskers = beard_mesh(dims, beard, beard_detail(triangles), workers)
     var eyes = List[BufferGeometry]()
     # Both named sides receive an eye.
@@ -983,9 +1036,11 @@ def add_game_humanoid(
     if hair.value < 0:
         var strands = hair_albedo(HAIR_TEXELS, spec.genome)
         strands.repeat = Vector2(6, 2)
-        hair = assets.materials.add(
-            hair_phong(spec.genome, assets.textures.add(strands^))
-        )
+        var look = hair_phong(spec.genome, assets.textures.add(strands^))
+        # The game lights each vertex: a sharp highlight on a coarse
+        # shell lights a whole triangle, a bright wedge in the hair.
+        look.shininess = GAME_HAIR_SHININESS
+        hair = assets.materials.add(look)
     var hair_node = place_mesh_node(scene, assets, holder_id, shell^, hair)
     # The shells are drawn before the cards over them.
     var full_beard = Optional[BufferGeometry](None)
