@@ -792,16 +792,17 @@ struct _Collapser(Movable):
             var face = around[slot]
             if not self.face_alive[face] or self._holds(face, other):
                 continue
-            var corners: List[Vector3] = [
-                self.positions[self.faces[face * 3]],
-                self.positions[self.faces[face * 3 + 1]],
-                self.positions[self.faces[face * 3 + 2]],
-            ]
-            var before = _face_normal(corners[0], corners[1], corners[2])
-            for corner in range(3):  # pragma: no branch
-                if self.faces[face * 3 + corner] == vertex:
-                    corners[corner] = point
-            var after = _face_normal(corners[0], corners[1], corners[2])
+            var a = self.positions[self.faces[face * 3]]
+            var b = self.positions[self.faces[face * 3 + 1]]
+            var c = self.positions[self.faces[face * 3 + 2]]
+            var before = _face_normal(a, b, c)
+            if self.faces[face * 3] == vertex:
+                a = point
+            if self.faces[face * 3 + 1] == vertex:
+                b = point
+            if self.faces[face * 3 + 2] == vertex:
+                c = point
+            var after = _face_normal(a, b, c)
             if _cosine(before, after) < FLIP_LIMIT:
                 return True
         return False
@@ -858,6 +859,14 @@ struct _Collapser(Movable):
                 if self.faces[face * 3 + corner] == v:
                     self.faces[face * 3 + corner] = u
             self.vertex_faces[u].append(face)
+        # The dead faces leave `u`'s list, the live ones keep their order:
+        # each later look at `u` reads only what can still change.
+        var kept = List[Int](capacity=len(self.vertex_faces[u]))
+        for face in self.vertex_faces[u]:  # pragma: no branch
+            if self.face_alive[face]:
+                kept.append(face)
+        self.vertex_faces[u] = kept^
+        self.vertex_faces[v] = List[Int]()
         self.vertex_alive[v] = False
         self.version[u] += 1
         var near = self._neighbors(u)
