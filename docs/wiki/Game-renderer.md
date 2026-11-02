@@ -138,6 +138,12 @@ A map read at each pixel ignores the texture's offset, repeat and rotation.
 
 The setup keeps each triangle's depth as a plane over the screen. It writes the plane from the first corner's depth and the other two corners' differences from it. A long thin triangle near the horizon has huge edge terms, which cancel. Weighted by the depths themselves, they once left a far triangle of ground nearer than a wall at some pixels. Weighted by the small differences, the far ground stays behind the wall.
 
+## No pinholes between small triangles
+
+The setup measures each triangle's edge planes from the triangle's own corner, the least pixel of its box. The raster and the resolve read them from that corner too. Measured from the frame's corner, a triangle of two square pixels near pixel 1,000 has constant terms of about 500,000, which cancel. The rounding left over was about 3 % of the triangle.
+
+Where two triangles that share an edge both rounded outward, no triangle covered the pixel, and what was behind showed through. On a close face, the back of the head showed as dark specks. A floor of 180,000 small triangles in a 1920 by 1080 frame had 751 such pixels, and now has none.
+
 ## Shadows
 
 | Mode | What is drawn |

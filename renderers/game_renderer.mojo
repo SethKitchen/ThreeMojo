@@ -158,9 +158,10 @@ comptime TILE = 64
 comptime STRIDE = 16
 """Floats a vertex takes in the frame's vertex array: its clip position,
 its ambient and sun light, its shadow coordinates and spare room."""
-comptime PLANE = 16
+comptime PLANE = 18
 """Floats a triangle takes in the frame's plane array: three edges, the
-depth plane and the inverse w of each corner."""
+depth plane, the inverse w of each corner, its map's code, and the pixel
+its planes are measured from."""
 comptime CHUNK = 4096
 """The most vertices or triangles one task of the vertex or the setup
 stage takes."""
@@ -3110,15 +3111,26 @@ def _emit(
     if mnx > mxx or mny > mxy:
         return
     var inv = 1 / area
+    # The planes are measured from the triangle's own corner of the
+    # screen, its box's least pixel. Measured from the screen's corner, a
+    # small triangle far from it has constant terms a thousand times its
+    # area, which cancel: the rounding left over opens pinholes between
+    # triangles that share an edge, and what is behind shows through.
+    var lx0 = x0 - mnx
+    var ly0 = y0 - mny
+    var lx1 = x1 - mnx
+    var ly1 = y1 - mny
+    var lx2 = x2 - mnx
+    var ly2 = y2 - mny
     var a0 = (y1 - y2) * inv
     var b0 = (x2 - x1) * inv
-    var c0 = (x1 * y2 - x2 * y1) * inv
+    var c0 = (lx1 * ly2 - lx2 * ly1) * inv
     var a1 = (y2 - y0) * inv
     var b1 = (x0 - x2) * inv
-    var c1 = (x2 * y0 - x0 * y2) * inv
+    var c1 = (lx2 * ly0 - lx0 * ly2) * inv
     var a2 = (y0 - y1) * inv
     var b2 = (x1 - x0) * inv
-    var c2 = (x0 * y1 - x1 * y0) * inv
+    var c2 = (lx0 * ly1 - lx1 * ly0) * inv
     var z0 = a[unsafe_offset=2] * iw0
     var z1 = b[unsafe_offset=2] * iw1
     var z2 = c[unsafe_offset=2] * iw2
@@ -3161,6 +3173,8 @@ def _emit(
         var level = 0.5 * log2(max(mapped, Float32(1.0e-20)) / abs(area))
         code = slot * LEVEL_CODE + min(LEVEL_CODE - 1, max(Float32(0), level))
     plane[unsafe_offset=15] = code
+    plane[unsafe_offset=16] = mnx
+    plane[unsafe_offset=17] = mny
     var bound = bounds.unsafe_offset(n * 4)
     bound[unsafe_offset=0] = Int32(Int(mnx))
     bound[unsafe_offset=1] = Int32(Int(mny))
@@ -3212,17 +3226,19 @@ __async def _raster_task(
         var za = p[unsafe_offset=9]
         var zb = p[unsafe_offset=10]
         var zc = p[unsafe_offset=11]
+        var ox = p[unsafe_offset=16]
+        var oy = p[unsafe_offset=17]
         var id = I(Int32(t))
         var start = tx0 + (bx0 - tx0) // GAME_LANES * GAME_LANES
         for y in range(by0, by1 + 1):  # pragma: no branch
-            var py = Float32(y) + 0.5
+            var py = Float32(y) + 0.5 - oy
             var r0 = py * b0 + c0
             var r1 = py * b1 + c1
             var r2 = py * b2 + c2
             var rz = py * zb + zc
             var x = start
             while x <= bx1:
-                var px = lanes + (Float32(x) + 0.5)
+                var px = lanes + (Float32(x) + 0.5 - ox)
                 var e0 = px * a0 + r0
                 var e1 = px * a1 + r1
                 var e2 = px * a2 + r2
@@ -3449,8 +3465,8 @@ __async def _resolve_task(
                 # Lanes that all show one triangle read its floats once.
                 var one = drawn.reduce_and() and t.eq(t[0]).reduce_and()
                 var p = tri * PLANE
-                var px = lane_f + (Float32(x) + 0.5)
-                var py = F(Float32(y) + 0.5)
+                var px = lane_f + (Float32(x) + 0.5) - _pick(planes, p, 16, one)
+                var py = F(Float32(y) + 0.5) - _pick(planes, p, 17, one)
                 var q0 = (
                     _pick(planes, p, 0, one) * px
                     + _pick(planes, p, 1, one) * py
