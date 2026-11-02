@@ -62,8 +62,7 @@ from extensions.humanoid.skeleton.head.expression import (
     FaceWeights,
     face_rig_shapes,
 )
-from extensions.humanoid.skeleton.head.face_model import TEETH, GUMS_AND_TONGUE
-from extensions.humanoid.skeleton.head.skin.mouth import mouth_mesh
+from extensions.humanoid.skeleton.head.skin.mouth import mouth_meshes
 from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.rig.weights import (
     keep_arms_off,
@@ -761,8 +760,8 @@ def add_game_humanoid(
         var split = body_skin_parts(spec, detail, workers, gap, shapes)
         body = split.pop(0)
         facial_meshes.append(split.pop(0))
-        facial_meshes.append(mouth_mesh(dims, TEETH, shapes))
-        facial_meshes.append(mouth_mesh(dims, GUMS_AND_TONGUE, shapes))
+        # The teeth and the gums share the face model's placements.
+        facial_meshes.extend(mouth_meshes(dims, shapes))
     else:
         body = body_skin_mesh(spec, detail, workers, gap)
     # The shell's inner face lies under the scalp: a game never sees it.

@@ -13,6 +13,7 @@ on the person as the scanned skin is, and rigged with the same shapes.
 This is not a three.js port. See Extensions.
 
     var teeth = mouth_mesh(dims, TEETH, face_rig_shapes())
+    var both = mouth_meshes(dims, face_rig_shapes())
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -20,6 +21,7 @@ from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from extensions.humanoid.skeleton.head.face_model import (
     GUMS_AND_TONGUE,
     TEETH,
+    FaceModel,
     FacePart,
 )
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
@@ -28,6 +30,7 @@ from extensions.humanoid.skeleton.head.skin.scan import (
     rest_expression,
     scan_model,
 )
+from math.vector3 import Vector3
 
 
 def mouth_mesh(
@@ -55,11 +58,68 @@ def mouth_mesh(
     """
     if part.first != TEETH.first and part.first != GUMS_AND_TONGUE.first:
         raise Error("The inside of the mouth is the teeth or the gums")
+    var model = scan_model()
+    return _rigged(model, _placed(dimensions, model, shapes), part, shapes)
+
+
+def mouth_meshes(
+    dimensions: HeadMuscleDimensions,
+    shapes: List[String] = List[String](),
+) raises -> List[BufferGeometry]:
+    """Return the teeth, and the gums and the tongue, of one person, as
+    `mouth_mesh` returns each.
+
+    The model is placed on the person once for each shape, and both parts
+    are cut from the same placements: half the work of two calls to
+    `mouth_mesh`.
+
+    Args:
+        dimensions: Landmarks from `head_muscle_dimensions`.
+        shapes: The expression shapes to rig, by the model's names.
+
+    Returns:
+        The teeth, then the gums and the tongue.
+
+    Raises:
+        Error: If `dimensions.validate` refuses the copy, the face model
+            cannot be read, or a shape is not the model's.
+    """
+    var model = scan_model()
+    var placed = _placed(dimensions, model, shapes)
+    var out = List[BufferGeometry](capacity=2)
+    out.append(_rigged(model, placed, TEETH, shapes))
+    out.append(_rigged(model, placed, GUMS_AND_TONGUE, shapes))
+    return out^
+
+
+def _placed(
+    dimensions: HeadMuscleDimensions,
+    model: FaceModel,
+    shapes: List[String],
+) raises -> List[List[Vector3]]:
+    """Return the model placed on the person at rest, then worn in each
+    shape in full."""
     dimensions.validate()
     var h = dimensions.head.copy()
-    var model = scan_model()
     var count = model.vertex_count()
-    var rest = model.part(place(h, model, count), part)
+    var placed = List[List[Vector3]](capacity=len(shapes) + 1)
+    placed.append(place(h, model, count))
+    for name in shapes:  # pragma: no branch
+        var weights = rest_expression(model)
+        weights[model.expression(name)] = 1
+        placed.append(place(h, model, count, weights))
+    return placed^
+
+
+def _rigged(
+    model: FaceModel,
+    placed: List[List[Vector3]],
+    part: FacePart,
+    shapes: List[String],
+) raises -> BufferGeometry:
+    """Return one part of the mouth at rest, with a relative morph target
+    for each shape: `placed` holds the rest, then each shape."""
+    var rest = model.part(placed[0], part)
     if len(shapes) == 0:
         return rest^
     ref still = rest.attribute_view(String(POSITION))
@@ -67,10 +127,8 @@ def mouth_mesh(
     var total = still.count()
     var targets = List[BufferAttribute]()
     var turns = List[BufferAttribute]()
-    for name in shapes:  # pragma: no branch
-        var weights = rest_expression(model)
-        weights[model.expression(name)] = 1
-        var worn = model.part(place(h, model, count, weights), part)
+    for k in range(len(shapes)):  # pragma: no branch
+        var worn = model.part(placed[k + 1], part)
         ref moved = worn.attribute_view(String(POSITION))
         ref turned = worn.attribute_view(String(NORMAL))
         var positions = List[Float32](capacity=3 * total)
