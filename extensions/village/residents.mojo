@@ -931,6 +931,7 @@ def animal_look(
         phases: How many poses of its walk to mesh.
         quality: How finely it is meshed.
         coarseness: How many times its quality's cell its mesh's cell is.
+            The eyes' finer cell grows as much, but never past the body's.
 
     Returns:
         Its standing mesh and, for an animal on four legs, its walk's
@@ -947,6 +948,9 @@ def animal_look(
         animal_options(seed, quality=quality),
     )
     animal.cell *= coarseness
+    # The eyes have their own finer cell. Left fine, they made half of a
+    # coarse rabbit's vertices.
+    animal.eye_cell = min(animal.cell, animal.eye_cell * coarseness)
     var stand = assets.geometries.add(
         mesh_animal(animal, animal.bind_pose(), workers=0)
     )
