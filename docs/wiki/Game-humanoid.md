@@ -118,7 +118,9 @@ These were measured on four cores.
 
 With a budget, the hair's shell and the hands are meshed at about ten times their shares of it. `budget_detail` chooses the detail, and never above `hair_detail` or `hand_detail`. Finer, the decimation throws the rest away, and the meshing and the decimation cost more for nothing. At 16,000 triangles the shell's share is 1,920. So it is meshed at detail 15, about 21,000 triangles, not at 32, about 96,000.
 
-`beard_detail` chooses a beard's detail: 28 with no budget, and 12 with one, because the decimation throws most of a finer mesh away. The decimation must not pinch a thin part, so on a short beard or a chin strap it stops above the budget. When it keeps more than twice the budget, `beard_stalls` says so, and the beard is meshed again at detail 20. Stubble lies in patches, and each keeps its rim, so it decimates best at detail 12: to 900 triangles, not 2,350. On four cores a full beard now takes 0.15 s to mesh and decimate, not 0.9 s.
+`beard_detail` chooses a beard's detail: 28 with no budget, and 12 with one, because the decimation throws most of a finer mesh away. The decimation must not pinch a thin part, so on a short beard or a chin strap it stops above the budget. When it keeps more than twice the budget, `beard_stalls` says so, and the beard is meshed again at detail 20.
+
+A game humanoid grows no stubble mesh. At any game detail, a shell 1.5 mm deep zigzags in and out of the skin, and only torn shards stand out of it. `shade_stubble` darkens the skin's colors in stubble's zone instead, by `STUBBLE_SHADE`, half, fading over 0.8 template cm at the zone's edge. On a face that speaks it shades the scanned face, and else the body's skin. On four cores a full beard now takes 0.15 s to mesh and decimate, not 0.9 s.
 
 The body's skin, each hand's and the hair's shell are decimated at once, one on each thread, with `budget_all`. Each decimation is the same as before, so the meshes are too. On a shared four-core machine a build at 24,000 triangles fell from 3.3 s to 2.5 s.
 

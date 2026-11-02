@@ -231,6 +231,8 @@ def test_a_beard_grows_cards_but_stubble_does_not() raises:
     assert_true(len(bearded.cards[1].groom) >= 40)
     var stubbled = _person(scene, assets, 12, 0, STUBBLE)
     assert_equal(len(stubbled.cards), 1)
+    # Stubble is a shade of the skin, not a mesh.
+    assert_false(stubbled.beard)
     var bare = _person(scene, assets, 0, 0, FULL_BEARD)
     assert_equal(len(bare.cards), 0)
 
