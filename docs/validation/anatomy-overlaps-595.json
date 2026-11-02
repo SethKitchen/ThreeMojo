@@ -3,14 +3,14 @@
   "issue": "https://github.com/SethKitchen/ThreeMojo/issues/595",
   "result_label": "template geometry evidence; not clearance or biomechanical validation",
   "build_provenance": {
-    "source_sha256": "d251edff20f081783026e883df32a68ca928dd92298a371962ba8a0d3cb11737",
+    "source_sha256": "92ebd4d6f79d2ef01055048cc8c404fddf32d82fb80e4adbd3e706ad9c6bd635",
     "toolchain": "Mojo 1.2.0 (2016d0cd)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "9adc8ce4b1162cafd96ecd45a17601f74d7b43e72fd45652ce8f4ec6f1b7c747"
+    "binary_sha256": "60b11433b9287fb139bfffd1898fb016528e7b4ea2aa2a2a0a440992c0221aa3"
   },
   "tool_sha256": "ba9b800a26222354c051ac85ea5532e947887a7e12fc5195d6b94cd046d98343",
   "spec": {
