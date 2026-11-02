@@ -1409,5 +1409,21 @@ def test_triangles_past_the_near_and_far_planes_are_cut() raises:
     assert_equal(image.depth[2 * WIDTH + 40], inf[DType.float32]())
 
 
+def test_a_frame_with_no_mesh_is_prepared_for_a_gpu() raises:
+    # A frame with triangles first, so the packed arrays hold something.
+    var assets = Assets()
+    var scene = _floor_scene(assets, Material(Color(180, 160, 140)))
+    var fast = GameRenderer(WIDTH, HEIGHT)
+    fast.prepare_gpu(scene, assets, _above(), NOW)
+    assert_true(fast.triangles > 0)
+    # A scene with a light and no mesh has no draw, so nothing is packed.
+    var bare = Scene()
+    bare.add_light(ambient_light(Color(255, 255, 255), 0.5))
+    bare.update()
+    fast.prepare_gpu(bare, assets, _above(), NOW)
+    assert_equal(fast.draw_count, 0)
+    assert_equal(fast.triangles, 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
