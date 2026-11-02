@@ -571,6 +571,49 @@ __async def _budget_task(
         failures[][index] = String(e)
 
 
+__async def _head_task(
+    dims: Pointer[HeadMuscleDimensions, MutAnyOrigin],
+    spec: Pointer[HumanoidSpec, ImmutAnyOrigin],
+    parts: Pointer[List[BufferGeometry], MutAnyOrigin],
+    failure: Pointer[String, MutAnyOrigin],
+    shell_detail: Int,
+    hair_style: HairStyle,
+    alone: Bool,
+    beard: Beard,
+    beard_cells: Int,
+    fingers: Int,
+    workers: Int,
+):
+    """Mesh the hair's shell, the beard, the eyes and the hands, in that
+    order, or record why one failed.
+
+    A beard of stubble or none adds no mesh.
+    """
+    try:
+        parts[].append(
+            head_hair_from_dimensions(
+                dims[],
+                SCALP_HAIR,
+                RIGHT,
+                shell_detail,
+                workers,
+                hair_style,
+                outer_only=True,
+                alone=alone,
+            )
+        )
+        if beard != STUBBLE and beard != CLEAN_SHAVEN:
+            parts[].append(beard_mesh(dims[], beard, beard_cells, workers))
+        # Both named sides receive an eye.
+        for side in [RIGHT, LEFT]:  # pragma: no branch
+            parts[].append(eyeball_mesh(dims[], side, 12))
+        var arms = arm_muscle_dimensions(spec[])
+        parts[].append(hand_skin_from_dimensions(arms, RIGHT, fingers))
+        parts[].append(hand_skin_from_dimensions(arms, LEFT, fingers))
+    except e:
+        failure[] = String(e)
+
+
 def budget_all(
     var meshes: List[BufferGeometry], budgets: List[Int], workers: Int
 ) raises -> List[BufferGeometry]:
@@ -725,7 +768,10 @@ def add_game_humanoid(
         guides: Guide strands of hair to grow, or none for the hair's
             shell alone.
         followers: Follow strands round each guide.
-        workers: How many threads mesh the skin.
+        workers: How many threads mesh the skin. The hair's shell, the
+            beard, the eyes and the hands are meshed on a task of their
+            own at the same time as the skin. The meshes are the same for
+            any count.
         use: Visual use only. Engineering use is refused before scene edits.
         facial_animation: Keep original face, teeth and gums/tongue under HEAD.
             The total mesh budget then includes those parts and both eyes.
@@ -786,7 +832,7 @@ def add_game_humanoid(
         ).to_json(),
     )
     var gap = LEG_GAP * Float32(spec.stature.value) / 1.8288
-    var body: BufferGeometry
+    var body = BufferGeometry()
     var facial_meshes = List[BufferGeometry]()
     var dims = head_muscle_dimensions(spec)
     if facial_animation and triangles > 0 and triangles < _FACIAL_PART_MINIMUM:
@@ -801,28 +847,56 @@ def add_game_humanoid(
             + String(_FACIAL_PART_MINIMUM)
             + " triangles before the face and eyes"
         )
-    if facial_animation:
-        var shapes = face_rig_shapes()
-        var split = body_skin_parts(spec, detail, workers, gap, shapes)
-        body = split.pop(0)
-        facial_meshes.append(split.pop(0))
-        # The teeth and the gums share the face model's placements.
-        facial_meshes.extend(mouth_meshes(dims, shapes))
-    else:
-        body = body_skin_mesh(spec, detail, workers, gap)
-    # The shell's inner face lies under the scalp: a game never sees it.
-    # With no strands over it, the shell takes its style's shape.
+    # The head's parts and the hands do not need the skin: they are meshed
+    # on a task of their own while the skin is.
     var share = Float32(triangles) if triangles > 0 else Float32(0)
-    var shell = head_hair_from_dimensions(
-        dims,
-        SCALP_HAIR,
-        RIGHT,
-        budget_detail(Int(share * HAIR_SHARE), SHELL_DENSITY, hair_detail),
-        workers,
-        hair_style,
-        outer_only=True,
-        alone=guides == 0 and cards == 0,
+    var each_hand = Int(share * (1 - BODY_SHARE - HAIR_SHARE) / 2)
+    var head_parts = List[BufferGeometry]()
+    var head_failure = String()
+    var meshing = TaskGroup()
+    meshing.create_task(
+        _head_task(
+            Pointer(to=dims).unsafe_origin_cast[MutAnyOrigin](),
+            Pointer(to=spec).unsafe_origin_cast[ImmutAnyOrigin](),
+            Pointer(to=head_parts).unsafe_origin_cast[MutAnyOrigin](),
+            Pointer(to=head_failure).unsafe_origin_cast[MutAnyOrigin](),
+            # The shell's inner face lies under the scalp: a game never
+            # sees it. With no strands over it, the shell takes its
+            # style's shape.
+            budget_detail(Int(share * HAIR_SHARE), SHELL_DENSITY, hair_detail),
+            hair_style,
+            guides == 0 and cards == 0,
+            beard,
+            beard_detail(triangles),
+            budget_detail(each_hand, HAND_DENSITY, hand_detail),
+            workers,
+        )
     )
+    var skin_failure = String()
+    try:
+        if facial_animation:
+            var shapes = face_rig_shapes()
+            var split = body_skin_parts(spec, detail, workers, gap, shapes)
+            body = split.pop(0)
+            facial_meshes.append(split.pop(0))
+            # The teeth and the gums share the face model's placements.
+            facial_meshes.extend(mouth_meshes(dims, shapes))
+        else:
+            body = body_skin_mesh(spec, detail, workers, gap)
+    except e:
+        skin_failure = String(e)
+    # The task reads storage on this frame: it must end before a raise.
+    meshing.wait()
+    if skin_failure != "":
+        raise Error(skin_failure)
+    if head_failure != "":
+        raise Error(head_failure)
+    var left = head_parts.pop()
+    var right = head_parts.pop()
+    var eyes = List[BufferGeometry]()
+    eyes.append(head_parts.pop(len(head_parts) - 2))
+    eyes.append(head_parts.pop())
+    var shell = head_parts.pop(0)
     # Decimation bends the strands laid round the shell; they are laid
     # again where its vertices end up.
     var meshed = shell.clone()
@@ -835,16 +909,7 @@ def add_game_humanoid(
         else:
             shade_stubble(body, dims)
     elif beard != CLEAN_SHAVEN:
-        whiskers = beard_mesh(dims, beard, beard_detail(triangles), workers)
-    var eyes = List[BufferGeometry]()
-    # Both named sides receive an eye.
-    for side in [RIGHT, LEFT]:  # pragma: no branch
-        eyes.append(eyeball_mesh(dims, side, 12))
-    var arms = arm_muscle_dimensions(spec)
-    var each_hand = Int(share * (1 - BODY_SHARE - HAIR_SHARE) / 2)
-    var fingers = budget_detail(each_hand, HAND_DENSITY, hand_detail)
-    var right = hand_skin_from_dimensions(arms, RIGHT, fingers)
-    var left = hand_skin_from_dimensions(arms, LEFT, fingers)
+        whiskers = head_parts.pop()
     untinted(right)
     untinted(left)
     # The rig reads the crown, the fingertips and the toes off the skin.
@@ -909,9 +974,16 @@ def add_game_humanoid(
         # the body. A protected hair shell can exceed its nominal share.
         # Giving the body the actual remainder avoids a second body
         # decimation and attribute-transfer pass in the usual case.
-        shell = _budgeted(shell^, hair_budget)
-        right = _budgeted(right^, hand_budget)
-        left = _budgeted(left^, hand_budget)
+        var three = List[BufferGeometry]()
+        three.append(shell^)
+        three.append(right^)
+        three.append(left^)
+        var fewer = budget_all(
+            three^, [hair_budget, hand_budget, hand_budget], workers
+        )
+        left = fewer.pop()
+        right = fewer.pop()
+        shell = fewer.pop()
         body_budget = max(
             32,
             triangles
@@ -1102,8 +1174,9 @@ def add_game_humanoid(
                 scene, assets, holder_id, spec, cards, style=hair_style
             )
         )
-        # A beard grows cards over its shell, but stubble is too short.
-        if full_beard and beard != STUBBLE:
+        # A beard grows cards over its shell. Stubble has no shell: it is
+        # a shade of the skin.
+        if full_beard:
             card_grooms.append(
                 add_beard_cards(
                     scene,
