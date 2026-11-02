@@ -139,7 +139,7 @@ About ten folds run down each skirt. They bunch together and spread apart round 
 
 A drawn skirt is lined: it has an inner face one fabric thickness inside, and a strip across its hem. So the hem shows its thickness, and the inside of the skirt draws when it is seen from below.
 
-A long skirt, whose hem falls below the knees, hides the legs inside it from 15 cm over its hem (`SKIRT_SHOW`). Both thighs share the middle of its front. So a thigh that lifts would push out through it as the person runs or jumps. With the legs hidden, nothing is left to push out. The skin and every garment under the skirt are hidden there.
+A long skirt, whose hem falls below the knees, hides the legs inside it from 15 cm over its hem (`SKIRT_SHOW`). A shorter skirt with no opening, such as a tunic's or a surcoat's, hides them from 6 cm over its hem (`SHORT_SKIRT_SHOW`). Both thighs share the middle of its front. So a thigh that lifts would push out through it as the person runs or jumps. With the legs hidden, nothing is left to push out. The skin and every garment under the skirt are hidden there.
 
 A short skirt, as a tunic's, hides no leg: a kick lifts the thigh out under its hem. A skirt parted open, as a frock coat's, shows the legs, so it hides none.
 

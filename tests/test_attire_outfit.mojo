@@ -527,14 +527,25 @@ def test_a_long_skirt_hides_the_legs_inside_it() raises:
     var robed = Outfit()
     robed.add(cassock())
     _ = dress(scene, assets, bare, robed)
-    assert_true(_legs_drawn(scene, assets, bare) * 8 < before)
-    # A tunic's short skirt hides them only where its own cover reaches,
-    # at the top of the thighs: a kick lifts them out.
+    var under_robe = _legs_drawn(scene, assets, bare)
+    assert_true(under_robe * 8 < before)
+    # A tunic's short skirt hides them only from `SHORT_SKIRT_SHOW` over
+    # its hem up: less than the robe does, and the knees still show.
     var other = coarse_person(scene, assets)
     var short = Outfit()
     short.add(tunic())
     _ = dress(scene, assets, other, short)
-    assert_true(_legs_drawn(scene, assets, other) * 10 > before * 9)
+    var under_tunic = _legs_drawn(scene, assets, other)
+    assert_true(under_tunic < before)
+    assert_true(under_tunic > under_robe)
+    # A skirt parted open hides none of them.
+    var parted = tunic()
+    parted.opening = OPEN_BELOW
+    var third = coarse_person(scene, assets)
+    var open = Outfit()
+    open.add(parted^)
+    _ = dress(scene, assets, third, open)
+    assert_true(_legs_drawn(scene, assets, third) >= under_tunic)
 
 
 def test_an_outfit_that_does_not_check_is_refused() raises:
