@@ -1004,6 +1004,49 @@ def test_many_meshes_and_a_large_one_share_the_work() raises:
     assert_true(image.depth[30 * WIDTH + 40] < 1)
 
 
+def test_small_triangles_far_from_the_corner_leave_no_pinholes() raises:
+    # A floor of 180,000 small triangles fills the bottom right of a wide
+    # frame, far from its corner, each a few pixels across. No pixel
+    # inside it falls between two triangles to the sky.
+    var assets = Assets()
+    var wide = GameRenderer(1920, 1080)
+    var scene = Scene()
+    var ground = scene.add(_lying())
+    var floor = assets.geometries.add(
+        plane(Length(8.0, METER), Length(8.0, METER), 300, 300)
+    )
+    var paint = assets.materials.add(
+        Material(Color(160, 160, 160), kind=PHYSICAL)
+    )
+    scene.add_mesh(Mesh(floor, paint, ground))
+    _sunlit(scene)
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(1920) / Float32(1080),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(-3, 5, -3), Vector3(1.5, 0, 1.5))
+    var image = wide.render(scene, assets, camera, NOW)
+    var holes = 0
+    var drawn = 0
+    for y in range(540, 1070):
+        for x in range(960, 1910):
+            if image.depth[y * 1920 + x] < 1:
+                drawn += 1
+                continue
+            # A pixel nothing drew, with drawn pixels on each side.
+            var left = image.depth[y * 1920 + x - 1] < 1
+            var right = image.depth[y * 1920 + x + 1] < 1
+            var up = image.depth[(y - 1) * 1920 + x] < 1
+            var down = image.depth[(y + 1) * 1920 + x] < 1
+            if left and right and up and down:
+                holes += 1
+    assert_true(drawn > 100000)
+    assert_equal(holes, 0)
+
+
 def _empty_geometry() raises -> BufferGeometry:
     """Return a geometry with every attribute and no vertex."""
     var geometry = BufferGeometry()
