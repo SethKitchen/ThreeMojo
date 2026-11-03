@@ -996,11 +996,17 @@ struct GameRenderer(Movable):
             self._depth.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
             self._ids.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
         )
-        var drawn = 0
-        for i in range(len(self._ids)):  # pragma: no branch
-            if self._ids[i] != NO_TRIANGLE:
-                drawn += 1
-        self.drawn = drawn
+        # The buffer holds whole tiles, so it holds whole runs of lanes.
+        comptime assert TILE % GAME_LANES == 0, "A tile must hold whole runs"
+        var named = self._ids.unsafe_ptr()
+        var counts = I(0)
+        for i in range(0, len(self._ids), GAME_LANES):  # pragma: no branch
+            counts += (
+                named.unsafe_load[width=GAME_LANES](i)
+                .ne(NO_TRIANGLE)
+                .select(I(1), I(0))
+            )
+        self.drawn = Int(counts.reduce_add())
         var rastered = perf_counter_ns()
         var sky = self._sky(scene, assets, camera)
         var skied = perf_counter_ns()

@@ -195,6 +195,12 @@ def test_a_lit_floor_matches_the_general_renderer() raises:
         assert_equal(image.depth[2 * WIDTH + 40], inf[DType.float32]())
         assert_true(fast.triangles > 0)
         assert_true(fast.drawn > 0)
+        # A drawn pixel keeps its depth; the sky's is infinite.
+        var finite = 0
+        for i in range(WIDTH * HEIGHT):
+            if image.depth[i] < inf[DType.float32]():
+                finite += 1
+        assert_equal(fast.drawn, finite)
         assert_equal(fast.draw_count, 1)
         assert_equal(len(fast.timings), 8)
 
