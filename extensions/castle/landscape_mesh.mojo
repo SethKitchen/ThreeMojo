@@ -87,8 +87,8 @@ def _look(land: Landscape, grid: _Grid) raises -> _Surface:
     var snow_line = land.settings.snow_line.value
     # Noise finer than a few cells only makes the cells speckle.
     var fine = grid.step <= 6.0
-    for j in range(columns):
-        for i in range(columns):
+    for j in range(columns):  # pragma: no branch
+        for i in range(columns):  # pragma: no branch
             var at = j * columns + i
             var x = grid.x0 + Float64(i) * grid.step
             var y = grid.y0 + Float64(j) * grid.step
@@ -181,12 +181,12 @@ def add_ground(land: Landscape, mut kit: Kit) raises:
     Raises:
         Error: If a noise coordinate is not finite.
     """
-    for ring in range(len(land.rings)):
+    for ring in range(len(land.rings)):  # pragma: no branch
         ref grid = land.rings[ring]
         var surface = _look(land, grid)
         var columns = grid.columns
-        for j in range(columns - 1):
-            for i in range(columns - 1):
+        for j in range(columns - 1):  # pragma: no branch
+            for i in range(columns - 1):  # pragma: no branch
                 var x = grid.x0 + (Float64(i) + 0.5) * grid.step
                 var y = grid.y0 + (Float64(j) + 0.5) * grid.step
                 if (

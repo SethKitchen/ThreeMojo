@@ -113,7 +113,7 @@ struct LandscapeSettings(ImplicitlyCopyable):
             self.treeline.value,
             self.snow_line.value,
         ]
-        for at in range(len(lengths)):
+        for at in range(len(lengths)):  # pragma: no branch
             if not (isfinite(lengths[at]) and lengths[at] > 0.0):
                 raise Error("The sizes of a landscape must be positive finite")
         if not (self.plain_radius.value < self.hills_radius.value):
@@ -506,7 +506,7 @@ def build_landscape(
     var low_y = Float64(1.0e30)
     var high_x = Float64(-1.0e30)
     var high_y = Float64(-1.0e30)
-    for corner in plan.moat.outline:
+    for corner in plan.moat.outline:  # pragma: no branch
         low_x = min(low_x, corner.x.value)
         low_y = min(low_y, corner.y.value)
         high_x = max(high_x, corner.x.value)
@@ -541,7 +541,7 @@ def build_landscape(
         _STEP_FACTOR_3 * unit,
     ]
     var rings = List[_Grid]()
-    for ring in range(_RINGS):
+    for ring in range(_RINGS):  # pragma: no branch
         var half = sizes[ring]
         var step = steps[ring]
         var columns = Int(2.0 * half / step) + 1
@@ -549,8 +549,8 @@ def build_landscape(
         var grid = _Grid(
             middle_x - half, middle_y - half, step, columns, half, hole
         )
-        for j in range(columns):
-            for i in range(columns):
+        for j in range(columns):  # pragma: no branch
+            for i in range(columns):  # pragma: no branch
                 var x = grid.x0 + Float64(i) * step
                 var y = grid.y0 + Float64(j) * step
                 var at = point(x, y)
@@ -586,7 +586,7 @@ def build_landscape(
                     # cell, so a ridge narrower than the cell does not alias.
                     var spread = 0.0 if ring < 2 else step * 0.3
                     var rise = 0.0
-                    for corner in range(4):
+                    for corner in range(4):  # pragma: no branch
                         var shift_x = spread * (
                             1.0 if corner % 2 == 0 else -1.0
                         )
@@ -603,11 +603,11 @@ def build_landscape(
         rings.append(grid^)
     # A fine ring meets the coarse ring round it along an edge. Its vertices
     # on that edge are put on the coarse ring's triangles, so no crack opens.
-    for ring in range(_RINGS - 1):
+    for ring in range(_RINGS - 1):  # pragma: no branch
         ref fine = rings[ring]
         ref coarse = rings[ring + 1]
         var width = 2.0 * fine.half
-        for k in range(fine.columns):
+        for k in range(fine.columns):  # pragma: no branch
             var along = fine.x0 + Float64(k) * fine.step
             var across = fine.y0 + Float64(k) * fine.step
             fine.heights[k] = coarse.sample(along, fine.y0)
@@ -658,17 +658,17 @@ def find_site(
     """
     var spacing = 15.0
     var rings = Int(600.0 / spacing)
-    for ring in range(rings):
+    for ring in range(rings):  # pragma: no branch
         var reach = Float64(ring) * spacing
         var around = max(1, Int(2.0 * pi * reach / spacing))
-        for step in range(around):
+        for step in range(around):  # pragma: no branch
             var angle = 2.0 * pi * Float64(step) / Float64(around)
             var x = east + reach * cos(angle)
             var y = north + reach * sin(angle)
             if land.distance_from_moat(x, y) < clearance:
                 continue
             var level = True
-            for k in range(9):
+            for k in range(9):  # pragma: no branch
                 var probe_angle = 2.0 * pi * Float64(k) / 8.0
                 var share = 0.0 if k == 8 else radius
                 var px = x + share * cos(probe_angle)

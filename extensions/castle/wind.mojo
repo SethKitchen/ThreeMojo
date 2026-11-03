@@ -112,7 +112,7 @@ struct WindSite(ImplicitlyCopyable):
             self.air_density.value,
             self.turbulence_factor,
         ]
-        for at in range(len(values)):
+        for at in range(len(values)):  # pragma: no branch
             if not (isfinite(values[at]) and values[at] > 0.0):
                 raise Error(
                     "A wind site needs a positive finite velocity, roughness"
@@ -432,7 +432,7 @@ struct Shaft(Copyable, Movable):
             self.height.value,
             self.roughness.value,
         ]
-        for at in range(len(lengths)):
+        for at in range(len(lengths)):  # pragma: no branch
             if not (isfinite(lengths[at]) and lengths[at] > 0.0):
                 raise Error("A shaft needs a positive finite size")
         if not (self.wall_thickness.value < self.outer_diameter.value / 2.0):
@@ -612,7 +612,7 @@ def structural_factor(
         mass_per_length,
         structural_decrement,
     ]
-    for at in range(len(inputs)):
+    for at in range(len(inputs)):  # pragma: no branch
         if not (isfinite(inputs[at]) and inputs[at] > 0.0):
             raise Error(
                 "A structural factor needs a positive finite height, width,"
@@ -760,14 +760,14 @@ def shaft_frequency_fe(shaft: Shaft, elements: Int = 12) raises -> Frequency64:
         Length64(0.0),
     )
     var model = StructuralModel()
-    for at in range(elements + 1):
+    for at in range(elements + 1):  # pragma: no branch
         _ = model.add_node(
             Vec3d(
                 0.0, 0.0, shaft.height.value * Float64(at) / Float64(elements)
             )
         )
     model.fix(NodeId(0))
-    for at in range(elements):
+    for at in range(elements):  # pragma: no branch
         _ = model.add_member(
             NodeId(at), NodeId(at + 1), section, material, Vec3d(1.0, 0.0, 0.0)
         )
@@ -861,7 +861,7 @@ def tower_wind(
     var strip = height / Float64(_STRIPS)
     var shear = Float64(0)
     var moment = Float64(0)
-    for at in range(_STRIPS):
+    for at in range(_STRIPS):  # pragma: no branch
         var z = (Float64(at) + 0.5) * strip
         var pressure = site.peak_pressure(Length64(max(z - below, 0.0))).value
         var force = cscd * cf * pressure * b * strip

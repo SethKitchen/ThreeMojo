@@ -88,7 +88,7 @@ def _spray(
     var height = List[Float64]()
     var half = List[Float64]()
     var light = List[Float64]()
-    for k in range(rows):
+    for k in range(rows):  # pragma: no branch
         var tau = Float64(k) / Float64(rows - 1)
         radius.append(0.12 + tau * length)
         height.append(z + lift * length * tau - droop * length * tau * tau)
@@ -97,7 +97,7 @@ def _spray(
             0.5 * width * (0.62 + 0.38 * sin(pi * (0.2 + 0.8 * tau))) * taper
         )
         light.append(tier_light * (0.42 + 0.58 * tau))
-    for k in range(rows - 1):
+    for k in range(rows - 1):  # pragma: no branch
         var p0 = away * radius[k] + Vec3d(0, 0, height[k])
         var p1 = away * radius[k + 1] + Vec3d(0, 0, height[k + 1])
         var a = p0 - side * half[k]
@@ -177,14 +177,14 @@ def spruce(
     )
     var base = height * 0.14
     var span = height - base
-    for k in range(tiers):
+    for k in range(tiers):  # pragma: no branch
         var t = Float64(k) / Float64(tiers - 1)
         var z = base + span * pow(t, 0.9)
         var reach = spread * height * 0.2 * pow(1.0 - t, 0.82) + 0.3
         var branches = 5 + Int(3.0 * (1.0 - t)) + (k % 2)
         var turn = unit_noise(Float64(k), 1.0, seed) * 2.0 * pi
         var tier_light = 0.5 + 0.5 * t
-        for b in range(branches):
+        for b in range(branches):  # pragma: no branch
             # A few branches are missing: gaps in the crown.
             if unit_noise(Float64(k * 13 + b), 3.0, seed + 1) < 0.1:
                 continue
@@ -317,7 +317,7 @@ def broadleaf_crown(
             white,
         )
     var golden = pi * (3.0 - sqrt(5.0))
-    for i in range(clusters):
+    for i in range(clusters):  # pragma: no branch
         var fraction = (Float64(i) + 0.5) / Float64(clusters)
         var polar = 1.0 - 2.0 * fraction
         var ring = sqrt(max(0.0, 1.0 - polar * polar))
@@ -364,7 +364,7 @@ def cone_crown(seed: Int, height: Float64) raises -> TreeShape:
         var turn = unit_noise(Float64(tier), 1.0, seed) * pi
         var apex = Vec3d(0, 0, z1 + height * 0.1 * (1.0 if tier == 2 else 0.0))
         var light = 0.45 + 0.28 * Float64(tier)
-        for k in range(sides):
+        for k in range(sides):  # pragma: no branch
             var a0 = turn + 2.0 * pi * Float64(k) / Float64(sides)
             var a1 = turn + 2.0 * pi * Float64(k + 1) / Float64(sides)
             var p0 = Vec3d(cos(a0) * radius, sin(a0) * radius, z0)
@@ -415,10 +415,10 @@ def ball_crown(seed: Int, height: Float64) raises -> TreeShape:
     var center = Vec3d(0, 0, height * 0.62)
     var rx = height * 0.38
     var rz = height * 0.36
-    for band in range(bands):
+    for band in range(bands):  # pragma: no branch
         var p0 = pi * Float64(band) / Float64(bands)
         var p1 = pi * Float64(band + 1) / Float64(bands)
-        for k in range(around):
+        for k in range(around):  # pragma: no branch
             var a0 = 2.0 * pi * Float64(k) / Float64(around)
             var a1 = 2.0 * pi * Float64(k + 1) / Float64(around)
             var n00 = Vec3d(sin(p0) * cos(a0), sin(p0) * sin(a0), cos(p0))

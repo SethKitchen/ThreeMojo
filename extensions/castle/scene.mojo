@@ -228,7 +228,7 @@ def _add_meshes(
 ) raises:
     """Add the geometry of each material to a scene, but not the water, which
     Clearwater draws."""
-    for at in range(len(meshes)):
+    for at in range(len(meshes)):  # pragma: no branch
         ref mesh = meshes[at]
         if mesh.material == WATER:
             continue

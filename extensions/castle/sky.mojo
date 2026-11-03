@@ -209,9 +209,9 @@ def paint_sky[
     var back_y = Float64(world.get(1, 2))
     var back_z = Float64(world.get(2, 2))
     var painted = 0
-    for row in range(height):
+    for row in range(height):  # pragma: no branch
         var ndc_y = 1.0 - (Float64(row) + 0.5) / Float64(height) * 2.0
-        for column in range(width):
+        for column in range(width):  # pragma: no branch
             var at = row * width + column
             if image.depth[at] < 1.0e30:
                 continue

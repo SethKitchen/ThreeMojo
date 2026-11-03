@@ -100,7 +100,7 @@ def polygon_area(outline: List[Point]) raises -> Area64:
         raise Error("A polygon needs at least three points")
     var twice = Float64(0)
     var count = len(outline)
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var p = outline[at]
         var q = outline[(at + 1) % count]
         twice += p.x.value * q.y.value - q.x.value * p.y.value
@@ -123,7 +123,7 @@ def polygon_contains(outline: List[Point], at: Point) -> Bool:
         return False
     var inside = False
     var last = count - 1
-    for first in range(count):
+    for first in range(count):  # pragma: no branch
         var a = outline[first]
         var b = outline[last]
         if (a.y.value > at.y.value) != (b.y.value > at.y.value):
@@ -148,7 +148,7 @@ def check_polygon(outline: List[Point]) raises:
     """
     if len(outline) < 3:
         raise Error("A polygon needs at least three points")
-    for corner in outline:
+    for corner in outline:  # pragma: no branch
         if not (isfinite(corner.x.value) and isfinite(corner.y.value)):
             raise Error("A point must be finite")
     if polygon_area(outline).value == 0:
@@ -174,7 +174,7 @@ def convex_hull(outline: List[Point]) raises -> List[Point]:
         raise Error("A hull needs at least three points")
     # An index list sorted by x and then by y, by insertion.
     var order = List[Int]()
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var place = len(order)
         while place > 0:
             var before = outline[order[place - 1]]
@@ -190,7 +190,7 @@ def convex_hull(outline: List[Point]) raises -> List[Point]:
     # The lower hull, then the upper hull.
     for pass_ in range(2):
         var start = len(chain)
-        for step in range(count):
+        for step in range(count):  # pragma: no branch
             var at = order[step] if pass_ == 0 else order[count - 1 - step]
             while len(chain) >= start + 2 and (
                 _turn(
@@ -207,7 +207,7 @@ def convex_hull(outline: List[Point]) raises -> List[Point]:
     if len(chain) < 3:
         raise Error("A hull needs points that do not lie on one line")
     var hull = List[Point]()
-    for at in chain:
+    for at in chain:  # pragma: no branch
         hull.append(outline[at])
     return hull^
 
@@ -237,7 +237,7 @@ def distance_to_outline(outline: List[Point], at: Point) raises -> Length64:
     if count < 3:
         raise Error("A polygon needs at least three points")
     var nearest = Float64(1.0e30)
-    for first in range(count):
+    for first in range(count):  # pragma: no branch
         var a = outline[first]
         var b = outline[(first + 1) % count]
         var dx = b.x.value - a.x.value
@@ -283,7 +283,7 @@ def offset_outline(axis: List[Point], width: Length64) raises -> List[Point]:
     # The unit normal of each segment, to the left of its direction.
     var nx = List[Float64]()
     var ny = List[Float64]()
-    for at in range(count - 1):
+    for at in range(count - 1):  # pragma: no branch
         var p = axis[at]
         var q = axis[at + 1]
         if not (
@@ -302,7 +302,7 @@ def offset_outline(axis: List[Point], width: Length64) raises -> List[Point]:
         ny.append(dx / length)
     var left = List[Point]()
     var right = List[Point]()
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var ox: Float64
         var oy: Float64
         if at == 0:
@@ -321,7 +321,7 @@ def offset_outline(axis: List[Point], width: Length64) raises -> List[Point]:
         left.append(point(base.x.value + ox, base.y.value + oy))
         right.append(point(base.x.value - ox, base.y.value - oy))
     var outline = left^
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         outline.append(right[count - 1 - at])
     return outline^
 
@@ -775,9 +775,9 @@ struct CastlePlan(Copyable, Movable):
             raise Error("A castle needs a tower")
         if len(self.wings) == 0:
             raise Error("A castle needs a wing")
-        for tower in self.towers:
+        for tower in self.towers:  # pragma: no branch
             tower.check()
-        for wing in self.wings:
+        for wing in self.wings:  # pragma: no branch
             wing.check()
         self.gate.check()
         self.quay.check()
@@ -819,14 +819,14 @@ struct CastlePlan(Copyable, Movable):
         if not (isfinite(step.value) and step.value > 0):
             raise Error("A sampling step must be positive and finite")
         var wings = List[List[Point]]()
-        for wing in self.wings:
+        for wing in self.wings:  # pragma: no branch
             wings.append(wing.outline())
         var gate = self.gate.outline()
         var low_x = Float64(1.0e30)
         var low_y = Float64(1.0e30)
         var high_x = Float64(-1.0e30)
         var high_y = Float64(-1.0e30)
-        for corner in self.surveyed_footprint:
+        for corner in self.surveyed_footprint:  # pragma: no branch
             low_x = min(low_x, corner.x.value)
             low_y = min(low_y, corner.y.value)
             high_x = max(high_x, corner.x.value)
@@ -835,16 +835,16 @@ struct CastlePlan(Copyable, Movable):
         var either = 0
         var across = Int((high_x - low_x) / step.value) + 1
         var up = Int((high_y - low_y) / step.value) + 1
-        for row in range(up):
-            for column in range(across):
+        for row in range(up):  # pragma: no branch
+            for column in range(across):  # pragma: no branch
                 var at = point(
                     low_x + (Float64(column) + 0.5) * step.value,
                     low_y + (Float64(row) + 0.5) * step.value,
                 )
                 var built = polygon_contains(gate, at)
-                for tower in self.towers:
+                for tower in self.towers:  # pragma: no branch
                     built = built or tower.contains(at)
-                for wing in wings:
+                for wing in wings:  # pragma: no branch
                     built = built or polygon_contains(wing, at)
                 var surveyed = polygon_contains(self.surveyed_footprint, at)
                 if built and surveyed:

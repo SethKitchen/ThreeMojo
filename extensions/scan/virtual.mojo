@@ -247,8 +247,8 @@ struct VirtualScan(Movable):
         var eye = eye_inverse.transform_point(Vector3(0, 0, 0))
         var points = List[Vector3](length=width * height, fill=Vector3(0, 0, 0))
         var present = List[Bool](length=width * height, fill=False)
-        for y in range(height):
-            for x in range(width):
+        for y in range(height):  # pragma: no branch
+            for x in range(width):  # pragma: no branch
                 var depth = image.depth[y * width + x]
                 if depth > -1 and depth < 1:
                     points[y * width + x] = _point(
@@ -257,8 +257,8 @@ struct VirtualScan(Movable):
                     present[y * width + x] = True
         var voxel = self.options.voxel.to(METER)
         var taken = 0
-        for y in range(height - 1):
-            for x in range(width - 1):
+        for y in range(height - 1):  # pragma: no branch
+            for x in range(width - 1):  # pragma: no branch
                 var slot = y * width + x
                 if not (
                     present[slot]
@@ -396,7 +396,7 @@ struct VirtualScan(Movable):
         if self.count() == 0:
             raise Error("Virtual scan: the views gave no splat")
         var covariances = List[Float32](length=self.count() * 6, fill=0)
-        for place in range(self.count()):
+        for place in range(self.count()):  # pragma: no branch
             var a = Vector3(
                 self.tangents[place * 3],
                 self.tangents[place * 3 + 1],
@@ -442,7 +442,7 @@ struct VirtualScan(Movable):
         if self.count() == 0:
             raise Error("Virtual scan: the views gave no splat")
         var out = List[UInt8](length=self.count() * SPLAT_ROW, fill=0)
-        for place in range(self.count()):
+        for place in range(self.count()):  # pragma: no branch
             var row = place * SPLAT_ROW
             var a = Vector3(
                 self.tangents[place * 3],

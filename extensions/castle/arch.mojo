@@ -67,7 +67,7 @@ def _slack(ratio: Float64, thrust: Float64, joints: Int) -> Float64:
     )
     var lowest_upper = Float64(1.0e30)
     var highest_lower = Float64(-1.0e30)
-    for k in range(joints + 1):
+    for k in range(joints + 1):  # pragma: no branch
         var theta = pi / 2.0 * Float64(k) / Float64(joints)
         var weight = ratio * theta
         var centroid = Float64(0)

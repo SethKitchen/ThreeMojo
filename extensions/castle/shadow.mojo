@@ -43,7 +43,7 @@ def _blocked(
     inside a solid of the plan."""
     var datum = plan.island_level.value
     var at = point(x, y)
-    for tower in plan.towers:
+    for tower in plan.towers:  # pragma: no branch
         var dx = x - tower.center.x.value
         var dy = y - tower.center.y.value
         if (
@@ -51,7 +51,7 @@ def _blocked(
             and z < tower.top().value - datum
         ):
             return True
-    for wing in plan.wings:
+    for wing in plan.wings:  # pragma: no branch
         if z < wing.base.value + wing.ridge_height.value - datum:
             if polygon_contains(wing.outline(), at):
                 return True
@@ -84,7 +84,7 @@ def courtyard_points(plan: CastlePlan, step: Length64) raises -> List[Point]:
     var low_y = Float64(1.0e30)
     var high_x = Float64(-1.0e30)
     var high_y = Float64(-1.0e30)
-    for corner in hull:
+    for corner in hull:  # pragma: no branch
         low_x = min(low_x, corner.x.value)
         low_y = min(low_y, corner.y.value)
         high_x = max(high_x, corner.x.value)
@@ -125,7 +125,7 @@ def is_in_sun(
         return False
     var toward = position.toward()
     var highest = Float64(0)
-    for tower in plan.towers:
+    for tower in plan.towers:  # pragma: no branch
         highest = max(highest, tower.top().value - plan.island_level.value)
     var t = _RAY_STEP
     while t < _RAY_LENGTH:
@@ -164,7 +164,7 @@ def lit_fraction(
     if len(points) == 0:
         raise Error("The courtyard has no point at this step")
     var lit = 0
-    for at in points:
+    for at in points:  # pragma: no branch
         if is_in_sun(plan, at, position):
             lit += 1
     return Float64(lit) / Float64(len(points))

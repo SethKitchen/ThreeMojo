@@ -223,6 +223,8 @@ def test_the_bundle_refuses_what_the_host_cannot_run() raises:
         _ = FrameBundle(_ray_reconstruction(), RENDER, passes=MOST_PASSES + 1)
     with assert_raises(contains="at least one pixel"):
         _ = FrameBundle(_super_resolution(), FrameSize(0, 4))
+    with assert_raises(contains="at least one pixel"):
+        _ = FrameBundle(_super_resolution(), FrameSize(6, 0))
     var bad = _super_resolution()
     bad.mode = UpscaleMode(9)
     with assert_raises():
@@ -270,6 +272,22 @@ def test_a_frame_must_be_one_streamline_can_run() raises:
     empty[1].width = 0
     with assert_raises(contains="must fill it"):
         bundle.add(constants, empty)
+    var flat = good.copy()
+    flat[1].height = 0
+    with assert_raises(contains="must fill it"):
+        bundle.add(constants, flat)
+    # A side wider than the file's 32-bit field is refused before the
+    # values are counted.
+    var wide = good.copy()
+    wide[1].width = Int(UInt32.MAX) + 1
+    with assert_raises(contains="must fill it"):
+        bundle.add(constants, wide)
+    var tall = good.copy()
+    tall[1].height = Int(UInt32.MAX) + 1
+    with assert_raises(contains="must fill it"):
+        bundle.add(constants, tall)
+    with assert_raises(contains="not tagged"):
+        bundle.add(constants, List[BufferData]())
 
     var infinite = good.copy()
     infinite[0].values[5] = nan[DType.float32]()
@@ -340,21 +358,30 @@ def test_a_result_must_be_whole_and_finite() raises:
         _ = decode_result(version, FrameSize(3, 2))
     with assert_raises(contains="not 2 by 3"):
         _ = decode_result(good, FrameSize(2, 3))
+    with assert_raises(contains="not 3 by 3"):
+        _ = decode_result(good, FrameSize(3, 3))
     var long = good.copy()
     long.append(0)
     with assert_raises(contains="length"):
         _ = decode_result(long, FrameSize(3, 2))
-    var bad = good.copy()
-    var at = 16 + 16 * 4 + 8
+    # Each of the four channels of pixel 4 is not a number in turn.
     var word = bitcast[DType.uint32](nan[DType.float32]())
-    for step in range(4):
-        bad[at + step] = UInt8((word >> UInt32(8 * step)) & 0xFF)
-    with assert_raises(contains="finite"):
-        _ = decode_result(bad, FrameSize(3, 2))
+    for channel in range(4):
+        var bad = good.copy()
+        var at = 16 + 16 * 4 + 4 * channel
+        for step in range(4):
+            bad[at + step] = UInt8((word >> UInt32(8 * step)) & 0xFF)
+        with assert_raises(contains="finite"):
+            _ = decode_result(bad, FrameSize(3, 2))
     with assert_raises(contains="at least one pixel"):
         _ = encode_result(colors, FrameSize(3, 0))
+    with assert_raises(contains="at least one pixel"):
+        _ = encode_result(colors, FrameSize(0, 2))
     with assert_raises(contains="fill the result"):
         _ = encode_result(colors, FrameSize(2, 2))
+    # A width whose area would overflow is refused before it is multiplied.
+    with assert_raises(contains="fill the result"):
+        _ = encode_result(colors, FrameSize(Int.MAX, 2))
 
 
 def main() raises:

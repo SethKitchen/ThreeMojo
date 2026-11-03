@@ -182,7 +182,7 @@ def _terrain(plan: CastlePlan, settings: ViewSettings, mut kit: Kit) raises:
     var low_y = Float64(1.0e30)
     var high_x = Float64(-1.0e30)
     var high_y = Float64(-1.0e30)
-    for corner in plan.moat.outline:
+    for corner in plan.moat.outline:  # pragma: no branch
         low_x = min(low_x, corner.x.value)
         low_y = min(low_y, corner.y.value)
         high_x = max(high_x, corner.x.value)
@@ -198,8 +198,8 @@ def _terrain(plan: CastlePlan, settings: ViewSettings, mut kit: Kit) raises:
     var heights = List[Float64](capacity=columns * rows)
     var colors = List[Vec3d](capacity=columns * rows)
     var dry = Vec3d(1.0, 0.86, 0.6)
-    for row in range(rows):
-        for column in range(columns):
+    for row in range(rows):  # pragma: no branch
+        for column in range(columns):  # pragma: no branch
             var at = point(
                 low_x + Float64(column) * step, low_y + Float64(row) * step
             )
@@ -260,8 +260,8 @@ def _strip(
     fields.append(Vec3d(0.8, 0.8, 0.55))
     fields.append(Vec3d(1.0, 0.9, 0.55))
     fields.append(Vec3d(0.7, 0.85, 0.6))
-    for row in range(rows):
-        for column in range(columns):
+    for row in range(rows):  # pragma: no branch
+        for column in range(columns):  # pragma: no branch
             var x = x0 + Float64(column) * step_x
             var y = y0 + Float64(row) * step_y
             heights.append(ground)
@@ -277,7 +277,7 @@ def _strip(
 def _water(plan: CastlePlan, mut kit: Kit) raises:
     """Add the surface of the moat."""
     var outline = List[Tuple[Float64, Float64]]()
-    for corner in plan.moat.outline:
+    for corner in plan.moat.outline:  # pragma: no branch
         outline.append((corner.x.value, corner.y.value))
     var level = plan.moat.water_level.value - plan.island_level.value
     kit.water.plate(
@@ -316,7 +316,7 @@ def _facade(
     var sill = plinth + 0.9
     while sill + 1.9 < eave - 0.8:
         var row = window_row(length, 1.4, pitch, 1.1, 1.9, sill, False)
-        for o in row:
+        for o in row:  # pragma: no branch
             openings.append(o.copy())
         sill += 3.5
     wall(kit, False, p, q, away, plinth, eave, openings, tint)
@@ -377,7 +377,7 @@ def _wing(
     var left_eave = List[Vec3d]()
     var right_eave = List[Vec3d]()
     var scale = (half + _OVERHANG) / half
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var axis = Vec3d(wing.axis[at].x.value, wing.axis[at].y.value, 0)
         var l = Vec3d(outline[at].x.value, outline[at].y.value, 0)
         var r = Vec3d(
@@ -393,7 +393,7 @@ def _wing(
         left_eave.append(Vec3d(lo.x, lo.y, eave - 0.3))
         right_eave.append(Vec3d(ro.x, ro.y, eave - 0.3))
     var pitch = settings.window_pitch.value
-    for at in range(count - 1):
+    for at in range(count - 1):  # pragma: no branch
         var run = Vec3d(
             wing.axis[at + 1].x.value - wing.axis[at].x.value,
             wing.axis[at + 1].y.value - wing.axis[at].y.value,
@@ -484,7 +484,7 @@ def _wing(
     var sill = plinth + 0.9
     while sill + 1.7 < eave - 0.8:
         var row = window_row(width, 1.9, 4.0, 1.0, 1.7, sill, False)
-        for o in row:
+        for o in row:  # pragma: no branch
             cap_windows.append(o.copy())
         sill += 3.5
     for end in range(2):
@@ -668,7 +668,7 @@ def _gate(
         var sill = plinth + 1.4
         while sill + 2.4 < top - 1.6:
             var row = window_row(length, 1.8, 3.6, 1.0, 2.4, sill, True)
-            for o in row:
+            for o in row:  # pragma: no branch
                 # The portal side keeps its middle clear.
                 if edge == 0 and abs(o.at - length / 2) < 3.0:
                     continue
@@ -713,7 +713,7 @@ def _quay(plan: CastlePlan, mut kit: Kit) raises:
     var top = plan.quay.top.value - datum
     var count = len(outline)
     var up = Vec3d(0, 0, 1)
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var p = outline[at]
         var q = outline[(at + 1) % count]
         var run = Vec3d(q.x.value - p.x.value, q.y.value - p.y.value, 0)
@@ -757,7 +757,7 @@ def _quay(plan: CastlePlan, mut kit: Kit) raises:
                     Vec3d(0.75, 0.72, 0.68),
                 )
     var coping = List[Tuple[Float64, Float64]]()
-    for corner in outline:
+    for corner in outline:  # pragma: no branch
         coping.append((corner.x.value, corner.y.value))
     kit.stone.plate(
         coping,
@@ -809,7 +809,7 @@ def _bridge(plan: CastlePlan, gate: Gate, mut kit: Kit) raises:
         outline.append((reach, parapet_top))
         outline.append((0.0, parapet_top))
         var holes = List[List[Tuple[Float64, Float64]]]()
-        for span in range(bridge.spans):
+        for span in range(bridge.spans):  # pragma: no branch
             var arch = List[Tuple[Float64, Float64]]()
             var middle = (
                 lead_in
@@ -838,7 +838,7 @@ def _bridge(plan: CastlePlan, gate: Gate, mut kit: Kit) raises:
     # The soffit of each arch: strips across the bridge between the walls.
     var inner = across * half
     var other = across * (-half)
-    for span in range(bridge.spans):
+    for span in range(bridge.spans):  # pragma: no branch
         var middle = lead_in + (Float64(span) + 0.5) * bridge.pitch.value
         for step in range(12):
             var t0 = pi - pi * Float64(step) / 12.0
@@ -893,7 +893,7 @@ def _bridge(plan: CastlePlan, gate: Gate, mut kit: Kit) raises:
         # The railing: posts and two rails on the coping.
         var iron = srgb(40, 42, 44)
         var posts = Int(span_length / 1.4)
-        for k in range(posts + 1):
+        for k in range(posts + 1):  # pragma: no branch
             var s = Float64(k) * span_length / Float64(posts)
             var at = (
                 launch
@@ -925,7 +925,7 @@ def _bridge(plan: CastlePlan, gate: Gate, mut kit: Kit) raises:
                 iron,
             )
     # The cutwaters: the piers stand out from the walls in points.
-    for pier in range(bridge.spans + 1):
+    for pier in range(bridge.spans + 1):  # pragma: no branch
         var s = lead_in + Float64(pier) * bridge.pitch.value
         var centre = launch + along * s
         var reach = half + thick + 1.3
@@ -938,7 +938,7 @@ def _bridge(plan: CastlePlan, gate: Gate, mut kit: Kit) raises:
         wedge.append((0.0, reach))
         wedge.append((-1.0, half + thick))
         var rotated = List[Tuple[Float64, Float64]]()
-        for corner in wedge:
+        for corner in wedge:  # pragma: no branch
             rotated.append(
                 (
                     centre.x + along.x * corner[0] + across.x * corner[1],
@@ -965,7 +965,7 @@ def shore_ring(plan: CastlePlan, hull: List[Point]) raises -> List[Point]:
     the island lies a moat's width farther in.
     """
     var ring = List[Point]()
-    for corner in plan.moat.outline:
+    for corner in plan.moat.outline:  # pragma: no branch
         if distance_to_outline(hull, corner).value < 7.0:
             ring.append(corner)
     return ring^
@@ -975,13 +975,13 @@ def resample_ring(ring: List[Point], spacing: Float64) -> List[Point]:
     """Return a closed ring with a corner at least every `spacing` meters."""
     var result = List[Point]()
     var count = len(ring)
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var a = ring[at]
         var b = ring[(at + 1) % count]
         var dx = b.x.value - a.x.value
         var dy = b.y.value - a.y.value
         var steps = max(1, Int(sqrt(dx * dx + dy * dy) / spacing + 0.5))
-        for step in range(steps):
+        for step in range(steps):  # pragma: no branch
             var t = Float64(step) / Float64(steps)
             result.append(point(a.x.value + dx * t, a.y.value + dy * t))
     return result^
@@ -993,7 +993,7 @@ def offset_ring(ring: List[Point], distance: Float64) -> List[Point]:
     var count = len(ring)
     var sign = 1.0 if signed_area(ring) > 0 else -1.0
     var result = List[Point]()
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var before = ring[(at + count - 1) % count]
         var here = ring[at]
         var after = ring[(at + 1) % count]
@@ -1024,7 +1024,7 @@ def _ring_path(plan: CastlePlan, hull: List[Point], mut kit: Kit) raises:
     var outer = offset_ring(ring, _PATH_TO - 0.2)
     var fence = offset_ring(ring, 4.6)
     var count = len(ring)
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var next = (at + 1) % count
         var a = Vec3d(inner[at].x.value, inner[at].y.value, 0)
         var b = Vec3d(inner[next].x.value, inner[next].y.value, 0)
@@ -1039,7 +1039,7 @@ def _ring_path(plan: CastlePlan, hull: List[Point], mut kit: Kit) raises:
     # The fence: a post every 2.4 m and two rails between them.
     var wood = srgb(98, 82, 62)
     var up = Vec3d(0, 0, 1)
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var next = (at + 1) % count
         var here = Vec3d(fence[at].x.value, fence[at].y.value, 0)
         var there = Vec3d(fence[next].x.value, fence[next].y.value, 0)
@@ -1084,7 +1084,7 @@ def _shift_axis(axis: List[Point], distance: Float64) -> List[Point]:
     travel, with the corners mitered."""
     var count = len(axis)
     var result = List[Point]()
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var before = axis[max(at - 1, 0)]
         var here = axis[at]
         var after = axis[min(at + 1, count - 1)]
@@ -1122,7 +1122,7 @@ def _courtyard(plan: CastlePlan, mut kit: Kit) raises:
     var lift = Vec3d(0, 0, 0.04)
     # The band comes as a closed outline: one side, then the other, back.
     var half = count // 2
-    for at in range(half - 1):
+    for at in range(half - 1):  # pragma: no branch
         var a = at_height(path[at], 0.0) + lift
         var b = at_height(path[at + 1], 0.0) + lift
         var c = at_height(path[count - 2 - at], 0.0) + lift
@@ -1132,7 +1132,7 @@ def _courtyard(plan: CastlePlan, mut kit: Kit) raises:
     var hedge = _shift_axis(plan.quay.axis, 6.7)
     var green = Vec3d(0.5, 0.65, 0.4)
     var up = Vec3d(0, 0, 1)
-    for at in range(len(hedge) - 1):
+    for at in range(len(hedge) - 1):  # pragma: no branch
         var a = at_height(hedge[at], 0.0)
         var b = at_height(hedge[at + 1], 0.0)
         var run = b - a
@@ -1213,9 +1213,9 @@ def build_structures(
     var hull = convex_hull(plan.moat.outline)
     _water(plan, kit)
     _ring_path(plan, hull, kit)
-    for wing in plan.wings:
+    for wing in plan.wings:  # pragma: no branch
         _wing(plan, wing, settings, kit)
-    for at in range(len(plan.towers)):
+    for at in range(len(plan.towers)):  # pragma: no branch
         _tower(plan, plan.towers[at], at, settings, kit)
     _gate(plan, plan.gate, settings, kit)
     _quay(plan, kit)

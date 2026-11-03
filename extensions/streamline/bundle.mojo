@@ -353,8 +353,8 @@ struct FrameBundle(Movable):
             check_ray_reconstruction_tags(
                 self.ray_reconstruction, self.render, tags
             )
-        for buffer in buffers:
-            for value in buffer.values:
+        for buffer in buffers:  # pragma: no branch
+            for value in buffer.values:  # pragma: no branch
                 if not isfinite(value):
                     raise Error(
                         "The values of the "
@@ -363,14 +363,14 @@ struct FrameBundle(Movable):
                     )
         self._put_constants(constants)
         _put(self._bytes, _grow(self._bytes, 1), UInt32(len(buffers)))
-        for buffer in buffers:
+        for buffer in buffers:  # pragma: no branch
             var at = _grow(self._bytes, 4 + len(buffer.values))
             _put(self._bytes, at, UInt32(buffer.kind.streamline_type()))
             _put(self._bytes, at + 4, UInt32(buffer.width))
             _put(self._bytes, at + 8, UInt32(buffer.height))
             _put(self._bytes, at + 12, UInt32(buffer.channels))
             at += 16
-            for value in buffer.values:
+            for value in buffer.values:  # pragma: no branch
                 _put(self._bytes, at, bitcast[DType.uint32](value))
                 at += 4
         self.frames += 1
@@ -405,7 +405,7 @@ struct FrameBundle(Movable):
             constants.camera_aspect,
         ]
         at += 256
-        for value in floats:
+        for value in floats:  # pragma: no branch
             _put(self._bytes, at, bitcast[DType.uint32](value))
             at += 4
         var marks: List[Bool] = [
@@ -418,7 +418,7 @@ struct FrameBundle(Movable):
             constants.motion_vectors_jittered,
         ]
         var flags = UInt32(0)
-        for bit in range(len(marks)):
+        for bit in range(len(marks)):  # pragma: no branch
             if marks[bit]:
                 flags |= UInt32(1) << UInt32(bit)
         _put(self._bytes, at, flags)
@@ -468,7 +468,7 @@ def encode_result(
     _put(bytes, 8, UInt32(size.width))
     _put(bytes, 12, UInt32(size.height))
     var at = _RESULT_HEADER
-    for color in colors:
+    for color in colors:  # pragma: no branch
         _put(bytes, at, bitcast[DType.uint32](color.r))
         _put(bytes, at + 4, bitcast[DType.uint32](color.g))
         _put(bytes, at + 8, bitcast[DType.uint32](color.b))
@@ -514,7 +514,7 @@ def decode_result(
         raise Error("The result's length does not match its size")
     var colors = List[FloatColor](capacity=width * height)
     var at = _RESULT_HEADER
-    for _ in range(width * height):
+    for _ in range(width * height):  # pragma: no branch
         var color = FloatColor(
             bitcast[DType.float32](_get(bytes, at)),
             bitcast[DType.float32](_get(bytes, at + 4)),

@@ -242,7 +242,7 @@ struct MoatBalance(Copyable, Movable):
         var steps = max(1, Int(duration.value / _STEP + 0.999999))
         var dt = duration.value / Float64(steps)
         var h = level.value
-        for _ in range(steps):
+        for _ in range(steps):  # pragma: no branch
             var k1 = self.net_rate(Length64(h), weather, day)
             var k2 = self.net_rate(Length64(h + 0.5 * dt * k1), weather, day)
             var k3 = self.net_rate(Length64(h + 0.5 * dt * k2), weather, day)

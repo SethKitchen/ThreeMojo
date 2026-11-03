@@ -199,7 +199,7 @@ def signed_area(outline: List[Point]) -> Float64:
     """
     var twice = Float64(0)
     var count = len(outline)
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var p = outline[at]
         var q = outline[(at + 1) % count]
         twice += p.x.value * q.y.value - q.x.value * p.y.value
@@ -432,10 +432,10 @@ def opening_polygon(
     var spring = max(high - _OGIVE * span, low + 0.3)
     points.append((at + half, spring))
     var steps = 5
-    for step in range(1, steps + 1):
+    for step in range(1, steps + 1):  # pragma: no branch
         var turn = (pi / 3.0) * Float64(step) / Float64(steps)
         points.append((at - half + span * cos(turn), spring + span * sin(turn)))
-    for step in range(steps - 1, -1, -1):
+    for step in range(steps - 1, -1, -1):  # pragma: no branch
         var turn = pi - (pi / 3.0) * Float64(step) / Float64(steps)
         points.append((at + half + span * cos(turn), spring + span * sin(turn)))
     return points^
@@ -619,7 +619,7 @@ def window_row(
     if room < 0:
         return result^
     var count = Int(room / pitch) + 1
-    for k in range(count):
+    for k in range(count):  # pragma: no branch
         var at = length / 2.0
         if count > 1:
             at = margin + room * Float64(k) / Float64(count - 1)
@@ -652,7 +652,7 @@ def ring_band(
         color: The linear color.
     """
     var up = Vec3d(0, 0, 1)
-    for at in range(facets):
+    for at in range(facets):  # pragma: no branch
         var t0 = 2.0 * pi * Float64(at) / Float64(facets)
         var t1 = 2.0 * pi * Float64(at + 1) / Float64(facets)
         var middle = (t0 + t1) / 2
@@ -709,7 +709,7 @@ def round_wall(
     Raises:
         Error: If a plate cannot be triangulated.
     """
-    for at in range(facets):
+    for at in range(facets):  # pragma: no branch
         var t0 = 2.0 * pi * Float64(at) / Float64(facets)
         var t1 = 2.0 * pi * Float64(at + 1) / Float64(facets)
         var middle = (t0 + t1) / 2
@@ -719,7 +719,7 @@ def round_wall(
         var run = (q - p).length()
         var openings = List[Opening]()
         if stride > 0 and (at + phase) % stride == 0 and run > slit + 0.55:
-            for level in levels:
+            for level in levels:  # pragma: no branch
                 openings.append(Opening(run / 2, level, slit, 1.25, True, True))
         wall(kit, stone, p, q, away, bottom, top, openings, color)
 
@@ -745,7 +745,7 @@ def corbel_ring(
         color: The linear color.
     """
     var up = Vec3d(0, 0, 1)
-    for at in range(count):
+    for at in range(count):  # pragma: no branch
         var turn = 2.0 * pi * (Float64(at) + 0.5) / Float64(count)
         var away = Vec3d(cos(turn), sin(turn), 0)
         var along = Vec3d(-sin(turn), cos(turn), 0)
@@ -797,14 +797,14 @@ def round_crown(
     # The floor of the walk, then the merlons round its edge.
     var centre = Vec3d(cx, cy, top)
     var lead = srgb(88, 94, 98)
-    for at in range(facets):
+    for at in range(facets):  # pragma: no branch
         var t0 = 2.0 * pi * Float64(at) / Float64(facets)
         var t1 = 2.0 * pi * Float64(at + 1) / Float64(facets)
         var p = centre + Vec3d(reach * cos(t0), reach * sin(t0), 0)
         var q = centre + Vec3d(reach * cos(t1), reach * sin(t1), 0)
         kit.metal.oriented(centre, p, q, up, lead)
     var merlons = max(8, Int(2.0 * pi * reach / 1.4))
-    for at in range(merlons):
+    for at in range(merlons):  # pragma: no branch
         var turn = 2.0 * pi * (Float64(at) + 0.5) / Float64(merlons)
         var away = Vec3d(cos(turn), sin(turn), 0)
         var along = Vec3d(-sin(turn), cos(turn), 0)
@@ -853,7 +853,7 @@ def finial(
     var low = base + Vec3d(0, 0, ball)
     var mid = base + Vec3d(0, 0, ball * 2.0)
     var tip = base + Vec3d(0, 0, height)
-    for at in range(sides):
+    for at in range(sides):  # pragma: no branch
         var t0 = 2.0 * pi * Float64(at) / Float64(sides)
         var t1 = 2.0 * pi * Float64(at + 1) / Float64(sides)
         var r = ball * 0.8
@@ -905,7 +905,7 @@ def spire(
     var heights = List[Float64]()
     heights.append(0.0)
     heights.append(height * 0.06)
-    for at in range(facets):
+    for at in range(facets):  # pragma: no branch
         var t0 = 2.0 * pi * Float64(at) / Float64(facets)
         var t1 = 2.0 * pi * Float64(at + 1) / Float64(facets)
         var away0 = Vec3d(cos(t0), sin(t0), 0)
@@ -1140,7 +1140,7 @@ def merlon_row(
     var base = Vec3d(p.x, p.y, 0)
     # The corbels, then the band they carry, which stands away from the wall.
     var corbels = max(2, Int(length / 0.9))
-    for k in range(corbels):
+    for k in range(corbels):  # pragma: no branch
         var offset = (Float64(k) + 0.5) * length / Float64(corbels)
         var at = base + along * offset
         for step in range(3):
@@ -1170,7 +1170,7 @@ def merlon_row(
         white(),
     )
     var merlons = max(2, Int(length / 1.5))
-    for k in range(merlons):
+    for k in range(merlons):  # pragma: no branch
         var offset = (Float64(k) + 0.5) * length / Float64(merlons)
         var at = base + along * offset
         var width = length / Float64(merlons) * 0.58

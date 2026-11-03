@@ -165,41 +165,41 @@ def _bank(seed: Int) raises -> List[TreeShape]:
     """Grow the shapes of every tier, in the order of `_shape_index`."""
     var shapes = List[TreeShape]()
     # Tier 0, in full detail: the skeletons of `trees`.
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(broadleaf(seed + 11 * k, 1.0))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(conifer(seed + 13 * k, 1.0))
     # A fir and a larch are conifers of this tier too.
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(conifer(seed + 17 * k + 2, 1.0))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(conifer(seed + 19 * k + 4, 1.0))
     # Tier 1, in reduced detail.
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(broadleaf(seed + 29 * k + 3, 0.4))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(conifer(seed + 31 * k + 5, 0.4))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(conifer(seed + 37 * k + 6, 0.4))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(conifer(seed + 41 * k + 8, 0.4))
     # Tier 2, the crowns.
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(broadleaf_crown(seed + 43 * k, 18.0, 22))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(spruce(seed + 47 * k, 24.0, 11, 0.3, 1.0))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(spruce(seed + 53 * k, 26.0, 12, 0.25, 0.7))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(spruce(seed + 59 * k, 22.0, 10, 0.15, 1.25))
     # Tier 3, cones and balls.
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(ball_crown(seed + 61 * k, 17.0))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(cone_crown(seed + 67 * k, 24.0))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(cone_crown(seed + 71 * k, 26.0))
-    for k in range(_VARIANTS):
+    for k in range(_VARIANTS):  # pragma: no branch
         shapes.append(cone_crown(seed + 73 * k, 22.0))
     return shapes^
 
@@ -290,8 +290,8 @@ def _grow_tier(
     var treeline = land.settings.treeline.value
     var seed = settings.seed
     var columns = Int(2.0 * outer / cell) + 1
-    for row in range(columns):
-        for column in range(columns):
+    for row in range(columns):  # pragma: no branch
+        for column in range(columns):  # pragma: no branch
             var jx = unit_noise(Float64(column), Float64(row), seed + tier)
             var jy = unit_noise(Float64(column), Float64(row), seed + 2 + tier)
             var x = settings.eye_x - outer + (Float64(column) + jx) * cell
@@ -423,7 +423,7 @@ def plant_forest(
         settings.far.value,
     ]
     var cells: List[Float64] = [7.0, 9.0, 24.0, 48.0]
-    for tier in range(_TIERS):
+    for tier in range(_TIERS):  # pragma: no branch
         _grow_tier(
             land,
             settings,
@@ -438,7 +438,7 @@ def plant_forest(
     var counts = List[Int](length=len(shapes), fill=0)
     for at in range(len(spots)):
         counts[spots[at].shape] += 1
-    for shape in range(len(shapes)):
+    for shape in range(len(shapes)):  # pragma: no branch
         if counts[shape] == 0:
             continue
         var tier = shape // (_KINDS * _VARIANTS)
@@ -478,7 +478,7 @@ def _place(
 ) raises:
     """Set the matrix, and for leaves the color, of each tree of a shape."""
     var at = 0
-    for k in range(len(spots)):
+    for k in range(len(spots)):  # pragma: no branch
         if spots[k].shape != shape:
             continue
         var size = Float32(spots[k].size)

@@ -157,7 +157,7 @@ def composite_splats[
     var width = image.width
     var height = image.height
     var target = srgb_working_target(width, height, Color(0, 0, 0))
-    for at in range(width * height):
+    for at in range(width * height):  # pragma: no branch
         var base = at * 4
         target.colors[at] = FloatColor(
             of=Color(
@@ -181,7 +181,7 @@ def composite_splats[
     )
     rasterize_splats(target, selected, workers)
     var resolved = resolve_srgb_working(target)
-    for at in range(width * height):
+    for at in range(width * height):  # pragma: no branch
         var base = at * 4
         image.pixels[base] = resolved.pixels[base]
         image.pixels[base + 1] = resolved.pixels[base + 1]

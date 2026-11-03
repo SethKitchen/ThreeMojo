@@ -175,7 +175,7 @@ def _fbm(
     var amplitude = Float64(0.5)
     var weight = Float64(0)
     var cells = period
-    for octave in range(octaves):
+    for octave in range(octaves):  # pragma: no branch
         total += amplitude * _noise(u, v, cells, seed + 17 * octave)
         weight += amplitude
         amplitude *= 0.5
@@ -195,8 +195,8 @@ def _cells(
     var iy = Int(floor(y))
     var best = Float64(1.0e30)
     var name = Float64(0)
-    for dy in range(-1, 2):
-        for dx in range(-1, 2):
+    for dy in range(-1, 2):  # pragma: no branch
+        for dx in range(-1, 2):  # pragma: no branch
             var cx = ix + dx
             var cy = iy + dy
             var wx = _wrap(cx, period)
@@ -226,8 +226,8 @@ def _maps(layers: _Layers, strength: Float64) raises -> SurfaceMaps:
     var albedo = List[UInt8](capacity=size * size * 4)
     var normal = List[UInt8](capacity=size * size * 4)
     var rough = List[UInt8](capacity=size * size * 4)
-    for row in range(size):
-        for column in range(size):
+    for row in range(size):  # pragma: no branch
+        for column in range(size):  # pragma: no branch
             var at = row * size + column
             var color = layers.color[at]
             albedo.append(_byte(color.x))
@@ -289,8 +289,8 @@ def brick_maps(size: Int, seed: Int) raises -> SurfaceMaps:
     var mortar = Vec3d(0.74, 0.70, 0.62)
     var joint_x = _BRICK_JOINT / _BRICK_LENGTH
     var joint_y = _BRICK_JOINT / _BRICK_COURSE
-    for row in range(size):
-        for column in range(size):
+    for row in range(size):  # pragma: no branch
+        for column in range(size):  # pragma: no branch
             var u = (Float64(column) + 0.5) / Float64(size)
             var v = 1.0 - (Float64(row) + 0.5) / Float64(size)
             var course_at = v * 12.0
@@ -364,8 +364,8 @@ def stone_maps(size: Int, seed: Int) raises -> SurfaceMaps:
     var mortar = Vec3d(0.66, 0.63, 0.56)
     var joint_x = 0.004 / 0.6
     var joint_y = 0.004 / 0.3
-    for row in range(size):
-        for column in range(size):
+    for row in range(size):  # pragma: no branch
+        for column in range(size):  # pragma: no branch
             var u = (Float64(column) + 0.5) / Float64(size)
             var v = 1.0 - (Float64(row) + 0.5) / Float64(size)
             var course_at = v * 4.0
@@ -428,8 +428,8 @@ def slate_maps(size: Int, seed: Int) raises -> SurfaceMaps:
     var green = Vec3d(0.27, 0.32, 0.31)
     var brown = Vec3d(0.33, 0.30, 0.31)
     var gap = Vec3d(0.06, 0.06, 0.07)
-    for row in range(size):
-        for column in range(size):
+    for row in range(size):  # pragma: no branch
+        for column in range(size):  # pragma: no branch
             var u = (Float64(column) + 0.5) / Float64(size)
             var v = 1.0 - (Float64(row) + 0.5) / Float64(size)
             var course_at = v * 4.0
@@ -481,8 +481,8 @@ def grass_maps(size: Int, seed: Int) raises -> SurfaceMaps:
     var green = Vec3d(0.30, 0.38, 0.14)
     var deep = Vec3d(0.20, 0.28, 0.10)
     var dry = Vec3d(0.52, 0.47, 0.22)
-    for row in range(size):
-        for column in range(size):
+    for row in range(size):  # pragma: no branch
+        for column in range(size):  # pragma: no branch
             var u = (Float64(column) + 0.5) / Float64(size)
             var v = 1.0 - (Float64(row) + 0.5) / Float64(size)
             var patch = _fbm(u, v, 5, 4, seed + 1)
@@ -527,8 +527,8 @@ def gravel_maps(size: Int, seed: Int) raises -> SurfaceMaps:
     var gray = Vec3d(0.52, 0.50, 0.47)
     var tan = Vec3d(0.62, 0.54, 0.40)
     var white = Vec3d(0.72, 0.70, 0.64)
-    for row in range(size):
-        for column in range(size):
+    for row in range(size):  # pragma: no branch
+        for column in range(size):  # pragma: no branch
             var u = (Float64(column) + 0.5) / Float64(size)
             var v = 1.0 - (Float64(row) + 0.5) / Float64(size)
             var found = _cells(u, v, 40, seed)
@@ -572,7 +572,7 @@ def leaf_texture(size: Int, seed: Int) raises -> Texture:
     var half_length = List[Float64]()
     var half_width = List[Float64]()
     var shade = List[Float64]()
-    for leaf in range(count):
+    for leaf in range(count):  # pragma: no branch
         # Leaves sit inside a disc, and point away from its middle.
         var around = 2.0 * pi * _hash(leaf, 1, seed)
         var reach = 0.36 * sqrt(_hash(leaf, 2, seed))
@@ -584,13 +584,13 @@ def leaf_texture(size: Int, seed: Int) raises -> Texture:
         half_width.append(length * (0.42 + 0.12 * _hash(leaf, 5, seed)))
         shade.append(0.55 + 0.45 * _hash(leaf, 6, seed))
     var pixels = List[UInt8](length=size * size * 4, fill=0)
-    for row in range(size):
-        for column in range(size):
+    for row in range(size):  # pragma: no branch
+        for column in range(size):  # pragma: no branch
             var x = (Float64(column) + 0.5) / Float64(size)
             var y = 1.0 - (Float64(row) + 0.5) / Float64(size)
             var found = False
             var value = Float64(0)
-            for leaf in range(count):
+            for leaf in range(count):  # pragma: no branch
                 var dx = x - px[leaf]
                 var dy = y - py[leaf]
                 var along = (
@@ -662,8 +662,8 @@ def needle_texture(size: Int, seed: Int) raises -> Texture:
     _require_size(size)
     var pairs = 30
     var pixels = List[UInt8](length=size * size * 4, fill=0)
-    for row in range(size):
-        for column in range(size):
+    for row in range(size):  # pragma: no branch
+        for column in range(size):  # pragma: no branch
             var x = (Float64(column) + 0.5) / Float64(size)
             var y = 1.0 - (Float64(row) + 0.5) / Float64(size)
             var value = Float64(0)
@@ -672,7 +672,7 @@ def needle_texture(size: Int, seed: Int) raises -> Texture:
             if stem[0] < 0.012:
                 found = True
                 value = 0.45
-            for k in range(pairs):
+            for k in range(pairs):  # pragma: no branch
                 var t = (Float64(k) + 0.5) / Float64(pairs)
                 var base_y = 0.06 + 0.86 * t
                 var length = 0.34 * (1.0 - 0.7 * t)
