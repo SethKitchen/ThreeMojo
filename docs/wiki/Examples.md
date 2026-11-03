@@ -102,6 +102,10 @@ mkdir -p out
 | `scan_view_gpu.mojo` | `seem-church-gpu.png` | [GPU splats](GPU-splats) |
 | `scan_walk.mojo` | `scan-walk.png` | [Walking through a scan](Walking-through-a-scan) |
 | `scan_walk_gpu.mojo` | `scan-walk-gpu.png` | [GPU splats](GPU-splats) |
+| `wijnendale_scan.mojo` | `wijnendale-scan.png` | [Virtual scans](Virtual-scans) |
+| `wijnendale.mojo` | `wijnendale.png` | [Castle](Castle) |
+| `wijnendale_simulation.mojo` | `wijnendale-simulation.png` | [Castle analysis](Castle-analysis) |
+| `wijnendale_landscape.mojo` | `wijnendale-landscape.png` | [Landscape](Landscape) |
 | `spring_modes.mojo` | `numerics.png` | [Numerics](Numerics) |
 | `audio_game_humanoid.mojo` | `audio-character.glb` | [Audio-aligned game faces](Audio-aligned-game-faces) |
 | `carla_towns.mojo` | `carla_towns.png` | [CARLA rendering](CARLA-rendering) |

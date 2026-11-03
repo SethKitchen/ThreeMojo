@@ -30,6 +30,7 @@ from std.testing import (
     assert_true,
 )
 
+from extensions.warp.derivatives import Stencil
 from extensions.warp.frame import eulerian_transform, to_eulerian
 from extensions.warp.grid import SpacetimeCenter, SpacetimeGrid
 from extensions.warp.kinds import (
@@ -234,6 +235,36 @@ def test_curvature_matches_stress_energy() raises:
             expected[k],
             atol=1e-9 * abs(expected[0]),
         )
+
+
+def test_stencil_from_fields() raises:
+    # A GPU kernel rebuilds the stencil from its fields. The copy must take
+    # the same differences and find the same indexes as the grid does.
+    var grid = SpacetimeGrid.uniform(1, 6, 5, 7, Duration64(1.0), Length64(0.3))
+    var stencil = Stencil(grid, FOURTH_ORDER)
+    var copy = Stencil(
+        counts=stencil.counts,
+        strides=stencil.strides,
+        steps=stencil.steps,
+        wraps=stencil.wraps,
+        reach=stencil.reach,
+    )
+    var field = List[Float64](capacity=grid.points())
+    for point in range(grid.points()):
+        var at = grid.position(point)
+        field.append(Float64(at[1] * at[1]) + 0.5 * Float64(at[2] * at[3]))
+    for point in range(grid.points()):
+        var at = grid.position(point)
+        assert_true(copy.position(point) == at)
+        for axis in range(4):
+            assert_equal(
+                copy.first(field, 0, point, at, axis),
+                stencil.first(field, 0, point, at, axis),
+            )
+            assert_equal(
+                copy.second(field, 0, point, at, axis, 3),
+                stencil.second(field, 0, point, at, axis, 3),
+            )
 
 
 def test_solver_refusals() raises:

@@ -177,6 +177,28 @@ def determinant4(a: Matrix4) -> Float64:
     return a[0] * cof[0] + a[1] * cof[1] + a[2] * cof[2] + a[3] * cof[3]
 
 
+def checked_inverse4(a: Matrix4, mut ok: Bool) -> Matrix4:
+    """Return the inverse of a 4 by 4 matrix, by cofactors, without raising.
+
+    This is WarpFactory's `c4Inv`. A GPU kernel cannot raise, so it calls
+    this form, as the CPU solver does.
+
+    Args:
+        a: The matrix.
+        ok: Set to False if the determinant is zero or not finite, and left
+            alone otherwise.
+
+    Returns:
+        The inverse, or zero when `ok` is set to False.
+    """
+    var cof = cofactors4(a)
+    var det = a[0] * cof[0] + a[1] * cof[1] + a[2] * cof[2] + a[3] * cof[3]
+    if det == 0.0 or not isfinite(det):
+        ok = False
+        return Matrix4(0)
+    return transpose4(cof) / det
+
+
 def inverse4(a: Matrix4) raises -> Matrix4:
     """Return the inverse of a 4 by 4 matrix, by cofactors.
 
@@ -191,11 +213,11 @@ def inverse4(a: Matrix4) raises -> Matrix4:
     Raises:
         Error: If the determinant is zero or not finite.
     """
-    var cof = cofactors4(a)
-    var det = a[0] * cof[0] + a[1] * cof[1] + a[2] * cof[2] + a[3] * cof[3]
-    if det == 0.0 or not isfinite(det):
+    var ok = True
+    var inverse = checked_inverse4(a, ok)
+    if not ok:
         raise Error("A metric is singular at a grid point")
-    return transpose4(cof) / det
+    return inverse
 
 
 struct TensorField(Copyable, Movable):

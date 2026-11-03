@@ -51,7 +51,9 @@ from lights.light import DIRECTIONAL
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
+from render.tasks import TaskGroup
 from std.math import exp, isinf, sqrt
+from std.sys import num_logical_cores
 from units.si import PER_METER, RADIAN, SECOND, Angle, Duration, InverseLength
 
 comptime DROPS = 700
@@ -522,39 +524,33 @@ struct Weather(Movable):
         var bright = look.bright
         var gray = look.gray
         var fog = look.fog
-        for y in range(h):  # pragma: no branch
-            var gy = Float32(y) / Float32(CLOUD_STEP)
-            var r0 = min(Int(gy), rows - 2)
-            var ty = gy - Float32(r0)
-            for x in range(w):  # pragma: no branch
-                var at = y * w + x
-                if not isinf(image.depth[at]):
-                    continue
-                var gx = Float32(x) / Float32(CLOUD_STEP)
-                var c0 = min(Int(gx), columns - 2)
-                var tx = gx - Float32(c0)
-                var a = cover[r0 * columns + c0]
-                var b = cover[r0 * columns + c0 + 1]
-                var c = cover[(r0 + 1) * columns + c0]
-                var e = cover[(r0 + 1) * columns + c0 + 1]
-                var top = a + (b - a) * tx
-                var bottom = c + (e - c) * tx
-                var cloud = top + (bottom - top) * ty
-                var alpha = min(Float32(1), veil + cloud * (1 - veil))
-                var p = at * 4
-                var sky = Vector3(
-                    Float32(image.pixels[p]),
-                    Float32(image.pixels[p + 1]),
-                    Float32(image.pixels[p + 2]),
+        # Each pixel is its own, so the rows are cut over the cores.
+        var tasks = max(1, min(h, num_logical_cores()))
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _cover_rows(
+                    image.depth.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    image.pixels.unsafe_ptr().unsafe_origin_cast[
+                        MutAnyOrigin
+                    ](),
+                    cover.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    w,
+                    columns,
+                    rows,
+                    look,
+                    task * h // tasks,
+                    (task + 1) * h // tasks,
                 )
-                # The underside of a thick cloud is darker than its edge.
-                var tone = gray * (1 - 0.18 * cloud * look.gloom)
-                var seen = sky + (tone - sky) * alpha
-                seen = seen + (fog - seen) * mist
-                seen = seen * bright
-                image.pixels[p] = UInt8(Int(min(Float32(255), seen.x)))
-                image.pixels[p + 1] = UInt8(Int(min(Float32(255), seen.y)))
-                image.pixels[p + 2] = UInt8(Int(min(Float32(255), seen.z)))
+            )
+        group.wait()
+        _ = len(image.depth)
+        _ = len(image.pixels)
+        _ = len(cover)
 
     def rain(self, mut window: Framebuffer):
         """Draw the falling drops over a window as thin streaks.
@@ -584,3 +580,56 @@ struct Weather(Movable):
                     window.pixels[p + c] = UInt8(
                         Int(under + (215 - under) * alpha)
                     )
+
+
+__async def _cover_rows(
+    depth: Pointer[Float32, ImmutAnyOrigin],
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    cover: Pointer[Float32, ImmutAnyOrigin],
+    w: Int,
+    columns: Int,
+    rows: Int,
+    look: CoverLook,
+    first: Int,
+    past: Int,
+):
+    """Draw the clouds and the fog over rows `first` to `past` of a frame's
+    sky, from the grid of cloud cover, as `Weather.cover` does."""
+    var veil = look.veil
+    var mist = look.mist
+    var bright = look.bright
+    var gray = look.gray
+    var fog = look.fog
+    for y in range(first, past):  # pragma: no branch
+        var gy = Float32(y) / Float32(CLOUD_STEP)
+        var r0 = min(Int(gy), rows - 2)
+        var ty = gy - Float32(r0)
+        for x in range(w):  # pragma: no branch
+            var at = y * w + x
+            if not isinf(depth[unsafe_offset=at]):
+                continue
+            var gx = Float32(x) / Float32(CLOUD_STEP)
+            var c0 = min(Int(gx), columns - 2)
+            var tx = gx - Float32(c0)
+            var a = cover[unsafe_offset=r0 * columns + c0]
+            var b = cover[unsafe_offset=r0 * columns + c0 + 1]
+            var c = cover[unsafe_offset=(r0 + 1) * columns + c0]
+            var e = cover[unsafe_offset=(r0 + 1) * columns + c0 + 1]
+            var top = a + (b - a) * tx
+            var bottom = c + (e - c) * tx
+            var cloud = top + (bottom - top) * ty
+            var alpha = min(Float32(1), veil + cloud * (1 - veil))
+            var p = at * 4
+            var sky = Vector3(
+                Float32(pixels[unsafe_offset=p]),
+                Float32(pixels[unsafe_offset=p + 1]),
+                Float32(pixels[unsafe_offset=p + 2]),
+            )
+            # The underside of a thick cloud is darker than its edge.
+            var tone = gray * (1 - 0.18 * cloud * look.gloom)
+            var seen = sky + (tone - sky) * alpha
+            seen = seen + (fog - seen) * mist
+            seen = seen * bright
+            pixels[unsafe_offset=p] = UInt8(Int(min(Float32(255), seen.x)))
+            pixels[unsafe_offset=p + 1] = UInt8(Int(min(Float32(255), seen.y)))
+            pixels[unsafe_offset=p + 2] = UInt8(Int(min(Float32(255), seen.z)))

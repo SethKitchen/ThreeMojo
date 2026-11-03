@@ -72,11 +72,10 @@ __async def _across_task(
             var f = shares[unsafe_offset=x]
             var a = source.unsafe_offset(c * 4)
             var b = a.unsafe_offset(4 if c + 1 < width else 0)
-            for ch in range(4):
-                var low = Float32(a[unsafe_offset=ch])
-                line_out[unsafe_offset=x * 4 + ch] = (
-                    low + (Float32(b[unsafe_offset=ch]) - low) * f
-                )
+            # A pixel's four channels mix at once, each as it would alone.
+            var low = a.unsafe_load[width=4]().cast[DType.float32]()
+            var high = b.unsafe_load[width=4]().cast[DType.float32]()
+            line_out.unsafe_offset(x * 4).unsafe_store(low + (high - low) * f)
 
 
 __async def _down_task(

@@ -254,3 +254,12 @@ $(call gallery,anodizing,anodizing)
 $(call gallery,kroll-loop,kroll_loop)
 # Diamond and graphite read from CIF text, turning side by side.
 $(call gallery,crystal,crystal)
+# Wijnendale Castle from the air in autumn, under the sun of 19 October 2026.
+$(call gallery,wijnendale,wijnendale)
+# The castle each hour of 19 October, with the donjon's shadow turning.
+$(call gallery,wijnendale-simulation,wijnendale_simulation,assets/pebbles.jpg)
+# The castle in mountains, woods and lakes, beside a scanned church when the
+# scan is cached.
+$(call gallery,wijnendale-landscape,wijnendale_landscape,assets/pebbles.jpg)
+# The castle scanned by 24 virtual cameras, drawn as its splats.
+$(call gallery,wijnendale-scan,wijnendale_scan)

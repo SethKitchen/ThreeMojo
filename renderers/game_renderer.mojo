@@ -145,7 +145,7 @@ from render.texture import MIRROR, REPEAT, Texture
 from render.cube_texture import CubeTexture
 from render.texture_store import TextureId
 from std.math import ceil, exp2, floor, inf, log2, max, min, sqrt
-from std.memory import unsafe_memcpy
+from std.memory import stack_allocation, unsafe_memcpy
 from std.time import perf_counter_ns
 from units.si import PER_METER, SECOND, Duration
 
@@ -1229,11 +1229,17 @@ struct GameRenderer(Movable):
             self._depth.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
             self._ids.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
         )
-        var drawn = 0
-        for i in range(len(self._ids)):  # pragma: no branch
-            if self._ids[i] != NO_TRIANGLE:
-                drawn += 1
-        self.drawn = drawn
+        # The buffer holds whole tiles, so it holds whole runs of lanes.
+        comptime assert TILE % GAME_LANES == 0, "A tile must hold whole runs"
+        var named = self._ids.unsafe_ptr()
+        var counts = I(0)
+        for i in range(0, len(self._ids), GAME_LANES):  # pragma: no branch
+            counts += (
+                named.unsafe_load[width=GAME_LANES](i)
+                .ne(NO_TRIANGLE)
+                .select(I(1), I(0))
+            )
+        self.drawn = Int(counts.reduce_add())
         var rastered = perf_counter_ns()
         var sky = self._sky(scene, assets, camera)
         var skied = perf_counter_ns()
@@ -2159,23 +2165,35 @@ struct GameRenderer(Movable):
         self._gpu_vertices = next_extra
 
     def _bin(self, width: Int, height: Int) raises -> List[List[Int32]]:
-        """List each tile's triangles, in order, for an image of a size."""
+        """List each tile's triangles, in order, for an image of a size.
+
+        Each row of tiles is listed by its own task. A task reads every
+        triangle's bounds and keeps those that reach its row, so each tile
+        lists its triangles in the order they were set up."""
         var tiles_x = (width + TILE - 1) // TILE
         var tiles_y = (height + TILE - 1) // TILE
         var bins = List[List[Int32]](
             length=tiles_x * tiles_y, fill=List[Int32]()
         )
-        var bounds = self._bounds.unsafe_ptr()
-        for j in range(self._jobs):
-            var first = self._batches[j].first
-            for t in range(first, first + self._batches[j].count):
-                var bx0 = Int(bounds[unsafe_offset=t * 4]) // TILE
-                var by0 = Int(bounds[unsafe_offset=t * 4 + 1]) // TILE
-                var bx1 = Int(bounds[unsafe_offset=t * 4 + 2]) // TILE
-                var by1 = Int(bounds[unsafe_offset=t * 4 + 3]) // TILE
-                for by in range(by0, by1 + 1):  # pragma: no branch
-                    for bx in range(bx0, bx1 + 1):  # pragma: no branch
-                        bins[by * tiles_x + bx].append(Int32(t))
+        var group = TaskGroup()
+        for row in range(tiles_y):  # pragma: no branch
+            group.create_task(
+                _bin_task(
+                    bins.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    Pointer(to=self._batches)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    self._jobs,
+                    self._bounds.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    row,
+                    tiles_x,
+                )
+            )
+        group.wait()
+        _ = len(self._batches)
+        _ = len(self._bounds)
         return bins^
 
     def _raster(
@@ -2668,6 +2686,16 @@ def _light_range(
     var crs = part.cr.unsafe_ptr()
     var cgs = part.cg.unsafe_ptr()
     var cbs = part.cb.unsafe_ptr()
+    # A skinned part has four bones and four weights for each of its
+    # vertices, so these reads stay inside the lists.
+    var bones = part.bones.unsafe_ptr()
+    var weights = part.weights.unsafe_ptr()
+    var us = shape.u.unsafe_ptr()
+    var vs = shape.v.unsafe_ptr()
+    # Each vertex's `STRIDE` floats, as rows of lanes and then as one row
+    # for each vertex.
+    var rows = stack_allocation[STRIDE, F]()
+    var turned = stack_allocation[STRIDE, F]()
     var sun_values = px
     var sky_values = px
     if d.sunlit >= 0:
@@ -2708,8 +2736,10 @@ def _light_range(
                     # `core.deform.skin_carriers` makes it.
                     var m = SIMD[DType.float32, 16](0)
                     for slot in range(BONES_PER_VERTEX):  # pragma: no branch
-                        var w = part.weights[(k + lane) * 4 + slot]
-                        var bone = Int(part.bones[(k + lane) * 4 + slot])
+                        var w = weights[unsafe_offset=(k + lane) * 4 + slot]
+                        var bone = Int(
+                            bones[unsafe_offset=(k + lane) * 4 + slot]
+                        )
                         m += carriers.unsafe_load[width=16](bone * 12) * w
                     var lx = x[lane]
                     var ly = y[lane]
@@ -2753,14 +2783,36 @@ def _light_range(
             x = x + (s.along_x * swing) * weight
             y = y + (s.flutter * flutter) * weight
             z = z + (s.along_z * swing) * weight
-        # The world position, the clip position and the view depth.
-        var wx = x * w0[0] + y * w0[1] + z * w0[2] + w0[3]
-        var wy = x * w1[0] + y * w1[1] + z * w1[2] + w1[3]
-        var wz = x * w2[0] + y * w2[1] + z * w2[2] + w2[3]
+        # The clip position.
         var cx = x * c0[0] + y * c0[1] + z * c0[2] + c0[3]
         var cy = x * c1[0] + y * c1[1] + z * c1[2] + c1[3]
         var cz = x * c2[0] + y * c2[1] + z * c2[2] + c2[3]
         var cw = x * c3[0] + y * c3[1] + z * c3[2] + c3[3]
+        if fr.depth_only:
+            # A shadow map needs only where each vertex is: its first four
+            # floats, interleaved so that each lane's four are together.
+            var front = cx.interleave(cz)
+            var back = cy.interleave(cw)
+            var low = front.slice[GAME_LANES, offset=0]().interleave(
+                back.slice[GAME_LANES, offset=0]()
+            )
+            var high = front.slice[GAME_LANES, offset=GAME_LANES]().interleave(
+                back.slice[GAME_LANES, offset=GAME_LANES]()
+            )
+            var records = rows.unsafe_bitcast[Float32]()
+            records.unsafe_store(low)
+            records.unsafe_offset(2 * GAME_LANES).unsafe_store(high)
+            var at = dest.unsafe_offset((d.first + k) * STRIDE)
+            for lane in range(lanes):  # pragma: no branch
+                at.unsafe_offset(lane * STRIDE).unsafe_store(
+                    records.unsafe_load[width=4](lane * 4)
+                )
+            k += lanes
+            continue
+        # The world position and the view depth.
+        var wx = x * w0[0] + y * w0[1] + z * w0[2] + w0[3]
+        var wy = x * w1[0] + y * w1[1] + z * w1[2] + w1[3]
+        var wz = x * w2[0] + y * w2[1] + z * w2[2] + w2[3]
         var depth = -(x * v2[0] + y * v2[1] + z * v2[2] + v2[3])
         var mx = nx * n0[0] + ny * n0[1] + nz * n0[2]
         var my = nx * n1[0] + ny * n1[1] + nz * n1[2]
@@ -2770,16 +2822,6 @@ def _light_range(
         mx *= inv
         my *= inv
         mz *= inv
-        if fr.depth_only:
-            # A shadow map needs only where each vertex is.
-            for lane in range(lanes):  # pragma: no branch
-                var at = dest.unsafe_offset((d.first + k + lane) * STRIDE)
-                at[unsafe_offset=0] = cx[lane]
-                at[unsafe_offset=1] = cy[lane]
-                at[unsafe_offset=2] = cz[lane]
-                at[unsafe_offset=3] = cw[lane]
-            k += lanes
-            continue
         var albedo_r = r * look.color[0] * look.map_color[0]
         var albedo_g = g * look.color[1] * look.map_color[1]
         var albedo_b = b * look.color[2] * look.map_color[2]
@@ -2852,33 +2894,77 @@ def _light_range(
             var lookup = Float32(-1) if (
                 d.sunlit >= 0 or not d.receives
             ) else Float32(0)
-            for lane in range(lanes):  # pragma: no branch
-                var at = base.unsafe_offset(lane * STRIDE)
-                if pixel:
-                    # The fog's share kept, for a lookup, or -1 less it,
-                    # for none; and the texture coordinates.
+            var code = F(lookup)
+            var u = F(0)
+            var v = F(0)
+            if pixel:
+                # The fog's share kept, for a lookup, or -1 less it, for
+                # none; and the texture coordinates.
+                code = keep if lookup == 0 else -1 - keep
+                for lane in range(lanes):  # pragma: no branch
                     var src = Int(verts[unsafe_offset=k + lane])
-                    at[unsafe_offset=13] = (
-                        keep[lane] if lookup == 0 else -1 - keep[lane]
-                    )
-                    at[unsafe_offset=14] = shape.u[src]
-                    at[unsafe_offset=15] = shape.v[src]
-                else:
-                    at[unsafe_offset=13] = lookup
-                at[unsafe_offset=0] = cx[lane]
-                at[unsafe_offset=1] = cy[lane]
-                at[unsafe_offset=2] = cz[lane]
-                at[unsafe_offset=3] = cw[lane]
-                at[unsafe_offset=4] = ar[lane]
-                at[unsafe_offset=5] = ag[lane]
-                at[unsafe_offset=6] = ab[lane]
-                at[unsafe_offset=7] = sr[lane]
-                at[unsafe_offset=8] = sg[lane]
-                at[unsafe_offset=9] = sb[lane]
-                at[unsafe_offset=10] = wx[lane]
-                at[unsafe_offset=11] = wy[lane]
-                at[unsafe_offset=12] = wz[lane]
+                    u[lane] = us[unsafe_offset=src]
+                    v[lane] = vs[unsafe_offset=src]
+            rows[unsafe_offset=0] = cx
+            rows[unsafe_offset=1] = cy
+            rows[unsafe_offset=2] = cz
+            rows[unsafe_offset=3] = cw
+            rows[unsafe_offset=4] = ar
+            rows[unsafe_offset=5] = ag
+            rows[unsafe_offset=6] = ab
+            rows[unsafe_offset=7] = sr
+            rows[unsafe_offset=8] = sg
+            rows[unsafe_offset=9] = sb
+            rows[unsafe_offset=10] = wx
+            rows[unsafe_offset=11] = wy
+            rows[unsafe_offset=12] = wz
+            rows[unsafe_offset=13] = code
+            rows[unsafe_offset=14] = u
+            rows[unsafe_offset=15] = v
+            var row = _transpose(
+                rows.unsafe_origin_cast[MutAnyOrigin](),
+                turned.unsafe_origin_cast[MutAnyOrigin](),
+            )
+            for lane in range(lanes):  # pragma: no branch
+                base.unsafe_offset(lane * STRIDE).unsafe_store(
+                    row[unsafe_offset=lane]
+                )
         k += lanes
+
+
+@always_inline
+def _transpose(
+    rows: MutPointer[F, MutAnyOrigin], scratch: MutPointer[F, MutAnyOrigin]
+) -> MutPointer[F, MutAnyOrigin]:
+    """Transpose `STRIDE` rows of `GAME_LANES` floats, as a square.
+
+    Four rounds each interleave row `i` with row `i + 8`. After the fourth,
+    row `j` holds lane `j` of every row in order. The rounds use `rows` and
+    `scratch` in turn, so both are changed.
+
+    Args:
+        rows: The rows, one for each of a vertex's floats.
+        scratch: Room for as many rows.
+
+    Returns:
+        Where the transposed rows are: one for each vertex.
+    """
+    comptime assert STRIDE == GAME_LANES, "The vertex record must be square"
+    var a = rows
+    var b = scratch
+    comptime for _round in range(4):
+        comptime for i in range(STRIDE // 2):
+            var pair = a[unsafe_offset=i].interleave(
+                a[unsafe_offset=i + STRIDE // 2]
+            )
+            b[unsafe_offset=2 * i] = pair.slice[GAME_LANES, offset=0]()
+            b[unsafe_offset=2 * i + 1] = pair.slice[
+                GAME_LANES, offset=GAME_LANES
+            ]()
+        var t = a
+        a = b
+        b = t
+    return a
 
 
 @always_inline
@@ -3181,6 +3267,30 @@ def _emit(
     bound[unsafe_offset=2] = Int32(Int(mxx))
     bound[unsafe_offset=3] = Int32(Int(mxy))
     bt.count += 1
+
+
+__async def _bin_task(
+    bins: MutPointer[List[Int32], MutAnyOrigin],
+    batches: Pointer[List[_Batch], ImmutAnyOrigin],
+    jobs: Int,
+    bounds: Pointer[Int32, ImmutAnyOrigin],
+    row: Int,
+    tiles_x: Int,
+):
+    """List the triangles of the first `jobs` batches that reach each tile
+    of a row of tiles, in order."""
+    var line = bins.unsafe_offset(row * tiles_x)
+    for j in range(jobs):
+        ref batch = batches[][j]
+        for t in range(batch.first, batch.first + batch.count):
+            var by0 = Int(bounds[unsafe_offset=t * 4 + 1]) // TILE
+            var by1 = Int(bounds[unsafe_offset=t * 4 + 3]) // TILE
+            if by0 > row or by1 < row:
+                continue
+            var bx0 = Int(bounds[unsafe_offset=t * 4]) // TILE
+            var bx1 = Int(bounds[unsafe_offset=t * 4 + 2]) // TILE
+            for bx in range(bx0, bx1 + 1):  # pragma: no branch
+                line[unsafe_offset=bx].append(Int32(t))
 
 
 __async def _raster_task(
@@ -3563,11 +3673,26 @@ __async def _resolve_task(
             var green = _encode_bytes(toned[1], buckets, thresholds)
             var blue = _encode_bytes(toned[2], buckets, thresholds)
             var kept = drawn.select(here, infinite)
-            for k in range(lanes):  # pragma: no branch
-                var out = pixels.unsafe_offset((at + k) * 4)
-                out[unsafe_offset=0] = UInt8(red[k])
-                out[unsafe_offset=1] = UInt8(green[k])
-                out[unsafe_offset=2] = UInt8(blue[k])
-                out[unsafe_offset=3] = 255
-                out_depth[unsafe_offset=at + k] = kept[k]
+            # Each pixel's four bytes together: red with blue and green
+            # with alpha, then the two pairs.
+            if lanes == GAME_LANES:
+                var rgba = (
+                    red.cast[DType.uint8]()
+                    .interleave(blue.cast[DType.uint8]())
+                    .interleave(
+                        green.cast[DType.uint8]().interleave(
+                            SIMD[DType.uint8, GAME_LANES](255)
+                        )
+                    )
+                )
+                pixels.unsafe_offset(at * 4).unsafe_store(rgba)
+                out_depth.unsafe_offset(at).unsafe_store(kept)
+            else:
+                for k in range(lanes):  # pragma: no branch
+                    var out = pixels.unsafe_offset((at + k) * 4)
+                    out[unsafe_offset=0] = UInt8(red[k])
+                    out[unsafe_offset=1] = UInt8(green[k])
+                    out[unsafe_offset=2] = UInt8(blue[k])
+                    out[unsafe_offset=3] = 255
+                    out_depth[unsafe_offset=at + k] = kept[k]
             x += lanes

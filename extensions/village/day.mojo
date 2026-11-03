@@ -40,7 +40,9 @@ from lights.light import DIRECTIONAL
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
+from render.tasks import TaskGroup
 from std.math import floor, isinf
+from std.sys import num_logical_cores
 from units.si import PER_METER, SECOND, Duration, InverseLength
 
 comptime SUNRISE = Float32(6)
@@ -285,41 +287,85 @@ struct DayCycle(ImplicitlyCopyable):
         var stars = look.stars
         var w = image.width
         var h = image.height
-        for y in range(h):  # pragma: no branch
-            var fy = Float32(y) / Float32(h)
-            for x in range(w):  # pragma: no branch
-                var at = y * w + x
-                if not isinf(image.depth[at]):
-                    continue
-                var d = d00 + across * (Float32(x) / Float32(w)) + down * fy
-                d = d / d.length()
-                var p = at * 4
-                var c = Vector3(
-                    Float32(image.pixels[p]),
-                    Float32(image.pixels[p + 1]),
-                    Float32(image.pixels[p + 2]),
+        # Each pixel is its own, so the rows are cut over the cores.
+        var tasks = max(1, min(h, num_logical_cores()))
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _night_rows(
+                    image.depth.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    image.pixels.unsafe_ptr().unsafe_origin_cast[
+                        MutAnyOrigin
+                    ](),
+                    w,
+                    h,
+                    d00,
+                    across,
+                    down,
+                    day,
+                    dusk,
+                    stars,
+                    task * h // tasks,
+                    (task + 1) * h // tasks,
                 )
-                # Low in the sky, the dusk's glow; and night over all.
-                var low = 1 - smoothstep(0, 0.35, d.y)
-                c = c * (
-                    Vector3(1, 1, 1)
-                    + (DUSK_ORANGE * 1.15 - Vector3(1, 1, 1)) * (dusk * low)
-                )
-                c = c + (NIGHT_SKY - c) * (1 - day)
-                var cell = hash01(
-                    Int(floor(d.x * STAR_GRID)),
-                    Int(floor(d.z * STAR_GRID)) * 977
-                    + Int(floor(d.y * STAR_GRID)),
-                    83,
-                )
-                if cell < STARS:
-                    # A star fades into the haze near the horizon.
-                    var bright = 120 + 135 * hash01(Int(cell * 1.0e7), 1, 84)
-                    var seen = stars * smoothstep(0.03, 0.12, d.y)
-                    c = c + (Vector3(bright, bright, bright * 0.95) - c) * seen
-                image.pixels[p] = UInt8(Int(min(Float32(255), c.x)))
-                image.pixels[p + 1] = UInt8(Int(min(Float32(255), c.y)))
-                image.pixels[p + 2] = UInt8(Int(min(Float32(255), c.z)))
+            )
+        group.wait()
+        _ = len(image.depth)
+        _ = len(image.pixels)
+
+
+__async def _night_rows(
+    depth: Pointer[Float32, ImmutAnyOrigin],
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    w: Int,
+    h: Int,
+    d00: Vector3,
+    across: Vector3,
+    down: Vector3,
+    day: Float32,
+    dusk: Float32,
+    stars: Float32,
+    first: Int,
+    past: Int,
+):
+    """Darken, warm and star rows `first` to `past` of a frame's sky, as
+    `DayCycle.night_sky` does."""
+    for y in range(first, past):  # pragma: no branch
+        var fy = Float32(y) / Float32(h)
+        for x in range(w):  # pragma: no branch
+            var at = y * w + x
+            if not isinf(depth[unsafe_offset=at]):
+                continue
+            var d = d00 + across * (Float32(x) / Float32(w)) + down * fy
+            d = d / d.length()
+            var p = at * 4
+            var c = Vector3(
+                Float32(pixels[unsafe_offset=p]),
+                Float32(pixels[unsafe_offset=p + 1]),
+                Float32(pixels[unsafe_offset=p + 2]),
+            )
+            # Low in the sky, the dusk's glow; and night over all.
+            var low = 1 - smoothstep(0, 0.35, d.y)
+            c = c * (
+                Vector3(1, 1, 1)
+                + (DUSK_ORANGE * 1.15 - Vector3(1, 1, 1)) * (dusk * low)
+            )
+            c = c + (NIGHT_SKY - c) * (1 - day)
+            var cell = hash01(
+                Int(floor(d.x * STAR_GRID)),
+                Int(floor(d.z * STAR_GRID)) * 977 + Int(floor(d.y * STAR_GRID)),
+                83,
+            )
+            if cell < STARS:
+                # A star fades into the haze near the horizon.
+                var bright = 120 + 135 * hash01(Int(cell * 1.0e7), 1, 84)
+                var seen = stars * smoothstep(0.03, 0.12, d.y)
+                c = c + (Vector3(bright, bright, bright * 0.95) - c) * seen
+            pixels[unsafe_offset=p] = UInt8(Int(min(Float32(255), c.x)))
+            pixels[unsafe_offset=p + 1] = UInt8(Int(min(Float32(255), c.y)))
+            pixels[unsafe_offset=p + 2] = UInt8(Int(min(Float32(255), c.z)))
 
 
 def dim_water(
