@@ -21,6 +21,11 @@ does. After ten warm-up frames each frame is timed by stage:
 - `upscale`: the frame stretched to the window.
 - `frame`: all five.
 
+It also splits `draw` into the renderer's own stages, as
+`GameRenderer.timings` gives them: `shadows`, `gather`, `vertices`,
+`setup`, `bins`, `raster`, `sky` and `resolve`. It gives the median of
+the triangles, the vertices and the draws of a frame too.
+
 It prints, as JSON, the median, the 95th percentile and the slowest of
 each stage in milliseconds, and the frames a second of the median frame.
 The numbers describe the machine that runs it.
@@ -49,6 +54,17 @@ from units.si import SECOND, Duration
 
 comptime WARM_UP = 10
 comptime FPS = 24
+comptime STAGES = [
+    "shadows",
+    "gather",
+    "vertices",
+    "setup",
+    "bins",
+    "raster",
+    "sky",
+    "resolve",
+]
+"""The renderer's stages, in the order of `GameRenderer.timings`."""
 
 
 def _preset(name: String) raises -> QualityPreset:
@@ -130,6 +146,13 @@ def main() raises:
     var smooths = List[Int]()
     var upscales = List[Int]()
     var totals = List[Int]()
+    var names = materialize[STAGES]()
+    var stages = List[List[Int]]()
+    for _ in range(len(names)):
+        stages.append(List[Int]())
+    var triangles = List[Int]()
+    var vertices = List[Int]()
+    var draw_counts = List[Int]()
     var step = Duration(Float32(1) / Float32(FPS), SECOND)
     for frame in range(WARM_UP + frames):
         var began = perf_counter_ns()
@@ -146,6 +169,26 @@ def main() raises:
         smooths.append(Int(game.smooth_ms * 1.0e6))
         upscales.append(Int(game.upscale_ms * 1.0e6))
         totals.append(Int(done - began))
+        for i in range(min(len(names), len(game.fast.timings))):
+            stages[i].append(Int(game.fast.timings[i] * 1.0e6))
+        triangles.append(game.fast.triangles)
+        vertices.append(game.fast.vertex_count)
+        draw_counts.append(game.fast.draw_count)
+    var parts = String()
+    for i in range(len(names)):
+        if len(stages[i]) == 0:
+            continue
+        if parts:
+            parts += ", "
+        parts += _summary(names[i], stages[i].copy())
+    var counts = String(
+        '"triangles": ',
+        _sorted(triangles^)[frames // 2],
+        ', "vertices": ',
+        _sorted(vertices^)[frames // 2],
+        ', "draws": ',
+        _sorted(draw_counts^)[frames // 2],
+    )
     var median = _percentile(_sorted(totals.copy()), 0.5)
     print(
         '{"preset": "',
@@ -172,6 +215,10 @@ def main() raises:
         _summary("upscale", upscales^),
         ", ",
         _summary("frame", totals^),
+        ', "draw_stages": {',
+        parts,
+        "}, ",
+        counts,
         ', "median_fps": ',
         1000.0 / median,
         "}",
