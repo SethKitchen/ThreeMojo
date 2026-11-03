@@ -5,9 +5,10 @@
 
 """NVIDIA Streamline's DLSS Super Resolution and Ray Reconstruction.
 
-This package is the part of the integration that needs no graphics device:
-the typed modes and presets, the options, the render size and jitter, the
-per-frame constants, the check of a frame's tagged buffers, and an upscaler
-trait with a CPU fallback. It does not load Streamline. See
-`docs/wiki/Streamline.md` for what a native binding still needs.
+This package holds the typed modes and presets, the options, the render
+size and jitter, the per-frame constants, the check of a frame's tagged
+buffers, and an upscaler trait with a CPU fallback. It does not load
+Streamline itself. `bundle.mojo` writes frames for `native/host.cpp`, a
+Windows program that runs them through `sl.interposer`. See
+`docs/wiki/Streamline.md`.
 """

@@ -1,8 +1,8 @@
 # Streamline
 
-`extensions/streamline/` holds the half of NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction integration that needs no graphics device. It does not run DLSS yet. A Windows probe has run both plugins, and evaluated Super Resolution on ThreeMojo's own frames. The package agrees with what they answered. See [Checked against DLSS](#checked-against-dlss).
+`extensions/streamline/` runs NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction on ThreeMojo's frames. A Mojo program writes the frames, and a small Windows program, the native host, runs them through `sl.interposer` on an RTX GPU. In WSL 2 the Mojo program starts the host directly. See [The native host](#the-native-host).
 
-The package types and checks everything that Streamline reads, builds the per-frame constants from a ThreeMojo camera, and checks the buffers of a frame. It also has an upscaler trait with a CPU fallback. A native binding will implement that trait. See [Extensions](Extensions).
+The package types and checks everything that Streamline reads, builds the per-frame constants from a ThreeMojo camera, and checks the buffers of a frame. It also has an upscaler trait with a CPU fallback for every other machine. See [Extensions](Extensions).
 
 The values follow the Streamline 2.14.16 headers `sl_dlss.h`, `sl_dlss_d.h` and `sl_consts.h`, and its programming guides for [DLSS Super Resolution](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS.md) and [DLSS Ray Reconstruction](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_RR.md).
 
@@ -16,7 +16,8 @@ The values follow the Streamline 2.14.16 headers `sl_dlss.h`, `sl_dlss_d.h` and 
 | Per-frame constants from two cameras | Done |
 | Check of the tagged buffers of a frame | Done |
 | `Upscaler` trait and the `SpatialUpscaler` fallback | Done |
-| Loading `sl.interposer` and calling `slEvaluateFeature` | Open, see [the native binding](#the-native-binding) |
+| The frames for the native host, and its result | Done |
+| Loading `sl.interposer` and calling `slEvaluateFeature` | Done, on Windows with Direct3D 12, see [the native host](#the-native-host) |
 
 ## Call it
 
@@ -147,15 +148,50 @@ It is not DLSS. It reads the color only, so it adds no detail that the render la
 
 A row of magnified crops sits below. Run it with `mojo run -I . examples/streamline.mojo out/streamline.png`. The gallery list names it, but no image of it is tracked.
 
-## The native binding
+## The native host
 
-The binding is not written. Three things block it today.
+Streamline runs on Windows with Direct3D or Vulkan. ThreeMojo's GPU backend is MAX, which opens neither. So the binding is a separate Windows program, `extensions/streamline/native/host.cpp`. It reads a bundle of frames, opens a Direct3D 12 device on the first NVIDIA adapter, loads `sl.interposer` with manual hooking, and plays the frames. For each frame it uploads the buffers, tags them, sets the constants and calls `slEvaluateFeature`. It writes the last output frame back.
 
-1. **The platform.** Streamline's documentation covers Windows with Direct3D 11, Direct3D 12 and Vulkan 1.2. It does not mention Linux or macOS. ThreeMojo runs on macOS, Linux and WSL 2. Its GPU backend is MAX, which opens no Direct3D or Vulkan device. `slEvaluateFeature` needs the command list of such a device, and `slSetTag` needs its resources.
-2. **The runtime.** `sl.interposer`, `sl.dlss` and `nvngx_dlss` come from NVIDIA. NVIDIA ships the DLSS runtime as a separate product with its own terms. This repository does not hold it.
-3. **Unstated conventions.** The headers leave some open. A running DLSS settled them: the sign of the jitter, the direction of the motion vectors, and the sense of the depth. The layout of a `float4x4` and the unit of the motion vectors are settled too. See [Checked against DLSS](#checked-against-dlss).
+### Build the host
 
-The tracking issue is [#771](https://github.com/SethKitchen/ThreeMojo/issues/771). It closes when a program on an RTX machine evaluates both features through `sl.interposer`, and a test compares the result with `SpatialUpscaler`.
+You need Windows, Visual Studio 2022 and an RTX GPU.
+
+1. Run `extensions\streamline\native\build.bat` from the repository root.
+2. The script downloads the Streamline SDK 2.14.16 from NVIDIA's GitHub release into `.cache\streamline`, and checks its SHA-256. To use an SDK that you unpacked yourself, set `STREAMLINE_SDK` to its folder first.
+3. The script puts `threemojo_streamline.exe` and NVIDIA's signed DLLs in `.cache\streamline\bin`.
+
+NVIDIA's license covers the SDK and the DLLs. This repository does not hold them.
+
+### Write the frames
+
+`FrameBundle` in `extensions/streamline/bundle.mojo` holds the options of one feature and its frames. Start it with `SuperResolutionOptions` or `RayReconstructionOptions` and the render size. Then call `add` once for each frame, with the `FrameConstants` of `frame_constants` and a `BufferData` for each buffer that the frame tags. `add` runs the checks of the options, the constants and the tags, so the host gets nothing that Streamline refuses. Do not pass the output color. The host makes it.
+
+`passes` plays the frames more than once, so the history fills. The frame that comes back is the last frame of the last pass.
+
+The host reads `encode()` and writes a result that `decode_result` reads:
+
+```sh
+threemojo_streamline.exe FRAMES RESULT
+```
+
+A path of `-` is the standard input or the standard output. Use the pipes from WSL 2. A file on the other side of the WSL 2 file bridge reads at about 16 MB/s, and a pipe is ten times faster. The host writes a report of its stages to the standard error. The exit status is 0 on success, 1 for a wrong command line, 2 for a bundle that cannot be read, 3 when Streamline refuses, and 4 for a Direct3D error.
+
+The file is little-endian, with four bytes for each field. The docstring of `bundle.mojo` gives the layout.
+
+### Compare it with the fallback
+
+`tests/test_streamline_native.mojo` runs both features through the host on an analytic scene: a floor of 0.25 meter tiles under a sky. One render cannot hold the distant tiles. The true image is the mean of 16 samples in each output pixel. Set `THREEMOJO_STREAMLINE_HOST` to the host's path to run the tests. On a machine without the host, they return at once.
+
+The scene is rendered at 186 by 104, the Balanced size for 320 by 180, with 24 jitter phases.
+
+| Feature | Input | DLSS error (MSE) | `SpatialUpscaler` error (MSE) |
+|---|---|---|---|
+| Super Resolution, preset M | 24 clean renders, played 3 times | 0.0063 | 0.0283 |
+| Ray Reconstruction, preset F | 24 renders with noise from 0 to 2 in the light, with the albedo, the normals and the roughness, played 2 times | 0.0041 | 0.1105 |
+
+The run was on an NVIDIA TITAN RTX with driver 610.88, on Windows 11. A run of the host takes about 3.4 seconds. Of that, `slInit` takes 1.3 seconds and `slSetD3DDevice` 1.3 seconds. The 72 frames take 0.13 seconds.
+
+NGX starts `nvngx_update.exe`. A child process inherits the standard handles unless they are marked otherwise. Then it holds the caller's pipes open for seconds after the host ends. The host marks its standard handles as not inheritable before it loads Streamline.
 
 ## Checked against DLSS
 

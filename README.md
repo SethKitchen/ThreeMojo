@@ -731,7 +731,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Translation-stable traffic curvature](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-traffic-manager#curve-radius-and-coordinate-precision): widened circle radii and speed caps retain the absolute near-line cutoff [#489](https://github.com/SethKitchen/ThreeMojo/issues/489)
 - [x] [Gamepads](https://github.com/SethKitchen/ThreeMojo/wiki/Gamepads): SDL 3.2.24's gamepad subsystem, with mappings, controller types and a Linux evdev backend for Xbox, PlayStation and other pads [#844](https://github.com/SethKitchen/ThreeMojo/issues/844)
 - [x] [Gamepad drivers](https://github.com/SethKitchen/ThreeMojo/wiki/Gamepads#the-hidapi-drivers): DualSense, DualShock 4, Switch Pro and Xbox drivers, rumble, lights, sensors, touchpads, hotplug and a host-fed C ABI [#845](https://github.com/SethKitchen/ThreeMojo/issues/845)
-- [ ] [DLSS 4.5 through Streamline](https://github.com/SethKitchen/ThreeMojo/wiki/Streamline): typed options, jitter, constants and buffer checks, with a CPU fallback; the native binding remains open [#771](https://github.com/SethKitchen/ThreeMojo/issues/771)
+- [x] [DLSS 4.5 through Streamline](https://github.com/SethKitchen/ThreeMojo/wiki/Streamline): typed options, jitter, constants and buffer checks, a CPU fallback, and a native Direct3D 12 host that runs Super Resolution and Ray Reconstruction on ThreeMojo's frames [#771](https://github.com/SethKitchen/ThreeMojo/issues/771)
 
 </details>
 
@@ -762,6 +762,10 @@ Procedural buildings for engineering analysis and for games share one canonical 
 - [x] [Cleaning and orienting scans](https://github.com/SethKitchen/ThreeMojo/wiki/Cleaning-and-orienting-scans): leave out a scan's sky and floaters, find its up axis, and stand it in a scene [#782](https://github.com/SethKitchen/ThreeMojo/issues/782)
 - [x] [Walking through a scan](https://github.com/SethKitchen/ThreeMojo/wiki/Walking-through-a-scan): a capsule walks a scan's floor in a physics world, with a first-person camera, as a game does [#786](https://github.com/SethKitchen/ThreeMojo/issues/786)
 - [x] [GPU splats](https://github.com/SethKitchen/ThreeMojo/wiki/GPU-splats): a scan kept on the GPU and drawn a tile at a time. A scan of a building draws at 1920 by 1080 in 21 milliseconds, twice as fast as 24 CPU threads [#790](https://github.com/SethKitchen/ThreeMojo/issues/790)
+- [x] [Virtual scans](https://github.com/SethKitchen/ThreeMojo/wiki/Virtual-scans): splats made from rendered pictures with their depth. Wijnendale Castle as 3.65 million splats [#782](https://github.com/SethKitchen/ThreeMojo/issues/782)
+- [x] [Castle](https://github.com/SethKitchen/ThreeMojo/wiki/Castle): a moated brick castle from a plan, with a physically based mesh view, woods, sun and sky, and the Wijnendale plan [#778](https://github.com/SethKitchen/ThreeMojo/issues/778)
+- [x] [Landscape](https://github.com/SethKitchen/ThreeMojo/wiki/Landscape): the castle, Clearwater water, procedural mountains and woods, and a scanned church as Gaussian splats, in one picture [#778](https://github.com/SethKitchen/ThreeMojo/issues/778)
+- [x] [Castle analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Castle-analysis): wind on a tower, arch limit analysis, a quay wall, the water balance of a moat and sun shadows [#779](https://github.com/SethKitchen/ThreeMojo/issues/779)
 
 ### Earth retaining
 
@@ -784,8 +788,8 @@ Warp drive spacetimes, analyzed as WarpFactory analyzes them. A checked box reco
 - [x] [Spherical and cylindrical grids](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#spherical-and-cylindrical-grids): curvilinear grids, wrapping stencils, and shells and bubbles on them [#937](https://github.com/SethKitchen/ThreeMojo/issues/937)
 - [x] [Geodesics](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#geodesics): rays and free fall through a metric, proper time, and the sky seen from inside a bubble [#938](https://github.com/SethKitchen/ThreeMojo/issues/938)
 - [x] [Warp views](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#views): a turning surface of negative energy, and a bubble crossing the frame [#939](https://github.com/SethKitchen/ThreeMojo/issues/939)
-- [ ] [Positive-energy soliton](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#more-metrics): the soliton of Fell and Heisenberg; its construction needs the paper's equations [#940](https://github.com/SethKitchen/ThreeMojo/issues/940)
-- [ ] [Warp solver on the GPU](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#limits): a MAX kernel with a parity test against the CPU solver [#941](https://github.com/SethKitchen/ThreeMojo/issues/941)
+- [x] [Positive-energy soliton](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#more-metrics): the soliton of Fell and Heisenberg, its shift from a closed-form potential, and an energy density that is positive with no tilt [#940](https://github.com/SethKitchen/ThreeMojo/issues/940)
+- [x] [Warp solver on the GPU](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#on-the-gpu): a MAX kernel, one thread a point, that shares the CPU solver's arithmetic and matches it to 1e-12 [#941](https://github.com/SethKitchen/ThreeMojo/issues/941)
 
 ### Process chemistry
 
