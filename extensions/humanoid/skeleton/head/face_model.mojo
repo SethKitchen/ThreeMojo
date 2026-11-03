@@ -844,8 +844,10 @@ struct FaceModel(Movable):
 def _in_any(parts: List[FacePart], vertex: Int) -> Bool:
     """Return True if one of `parts` holds `vertex`."""
     for part in parts:  # pragma: no branch
-        if vertex >= part.first and vertex < part.end:
-            return True
+        # Two single tests: this runs for every vertex of the face.
+        if vertex >= part.first:
+            if vertex < part.end:
+                return True
     return False
 
 

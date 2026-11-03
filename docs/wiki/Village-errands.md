@@ -14,6 +14,17 @@ What the villager says shows in a panel over the prompt for `SPEECH_SECONDS`, 5 
 
 The villager stops for the same time and turns to face the player. `Residents.hold` stops a person and turns them toward a point at 4 radians a second. Their route waits for them.
 
+The villager's mouth says the words, and their face shows what they feel. `Talk.words` holds the words alone, and `Talk.feeling` and `Talk.strength` the expression. The face holds the expression for `SPEECH_SECONDS`, and then eases back to rest.
+
+| The words | The expression |
+|---|---|
+| The speaker asks for the things | A smile at `ASKING`, 0.3 |
+| The speaker still needs some | Sadness at `WANTING`, 0.35 |
+| The speaker takes the things and pays | A smile at `THANKFUL`, 0.8 |
+| A line | A smile at `CHATTING`, 0.25 |
+
+See [Village walk](Village-walk#faces) for how the faces move.
+
 ## Errands
 
 A `Speaker` is a villager, a name and lines. A speaker can also have an `Errand`. An errand holds the kind of thing wanted, how many, and the coins paid. It also holds what the speaker says to ask and to thank.

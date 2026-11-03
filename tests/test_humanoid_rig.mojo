@@ -33,9 +33,16 @@ from extensions.humanoid.skeleton.head.hair.beard import (
     GOATEE,
     MUSTACHE,
     SHORT_BEARD,
+    STUBBLE,
     Beard,
 )
+from extensions.humanoid.skeleton.head.expression import (
+    AA,
+    FaceWeights,
+    face_rig_shapes,
+)
 from extensions.humanoid.rig.game import (
+    ride_face,
     LEAST_BUDGET_DETAIL,
     SHELL_DENSITY,
     add_game_humanoid,
@@ -43,6 +50,7 @@ from extensions.humanoid.rig.game import (
     budget_detail,
     game_build_settings,
     carry_attributes,
+    shade_stubble,
 )
 from extensions.humanoid.rig.joints import (
     CHEST,
@@ -74,13 +82,21 @@ from extensions.humanoid.rig.weights import (
     _quantized_coordinate,
     _weld_key,
     _welded_edges,
+    _side_owner,
     bone_weights,
+    close_holes,
+    keep_arms_off,
+    part_arms,
     part_legs,
     rigid_weights,
     skin_weights,
 )
 from extensions.humanoid.sex import MALE
-from extensions.humanoid.skeleton.torso.body import body_skin_mesh
+from extensions.humanoid.skeleton.torso.body import (
+    body_skin_mesh,
+    body_skin_parts,
+)
+from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
@@ -88,6 +104,7 @@ from renderers.renderer import available_workers
 from std.memory import bitcast
 from std.testing import (
     TestSuite,
+    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_raises,
@@ -311,6 +328,149 @@ def test_the_legs_part_below_the_crotch() raises:
         assert_true(left.side() <= 0)
     assert_equal(mesh.index[4], 4)
     assert_true(mesh.has_attribute(String(COLOR)))
+
+
+def _middle(rig: HumanoidRig, joint: Joint) -> Vector3:
+    """Return the middle of a joint's bone."""
+    return (rig.joints[joint.value] + rig.ends[joint.value]) * 0.5
+
+
+def test_an_arm_parts_from_the_trunk_below_the_armpit() raises:
+    var rig = _rig()
+    var forearm = _middle(rig, RIGHT_FOREARM)
+    var upper = _middle(rig, RIGHT_UPPER_ARM)
+    var trunk = _middle(rig, SPINE)
+    var points: List[Vector3] = [
+        forearm,
+        trunk,
+        trunk + Vector3(0, 0.01, 0),
+        trunk + Vector3(0, 0, 0.01),
+        upper,
+    ]
+    # A forearm joined to the trunk, the trunk alone, and an upper arm
+    # joined to the trunk.
+    var mesh = _mesh(points, [0, 1, 2, 1, 3, 2, 4, 2, 1])
+    var normals = List[Float32](length=15, fill=0)
+    for v in range(5):
+        normals[3 * v + 2] = 1
+    mesh.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    skin_weights(mesh, rig)
+    # Below the armpit, both bridges part; the trunk's triangle is closed
+    # by a fan round a new vertex at its middle.
+    var low = mesh.clone()
+    assert_equal(part_arms(low, rig, upper.y + 1), 2)
+    assert_equal(low.vertex_count(), 6)
+    assert_equal(len(low.index), 12)
+    var middle = low.attribute_view(String(POSITION)).vector3(5)
+    assert_true(
+        (middle - (points[1] + points[2] + points[3]) * (1.0 / 3)).length()
+        < 1e-5
+    )
+    assert_almost_equal(
+        low.attribute_view(String(NORMAL)).vector3(5).z, 1, atol=1e-6
+    )
+    assert_equal(low.attribute_view(String(SKIN_WEIGHT)).component(5, 0), 0)
+    # Above the armpit, the upper arm stays joined to the trunk.
+    var high = mesh.clone()
+    assert_equal(part_arms(high, rig, upper.y - 10), 1)
+    # Nothing joined parts nothing.
+    var alone = _mesh(points, [1, 3, 2])
+    assert_equal(part_arms(alone, rig, upper.y + 1), 0)
+    assert_equal(len(alone.index), 3)
+
+
+def test_the_side_of_the_chest_stays_the_trunks() raises:
+    var rig = _rig()
+    var upper = _middle(rig, RIGHT_UPPER_ARM)
+    var side = Float32(1) if upper.x > 0 else Float32(-1)
+    # Beside the upper arm's bone, toward the midline: facing out, it is
+    # the side of the chest; facing in, the arm's inner side.
+    var inside = upper - Vector3(side * 0.02, 0, 0)
+    var outside = upper + Vector3(side * 0.02, 0, 0)
+    var points: List[Vector3] = [inside, inside, outside]
+    var mesh = _mesh(points, [0, 1, 2])
+    mesh.set_attribute(
+        String(NORMAL),
+        BufferAttribute([side, 0, 0, -side, 0, 0, side, 0, 0], 3),
+    )
+    assert_false(Joint(_side_owner(mesh, rig, 0)).side() != 0)
+    assert_equal(_side_owner(mesh, rig, 1), RIGHT_UPPER_ARM.value)
+    assert_equal(_side_owner(mesh, rig, 2), RIGHT_UPPER_ARM.value)
+    # Without normals, the arm keeps what it lies nearest.
+    var bare = _mesh(points, [0, 1, 2])
+    assert_equal(_side_owner(bare, rig, 0), RIGHT_UPPER_ARM.value)
+
+
+def test_the_arms_weights_come_off_the_trunk_below_the_armpit() raises:
+    var rig = _rig()
+    var trunk = _middle(rig, SPINE)
+    var forearm = _middle(rig, RIGHT_FOREARM)
+    assert_true(forearm.y < trunk.y)
+    var points: List[Vector3] = [
+        trunk,
+        trunk + Vector3(0, 0.01, 0),
+        forearm,
+        trunk + Vector3(0, 0, 0.01),
+    ]
+    var mesh = _mesh(points, [0, 1, 2, 0, 2, 3])
+    var a = Float32(RIGHT_FOREARM.value)
+    var c = Float32(SPINE.value)
+    mesh.set_attribute(
+        String(SKIN_INDEX),
+        BufferAttribute([c, a, 0, 0, c, a, 0, 0, a, c, 0, 0, a, 0, 0, 0], 4),
+    )
+    mesh.set_attribute(
+        String(SKIN_WEIGHT),
+        BufferAttribute(
+            [0.75, 0.25, 0, 0, 0.75, 0.25, 0, 0, 0.75, 0.25, 0, 0, 1, 0, 0, 0],
+            4,
+        ),
+    )
+    # The armpit lies between the trunk's first two points.
+    keep_arms_off(mesh, rig, trunk.y + 0.005)
+    ref weights = mesh.attribute_view(String(SKIN_WEIGHT))
+    # The trunk below it keeps only the trunk's weight; above it, all.
+    assert_almost_equal(weights.component(0, 0), 1, atol=1e-6)
+    assert_almost_equal(weights.component(0, 1), 0, atol=1e-6)
+    assert_almost_equal(weights.component(1, 0), 0.75, atol=1e-6)
+    # The arm keeps its own; a trunk point that held only an arm's weight
+    # keeps it, for it has no other.
+    assert_almost_equal(weights.component(2, 0), 0.75, atol=1e-6)
+    assert_almost_equal(weights.component(3, 0), 1, atol=1e-6)
+
+
+def test_holes_that_meet_at_a_vertex_are_closed_once() raises:
+    # Two triangles that share one corner: their holes meet there.
+    var points: List[Vector3] = [
+        Vector3(0, 0, 0),
+        Vector3(1, 0, 0),
+        Vector3(1, 1, 0),
+        Vector3(-1, 0, 0),
+        Vector3(-1, -1, 0),
+    ]
+    var mesh = _mesh(points, [0, 1, 2, 0, 3, 4])
+    # Normals that cancel keep a mean of zero.
+    mesh.set_attribute(
+        String(NORMAL),
+        BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -2], 3),
+    )
+    close_holes(mesh, List[Bool](length=5, fill=True))
+    # The walk from the shared corner closes one hole; a walk that ends
+    # off its start closes none.
+    assert_equal(mesh.vertex_count(), 6)
+    assert_equal(len(mesh.index), 15)
+    var n = mesh.attribute_view(String(NORMAL)).vector3(5)
+    assert_equal(n.length(), 0)
+    # Two triangles wound against each other share an edge that is no
+    # hole's. A walk from a touched corner then stops where no hole's edge
+    # leaves, off its start, and closes nothing.
+    var crossed = _mesh(points, [0, 1, 2, 0, 1, 3])
+    close_holes(crossed, List[Bool](length=5, fill=True))
+    assert_equal(len(crossed.index), 6)
+    # An untouched hole stays open.
+    var open = _mesh(points, [0, 1, 2])
+    close_holes(open, List[Bool](length=5, fill=False))
+    assert_equal(len(open.index), 3)
 
 
 def test_clips_play_on_the_bones() raises:
@@ -675,8 +835,106 @@ def test_a_game_humanoid_grows_a_beard() raises:
     assert_true(whole.beard)
     with assert_raises(contains="named style"):
         _ = game_build_settings(beard=Beard(40))
-    with assert_raises(contains="does not carry a beard"):
-        _ = game_build_settings(facial_animation=True, beard=GOATEE)
+    # A face that speaks may grow a beard: see the next test.
+    _ = game_build_settings(facial_animation=True, beard=GOATEE)
+
+
+def test_a_speaking_face_s_beard_moves_with_its_mouth() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var person = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        _spec(),
+        2500,
+        12,
+        8,
+        8,
+        workers=1,
+        facial_animation=True,
+        beard=GOATEE,
+        face_stand_in=300,
+    )
+    # The beard rides each of the face's blend shapes.
+    assert_equal(len(person.riders), 1)
+    var beard = person.riders[0]
+    assert_true(scene.meshes[beard].node == person.beard.value())
+    ref whiskers = assets.geometries.get(scene.meshes[beard].geometry)
+    assert_equal(whiskers.morph_count(), len(face_rig_shapes()))
+    assert_true(whiskers.morph_relative)
+    # An open mouth moves the beard's chin with the face's.
+    var open = FaceWeights()
+    open.add_viseme(AA, 1)
+    person.move_face(scene, open)
+    assert_true(scene.meshes[beard].morph_influences.is_worn())
+    var moved = False
+    var target = scene.meshes[beard].morph_target_dictionary["jawOpen"]
+    ref offsets = whiskers.morph_positions[target]
+    for v in range(offsets.count()):
+        if offsets.vector3(v).length() > 1e-3:
+            moved = True
+    assert_true(moved)
+    # A face that does not speak cannot move, and a face whose shapes are
+    # not relative cannot be ridden.
+    var still = add_game_humanoid(
+        scene, assets, root, _spec(), 800, 8, 8, 8, workers=1
+    )
+    with assert_raises(contains="Only a face that speaks"):
+        still.move_face(scene, open)
+    var absolute = BufferGeometry()
+    absolute.set_attribute(String(POSITION), BufferAttribute([0, 0, 0], 3))
+    absolute.morph_relative = False
+    var rider = absolute.clone()
+    with assert_raises(contains="must be relative"):
+        ride_face(rider, absolute)
+
+
+def _one_shape_face(normals: Bool) raises -> BufferGeometry:
+    """Return a face of two vertices whose one shape moves the first down
+    a centimeter."""
+    var face = BufferGeometry()
+    face.set_attribute(
+        String(POSITION), BufferAttribute([0, 0, 0, 0, 0.3, 0], 3)
+    )
+    if normals:
+        face.set_attribute(
+            String(NORMAL), BufferAttribute([0, 0, 1, 0, 0, 1], 3)
+        )
+    face.morph_relative = True
+    face.add_morph_target(
+        BufferAttribute([0, -0.01, 0, 0, 0, 0], 3), name="jawOpen"
+    )
+    return face^
+
+
+def test_a_rider_stands_off_the_face_and_takes_its_shapes() raises:
+    # One vertex lies a millimeter off the face, under the gap; one lies
+    # well past it, by the face's second vertex.
+    var points: List[Float32] = [0, 0, 0.001, 0, 0.3, 0.5]
+    var rider = BufferGeometry()
+    rider.set_attribute(String(POSITION), BufferAttribute(points.copy(), 3))
+    ride_face(rider, _one_shape_face(True), 0.01)
+    ref moved = rider.attribute_view(String(POSITION))
+    assert_almost_equal(moved.vector3(0).z, 0.01, atol=1e-6)
+    assert_almost_equal(moved.vector3(1).z, 0.5, atol=1e-6)
+    # Each vertex moves as its nearest face vertex does.
+    assert_equal(rider.morph_count(), 1)
+    assert_equal(rider.morph_names[0], "jawOpen")
+    assert_almost_equal(rider.morph_positions[0].vector3(0).y, -0.01, atol=1e-6)
+    assert_almost_equal(rider.morph_positions[0].vector3(1).y, 0, atol=1e-6)
+    # With no gap, or a face with no normals, no vertex moves out.
+    for normals in [True, False]:
+        var still = BufferGeometry()
+        still.set_attribute(String(POSITION), BufferAttribute(points.copy(), 3))
+        var gap = Float32(0.01) if not normals else Float32(0)
+        ride_face(still, _one_shape_face(normals), gap)
+        assert_almost_equal(
+            still.attribute_view(String(POSITION)).vector3(0).z,
+            0.001,
+            atol=1e-6,
+        )
 
 
 def test_a_beard_leaves_the_body_a_budget() raises:
@@ -782,6 +1040,46 @@ def test_a_part_is_meshed_about_ten_times_finer_than_its_budget() raises:
     assert_equal(budget_detail(1, SHELL_DENSITY, 32), LEAST_BUDGET_DETAIL)
     assert_equal(budget_detail(1000000, SHELL_DENSITY, 32), 32)
     assert_equal(budget_detail(1920, SHELL_DENSITY, 10), 10)
+
+
+def test_stubble_shades_the_skin_it_grows_on() raises:
+    # Stubble darkens the face round the mouth and the jaw, and leaves the
+    # brow as it is.
+    var spec = _spec()
+    var face = body_skin_parts(spec, 8, 1, 0.0, List[String]())[1].clone()
+    var before = face.clone_attribute(String(COLOR))
+    shade_stubble(face, head_muscle_dimensions(spec))
+    ref after = face.attribute_view(String(COLOR))
+    var darker = 0
+    var same = 0
+    for v in range(after.count()):
+        if after.component(v, 0) < before.component(v, 0):
+            darker += 1
+        elif after.component(v, 0) == before.component(v, 0):
+            same += 1
+    assert_true(darker > 0)
+    assert_true(same > 0)
+    assert_equal(darker + same, after.count())
+    # A speaking face with stubble grows no beard mesh: the face is shaded.
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var person = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        spec,
+        2500,
+        12,
+        8,
+        8,
+        workers=1,
+        facial_animation=True,
+        beard=STUBBLE,
+        face_stand_in=300,
+    )
+    assert_false(person.beard)
+    assert_equal(len(person.riders), 0)
 
 
 def main() raises:

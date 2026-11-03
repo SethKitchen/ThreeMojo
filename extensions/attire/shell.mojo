@@ -62,6 +62,12 @@ from math.vector3 import Vector3
 comptime UNDER_REACH = Float32(0.75)
 """A garment is cut where a layer over it covers it past this level. That
 layer's hem lies at one half, so the garment ends under it."""
+comptime CLOSED_REACH = Float32(0.55)
+"""Under a layer with no opening, a garment is cut deeper, where that
+layer covers it past this level. A raised arm bends the skin hard, and an
+inner layer can cross the outer one near that layer's edge; the deeper
+cut keeps it out of that band. Under a layer cut open, `UNDER_REACH`
+keeps the garment that shows at the opening whole to its edge."""
 comptime OVER = "over"
 """The name of the attribute that carries, while a garment is cut, the
 greatest cover value of any layer over it."""

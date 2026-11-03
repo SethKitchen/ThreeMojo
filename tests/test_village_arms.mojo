@@ -8,11 +8,22 @@ shows."""
 
 from core.assets import Assets
 from core.scene import Scene
+from extensions.attire.apparel import wizard_robe
+from extensions.attire.garment import shirt, tunic
+from extensions.attire.kinds import OPEN_BELOW
 from extensions.attire.outfit import Outfit
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.ground import Ground
-from extensions.village.arms import Arms
+from extensions.village.arms import (
+    SHEATH_CLEARANCE,
+    Arms,
+    sheath_rest,
+    sheath_turn,
+)
+from math.quaternion import Quaternion
+from math.vector3 import Vector3
+from std.math import acos, cos, pi, sin
 from extensions.village.blade import BRIGHT_STEEL, SwordLooks
 from extensions.village.character import (
     STANDING,
@@ -24,6 +35,10 @@ from extensions.village.combat import (
     BITE,
     GROUND_WAVE,
     DODGE,
+    HEAVY,
+    LIGHT_THREE,
+    RISING_EDGE,
+    WHIRLWIND,
     FREE,
     HIGH_STANCE,
     LIGHT_ONE,
@@ -34,7 +49,7 @@ from extensions.village.combat import (
     Fighter,
     FighterParameters,
 )
-from extensions.village.residents import Body
+from extensions.village.residents import Body, hobbles
 from extensions.village.styles import (
     ARCHERY,
     AXE,
@@ -54,6 +69,24 @@ from std.testing import (
     assert_true,
 )
 from units.si import METER, RADIAN, SECOND, Angle, Duration, INCH, Length
+
+
+def test_a_scabbard_swings_clear_of_the_thigh() raises:
+    var rest = sheath_rest()
+    # Back and down, as a sheathed sword hangs.
+    assert_true(rest.z < 0 and rest.y < 0)
+    # A thigh that hangs down is clear of it: no turn.
+    var down = Vector3(0, -1, 0)
+    assert_true(sheath_turn(rest, down) == Quaternion.identity())
+    # A thigh swung back along it pushes it to the clearance.
+    var clearance = Float32(SHEATH_CLEARANCE * pi / 180)
+    for way in [rest, Vector3(0, -sin(Float32(1.2)), -cos(Float32(1.2)))]:
+        var turned = sheath_turn(rest, way).rotate(rest)
+        var apart = acos(min(Float32(1), turned.dot(way)))
+        assert_almost_equal(apart, clearance, atol=1e-3)
+    # Pointed the other way, it is clear again.
+    var away = Vector3(-rest.x, -rest.y, -rest.z)
+    assert_true(sheath_turn(rest, away) == Quaternion.identity())
 
 
 def test_a_body_plays_what_its_fighter_does() raises:
@@ -215,6 +248,16 @@ def test_a_body_carries_each_styles_weapon_and_clips() raises:
     )
     for k in range(STYLES):
         assert_false(bare.armed[k])
+    # It has no scabbard to swing.
+    assert_equal(len(bare.sheathed), 0)
+    bare.pose(
+        scene,
+        body,
+        walker,
+        Fighter(FighterParameters()),
+        False,
+        Duration(0.05, SECOND),
+    )
     # A giant plays a giant's clips for the moves of a boss's attacks.
     var maces: List[FightingStyle] = [MACE]
     var giant = Arms(
@@ -227,6 +270,56 @@ def test_a_body_carries_each_styles_weapon_and_clips() raises:
     var bad: List[FightingStyle] = [FightingStyle(6)]
     with assert_raises(contains="six"):
         _ = Arms(scene, assets, body, SwordLooks(assets), BRIGHT_STEEL, bad)
+
+
+def test_a_robe_hobbles_its_wearer_s_kicks() raises:
+    # Only a closed skirt that covers the shins hobbles.
+    var bare = Outfit()
+    bare.add(shirt())
+    bare.add(tunic())
+    assert_false(hobbles(bare))
+    var parted = wizard_robe()
+    parted.opening = OPEN_BELOW
+    var open = Outfit()
+    open.add(parted^)
+    assert_false(hobbles(open))
+    var robed = Outfit()
+    robed.add(wizard_robe())
+    assert_true(hobbles(robed))
+    # A hobbled body swings a fist where a free one kicks.
+    var assets = Assets()
+    var scene = Scene()
+    var body = Body(
+        scene,
+        assets,
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        Outfit(),
+        500,
+        8,
+    )
+    assert_false(body.hobbled)
+    # A body that does not speak keeps its face as it is, near or far.
+    assert_false(body.speaks)
+    body.show_face(scene, Vector3(0, 1.5, 0.5), 5, Duration(0.1, SECOND))
+    assert_false(body.near)
+    var free = Arms(
+        scene, assets, body, SwordLooks(assets), BRIGHT_STEEL, [HAND_TO_HAND]
+    )
+    var fists = HAND_TO_HAND.value * MOVES
+    assert_true(
+        free.table[fists + LIGHT_THREE.value] != free.table[fists + HEAVY.value]
+    )
+    body.hobbled = True
+    var held = Arms(
+        scene, assets, body, SwordLooks(assets), BRIGHT_STEEL, [HAND_TO_HAND]
+    )
+    assert_equal(
+        held.table[fists + LIGHT_THREE.value], held.table[fists + HEAVY.value]
+    )
+    assert_equal(
+        held.table[fists + WHIRLWIND.value],
+        held.table[fists + RISING_EDGE.value],
+    )
 
 
 def main() raises:

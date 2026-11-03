@@ -10,6 +10,7 @@ from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.rig.game import add_game_humanoid
 from extensions.humanoid.sex import MALE
+from extensions.humanoid.skeleton.head.hair.beard import CLEAN_SHAVEN
 from extensions.humanoid.spec import HumanoidSpec
 from std.testing import TestSuite, assert_equal, assert_raises
 from units.si import FOOT, METER, Length
@@ -126,6 +127,38 @@ def test_facial_budget_preflight_preserves_spec_and_detail_validation() raises:
     assert_equal(assets.geometries.count(), 0)
     assert_equal(assets.materials.count(), 0)
     assert_equal(assets.textures.count(), 0)
+
+
+def test_the_skin_and_the_head_report_their_own_failures() raises:
+    # The skin and the head's parts are meshed at once. A failure of
+    # either is raised after both end, the skin's first, and changes
+    # nothing.
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var valid = HumanoidSpec(Length(6, FOOT), MALE)
+    with assert_raises(contains="body skin needs a detail"):
+        _ = add_game_humanoid(
+            scene,
+            assets,
+            root,
+            valid,
+            0,
+            detail=7,
+            hand_detail=8,
+            hair_detail=8,
+            beard=CLEAN_SHAVEN,
+        )
+    with assert_raises(contains="body skin needs a detail"):
+        _ = add_game_humanoid(
+            scene, assets, root, valid, 0, detail=7, hair_detail=7
+        )
+    with assert_raises(contains="scalp hair needs a detail"):
+        _ = add_game_humanoid(
+            scene, assets, root, valid, 0, detail=8, hair_detail=7
+        )
+    assert_equal(scene.count(), 1)
+    assert_equal(assets.geometries.count(), 0)
 
 
 def main() raises:

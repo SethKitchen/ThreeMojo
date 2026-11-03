@@ -12,6 +12,7 @@ from extensions.attire.mesh_ops import COVER, merge
 from extensions.attire.skirt import (
     SKIRT_LEG_SHARE,
     SKIRT_SIDES,
+    SKIRT_UNDERLAP,
     fold_profile,
     SkirtEnvelope,
     hang_skirt,
@@ -412,6 +413,19 @@ def test_a_garment_hangs_its_skirt_below_the_top() raises:
             lowest_leg = min(lowest_leg, p.y)
     assert_almost_equal(lowest_leg, -0.03, atol=1e-5)
     assert_almost_equal(lowest_arm, -0.4, atol=1e-5)
+    # Under a shorter skirt, the skirt is cut `SKIRT_UNDERLAP` over that
+    # skirt's hem: nothing of it hangs higher, outside the arm.
+    var top = envelope.heights[0]
+    var mid = (top + envelope.hem()) / 2
+    var shorter = mid - SKIRT_UNDERLAP * skirt_scale(rig)
+    var under = hang_skirt(piece, envelope, rig, False, covered=shorter)
+    assert_true(under.triangle_count() < hung.triangle_count())
+    assert_true(under.triangle_count() > cut.triangle_count())
+    ref low = under.attribute_view(String(POSITION))
+    for v in range(low.count()):
+        var p = low.vector3(v)
+        if p.x >= -0.2:
+            assert_false(p.y > mid + 1e-4 and p.y < top - 1e-4)
     # An empty piece hangs nothing it does not have.
     var empty = empty_mesh()
     assert_equal(

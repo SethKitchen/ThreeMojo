@@ -30,16 +30,21 @@ legs keeps its standing mesh. A shy herd runs from the player, at
 
 from animation.animation_mixer import ONCE, AnimationAction, AnimationMixer
 from core.assets import Assets
+from extensions.attire.kinds import CLOSED, SKIRTED
 from extensions.attire.outfit import Outfit, dress
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.anatomy.locomotion import WALK_FROUDE, stride_frequency
 from extensions.animals.build import (
+    Animal,
     animal_materials,
     create_animal,
     mesh_animal,
 )
+from extensions.animals.rig import Pose
+from core.buffer_geometry import BufferGeometry
+from render.tasks import TaskGroup
 from extensions.animals.gait import is_quadruped, walk_pose, walk_stride
 from extensions.animals.options import CROWD, Quality, animal_options
 from extensions.animals.registry import SpeciesId, require_species
@@ -50,11 +55,19 @@ from extensions.humanoid.rig.clips import (
     walk_clip,
 )
 from extensions.humanoid.rig.game import GameHumanoid, add_game_humanoid
-from extensions.humanoid.rig.joints import RIGHT_TOES
+from extensions.humanoid.rig.joints import RIGHT_SHIN, RIGHT_TOES
+from extensions.humanoid.skeleton.head.hair.beard import (
+    CLEAN_SHAVEN,
+    Beard,
+)
+from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
 from extensions.humanoid.spec import HumanoidSpec
+from renderers.renderer import available_workers
 from extensions.vegetation.checks import require_between, require_count_between
 from extensions.vegetation.ground import Ground, Lot
 from extensions.vegetation.noise import hash01
+from extensions.village.faces import FACE_TRIANGLES, FaceLife
+from extensions.village.clothes import Groom, plain_groom
 from extensions.village.interior import Doorway
 from extensions.village.terrain import Terrain
 from extensions.village.character import (
@@ -107,6 +120,8 @@ does."""
 comptime SOLE = Float32(0.02)
 """How far the sole is below the toes' joint, in meters for a person of
 six feet."""
+comptime EYE_HEIGHT = Float32(0.93)
+"""How far up a person's height their eyes are."""
 comptime FACE_SPEED = Float32(4)
 """How fast a held person turns to face their point, in radians a
 second."""
@@ -187,6 +202,33 @@ def facing_turn(heading: Angle) -> Angle:
     return Angle(heading.to(RADIAN) + pi, RADIAN)
 
 
+def hobbles(outfit: Outfit) raises -> Bool:
+    """Return whether an outfit has a closed skirt that falls past the
+    knees, as a robe or a gown does.
+
+    A leg that kicks in such a skirt would pass out through its front,
+    so its wearer does not kick: see `Arms`.
+
+    Args:
+        outfit: The outfit.
+
+    Returns:
+        Whether a skirted garment closed all round covers the shins. A
+        neckline does not part the skirt, so it does not count.
+
+    Raises:
+        Error: Never: each joint is named.
+    """
+    for garment in outfit.garments:
+        if (
+            garment.form == SKIRTED
+            and garment.opening == CLOSED
+            and garment.cover.covers(RIGHT_SHIN)
+        ):
+            return True
+    return False
+
+
 struct Body(Movable):
     """A person's skinned body, its clothes, its clips, and the node that
     carries it."""
@@ -204,6 +246,13 @@ struct Body(Movable):
     var playing: Stance
     # How far the humanoid's origin is above its soles, in meters.
     var lift: Float32
+    # Whether the person speaks: whether its face moves. Its face's
+    # blinks, words and expression, and whether the preserved face shows.
+    var speaks: Bool
+    var life: FaceLife
+    var near: Bool
+    # Whether a closed skirt falls past the knees: see `hobbles`.
+    var hobbled: Bool
 
     def __init__(
         out self,
@@ -213,8 +262,14 @@ struct Body(Movable):
         outfit: Outfit,
         triangles: Int,
         detail: Int,
+        speaks: Bool = False,
+        seed: Int = 0,
+        hair: HairStyle = GROWN,
+        beard: Beard = CLEAN_SHAVEN,
     ) raises:
         """Build a person into a scene, dressed and standing at the origin.
+
+        The skin, the hair and the beard are meshed on every core there is.
 
         Args:
             scene: The scene.
@@ -225,6 +280,14 @@ struct Body(Movable):
             triangles: The skin's budget of triangles.
             detail: The cells along the body's skin, from 8 to 64. The
                 hands and the hair take half as many, and at least 8.
+            speaks: Whether the person's face moves: it keeps the
+                preserved face, teeth and tongue, and a still face of
+                `FACE_TRIANGLES` for a distance, over the budget. See
+                `extensions.village.faces`.
+            seed: Which times the face blinks at.
+            hair: How the hair is cut and laid.
+            beard: The facial hair. A speaking face's beard moves with
+                its mouth.
 
         Raises:
             Error: If the humanoid cannot be built, or the outfit does not
@@ -232,16 +295,43 @@ struct Body(Movable):
         """
         self.carrier = scene.add(Object3D())
         var half = max(8, detail // 2)
-        self.person = add_game_humanoid(
-            scene,
-            assets,
-            self.carrier,
-            spec,
-            triangles,
-            detail=detail,
-            hand_detail=half,
-            hair_detail=half,
-        )
+        self.speaks = speaks
+        self.life = FaceLife(seed)
+        self.near = False
+        self.hobbled = hobbles(outfit)
+        if speaks:
+            self.person = add_game_humanoid(
+                scene,
+                assets,
+                self.carrier,
+                spec,
+                triangles + FACE_TRIANGLES,
+                detail=detail,
+                hand_detail=half,
+                hair_detail=half,
+                facial_animation=True,
+                face_stand_in=FACE_TRIANGLES,
+                hair_style=hair,
+                beard=beard,
+                workers=available_workers(),
+            )
+            # The face is checked once: each frame only sets its weights.
+            self.person.face.value().validate(scene, assets)
+            self.person.show_face(scene, False)
+        else:
+            self.person = add_game_humanoid(
+                scene,
+                assets,
+                self.carrier,
+                spec,
+                triangles,
+                detail=detail,
+                hand_detail=half,
+                hair_detail=half,
+                hair_style=hair,
+                beard=beard,
+                workers=available_workers(),
+            )
         # A person casts a shadow, as an animal does.
         # A humanoid wears at least its body's skin.
         for skin in self.person.skins:  # pragma: no branch
@@ -312,6 +402,57 @@ struct Body(Movable):
             stance, character.speed()
         )
         self.mixer.update(scene, delta)
+
+    def head(self, scene: Scene) raises -> Vector3:
+        """Return about where the person's eyes are, in the world.
+
+        Args:
+            scene: The scene the body is in.
+
+        Returns:
+            A point over the soles, `EYE_HEIGHT` of the person's height up.
+
+        Raises:
+            Error: If the carrier is not in the scene.
+        """
+        var at = scene.get(self.carrier).position
+        # The carrier stands `lift` over the soles.
+        var eyes = at.y - self.lift + EYE_HEIGHT * self.person.rig.stature
+        return Vector3(at.x, eyes, at.z)
+
+    def show_face(
+        mut self,
+        mut scene: Scene,
+        eye: Vector3,
+        reach: Float32,
+        delta: Duration,
+    ) raises:
+        """Move a speaking person's face on by a frame, and show it.
+
+        Within `reach` of the eye, the preserved face shows and wears the
+        face's weights. Past it, the still face shows. A person who does
+        not speak is left as it is.
+
+        Args:
+            scene: The scene the body is in.
+            eye: Where the camera is.
+            reach: How near the eye must be to see the face move, in
+                meters: see `face_reach`.
+            delta: The frame's time.
+
+        Raises:
+            Error: If the time is negative.
+        """
+        if not self.speaks:
+            return
+        var weights = self.life.advance(delta)
+        var d = self.head(scene) - eye
+        var near = d.dot(d) < reach * reach
+        if near != self.near:
+            self.person.show_face(scene, near)
+            self.near = near
+        if near:
+            self.person.move_face(scene, weights)
 
 
 struct Route(Copyable, Movable):
@@ -492,7 +633,6 @@ comptime NO_HOUSE = HouseId(-1)
 """No house: a villager with no home to visit."""
 
 
-@fieldwise_init
 struct Villager(Copyable, Movable):
     """A person of the village, what they wear, and where they wander."""
 
@@ -509,6 +649,43 @@ struct Villager(Copyable, Movable):
     var outfit: Outfit
     # The house they visit, or `NO_HOUSE`.
     var home: HouseId
+    # How their hair is cut and laid, and their beard.
+    var groom: Groom
+
+    def __init__(
+        out self,
+        spec: HumanoidSpec,
+        x: Float32,
+        z: Float32,
+        reach: Float32,
+        seed: Int,
+        runs: Bool,
+        outfit: Outfit,
+        home: HouseId,
+        groom: Groom = plain_groom(),
+    ):
+        """Hold a person of the village.
+
+        Args:
+            spec: Who they are.
+            x: The middle of where they wander along x, in meters.
+            z: The middle of where they wander along z, in meters.
+            reach: How far from the middle they wander, in meters.
+            seed: Which points they wander between.
+            runs: Whether they run between the points.
+            outfit: What they wear.
+            home: The house they visit, or `NO_HOUSE`.
+            groom: How their hair is cut, and their beard.
+        """
+        self.spec = spec.copy()
+        self.x = x
+        self.z = z
+        self.reach = reach
+        self.seed = seed
+        self.runs = runs
+        self.outfit = outfit.copy()
+        self.home = home
+        self.groom = groom
 
 
 struct Herd(Copyable, Movable):
@@ -564,6 +741,8 @@ struct ResidentsParameters(Copyable, Movable):
     # Each person's budget of triangles, and the cells along their skin.
     var triangles: Int
     var detail: Int
+    # Whether the villagers' faces move: see `Body`'s `speaks`.
+    var faces: Bool
     # The poses of each animal's walk, how finely it is meshed, and how
     # many times its tier's cell its mesh's cell is: 1 for the tier's own
     # mesh, more for a coarser one.
@@ -575,9 +754,10 @@ struct ResidentsParameters(Copyable, Movable):
 
     def __init__(out self):
         """Create nobody, with game budgets: 3,000 triangles a person and
-        six poses an animal's stride."""
+        six poses an animal's stride. The villagers' faces move."""
         self.villagers = List[Villager]()
         self.herds = List[Herd]()
+        self.faces = True
         self.triangles = 3000
         self.detail = 24
         self.phases = 6
@@ -738,6 +918,62 @@ struct AnimalLook(Movable):
         self.walker = walker
 
 
+__async def _pose_task(
+    animal: Pointer[Animal, ImmutAnyOrigin],
+    poses: Pointer[List[Pose], ImmutAnyOrigin],
+    meshes: Pointer[List[BufferGeometry], MutAnyOrigin],
+    failures: Pointer[List[String], MutAnyOrigin],
+    index: Int,
+):
+    """Mesh an animal in one of its poses, or record why it failed."""
+    try:
+        meshes[][index] = mesh_animal(animal[], poses[][index], workers=0)
+    except e:
+        failures[][index] = String(e)
+
+
+def mesh_poses(
+    animal: Animal, poses: List[Pose]
+) raises -> List[BufferGeometry]:
+    """Return an animal's mesh in each pose, the poses meshed at once.
+
+    Each mesh is the same as `mesh_animal` makes alone: the poses only
+    share the threads.
+
+    Args:
+        animal: The animal.
+        poses: Its poses.
+
+    Returns:
+        One mesh per pose, in their order.
+
+    Raises:
+        Error: The first pose's error, in their order, if `mesh_animal`
+            refuses one.
+    """
+    var meshes = List[BufferGeometry]()
+    var failures = List[String]()
+    for _ in range(len(poses)):  # pragma: no branch
+        meshes.append(BufferGeometry())
+        failures.append(String())
+    var group = TaskGroup()
+    for index in range(len(poses)):  # pragma: no branch
+        group.create_task(
+            _pose_task(
+                Pointer(to=animal).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=poses).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=meshes).unsafe_origin_cast[MutAnyOrigin](),
+                Pointer(to=failures).unsafe_origin_cast[MutAnyOrigin](),
+                index,
+            )
+        )
+    group.wait()
+    for failure in failures:  # pragma: no branch
+        if failure != "":
+            raise Error(failure)
+    return meshes^
+
+
 def animal_look(
     mut assets: Assets,
     species: SpeciesId,
@@ -755,6 +991,7 @@ def animal_look(
         phases: How many poses of its walk to mesh.
         quality: How finely it is meshed.
         coarseness: How many times its quality's cell its mesh's cell is.
+            The eyes' finer cell grows as much, but never past the body's.
 
     Returns:
         Its standing mesh and, for an animal on four legs, its walk's
@@ -771,9 +1008,20 @@ def animal_look(
         animal_options(seed, quality=quality),
     )
     animal.cell *= coarseness
-    var stand = assets.geometries.add(
-        mesh_animal(animal, animal.bind_pose(), workers=0)
-    )
+    # The eyes have their own finer cell. Left fine, they made half of a
+    # coarse rabbit's vertices.
+    animal.eye_cell = min(animal.cell, animal.eye_cell * coarseness)
+    # The standing pose first, then the walk's.
+    var poses = List[Pose]()
+    poses.append(animal.bind_pose())
+    var quadruped = is_quadruped(animal.rig)
+    if quadruped:
+        for phase in range(phases):  # pragma: no branch
+            poses.append(
+                walk_pose(animal.rig, Float64(phase) / Float64(phases))
+            )
+    var meshes = mesh_poses(animal, poses)
+    var stand = assets.geometries.add(meshes.pop(0))
     var box = assets.geometries.get(stand).bounding_box()
     var frames = List[GeometryId]()
     var stride = Float32(0)
@@ -782,19 +1030,13 @@ def animal_look(
         max(Float32(0.1), (box.max.x - box.min.x) * 0.5), METER
     )
     walker.jump_speed = Velocity(0.0, METER_PER_SECOND)
-    if is_quadruped(animal.rig):
+    if quadruped:
         stride = walk_stride(animal.rig).to(METER)
         var hip = length_meters(animal.rig.j("hipL").y)
         var pace = stride * stride_frequency(WALK_FROUDE, hip).value
         walker.walk_speed = Velocity(max(Float32(0.2), pace), METER_PER_SECOND)
-        for phase in range(phases):  # pragma: no branch
-            var pose = walk_pose(
-                animal.rig,
-                Float64(phase) / Float64(phases),
-            )
-            frames.append(
-                assets.geometries.add(mesh_animal(animal, pose, workers=0))
-            )
+        for _ in range(len(meshes)):  # pragma: no branch
+            frames.append(assets.geometries.add(meshes.pop(0)))
     else:
         walker.walk_speed = Velocity(0.3, METER_PER_SECOND)
     # An animal runs only when it flees, at three times its walk.
@@ -875,6 +1117,10 @@ struct Residents(Movable):
                     villager.outfit,
                     parameters.triangles,
                     parameters.detail,
+                    speaks=parameters.faces,
+                    seed=villager.seed,
+                    hair=villager.groom.hair,
+                    beard=villager.groom.beard,
                 )
             )
             var route = wander_route(

@@ -6808,6 +6808,37 @@ def _camera_position[S: NodeSource](source: S) -> Lanes:
     )
 
 
+def _in_kinds(op: Int, first: NodeKind, last: NodeKind) -> Bool:
+    """Return True if an operation lies from `first` to `last`, inclusive.
+
+    One unsigned comparison tests both ends: an operation below `first`
+    wraps round to a distance larger than the range.
+
+    Args:
+        op: A raw operation, including values outside the kinds there are.
+        first: The range's first kind.
+        last: The range's last kind, not before `first`.
+
+    Returns:
+        Whether `op` is one of the kinds of the range.
+    """
+    return UInt(op - first.value) <= UInt(last.value - first.value)
+
+
+def _reads_a_map(op: Int) -> Bool:
+    """Return True if an operation reads a 2D texture through its sampler.
+
+    Args:
+        op: An instruction's operation.
+
+    Returns:
+        Whether it is `NODE_TEXTURE` or `NODE_TEXTURE_GRAD`.
+    """
+    if op == NODE_TEXTURE.value:
+        return True
+    return op == NODE_TEXTURE_GRAD.value
+
+
 def _leaf[
     S: NodeSource
 ](
@@ -6826,7 +6857,7 @@ def _leaf[
         return Lanes(source.word(PROGRAM_TIME))
     if op == NODE_CAMERA_POSITION.value:
         return _camera_position(source)
-    if op == NODE_TEXTURE.value or op == NODE_TEXTURE_GRAD.value:
+    if _reads_a_map(op):
         if not inputs.textured:
             return Lanes(1)
         # One read for both nodes; see `NodeSource.sample_either`.
@@ -6860,7 +6891,7 @@ def _leaf[
             Int(source.word(Int(immediate))), Int(x[0]), Int(x[1]), Int(z[0])
         )
         return Lanes(texel.r, texel.g, texel.b, texel.a)
-    if op == NODE_TEXTURE_3D.value or op == NODE_TEXTURE_ARRAY.value:
+    if _in_kinds(op, NODE_TEXTURE_3D, NODE_TEXTURE_ARRAY):
         if not inputs.textured:
             return Lanes(1)
         var slot = Int(source.word(Int(immediate)))
@@ -6925,7 +6956,7 @@ def _leaf[
         given = node_attributes(source, NodeContext(context), inputs.textured)
     if op == NODE_UV.value:
         return Lanes(given.u, given.v, 0, 0)
-    if op == NODE_POSITION_LOCAL.value or op == NODE_POSITION_WORLD.value:
+    if _in_kinds(op, NODE_POSITION_LOCAL, NODE_POSITION_WORLD):
         return _lanes(given.position)
     if op == NODE_POSITION_VIEW.value:
         return _view_point(source, given.position)
@@ -7520,9 +7551,7 @@ def _is_signed_operation(op: Int) -> Bool:
     Returns:
         True only for NODE_INT_ADD through NODE_INT_LAST, inclusive.
     """
-    if op >= NODE_INT_ADD.value and op <= NODE_INT_LAST.value:
-        return True
-    return False
+    return _in_kinds(op, NODE_INT_ADD, NODE_INT_LAST)
 
 
 def _operation[
@@ -7533,7 +7562,7 @@ def _operation[
     """Return what a math node computes from its inputs' registers. The
     commonest nodes, `add`, `sub`, `mul`, `div`, a swizzle, a join and a
     negation, are worked out in `run_code` itself."""
-    if op >= NODE_UINT_ADD.value and op <= NODE_UINT_TO_BOOL.value:
+    if _in_kinds(op, NODE_UINT_ADD, NODE_UINT_TO_BOOL):
         return _uint_operation(op, x, y, z)
     if _is_signed_operation(op):
         return _int_operation(op, x, y, z)
@@ -7612,7 +7641,7 @@ def _operation[
         return max(x, y)
     if op == NODE_MOD.value:
         return x - y * floor(x / y)
-    if op >= NODE_BIT_AND.value and op <= NODE_UNSIGNED.value:
+    if _in_kinds(op, NODE_BIT_AND, NODE_UNSIGNED):
         return _bits(op, x, y)
     if op == NODE_DISTANCE.value:
         var apart = x - y
@@ -7659,7 +7688,7 @@ def _operation[
                 bitcast[DType.uint32, 4](y), bitcast[DType.uint32, 4](z)
             )
         )
-    if op == NODE_MATRIX_VECTOR.value or op == NODE_VECTOR_MATRIX.value:
+    if _in_kinds(op, NODE_MATRIX_VECTOR, NODE_VECTOR_MATRIX):
         return _matrix(source, x, width, op == NODE_VECTOR_MATRIX.value)
     if op == NODE_NOISE.value:
         return Lanes(perlin_noise(x, width))
@@ -7721,6 +7750,61 @@ def run_nodes[
     )
 
 
+# The leaves numbered after the operations, one bit each from the first.
+comptime _LATE_LEAF_FIRST = NODE_FRAG_COORD.value
+comptime _LATE_LEAVES = (
+    _late_leaf_bit(NODE_FRAG_COORD)
+    | _late_leaf_bit(NODE_POINT_COORD)
+    | _late_leaf_bit(NODE_SCREEN_UV)
+    | _late_leaf_bit(NODE_VIEWPORT_TEXTURE)
+    | _late_leaf_bit(NODE_SHADOW)
+    | _late_leaf_bit(NODE_FRONT_FACING)
+    | _late_leaf_bit(NODE_TEXTURE_LEVEL)
+    | _late_leaf_bit(NODE_TEXTURE_GRAD)
+    | _late_leaf_bit(NODE_TEXEL_FETCH)
+    | _late_leaf_bit(NODE_TEXTURE_SIZE)
+    | _late_leaf_bit(NODE_ATTRIBUTE)
+    | _late_leaf_bit(NODE_TEXTURE_CUBE)
+    | _late_leaf_bit(NODE_TEXTURE_3D)
+    | _late_leaf_bit(NODE_TEXTURE_ARRAY)
+    | _late_leaf_bit(NODE_COMPUTE_BUILTIN)
+    | _late_leaf_bit(NODE_STORAGE_ELEMENT)
+    | _late_leaf_bit(NODE_COMPUTE_RESULT)
+)
+
+
+def _late_leaf_bit(kind: NodeKind) -> UInt64:
+    """Return the bit of `_LATE_LEAVES` that stands for a late leaf.
+
+    Args:
+        kind: A leaf numbered after the operations.
+
+    Returns:
+        One bit, at the kind's distance from `_LATE_LEAF_FIRST`.
+    """
+    return UInt64(1) << UInt64(kind.value - _LATE_LEAF_FIRST)
+
+
+def _is_leaf(op: Int) -> Bool:
+    """Return True if `_leaf` works out an operation, not `_operation`.
+
+    The leaves are numbered before `NODE_ADD`, and some after the
+    operations. One mask holds the late ones, so the test is one lookup.
+
+    Args:
+        op: An instruction's operation.
+
+    Returns:
+        Whether the operation is a leaf.
+    """
+    if op < NODE_ADD.value:
+        return True
+    var bit = UInt(op - _LATE_LEAF_FIRST)
+    if bit >= 64:
+        return False
+    return (_LATE_LEAVES >> UInt64(bit)) & 1 == 1
+
+
 def run_code[
     S: NodeSource
 ](source: S, start: Int, count: Int, inputs: NodeInputs) -> Lanes:
@@ -7748,7 +7832,8 @@ def run_code[
         written = Int(source.word(at + INSTRUCTION_DEST))
         # Integer constants use B for a type tag. Loads do not need
         # operand registers, so keep metadata out of the operand path.
-        if op == NODE_CONSTANT.value or op == NODE_UNIFORM.value:
+        # The two loads are kinds 0 and 1, so one unsigned test finds both.
+        if UInt(op) <= UInt(NODE_UNIFORM.value):
             var place = Int(immediate)
             registers[written] = Lanes(
                 source.word(place),
@@ -7793,26 +7878,7 @@ def run_code[
             continue
         # The leaves, and `gl_FragCoord`, the facing and a texture read at
         # a level, leaves numbered after them.
-        if (
-            op < NODE_ADD.value
-            or op == NODE_FRAG_COORD.value
-            or op == NODE_POINT_COORD.value
-            or op == NODE_SCREEN_UV.value
-            or op == NODE_VIEWPORT_TEXTURE.value
-            or op == NODE_SHADOW.value
-            or op == NODE_FRONT_FACING.value
-            or op == NODE_TEXTURE_LEVEL.value
-            or op == NODE_TEXTURE_GRAD.value
-            or op == NODE_TEXEL_FETCH.value
-            or op == NODE_TEXTURE_SIZE.value
-            or op == NODE_ATTRIBUTE.value
-            or op == NODE_TEXTURE_CUBE.value
-            or op == NODE_TEXTURE_3D.value
-            or op == NODE_TEXTURE_ARRAY.value
-            or op == NODE_COMPUTE_BUILTIN.value
-            or op == NODE_STORAGE_ELEMENT.value
-            or op == NODE_COMPUTE_RESULT.value
-        ):
+        if _is_leaf(op):
             registers[written] = _leaf(
                 source, op, x, z, immediate, third, inputs
             )
