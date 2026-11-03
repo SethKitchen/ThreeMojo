@@ -19,7 +19,8 @@ does. After ten warm-up frames each frame is timed by stage:
 - `water`: the pond's water composed into the frame.
 - `smooth`: the frame's edges smoothed.
 - `upscale`: the frame stretched to the window.
-- `frame`: all five.
+- `weather`: the clouds, the fog and the night over the sky, and the rain.
+- `frame`: all six, and the rest of the frame.
 
 It also splits `draw` into the renderer's own stages, as
 `GameRenderer.timings` gives them: `shadows`, `gather`, `vertices`,
@@ -145,6 +146,7 @@ def main() raises:
     var waters = List[Int]()
     var smooths = List[Int]()
     var upscales = List[Int]()
+    var weathers = List[Int]()
     var totals = List[Int]()
     var names = materialize[STAGES]()
     var stages = List[List[Int]]()
@@ -168,6 +170,7 @@ def main() raises:
         waters.append(Int(game.water_ms * 1.0e6))
         smooths.append(Int(game.smooth_ms * 1.0e6))
         upscales.append(Int(game.upscale_ms * 1.0e6))
+        weathers.append(Int(game.weather_ms * 1.0e6))
         totals.append(Int(done - began))
         for i in range(min(len(names), len(game.fast.timings))):
             stages[i].append(Int(game.fast.timings[i] * 1.0e6))
@@ -213,6 +216,8 @@ def main() raises:
         _summary("smooth", smooths^),
         ", ",
         _summary("upscale", upscales^),
+        ", ",
+        _summary("weather", weathers^),
         ", ",
         _summary("frame", totals^),
         ', "draw_stages": {',
