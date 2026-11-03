@@ -30,7 +30,11 @@ detail is the notches, positive toward the user."""
 comptime KEY_UP = 6
 """The event kind of a key release. The value of `InputKind` `KEY_UP`."""
 comptime KEY_SPACE = 32
-"""The key code of the space bar, which pauses and resumes an app."""
+"""The key code of the space bar, which pauses and resumes an app. The village
+app takes it for the jump instead."""
+comptime KEY_SHIFT = 260
+"""The key code of Shift. A key event has no modifiers, so a host reports Shift
+as a key of its own. The village app runs while it is held."""
 
 
 @fieldwise_init

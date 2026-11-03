@@ -20,7 +20,11 @@ a trim and a hose from them by a seed.
 
 from extensions.attire.garment import boots, hood, hose, shirt, tunic
 from extensions.attire.kinds import TRIM_DYE
+from extensions.attire.mix import Calling, calling_beard, calling_hair
 from extensions.attire.outfit import Outfit
+from extensions.humanoid.sex import Sex
+from extensions.humanoid.skeleton.head.hair.beard import CLEAN_SHAVEN, Beard
+from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
 from render.framebuffer import Color
 
 comptime MADDER = Color(150, 42, 34)
@@ -123,4 +127,41 @@ def dyed_outfit(seed: Int, hooded: Bool) raises -> Outfit:
     """
     return village_outfit(
         natural_dye(seed), natural_dye(seed + 1), natural_dye(seed + 3), hooded
+    )
+
+
+@fieldwise_init
+struct Groom(Copyable, ImplicitlyCopyable, Movable):
+    """How a person's hair is cut and laid, and the facial hair they
+    grow."""
+
+    var hair: HairStyle
+    var beard: Beard
+
+
+def plain_groom() -> Groom:
+    """Return the groom of a person that no calling dresses.
+
+    Returns:
+        Grown hair, and a clean-shaven face.
+    """
+    return Groom(GROWN, CLEAN_SHAVEN)
+
+
+def calling_groom(calling: Calling, sex: Sex, seed: Int) raises -> Groom:
+    """Return the hair and the beard that suit a calling.
+
+    Args:
+        calling: A named calling: see `extensions.attire.mix`.
+        sex: `MALE` or `FEMALE`.
+        seed: Which hair and beard, of those that suit it.
+
+    Returns:
+        `calling_hair` and `calling_beard` of the calling.
+
+    Raises:
+        Error: If the calling or the sex is not named.
+    """
+    return Groom(
+        calling_hair(calling, sex, seed), calling_beard(calling, sex, seed)
     )

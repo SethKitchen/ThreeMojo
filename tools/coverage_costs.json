@@ -9,6 +9,13 @@
   "timestamp_resolution_seconds": 0.1,
   "completed_measurements": 1171,
   "scheduling_estimates": {
+    "tests/test_capi_village.mojo": {
+      "kind": "right_censored_timeout_lower_bound",
+      "seconds": 5709.6,
+      "exit_code": 124,
+      "note": "The group deadline stopped this capture before completion. This lower bound only prioritizes scheduling; it is not a successful duration or completion forecast.",
+      "job_id": 124949214853
+    },
     "tests/test_capi_water.mojo": {
       "kind": "right_censored_timeout_lower_bound",
       "seconds": 2275.8,
@@ -164,6 +171,7 @@
     "tests/test_capi_host_tools.mojo": 22.4,
     "tests/test_capi_scene.mojo": 139.5,
     "tests/test_capi_splat.mojo": 203.1,
+    "tests/test_capi_village.mojo": 5709.6,
     "tests/test_capi_water.mojo": 2275.8,
     "tests/test_capi_workers_tool.mojo": 13.1,
     "tests/test_car_generator.mojo": 41.9,

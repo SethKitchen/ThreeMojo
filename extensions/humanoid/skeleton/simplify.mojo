@@ -307,20 +307,21 @@ struct _Heap(Movable):
             return top
         self.entries[0] = last
         var parent = 0
+        # Each test is a single comparison: this loop runs millions of
+        # times in a body's decimation, and a compound test there costs a
+        # coverage record on every pass.
         while True:
-            var least = parent
             var left = parent * 2 + 1
-            var right = left + 1
-            if (
-                left < count
-                and self.entries[left].cost < self.entries[least].cost
-            ):
+            # A node with no left child has no right one: it is a leaf.
+            if left >= count:
+                return top
+            var least = parent
+            if self.entries[left].cost < self.entries[least].cost:
                 least = left
-            if (
-                right < count
-                and self.entries[right].cost < self.entries[least].cost
-            ):
-                least = right
+            var right = left + 1
+            if right < count:
+                if self.entries[right].cost < self.entries[least].cost:
+                    least = right
             if least == parent:
                 return top
             var held = self.entries[parent]
@@ -544,8 +545,10 @@ def _face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
 def _cosine(a: Vector3, b: Vector3) -> Float64:
     """Return the cosine between two vectors, or -1 if either is zero."""
     var la = Float64(a.length())
+    if la == 0:
+        return -1
     var lb = Float64(b.length())
-    if la == 0 or lb == 0:
+    if lb == 0:
         return -1
     return Float64(a.dot(b)) / (la * lb)
 
@@ -735,11 +738,12 @@ struct _Collapser(Movable):
                 + (sy - my) * (sy - my)
                 + (sz - mz) * (sz - mz)
             )
-            if cost < best and off <= reach:
-                best = cost
-                x = sx
-                y = sy
-                z = sz
+            if cost < best:
+                if off <= reach:
+                    best = cost
+                    x = sx
+                    y = sy
+                    z = sz
         var at_u = sum.error(Float64(pu.x), Float64(pu.y), Float64(pu.z))
         if at_u < best:
             best = at_u
@@ -790,18 +794,21 @@ struct _Collapser(Movable):
         ref around = self.vertex_faces[vertex]
         for slot in range(len(around)):  # pragma: no branch
             var face = around[slot]
-            if not self.face_alive[face] or self._holds(face, other):
+            if not self.face_alive[face]:
                 continue
-            var corners: List[Vector3] = [
-                self.positions[self.faces[face * 3]],
-                self.positions[self.faces[face * 3 + 1]],
-                self.positions[self.faces[face * 3 + 2]],
-            ]
-            var before = _face_normal(corners[0], corners[1], corners[2])
-            for corner in range(3):  # pragma: no branch
-                if self.faces[face * 3 + corner] == vertex:
-                    corners[corner] = point
-            var after = _face_normal(corners[0], corners[1], corners[2])
+            if self._holds(face, other):
+                continue
+            var a = self.positions[self.faces[face * 3]]
+            var b = self.positions[self.faces[face * 3 + 1]]
+            var c = self.positions[self.faces[face * 3 + 2]]
+            var before = _face_normal(a, b, c)
+            if self.faces[face * 3] == vertex:
+                a = point
+            if self.faces[face * 3 + 1] == vertex:
+                b = point
+            if self.faces[face * 3 + 2] == vertex:
+                c = point
+            var after = _face_normal(a, b, c)
             if _cosine(before, after) < FLIP_LIMIT:
                 return True
         return False
@@ -818,14 +825,22 @@ struct _Collapser(Movable):
         """
         var u = entry.u
         var v = entry.v
-        if not self.vertex_alive[u] or not self.vertex_alive[v]:
+        # Each test is a single comparison, as in `_Heap.pop`: a collapse
+        # is tried for every candidate the heap gives up.
+        if not self.vertex_alive[u]:
             return False
-        if self.version[u] != entry.stamp_u or self.version[v] != entry.stamp_v:
+        if not self.vertex_alive[v]:
+            return False
+        if self.version[u] != entry.stamp_u:
+            return False
+        if self.version[v] != entry.stamp_v:
             return False
         var shared = self._faces_on_edge(u, v)
         # No face: the edge is gone. More than two: it is not a surface
         # edge, and merging it would tear the surface.
-        if shared == 0 or shared > 2:
+        if shared == 0:
+            return False
+        if shared > 2:
             return False
         if self.alive - shared < minimum:
             return False
@@ -841,7 +856,9 @@ struct _Collapser(Movable):
         if common != shared:
             return False
         var point = vector3_from_float64(entry.x, entry.y, entry.z)
-        if self._turns_over(u, v, point) or self._turns_over(v, u, point):
+        if self._turns_over(u, v, point):
+            return False
+        if self._turns_over(v, u, point):
             return False
         self.positions[u] = point
         self.quadrics[u] = _Quadric(self.quadrics[u].q + self.quadrics[v].q)
@@ -858,6 +875,14 @@ struct _Collapser(Movable):
                 if self.faces[face * 3 + corner] == v:
                     self.faces[face * 3 + corner] = u
             self.vertex_faces[u].append(face)
+        # The dead faces leave `u`'s list, the live ones keep their order:
+        # each later look at `u` reads only what can still change.
+        var kept = List[Int](capacity=len(self.vertex_faces[u]))
+        for face in self.vertex_faces[u]:  # pragma: no branch
+            if self.face_alive[face]:
+                kept.append(face)
+        self.vertex_faces[u] = kept^
+        self.vertex_faces[v] = List[Int]()
         self.vertex_alive[v] = False
         self.version[u] += 1
         var near = self._neighbors(u)
@@ -873,7 +898,9 @@ struct _Collapser(Movable):
             target: How many faces to keep.
             minimum: The fewest faces a collapse may leave.
         """
-        while self.alive > target and len(self.heap.entries) > 0:
+        while self.alive > target:
+            if len(self.heap.entries) == 0:
+                return
             _ = self.collapse(self.heap.pop(), minimum)
 
     def result(self) -> WeldedMesh:

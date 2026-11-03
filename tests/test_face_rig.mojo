@@ -29,7 +29,11 @@ from extensions.humanoid.skeleton.head.skin.geometry import (
     head_skin_from_dimensions,
 )
 from extensions.humanoid.skeleton.head.skin.mouth import mouth_mesh
-from extensions.humanoid.skeleton.head.skin.scan import NECK_SEAM
+from extensions.humanoid.skeleton.head.skin.scan import (
+    NECK_SEAM,
+    place_each,
+    scan_model,
+)
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from renderers.renderer import available_workers
@@ -92,6 +96,10 @@ def test_the_teeth_follow_the_jaw() raises:
     var unknown: List[String] = ["noSuchShape"]
     with assert_raises():
         _ = mouth_mesh(dims, TEETH, unknown)
+    # A placement needs one weight per expression shape.
+    var short: List[List[Float32]] = [[Float32(1)]]
+    with assert_raises(contains="one weight per expression"):
+        _ = place_each(dims.head, scan_model(), 10, short)
 
 
 def test_a_head_is_drawn_rigged() raises:

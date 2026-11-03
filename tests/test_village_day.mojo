@@ -164,6 +164,30 @@ def test_the_night_sky_is_dark_and_starry() raises:
         DayCycle(1).night_sky(flat, _camera(), 1)
 
 
+def test_the_night_look_is_off_by_day_and_aims_at_the_corners() raises:
+    var noon = DayCycle(12).night_look(_camera(), 1)
+    assert_false(noon.on)
+    assert_almost_equal(noon.day, 1)
+    # At night the stars come out, and cloud hides them.
+    var night = DayCycle(1).night_look(_camera(), 1)
+    assert_true(night.on)
+    assert_almost_equal(night.stars, 1)
+    assert_almost_equal(DayCycle(1).night_look(_camera(), 0.25).stars, 0.25)
+    assert_almost_equal(DayCycle(1).night_look(_camera(), 0).stars, 0)
+    # The camera looks along -z: the top left corner is up and to the left,
+    # the steps run right and down.
+    assert_true(night.d00.z < 0)
+    assert_true(night.d00.x < 0)
+    assert_true(night.d00.y > 0)
+    assert_true(night.across.x > 0)
+    assert_true(night.down.y < 0)
+    # At dusk the sky is warm, and the stars have not yet come out.
+    var dusk = DayCycle(19.4).night_look(_camera(), 1)
+    assert_true(dusk.on)
+    assert_true(dusk.dusk > 0)
+    assert_true(dusk.stars < night.stars)
+
+
 def test_the_water_darkens() raises:
     var image = _frame()
     var before = image.depth.copy()

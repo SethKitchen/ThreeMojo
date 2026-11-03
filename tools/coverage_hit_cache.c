@@ -18,12 +18,19 @@
 
 #define HIT_BYTES 512
 #define HIT_SLOTS 4096
-#if ATOMIC_INT_LOCK_FREE != 2
+/* A record can sit in any way of its set. Hot records of one loop that share
+ * a set then stay cached together instead of evicting each other. */
+#define HIT_WAYS 8
+#define HIT_SETS (HIT_SLOTS / HIT_WAYS)
+#if ATOMIC_INT_LOCK_FREE != 2 || ATOMIC_LLONG_LOCK_FREE != 2
 #error "coverage hit cache requires lock-free atomic integers"
 #endif
 
 struct hit_slot {
     atomic_uint busy;
+    /* The record's hash, published after its bytes. A lookup takes the slot
+     * only on a match, and then compares the exact bytes. Zero is empty. */
+    _Atomic uint64_t tag;
     size_t size;
     unsigned char bytes[HIT_BYTES];
 };
@@ -31,6 +38,8 @@ struct hit_slot {
 /* Atomics are initialized before any caller can enter the library. Cache
  * memory is fixed and never allocated per thread. */
 static struct hit_slot slots[HIT_SLOTS];
+/* Each set replaces its ways in turn, the oldest first. */
+static atomic_uint replacements[HIT_SETS];
 static pid_t owner;
 static dev_t pipe_device;
 static ino_t pipe_inode;
@@ -91,8 +100,12 @@ __attribute__((constructor)) static void initialize_hit_cache(void) {
     struct stat sink;
     owner = getpid();
     atomic_init(&forks_in_flight, 0);
-    for (size_t i = 0; i < HIT_SLOTS; ++i)
+    for (size_t i = 0; i < HIT_SLOTS; ++i) {
         atomic_init(&slots[i].busy, 0);
+        atomic_init(&slots[i].tag, 0);
+    }
+    for (size_t i = 0; i < HIT_SETS; ++i)
+        atomic_init(&replacements[i], 0);
     if (device && inode && fstat(2, &sink) == 0 && S_ISFIFO(sink.st_mode)) {
         char *device_end, *inode_end;
         errno = 0;
@@ -167,14 +180,21 @@ int threemojo_coverage_emit_hit(const unsigned char *bytes, size_t size, int ent
         hash ^= bytes[i];
         hash *= UINT64_C(1099511628211);
     }
-    struct hit_slot *slot = &slots[hash % HIT_SLOTS];
-    if (!atomic_exchange_explicit(&slot->busy, 1, memory_order_acquire)) {
-        int found = slot->size == size && size != 0 &&
-            memcmp(slot->bytes, bytes, size) == 0;
-        atomic_store_explicit(&slot->busy, 0, memory_order_release);
-        if (found) {
-            errno = entered_errno;
-            return entered_errno;
+    uint64_t tag = hash | 1;
+    size_t set_index = hash % HIT_SETS;
+    struct hit_slot *set = &slots[set_index * HIT_WAYS];
+    for (size_t way = 0; way < HIT_WAYS; ++way) {
+        struct hit_slot *slot = &set[way];
+        if (atomic_load_explicit(&slot->tag, memory_order_relaxed) != tag)
+            continue;
+        if (!atomic_exchange_explicit(&slot->busy, 1, memory_order_acquire)) {
+            int found = slot->size == size && size != 0 &&
+                memcmp(slot->bytes, bytes, size) == 0;
+            atomic_store_explicit(&slot->busy, 0, memory_order_release);
+            if (found) {
+                errno = entered_errno;
+                return entered_errno;
+            }
         }
     }
     /* Only genuinely new evidence needs another sink operation. A cache hit
@@ -187,11 +207,18 @@ int threemojo_coverage_emit_hit(const unsigned char *bytes, size_t size, int ent
     write_record(probe_sink, bytes, size);
     int written_errno = errno;
     /* Publish only after a complete successful write to this fixed sink.
-     * A busy slot, collision, eviction or race can only produce duplicates. */
-    if (cacheable && !atomic_exchange_explicit(&slot->busy, 1, memory_order_acquire)) {
-        memcpy(slot->bytes, bytes, size);
-        slot->size = size;
-        atomic_store_explicit(&slot->busy, 0, memory_order_release);
+     * A busy slot, a full set, eviction or a race can only produce duplicates. */
+    if (cacheable) {
+        unsigned turn = atomic_fetch_add_explicit(
+            &replacements[set_index], 1, memory_order_relaxed);
+        struct hit_slot *slot = &set[turn % HIT_WAYS];
+        if (!atomic_exchange_explicit(&slot->busy, 1, memory_order_acquire)) {
+            atomic_store_explicit(&slot->tag, 0, memory_order_relaxed);
+            memcpy(slot->bytes, bytes, size);
+            slot->size = size;
+            atomic_store_explicit(&slot->tag, tag, memory_order_relaxed);
+            atomic_store_explicit(&slot->busy, 0, memory_order_release);
+        }
     }
     errno = written_errno;
     return written_errno;

@@ -101,6 +101,11 @@ takes that cloth's weights in full."""
 comptime SKIRT_FREE = Float32(0.06)
 """How far from the cloth under it, in meters on the template, a skirt
 keeps its own blend of weights in full."""
+comptime SKIRT_UNDERLAP = Float32(0.03)
+"""How far up inside a shorter skirt over it a skirt reaches, in meters
+on the template. Above that the skirt over it hides it, so it is cut
+away: two tubes weighted apart cross as the legs swing, and the inner
+one would show through."""
 comptime SKIRT_SHORTEST = Float32(0.01)
 """A garment that reaches less than this below the top, in meters, hangs
 no skirt."""
@@ -730,6 +735,7 @@ def hang_skirt(
     rig: HumanoidRig,
     lined: Bool,
     shown: Bool = True,
+    covered: Float32 = Float32.MAX,
 ) raises -> BufferGeometry:
     """Return a garment with its shell below the top replaced by a skirt.
 
@@ -742,6 +748,8 @@ def hang_skirt(
             hem.
         shown: Whether to add the skirt. False cuts the shell at the top
             and adds nothing, for a skirt a longer one over it hides.
+        covered: The height of the hem of a shorter skirt over this one.
+            The skirt is cut `SKIRT_UNDERLAP` over it, and drawn below.
 
     Returns:
         The garment: its shell above the top, on the arms and the rest,
@@ -764,4 +772,12 @@ def hang_skirt(
     var kept = cut(piece, values, 0)
     if not shown:
         return kept^
-    return merge(kept, skirt_mesh(envelope, piece, rig, lined))
+    var skirt = skirt_mesh(envelope, piece, rig, lined)
+    var reach = covered + SKIRT_UNDERLAP * skirt_scale(rig)
+    if reach < top:
+        ref rings = skirt.attribute_view(String(POSITION))
+        var below = List[Float32](capacity=rings.count())
+        for v in range(rings.count()):  # pragma: no branch
+            below.append(reach - rings.vector3(v).y)
+        skirt = cut(skirt, below, 0)
+    return merge(kept, skirt)
