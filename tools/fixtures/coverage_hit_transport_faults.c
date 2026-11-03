@@ -89,18 +89,49 @@ static unsigned assertions_run;
 
 static int fault_is(const char *name) { return strcmp(fault, name) == 0; }
 
-static struct hit_slot *record_slot(const unsigned char *bytes, size_t size) {
+static size_t record_set_index(const unsigned char *bytes, size_t size) {
     uint64_t hash = UINT64_C(14695981039346656037);
     for (size_t i = 0; i < size; ++i) {
         hash ^= bytes[i];
         hash *= UINT64_C(1099511628211);
     }
-    return &slots[hash % HIT_SLOTS];
+    return hash % HIT_SETS;
+}
+
+/* The first of the record's HIT_WAYS slots. */
+static struct hit_slot *record_set(const unsigned char *bytes, size_t size) {
+    return &slots[record_set_index(bytes, size) * HIT_WAYS];
 }
 
 static int cached(const unsigned char *bytes, size_t size) {
-    struct hit_slot *slot = record_slot(bytes, size);
-    return size != 0 && slot->size == size && memcmp(slot->bytes, bytes, size) == 0;
+    struct hit_slot *set = record_set(bytes, size);
+    for (size_t way = 0; way < HIT_WAYS; ++way) {
+        if (size != 0 && atomic_load(&set[way].tag) != 0 && set[way].size == size &&
+            memcmp(set[way].bytes, bytes, size) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+/* Nothing was published to any way of the record's set, and no way is held. */
+static int set_untouched(const char *text) {
+    struct hit_slot *set = record_set((const unsigned char *)text, strlen(text));
+    for (size_t way = 0; way < HIT_WAYS; ++way) {
+        if (set[way].size != 0 || atomic_load(&set[way].tag) != 0 ||
+            atomic_load(&set[way].busy) != 0)
+            return 0;
+    }
+    return 1;
+}
+
+/* Write into `out` a distinct hit record whose set is `set_index`. */
+static void record_in_set(size_t set_index, unsigned *next, char out[64]) {
+    for (;;) {
+        int length = snprintf(out, 64, "COVLINE:set:%u\n", (*next)++);
+        assert(length > 0 && length < 64);
+        if (record_set_index((const unsigned char *)out, (size_t)length) == set_index)
+            return;
+    }
 }
 
 static char *fake_getenv(const char *name) {
@@ -326,8 +357,7 @@ static void write_cases(void) {
             expect_record_abort((int)evaluation, record);
             assert(calls == 1 && captured_size == (failures[i] == SHORT ? strlen(record) - 1 : 0));
             assert(!cached((const unsigned char *)record, strlen(record)));
-            assert(record_slot((const unsigned char *)record, strlen(record))->size == 0);
-            assert(atomic_load(&record_slot((const unsigned char *)record, strlen(record))->busy) == 0);
+            assert(set_untouched(record));
             /* A trapped abort is test-only. A real process cannot resume. Here
              * resumption proves a failed write did not pre-publish its key. */
             expect_uncached_write = 1;
@@ -341,13 +371,37 @@ static void write_cases(void) {
 static void order_collision_and_poll_cases(void) {
     const char *a = "COVLINE:collision:9\n", *b = "COVLINE:collision:294\n";
     const char *vector = "COVEVAL2:ordered:2:T:TT;\n";
-    assert(record_slot((const unsigned char *)a, strlen(a)) == record_slot((const unsigned char *)b, strlen(b)));
+    assert(record_set((const unsigned char *)a, strlen(a)) == record_set((const unsigned char *)b, strlen(b)));
     reset(); initialize();
     hit_text(a); hit_text(a); evaluation_text(vector); hit_text(b); hit_text(b); evaluation_text(vector); hit_text(a);
     char expected[512];
-    int length = snprintf(expected, sizeof(expected), "%s%s%s%s%s", a, vector, b, vector, a);
+    /* Two records of one set are both kept: the last `a` writes nothing. */
+    int length = snprintf(expected, sizeof(expected), "%s%s%s%s", a, vector, b, vector);
     assert(length > 0 && captured_size == (size_t)length && !memcmp(captured, expected, captured_size));
-    assert(calls == 5); ++assertions_run;
+    assert(calls == 4 && cached((const unsigned char *)a, strlen(a)) &&
+           cached((const unsigned char *)b, strlen(b))); ++assertions_run;
+
+    /* A full set replaces its oldest way: HIT_WAYS more records of a's set
+     * evict a, so a's next hit is a duplicate write, and then cached again. */
+    reset(); initialize();
+    size_t a_set = record_set_index((const unsigned char *)a, strlen(a));
+    unsigned next = 0;
+    char others[HIT_WAYS][64];
+    hit_text(a);
+    for (size_t i = 0; i < HIT_WAYS - 1; ++i) {
+        record_in_set(a_set, &next, others[i]);
+        hit_text(others[i]);
+    }
+    assert(calls == HIT_WAYS && cached((const unsigned char *)a, strlen(a)));
+    hit_text(a);
+    assert(calls == HIT_WAYS);
+    record_in_set(a_set, &next, others[HIT_WAYS - 1]);
+    hit_text(others[HIT_WAYS - 1]);
+    assert(calls == HIT_WAYS + 1 && !cached((const unsigned char *)a, strlen(a)));
+    hit_text(a); hit_text(a);
+    assert(calls == HIT_WAYS + 2 && cached((const unsigned char *)a, strlen(a)));
+    assert(attempts[HIT_WAYS + 1].size == strlen(a) &&
+           !memcmp(attempts[HIT_WAYS + 1].bytes, a, strlen(a))); ++assertions_run;
 
     for (unsigned i = 0; i < 3; ++i) {
         reset(); initialize(); hit_text(a);
@@ -357,13 +411,23 @@ static void order_collision_and_poll_cases(void) {
         assert(calls == 2); ++assertions_run;
     }
     reset(); initialize();
-    struct hit_slot *slot = record_slot((const unsigned char *)a, strlen(a));
-    atomic_store(&slot->busy, 1);
+    struct hit_slot *set = record_set((const unsigned char *)a, strlen(a));
+    for (size_t way = 0; way < HIT_WAYS; ++way) atomic_store(&set[way].busy, 1);
     hit_text(a); hit_text(a);
-    assert(calls == 2 && slot->size == 0 && atomic_load(&slot->busy) == 1);
-    atomic_store(&slot->busy, 0);
+    for (size_t way = 0; way < HIT_WAYS; ++way)
+        assert(set[way].size == 0 && atomic_load(&set[way].busy) == 1);
+    assert(calls == 2);
+    for (size_t way = 0; way < HIT_WAYS; ++way) atomic_store(&set[way].busy, 0);
     hit_text(a); hit_text(a);
     assert(calls == 3 && cached((const unsigned char *)a, strlen(a))); ++assertions_run;
+
+    /* A held way that holds the record cannot be read: its hit is a duplicate. */
+    for (size_t way = 0; way < HIT_WAYS; ++way) atomic_store(&set[way].busy, 1);
+    hit_text(a);
+    assert(calls == 4 && cached((const unsigned char *)a, strlen(a)));
+    for (size_t way = 0; way < HIT_WAYS; ++way) atomic_store(&set[way].busy, 0);
+    hit_text(a);
+    assert(calls == 4); ++assertions_run;
 
     const short poll_faults[] = {POLLERR, POLLHUP, POLLNVAL};
     for (unsigned i = 0; i < 4; ++i) {

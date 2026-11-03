@@ -8,14 +8,58 @@
 
 ## Play the game
 
-The game needs an X11 window. Linux has one. Windows under WSL 2 with WSLg and macOS with XQuartz have one too.
+The game runs in a macOS window or in an X11 window. Both read the keys of the table below.
+
+### On a Mac
+
+The macOS window needs no XQuartz. It needs macOS 14 or later, and the Xcode command line tools.
+
+```sh
+examples/capi/run.sh native village
+examples/capi/run.sh native village 1280 720 --quality low
+```
+
+The script builds the game first. The window is 1280 by 720 points by default. Give a width and a height for a different size. `--quality` takes `low`, `medium`, `high` or `ultra`. The default is `medium`. See [Game renderer](Game-renderer).
+
+The game builds the village for about 10 seconds. Then the window shows its first frame.
+
+A Retina display has two pixels for each point. The game draws a frame of the display's own pixels, so the picture is sharp. A window of 1280 by 720 points shows a frame of 2560 by 1440 pixels. On a Mac with 16 cores, `low` draws that frame at 74 frames a second and `medium` at 39. `high` draws 15 frames a second, and `ultra` draws 4.
+
+`--scale 1` draws a frame of the window's own size. `medium` then draws 65 frames a second, but the display stretches the frame, and it looks blurry. `--scale 2` or `--scale 3` sets the factor by hand.
+
+`--gpu` draws the frame on the Mac's GPU. The library prepares the triangles, the shadow maps and the water's tables on the CPU. Metal then draws the sky with its clouds and stars, and the triangles with a depth test. Metal also composes the pond's water and smooths the edges.
+
+The CPU adds the rain and the heads-up display. The window shows `CPU` and `GPU` milliseconds for each frame. See [Game renderer](Game-renderer#draw-on-the-gpu).
+
+```sh
+examples/capi/run.sh native village --gpu
+```
+
+The GPU frame has the size of the window's pixels, so `--scale` does not change it. The CPU path draws the 3D scene at a smaller size and stretches it. The GPU path draws every pixel of the 3D scene. At 2560 by 1440 pixels, the library needs 10 ms for a `low` frame and 18 ms for `medium`. A `high` frame takes 45 ms, and an `ultra` frame takes 141 ms. That is 95, 57, 22 and 7 frames a second.
+
+The CPU draws `medium` at 18 frames a second when it draws every pixel too. The stretched CPU frame draws `medium` at 39 frames a second, but it is softer. So the GPU path is both faster and sharper. If the Mac has no Metal device, the host says so and draws on the CPU.
+
+`--hour H` starts the day at hour H, from 0 to less than 24. `--weather NAME` starts in `clear`, `overcast`, `rain` or `fog`. Both work with or without `--gpu`. They show the night or the rain at once:
+
+```sh
+examples/capi/run.sh native village --gpu --hour 22
+examples/capi/run.sh native village --gpu --weather rain
+```
+
+Escape and Command+Q quit. `Q` is the companion's assist attack, and does not quit here. The window reads the keyboard only. It does not read a gamepad yet. The window code is in [C ABI and hosts](C-ABI-and-hosts).
+
+### On Linux
+
+The game needs an X11 window. Linux has one. Windows under WSL 2 with WSLg has one too. A Mac can use XQuartz, but the macOS window above is faster to set up.
 
 ```sh
 mojo run -I . examples/village_walk.mojo --play
 mojo run -I . examples/village_walk.mojo --play 1280 720 medium
 ```
 
-The window is 1920 by 1080 pixels by default. Give a width and a height for a different size. After the size, give a quality: `low`, `medium`, `high` or `ultra`. The default is `low`. See [Game renderer](Game-renderer). The game reads every gamepad on the machine, and the keyboard:
+The window is 1920 by 1080 pixels by default. Give a width and a height for a different size. After the size, give a quality: `low`, `medium`, `high` or `ultra`. The default is `low`. See [Game renderer](Game-renderer). The X11 game reads every gamepad on the machine, and the keyboard.
+
+### The controls
 
 | Control | Gamepad | Keyboard |
 |---|---|---|
@@ -40,13 +84,13 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Show the combo book | Hold the left trigger, and press the back button | `K` |
 | Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
 | Time | | `5` moves the day on three hours |
-| Quit | The start button | Escape |
+| Quit | The start button | Escape. Command+Q in the macOS window. |
 
 The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller. The fight's controls are on [Village combat](Village-combat#the-controls). The styles and the combos are on [Village fighting styles](Village-styles) and [Village combos](Village-combos), and the raid on [Village raid](Village-raid).
 
-The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 34 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
+The X11 game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 34 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do. This holds in the macOS window too, where a step is at most a tenth of a second.
 
-The game prints the frames a second to the standard error.
+The X11 game prints the frames a second to the standard error. The macOS window shows them in its title bar and prints them each second.
 
 ## Saved progress
 
@@ -215,11 +259,11 @@ Under the open sky, a house's ceiling under the eye does not hold it. A sight li
 
 | Residents | Where they wander |
 |---|---|
-| A woman of 65 inches, in a hooded green tunic | By the brick house, which she visits. |
-| A man of 70 inches, in a blue tunic | Along the trail. He visits the stone cottage. |
-| A child of 50 inches, in a yellow tunic, who runs | Around the pond. |
-| A man of 67 inches, in a hooded gray tunic | By the framed cottage, which he visits. |
-| A woman of 64 inches, in a red tunic | By the framed house, which she visits. |
+| A woman of 65 inches, dressed as a goodwife | By the brick house, which she visits. |
+| A man of 70 inches, dressed as a peasant | Along the trail. He visits the stone cottage. |
+| A child of 50 inches, dressed as a farmer, who runs | Around the pond. |
+| A man of 67 inches, dressed as a monk | By the framed cottage, which he visits. |
+| A woman of 64 inches, dressed as a noblewoman | By the framed house, which she visits. |
 | Four sheep and a goat | Right of the trail. |
 | Two cows and a horse | Left of the trail. |
 | A pig | By the barn. |
@@ -235,9 +279,28 @@ Each resident bumps into the trees, the player and every other resident. A resid
 
 **A person** is a `Body`: a game humanoid of 3,000 triangles, dressed in its `Outfit`, with its idle, walk, run and jump clips. The body fades to the clip of its stance in 0.2 seconds. The walk and the run play from 0.6 to 1.6 times their own rate, by the speed. So the feet keep pace with the ground. A jump plays from the moment the feet leave the ground. The player is a `Body` too.
 
+A person's skin, hair and beard are meshed on every core.
+
 **An animal** is a flipbook: its mesh in six poses of its walk, and one mesh standing. The mesh shows the pose of how far the animal has walked, so one stride covers one stride of ground. An animal walks at its stride times its stride frequency at a Froude number of 0.25. An animal that does not walk on four legs keeps its standing mesh.
 
 **A shy animal** runs from the player. `Herd.flee` is how near the player can come before the herd runs, a `Length`. Zero, the default, is tame. An animal nearer than that runs straight away from the player, at three times its walk, and its flipbook plays faster. It walks back to its route once the player is further away. The deer run from 12 meters, the rabbits from 6, the sheep from 3 and the goat from 2.
+
+## Faces
+
+Every villager and the player has a face that moves. A `Body` built with `speaks=True` keeps the preserved face, teeth and tongue of [Audio-aligned game faces](Audio-aligned-game-faces). It also keeps a still face of `FACE_TRIANGLES`, 900 triangles, for a distance. The still face is what the budget counts, so a person costs about as much as before. `ResidentsParameters.faces` turns the villagers' faces on or off. It is on by default.
+
+`face_reach` gives the distance at which a face is drawn `FACE_PIXELS`, 16 pixels, tall. It reads the quality's frame height and the camera's field of view. Nearer than that, `Body.show_face` shows the preserved face and sets its weights. Further, the still face shows. At the `medium` quality, the reach is about 2.6 meters.
+
+`FaceLife`, in `extensions/village/faces.mojo`, keeps one face moving:
+
+1. The eyes blink every 2 to 5.5 seconds, for 0.16 seconds. Each face blinks at its own times, by its seed.
+2. `say` starts words. The mouth makes the shape of each sound of the words, in its time. See [Head](Head#expressions-and-speech) for the shapes.
+3. `feel` sets an expression, how strong it is, and how long it is held. The face eases to it at `MOOD_EASE`, 5 a second. A new expression comes in after the last goes out.
+4. `pant` opens the mouth a little, in and out, for a fighter out of breath.
+
+`player_mood` sets the player's face by the fight. An attack shows anger, at 0.55. The heavy attack and the specials show more anger, at 0.9. A blow that lands on the player shows fear, and so does stamina run out. A fall shows sadness.
+
+Each expression is held for `GRIMACE`, 0.5 seconds. Below `WINDED`, 60 % of their stamina, the player pants.
 
 ## Clothes
 
@@ -252,7 +315,18 @@ Every person of the village is dressed, and so is the player. `village_outfit` g
 | `NETTLE` | Nettle green |
 | `GRAY_WOOL`, `CREAM_WOOL` | Undyed wool |
 
+The villagers, the bandits, the companion and the raiders are dressed by calling: `dressed_as` from [Outfits and armor](Outfits-and-armor#archetypes) gives each their outfit. `calling_groom` gives the hair and the beard that suit the calling, as a `Groom`. `Villager`, `Bandit` and `Raider` each hold a `groom`; a plain one, grown hair and no beard, by default. The raiders wear plate, a monk's robe, a knight's harness and a ranger's green.
+
 The player wears a madder-red tunic trimmed in weld yellow, over walnut hose. `PlayParameters.outfit` holds the player's clothes. An empty `Outfit` leaves a person bare.
+
+The clothes follow the skin, and the skin follows the bones, so they move together as a person runs, jumps and fights. Six things keep them apart where they must part:
+
+- The skin's arms are parted from the trunk before it is weighed. So an arm swung out does not stretch the skin or the tunic to the hip. See [Game humanoid](Game-humanoid#the-skin-and-its-weights).
+- A boot's last takes its weights from its own leg only. So a kick does not stretch the boot to the other foot.
+- The scabbard swings clear of the thigh beside it: see [Village combat](Village-combat#the-sword-clips).
+- Round the armpits, a garment under a closed one is cut deeper. So it does not show through when an arm rises. See [Garments](Garments).
+- A platebody keeps off the arms. So its side does not tear open under a raised arm. See [Outfits and armor](Outfits-and-armor#plate).
+- A long robe or gown hides the legs inside it. So a running leg does not push out through its front. See [Garments](Garments).
 
 ## The lighter village
 

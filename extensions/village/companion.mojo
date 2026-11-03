@@ -35,7 +35,8 @@ from extensions.humanoid.athleticism import TONED
 from extensions.humanoid.genome import random_genome
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.village.clothes import CREAM_WOOL, WALNUT, WOAD, village_outfit
+from extensions.attire.mix import RANGER, dressed_as
+from extensions.village.clothes import calling_groom
 from extensions.village.combat import Blow, FighterParameters
 from extensions.village.foes import Bandit
 from math.vector3 import Vector3
@@ -285,7 +286,7 @@ def default_allies() raises -> List[Bandit]:
     """Return the companion of the default village.
 
     Returns:
-        One swordswoman in woad blue and cream, who starts beside the
+        One swordswoman dressed as a ranger, who starts beside the
         player: `x` and `z` are her place from the player's start, to the
         side and behind. Her seed and her heading are not used.
 
@@ -295,12 +296,13 @@ def default_allies() raises -> List[Bandit]:
     return [
         Bandit(
             HumanoidSpec(Length(66.0, INCH), FEMALE, TONED, random_genome(70)),
-            village_outfit(WOAD, CREAM_WOOL, WALNUT, False),
+            dressed_as(RANGER, FEMALE, 70),
             ALLY_X,
             ALLY_Z,
             Angle(0.0, DEGREE),
             70,
             ally_fighter(),
             False,
+            calling_groom(RANGER, FEMALE, 70),
         )
     ]

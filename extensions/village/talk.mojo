@@ -36,6 +36,12 @@ from extensions.village.gathering import (
     Satchel,
     kind_name,
 )
+from extensions.humanoid.skeleton.head.expression import (
+    NEUTRAL,
+    SADNESS,
+    SMILE,
+    FacialExpression,
+)
 from extensions.village.sheet import Sheet
 from extensions.village.surfaces import HouseLooks
 from math.vector3 import Vector3
@@ -45,12 +51,43 @@ from units.si import RADIAN, SECOND, Angle, Duration
 
 comptime SPEECH_SECONDS = Float32(5)
 """How long a speaker's words show, in seconds."""
+comptime ASKING = Float32(0.3)
+"""How strongly a speaker smiles as they ask for an errand."""
+comptime THANKFUL = Float32(0.8)
+"""How strongly a speaker smiles as an errand is done."""
+comptime WANTING = Float32(0.35)
+"""How sad a speaker looks who still needs things."""
+comptime CHATTING = Float32(0.25)
+"""How strongly a speaker smiles as they say a line."""
 comptime MARKER_LIFT = Float32(0.55)
 """How far over a speaker's head their marker turns, in meters."""
 comptime OFFER_GOLD = Vector3(1.0, 0.78, 0.15)
 """The color of the marker of an errand offered, drawn unlit."""
 comptime TAKEN_SILVER = Vector3(0.75, 0.78, 0.82)
 """The color of the marker of an errand taken, drawn unlit."""
+
+
+def revealed(text: String, share: Float32) -> String:
+    """Return the first share of a text, and spaces for the rest, so the
+    text keeps its width as it is revealed.
+
+    Args:
+        text: The text, of one byte a character.
+        share: How much of it shows, from zero to one. A share past
+            either end is held to it.
+
+    Returns:
+        The text's first `share` of characters, then a space for each
+        character after them.
+    """
+    var bytes = text.as_bytes()
+    var shown = Int(
+        Float32(len(bytes)) * min(Float32(1), max(Float32(0), share))
+    )
+    var out = String()
+    for i in range(len(bytes)):
+        out += chr(Int(bytes[i])) if i < shown else " "
+    return out^
 
 
 @fieldwise_init
@@ -229,6 +266,11 @@ struct Talk(Movable):
     # seconds.
     var speech: String
     var age: Float32
+    # The words alone, and what the speaker feels as they say them, and
+    # how strongly: see `extensions.village.faces`.
+    var words: String
+    var feeling: FacialExpression
+    var strength: Float32
     # Whether the use button was held last frame.
     var held: Bool
     var clock: Float32
@@ -300,6 +342,9 @@ struct Talk(Movable):
         self.focus = -1
         self.speech = String()
         self.age = SPEECH_SECONDS
+        self.words = String()
+        self.feeling = NEUTRAL
+        self.strength = 0
         self.held = False
         self.clock = 0
 
@@ -349,6 +394,8 @@ struct Talk(Movable):
         var state = self.states[index]
         if state == OFFERED:
             self.states[index] = TAKEN
+            self.feeling = SMILE
+            self.strength = ASKING
             return speaker.errand.value().ask.copy()
         if state == TAKEN:
             ref errand = speaker.errand.value()
@@ -357,7 +404,11 @@ struct Talk(Movable):
                 satchel.counts[errand.wants.value] -= errand.count
                 satchel.counts[CHEST.value] += errand.reward
                 self.states[index] = DONE
+                self.feeling = SMILE
+                self.strength = THANKFUL
                 return errand.thanks.copy()
+            self.feeling = SADNESS
+            self.strength = WANTING
             return String(
                 "I still need ",
                 errand.count - held,
@@ -367,6 +418,8 @@ struct Talk(Movable):
             )
         var line = speaker.lines[self.next_line[index] % len(speaker.lines)]
         self.next_line[index] += 1
+        self.feeling = SMILE
+        self.strength = CHATTING
         return line
 
     def update(
@@ -411,6 +464,7 @@ struct Talk(Movable):
         if pressed and self.focus >= 0:
             var words = self.speak(self.focus, satchel)
             self.speech = String(self.speakers[self.focus].name, ": ", words)
+            self.words = words
             self.age = 0
             spoke = True
         var bob = 0.06 * sin(self.clock * 2.5)

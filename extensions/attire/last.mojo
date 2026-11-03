@@ -42,6 +42,7 @@ from extensions.humanoid.rig.joints import (
     LEFT_FOOT,
     RIGHT_FOOT,
     HumanoidRig,
+    Joint,
 )
 from math.convex_hull import ConvexHull
 from math.vector3 import Vector3
@@ -297,7 +298,11 @@ def last_mesh(last: FootLast, piece: BufferGeometry) raises -> BufferGeometry:
     Args:
         last: The last.
         piece: The garment's shell, whose attributes the last takes and
-            whose nearest vertex gives each of its vertices its weights.
+            whose nearest vertex of the last's leg gives each of its
+            vertices its weights. A vertex is the leg's that its leg's
+            joint, or a joint on the midline, turns most. The leg is the
+            side whose joints turn most of the vertices on the last's
+            side of the midline.
 
     Returns:
         The last, with the garment's attributes and normals.
@@ -308,9 +313,27 @@ def last_mesh(last: FootLast, piece: BufferGeometry) raises -> BufferGeometry:
     ref placed = piece.attribute_view(String(POSITION))
     ref bones = piece.attribute_view(String(SKIN_INDEX))
     ref weights = piece.attribute_view(String(SKIN_WEIGHT))
-    var points = List[Vector3](capacity=placed.count())
+    # A last takes its weights from its own leg's vertices only: where the
+    # legs touch, the skin's parted legs keep a copy of a vertex at the
+    # same place, turned by the other leg.
+    # The leg is the side whose joints turn most of the vertices on the
+    # last's side of the midline.
+    var sides = List[Int](capacity=placed.count())
+    var votes = 0
     for v in range(placed.count()):
+        # A garment keeps its four bones heaviest first.
+        var side = Joint(Int(bones.component(v, 0))).side()
+        sides.append(side)
+        if placed.vector3(v).x * last.center.x > 0:
+            votes += side
+    var leg = 1 if votes > 0 else -1
+    var points = List[Vector3](capacity=placed.count())
+    var sources = List[Int](capacity=placed.count())
+    for v in range(placed.count()):
+        if sides[v] == -leg:
+            continue
         points.append(placed.vector3(v))
+        sources.append(v)
     var writer = MeshWriter(piece)
     var at = List[Int]()
     var heights = List[Float32]()
@@ -323,10 +346,11 @@ def last_mesh(last: FootLast, piece: BufferGeometry) raises -> BufferGeometry:
             var p = last.center + direction * (
                 last.cast(direction) + LAST_STAND
             )
-            var source = _nearest(points, p)
+            var near = _nearest(points, p)
             var four = List[Int](length=4, fill=0)
             var share = List[Float32](length=4, fill=0)
-            if source >= 0:
+            if near >= 0:
+                var source = sources[near]
                 for c in range(4):  # pragma: no branch
                     four[c] = Int(bones.component(source, c))
                     share[c] = weights.component(source, c)

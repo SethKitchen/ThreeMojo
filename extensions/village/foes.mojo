@@ -55,6 +55,7 @@ from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.ordinal import ordinal_valid
 from core.scene import Scene
+from extensions.attire.mix import BARBARIAN, RANGER, WARLOCK, dressed_as
 from extensions.attire.outfit import Outfit
 from extensions.humanoid.athleticism import TONED
 from extensions.humanoid.genome import random_genome
@@ -62,6 +63,9 @@ from extensions.humanoid.sex import MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.noise import hash01
 from extensions.village.clothes import (
+    Groom,
+    calling_groom,
+    plain_groom,
     GRAY_WOOL,
     MADDER,
     NETTLE,
@@ -557,7 +561,6 @@ struct Brain(Copyable, Movable):
         out.way = round + toward * closer
 
 
-@fieldwise_init
 struct Bandit(Copyable, Movable):
     """A bandit: who they are, what they wear, where they keep, and how
     strong they are."""
@@ -573,6 +576,43 @@ struct Bandit(Copyable, Movable):
     var fighter: FighterParameters
     # Whether they keep back and throw knives: see `Brain.thrower`.
     var thrower: Bool
+    # How their hair is cut and laid, and their beard.
+    var groom: Groom
+
+    def __init__(
+        out self,
+        spec: HumanoidSpec,
+        outfit: Outfit,
+        x: Float32,
+        z: Float32,
+        heading: Angle,
+        seed: Int,
+        fighter: FighterParameters,
+        thrower: Bool,
+        groom: Groom = plain_groom(),
+    ):
+        """Hold a person of the village.
+
+        Args:
+            spec: Who they are.
+            outfit: What they wear.
+            x: Their post along x, in meters.
+            z: Their post along z, in meters.
+            heading: The way they face there.
+            seed: The seed of their dice.
+            fighter: How strong they are.
+            thrower: Whether they keep back and throw knives.
+            groom: How their hair is cut, and their beard.
+        """
+        self.spec = spec.copy()
+        self.outfit = outfit.copy()
+        self.x = x
+        self.z = z
+        self.heading = heading
+        self.seed = seed
+        self.fighter = fighter
+        self.thrower = thrower
+        self.groom = groom
 
 
 def bandit_fighter() -> FighterParameters:
@@ -702,11 +742,11 @@ def default_bandits() raises -> List[Bandit]:
     """Return the bandits of the default village.
 
     Returns:
-        Three hooded bandits around a camp past the meadow's north-west
-        edge, 25 meters from where the player starts: one in walnut
-        brown, one in gray and one in nettle green. Behind them stands
-        their captain, taller, in madder red: see `captain_fighter`. A
-        thrower in gray and weld yellow keeps the camp's east side.
+        Three barbarians in fur around a camp past the meadow's
+        north-west edge, 25 meters from where the player starts. Behind
+        them stands their captain, a warlock, taller: see
+        `captain_fighter`. A thrower in a ranger's green keeps the camp's
+        east side. Each wears the hair and the beard of their calling.
 
     Raises:
         Error: Never: the outfits check.
@@ -714,53 +754,58 @@ def default_bandits() raises -> List[Bandit]:
     return [
         Bandit(
             HumanoidSpec(Length(69.0, INCH), MALE, TONED, random_genome(61)),
-            village_outfit(WALNUT, GRAY_WOOL, WALNUT, True),
+            dressed_as(BARBARIAN, MALE, 61),
             -20,
             41,
             Angle(-60.0, DEGREE),
             61,
             bandit_fighter(),
             False,
+            calling_groom(BARBARIAN, MALE, 61),
         ),
         Bandit(
             HumanoidSpec(Length(71.0, INCH), MALE, TONED, random_genome(62)),
-            village_outfit(GRAY_WOOL, WALNUT, WALNUT, True),
+            dressed_as(BARBARIAN, MALE, 62),
             -16.5,
             44,
             Angle(-120.0, DEGREE),
             62,
             bandit_fighter(),
             False,
+            calling_groom(BARBARIAN, MALE, 62),
         ),
         Bandit(
             HumanoidSpec(Length(67.0, INCH), MALE, TONED, random_genome(63)),
-            village_outfit(NETTLE, WALNUT, GRAY_WOOL, True),
+            dressed_as(BARBARIAN, MALE, 63),
             -23,
             45,
             Angle(10.0, DEGREE),
             63,
             bandit_fighter(),
             False,
+            calling_groom(BARBARIAN, MALE, 63),
         ),
         Bandit(
             HumanoidSpec(Length(75.0, INCH), MALE, TONED, random_genome(64)),
-            village_outfit(MADDER, WALNUT, WALNUT, True),
+            dressed_as(WARLOCK, MALE, 64),
             -21,
             49,
             Angle(-90.0, DEGREE),
             64,
             captain_fighter(),
             False,
+            calling_groom(WARLOCK, MALE, 64),
         ),
         Bandit(
             HumanoidSpec(Length(68.0, INCH), MALE, TONED, random_genome(65)),
-            village_outfit(GRAY_WOOL, WELD, WALNUT, True),
+            dressed_as(RANGER, MALE, 65),
             -15,
             47,
             Angle(-150.0, DEGREE),
             65,
             bandit_fighter(),
             True,
+            calling_groom(RANGER, MALE, 65),
         ),
     ]
 

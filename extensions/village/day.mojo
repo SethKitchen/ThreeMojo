@@ -72,6 +72,24 @@ comptime STARS = Float32(0.004)
 """The share of the sky's cells that hold a star."""
 
 
+@fieldwise_init
+struct NightLook(ImplicitlyCopyable):
+    """What `DayCycle.night_sky` mixes a sky pixel with."""
+
+    # Whether the sky changes at all: it does not by full day.
+    var on: Bool
+    # The hour's daylight and dusk, as `DayCycle` gives them.
+    var day: Float32
+    var dusk: Float32
+    # How bright the stars show, from 0 to 1.
+    var stars: Float32
+    # The direction through the frame's top left corner, and the steps
+    # across and down to the other corners.
+    var d00: Vector3
+    var across: Vector3
+    var down: Vector3
+
+
 struct DayCycle(ImplicitlyCopyable):
     """The hour of the day, and how fast it moves on."""
 
@@ -200,6 +218,40 @@ struct DayCycle(ImplicitlyCopyable):
             InverseLength(scene.fog.density.value, PER_METER),
         )
 
+    def night_look(
+        self, camera: PerspectiveCamera, clear: Float32
+    ) raises -> NightLook:
+        """Find what `night_sky` mixes a sky pixel with.
+
+        Args:
+            camera: The camera that draws the frame.
+            clear: The share of the sky that clouds leave clear, from 0 to
+                1: the stars show through it.
+
+        Returns:
+            The hour's light and dusk, the stars' share, and the
+            directions through three corners of the frame. `on` is False
+            by day, when the sky is left as it is.
+
+        Raises:
+            Error: If the camera's matrices cannot be made.
+        """
+        var day = self.daylight()
+        var dusk = self.dusk()
+        var none = Vector3(0, 0, 0)
+        if day >= 1 and dusk <= 0:
+            return NightLook(False, day, dusk, 0, none, none, none)
+        var inverse = camera.projection_matrix()
+        inverse.multiply(camera.view_matrix())
+        inverse.invert()
+        var eye = camera.position
+        var d00 = inverse.transform_point(Vector3(-1, 1, 1)) - eye
+        var across = inverse.transform_point(Vector3(1, 1, 1)) - eye - d00
+        var down = inverse.transform_point(Vector3(-1, -1, 1)) - eye - d00
+        # The stars come out once the twilight has mostly gone.
+        var stars = (1 - smoothstep(0, 0.4, day)) * clear
+        return NightLook(True, day, dusk, stars, d00, across, down)
+
     def night_sky(
         self,
         mut image: Framebuffer,
@@ -222,21 +274,17 @@ struct DayCycle(ImplicitlyCopyable):
         """
         if len(image.depth) != image.width * image.height:
             raise Error("A frame needs a depth for each pixel")
-        var day = self.daylight()
-        var dusk = self.dusk()
-        if day >= 1 and dusk <= 0:
+        var look = self.night_look(camera, clear)
+        if not look.on:
             return
-        var inverse = camera.projection_matrix()
-        inverse.multiply(camera.view_matrix())
-        inverse.invert()
-        var eye = camera.position
-        var d00 = inverse.transform_point(Vector3(-1, 1, 1)) - eye
-        var across = inverse.transform_point(Vector3(1, 1, 1)) - eye - d00
-        var down = inverse.transform_point(Vector3(-1, -1, 1)) - eye - d00
+        var day = look.day
+        var dusk = look.dusk
+        var d00 = look.d00
+        var across = look.across
+        var down = look.down
+        var stars = look.stars
         var w = image.width
         var h = image.height
-        # The stars come out once the twilight has mostly gone.
-        var stars = (1 - smoothstep(0, 0.4, day)) * clear
         for y in range(h):  # pragma: no branch
             var fy = Float32(y) / Float32(h)
             for x in range(w):  # pragma: no branch

@@ -119,31 +119,40 @@ def closest_on_triangle(
     var area = cross(ab, ac)
     if area.dot(area) == 0:
         return _closest_on_flat_triangle(p, a, b, c)
+    # Each region test is a chain of single comparisons. A body's skin
+    # asks for millions of nearest points, and a compound test here costs
+    # a coverage record on every call.
     var ap = p - a
     var d1 = ab.dot(ap)
     var d2 = ac.dot(ap)
-    if d1 <= 0 and d2 <= 0:
-        return (a, Float32(0), Float32(0), ON_A)
+    if d1 <= 0:
+        if d2 <= 0:
+            return (a, Float32(0), Float32(0), ON_A)
     var bp = p - b
     var d3 = ab.dot(bp)
     var d4 = ac.dot(bp)
-    if d3 >= 0 and d4 <= d3:
-        return (b, Float32(1), Float32(0), ON_B)
+    if d3 >= 0:
+        if d4 <= d3:
+            return (b, Float32(1), Float32(0), ON_B)
     var vc = d1 * d4 - d3 * d2
-    if vc <= 0 and d1 >= 0 and d3 <= 0:
-        var v = d1 / (d1 - d3)
-        return (mix_delta3(a, b, v), v, Float32(0), ON_AB)
+    if vc <= 0:
+        if d1 >= 0:
+            if d3 <= 0:
+                var v = d1 / (d1 - d3)
+                return (mix_delta3(a, b, v), v, Float32(0), ON_AB)
     var cp = p - c
     var d5 = ab.dot(cp)
     var d6 = ac.dot(cp)
-    if d6 >= 0 and d5 <= d6:
-        return (c, Float32(0), Float32(1), ON_C)
+    if d6 >= 0:
+        if d5 <= d6:
+            return (c, Float32(0), Float32(1), ON_C)
     var vb = d5 * d2 - d1 * d6
     # Past the tests above, d2 >= 0 here, and on the BC test below both
     # edge terms are too; the weights are clamped against rounding.
-    if vb <= 0 and d6 <= 0:
-        var w = clamp(d2 / (d2 - d6), 0, 1)
-        return (mix_delta3(a, c, w), Float32(0), w, ON_CA)
+    if vb <= 0:
+        if d6 <= 0:
+            var w = clamp(d2 / (d2 - d6), 0, 1)
+            return (mix_delta3(a, c, w), Float32(0), w, ON_CA)
     var va = d3 * d6 - d5 * d4
     if va <= 0:
         var w = clamp((d4 - d3) / ((d4 - d3) + (d5 - d6)), 0, 1)

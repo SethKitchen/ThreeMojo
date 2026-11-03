@@ -66,9 +66,22 @@ from extensions.animals.registry import (
     RABBIT,
     SHEEP,
 )
+from extensions.attire.mix import (
+    FARMER,
+    GOODWIFE,
+    MONK,
+    NOBLEWOMAN,
+    PEASANT,
+    dressed_as,
+)
 from extensions.attire.outfit import Outfit
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import random_genome
+from extensions.humanoid.skeleton.head.expression import (
+    ANGER,
+    FEAR,
+    SADNESS,
+)
 from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.field import FieldStats
@@ -89,7 +102,16 @@ from extensions.village.gathering import (
     GatherParameters,
     Gathering,
 )
-from extensions.village.hud import draw_hud, note_text, use_prompt
+from extensions.village.battle_hud import DANGER, draw_target, hud_drop
+from extensions.village.compass import CompassMark, clock_text, draw_compass
+from extensions.village.hud import (
+    GOLD_TEXT,
+    Rgb,
+    draw_hud,
+    hud_scale,
+    note_text,
+    use_prompt,
+)
 from extensions.village.skills import (
     FISHING,
     FORAGING,
@@ -104,15 +126,34 @@ from extensions.village.skills import (
 )
 from extensions.village.progress import Progress
 from extensions.village.styles import STYLES, FightingStyle
+from extensions.village.combat import (
+    FALL,
+    FLINCH,
+    HEAVY,
+    STAGGER,
+    Fighter,
+    is_attack,
+    is_special,
+)
 from extensions.village.critters import Critters, Haunt, default_haunts
+from extensions.village.faces import FaceLife, face_reach
 from extensions.village.day import DayCycle, dim_water
+from extensions.village.gpu_post import GpuPost
 from extensions.village.talk import (
+    DONE,
+    OFFERED,
     SPEECH_SECONDS,
     Speaker,
     Talk,
     default_speakers,
+    revealed,
 )
-from extensions.village.weather import CLEAR, Weather, WeatherKind
+from extensions.village.weather import (
+    CLEAR,
+    Weather,
+    WeatherKind,
+    weather_label,
+)
 from extensions.village.residents import (
     Body,
     Herd,
@@ -130,6 +171,7 @@ from extensions.village.clothes import (
     WALNUT,
     WELD,
     WOAD,
+    calling_groom,
     village_outfit,
 )
 from extensions.village.quality import GameQuality, planted
@@ -177,6 +219,17 @@ comptime SHAKEN = Float32(1.0e-3)
 comptime SPECIALTY_MIGHT = Float32(0.1)
 """How much stronger the player's blows are in the style they specialize
 in."""
+comptime TARGET_TOP = 30
+"""How far down the frame the panel of the foe locked on to starts, in
+dots of the heads-up display's font: under the compass."""
+comptime FOE_SIGHT = Float32(60)
+"""How near a foe must be for the compass to point to it, in meters."""
+comptime SILVER_MARK = Rgb(200, 205, 215)
+"""The color of the compass's mark at an errand taken."""
+comptime GRIMACE = Float32(0.5)
+"""How long the player's face holds what a move shows, in seconds."""
+comptime WINDED = Float32(0.6)
+"""Below this share of their stamina, the player pants."""
 comptime ARM_EASE = Float32(3)
 """How fast the eye goes back out once a wall is passed: each second it
 closes all but `exp(-ARM_EASE)` of its gap."""
@@ -186,11 +239,11 @@ def default_residents() raises -> ResidentsParameters:
     """Return the people and the animals of the default village.
 
     Returns:
-        A woman in a hooded green tunic by the brick house, who visits
-        it; a man in a blue tunic on the trail, who visits the stone
-        cottage; a child in a yellow tunic who runs around the pond; an
-        old man in a gray tunic, who visits the framed cottage; and a
-        woman in a red tunic by the framed house, who visits it. Four
+        A goodwife by the brick house, who visits it; a peasant on the
+        trail, who visits the stone cottage; a farmer's child who runs
+        around the pond; an old monk, who visits the framed cottage; and
+        a noblewoman by the framed house, who visits it. Each wears the
+        hair and the beard of their calling. Four
         sheep and a goat right of the trail, two cows and a horse left
         of it, a pig by the barn, a dog near the start, two rabbits by
         the trail and two deer past the pond. The deer run from a player
@@ -209,8 +262,9 @@ def default_residents() raises -> ResidentsParameters:
             7,
             41,
             False,
-            village_outfit(NETTLE, WELD, GRAY_WOOL, True),
+            dressed_as(GOODWIFE, FEMALE, 3),
             HouseId(0),
+            calling_groom(GOODWIFE, FEMALE, 3),
         ),
         Villager(
             HumanoidSpec(Length(70.0, INCH), MALE, TONED, random_genome(8)),
@@ -219,8 +273,9 @@ def default_residents() raises -> ResidentsParameters:
             14,
             42,
             False,
-            village_outfit(WOAD, CREAM_WOOL, WALNUT, False),
+            dressed_as(PEASANT, MALE, 8),
             HouseId(2),
+            calling_groom(PEASANT, MALE, 8),
         ),
         Villager(
             HumanoidSpec(
@@ -231,8 +286,9 @@ def default_residents() raises -> ResidentsParameters:
             5,
             43,
             True,
-            village_outfit(WELD, MADDER, WALNUT, False),
+            dressed_as(FARMER, FEMALE, 13),
             NO_HOUSE,
+            calling_groom(FARMER, FEMALE, 13),
         ),
         Villager(
             HumanoidSpec(Length(67.0, INCH), MALE, UNTONED, random_genome(21)),
@@ -241,8 +297,9 @@ def default_residents() raises -> ResidentsParameters:
             6,
             44,
             False,
-            village_outfit(GRAY_WOOL, WALNUT, CREAM_WOOL, True),
+            dressed_as(MONK, MALE, 21),
             HouseId(4),
+            calling_groom(MONK, MALE, 21),
         ),
         Villager(
             HumanoidSpec(Length(64.0, INCH), FEMALE, TONED, random_genome(34)),
@@ -251,8 +308,9 @@ def default_residents() raises -> ResidentsParameters:
             6,
             45,
             False,
-            village_outfit(MADDER, CREAM_WOOL, WOAD, False),
+            dressed_as(NOBLEWOMAN, FEMALE, 34),
             HouseId(3),
+            calling_groom(NOBLEWOMAN, FEMALE, 34),
         ),
     ]
     residents.herds = [
@@ -346,6 +404,34 @@ struct PlayParameters(Copyable, Movable):
         self.battle.fight_reach = quality.fight_reach
 
 
+def player_mood(mut life: FaceLife, fighter: Fighter) raises:
+    """Set the player's face by how their fight goes.
+
+    A blow that lands on them, or stamina run out, shows fear, and a fall
+    sadness. An attack shows anger: the heavy attack and the specials
+    more. Below `WINDED` of their stamina the player pants.
+
+    Args:
+        life: The player's face.
+        fighter: The player in the fight.
+
+    Raises:
+        Error: Never: the expressions are named.
+    """
+    var move = fighter.move
+    if move == FALL:
+        life.feel(SADNESS, 1, GRIMACE)
+    elif move == FLINCH or move == STAGGER:
+        life.feel(FEAR, 0.7, GRIMACE)
+    elif move == HEAVY or is_special(move):
+        life.feel(ANGER, 0.9, GRIMACE)
+    elif is_attack(move):
+        life.feel(ANGER, 0.55, GRIMACE)
+    var top = fighter.parameters.stamina
+    var left = fighter.stamina / top if top > 0 else Float32(1)
+    life.pant((WINDED - left) / WINDED)
+
+
 def tree_obstacles(
     parameters: VillageParameters, lots: List[Lot]
 ) -> List[Obstacle]:
@@ -374,6 +460,30 @@ def tree_obstacles(
             continue
         out.append(Obstacle(planting.x, planting.z, TRUNK * planting.size))
     return out^
+
+
+def game_residents(parameters: PlayParameters) -> ResidentsParameters:
+    """Return the residents a game builds: its own, with animals no finer
+    than its quality's preset meshes them.
+
+    A game given residents of its own keeps their animals' coarseness
+    where it is coarser than the preset's. Where it is finer, the preset's
+    holds: a game at a low quality builds its animals coarse, whoever
+    chose its residents.
+
+    Args:
+        parameters: The game's parameters.
+
+    Returns:
+        The residents, with their animal coarseness at least the
+        quality's.
+    """
+    var residents = parameters.residents.copy()
+    residents.animal_coarseness = max(
+        residents.animal_coarseness,
+        Float64(parameters.quality.animal_coarseness),
+    )
+    return residents^
 
 
 struct VillageGame(Movable):
@@ -408,6 +518,14 @@ struct VillageGame(Movable):
     var upscale_ms: Float64
     # The last frame, the window's size: `render` draws into it.
     var window: Framebuffer
+    # The image that a GPU draws into, between `prepare_gpu` and
+    # `finish_gpu`: the renderer's size, which is the window's for a game
+    # that a GPU draws. And when `prepare_gpu` began, in nanoseconds.
+    var gpu_image: Framebuffer
+    var gpu_began: Int
+    # What a GPU draws after the triangles, when it does: the weather, the
+    # night, the pond's water and the smoothing of edges.
+    var gpu_post: GpuPost
     # What the player can gather, and what the player has.
     var gathering: Gathering
     # Whether `render` writes the heads-up display; the last note, and how
@@ -430,6 +548,10 @@ struct VillageGame(Movable):
     var day: DayCycle
     # The fight: the player's sword, the bandits and the dummies.
     var battle: Battle
+    # How near the camera must be to a face to see it move, in meters.
+    var face_reach: Float32
+    # The villager who last spoke, or -1.
+    var talker: Int
 
     def __init__(
         out self,
@@ -473,6 +595,13 @@ struct VillageGame(Movable):
         self.window = Framebuffer(
             width, height, List[UInt8](length=width * height * 4, fill=0)
         )
+        self.gpu_image = Framebuffer(
+            size[0],
+            size[1],
+            List[UInt8](length=size[0] * size[1] * 4, fill=0),
+        )
+        self.gpu_began = 0
+        self.gpu_post = GpuPost()
         self.village = Village(
             scene, assets, renderer, parameters.village, bed^, scan^
         )
@@ -489,7 +618,7 @@ struct VillageGame(Movable):
         self.residents = Residents(
             scene,
             assets,
-            parameters.residents,
+            game_residents(parameters),
             self.terrain,
             keep_off,
             homes,
@@ -501,6 +630,8 @@ struct VillageGame(Movable):
             parameters.outfit,
             parameters.residents.triangles,
             parameters.residents.detail,
+            speaks=parameters.residents.faces,
+            seed=1,
         )
         self.player = Character(
             player_movement(),
@@ -529,6 +660,8 @@ struct VillageGame(Movable):
         )
         self.village.water.shade_step = self.quality.water_step
         self.village.water.refresh_every = self.quality.water_refresh_every
+        self.face_reach = face_reach(size[1], parameters.field_of_view)
+        self.talker = -1
         self.view = ThirdPersonControls(parameters.heading)
         self.camera = PerspectiveCamera(
             parameters.field_of_view,
@@ -766,8 +899,14 @@ struct VillageGame(Movable):
         )
         if spoke:
             # The villager stops, and turns to the player while they talk.
+            # Their mouth says the words, and their face shows how they
+            # feel.
             var who = self.talk.speakers[self.talk.focus].villager
+            self.talker = who
             self.residents.hold(who, SPEECH_SECONDS, feet)
+            ref life = self.residents.bodies[who].life
+            life.say(self.talk.words)
+            life.feel(self.talk.feeling, self.talk.strength, SPEECH_SECONDS)
         self.view.follow_target(
             Vector3(feet.x, feet.y + FOCUS_HEIGHT, feet.z), delta
         )
@@ -796,6 +935,15 @@ struct VillageGame(Movable):
             var t = self.clock * 47
             var off = Vector3(sin(t) * jolt, cos(t * 1.3) * jolt * 0.7, 0)
             self.camera.place(self.camera.position + off, self.view.focus + off)
+        # The player's face shows the fight, and each face near the camera
+        # moves.
+        player_mood(self.body.life, self.battle.fighter)
+        var viewer = self.camera.position
+        self.body.show_face(scene, viewer, self.face_reach, delta)
+        for index in range(len(self.residents.bodies)):
+            self.residents.bodies[index].show_face(
+                scene, viewer, self.face_reach, delta
+            )
         # A house's inside shows only to a camera near it: from further
         # away, its windows show little of it.
         # The houses' lamps are lit from dusk to dawn.
@@ -855,32 +1003,124 @@ struct VillageGame(Movable):
         var image = self.fast.render(
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
-        var drawn = perf_counter_ns()
-        # Water that the camera cannot see is not composed: its surface
-        # and caustics cost most of the composition.
-        if self.village.pond_seen(self.camera):
-            # The water is lit by its own sky: it darkens with the night.
-            var share = self.day.water_light()
-            var dark = share < 1
-            var before = image.depth.copy() if dark else List[Float32]()
-            _ = self.village.water.compose(
-                image, scene, self.camera, self.village.level, self.village.bed
+        self._finish(scene, assets, image, began, perf_counter_ns(), False)
+
+    def prepare_gpu(
+        mut self, scene: Scene, assets: Assets, passes: Bool = False
+    ) raises:
+        """Begin the frame that `tick` prepared, for a GPU to draw.
+
+        The shadow maps, the gathering, the light at the vertices, the setup
+        of each triangle and the sky are done here, on the CPU. The GPU then
+        draws the frame as `fast.gpu_frame` describes it, into `gpu_image`,
+        and `finish_gpu` ends the frame. The frame is drawn at the quality's
+        size, so a game that a GPU draws should have a render scale of one.
+
+        With `passes`, the GPU also does what follows the triangles: the
+        weather and the night over the sky, the pond's water, and the
+        smoothing of edges. `gpu_post` then holds their numbers, and
+        `finish_gpu` leaves them out. The pond's water must have a shade
+        step from 2 to 64.
+
+        Args:
+            scene: The scene the game is in.
+            assets: The stores.
+            passes: Whether the GPU draws the weather, the night, the water
+                and the smoothing too.
+
+        Raises:
+            Error: If the scene cannot be drawn, or the passes cannot be
+                prepared.
+        """
+        self.gpu_began = perf_counter_ns()
+        self.gpu_post.on = False
+        self.fast.prepare_gpu(
+            scene, assets, self.camera, Duration(self.clock, SECOND)
+        )
+        if passes:
+            self.gpu_post.prepare(
+                self.village,
+                self.weather,
+                self.day,
+                self.camera,
+                scene,
+                self.gpu_image,
+                self.quality.smooth_edges,
             )
-            if dark:
-                dim_water(image, before, share)
+
+    def finish_gpu(mut self, scene: Scene, assets: Assets) raises:
+        """End the frame that `prepare_gpu` began, once a GPU has drawn it
+        into `gpu_image`.
+
+        The pond's water, the weather, the night, the smoothing of the
+        edges, the rain and the heads-up display are done as `render` does
+        them, on the GPU's image. The frame is then in `window`, and
+        `gpu_image` is free for the next frame.
+
+        Args:
+            scene: The scene the game is in.
+            assets: The stores.
+
+        Raises:
+            Error: If the scene cannot be drawn.
+        """
+        var drawn = perf_counter_ns()
+        var image = Framebuffer(
+            1, 1, List[UInt8](length=4, fill=0), List[Float32](length=1, fill=0)
+        )
+        swap(image, self.gpu_image)
+        try:
+            self._finish(
+                scene, assets, image, self.gpu_began, drawn, self.gpu_post.on
+            )
+        finally:
+            swap(image, self.gpu_image)
+
+    def _finish(
+        mut self,
+        scene: Scene,
+        assets: Assets,
+        mut image: Framebuffer,
+        began: Int,
+        drawn: Int,
+        passes: Bool,
+    ) raises:
+        """Do what follows the draw of a frame, on its image, and leave the
+        frame in `window`. An image of the window's size is swapped with it,
+        so `image` holds the window's last frame after. With `passes`, a GPU
+        has drawn the weather, the night, the water and the smoothing."""
         var watered = perf_counter_ns()
-        self.weather.cover(image, self.camera)
-        self.day.night_sky(image, self.camera, 1 - self.weather.look.clouds)
-        var covered = perf_counter_ns()
+        var covered = watered
+        if not passes:
+            # Water that the camera cannot see is not composed: its surface
+            # and caustics cost most of the composition.
+            if self.village.pond_seen(self.camera):
+                # The water is lit by its own sky: it darkens with the night.
+                var share = self.day.water_light()
+                var dark = share < 1
+                var before = image.depth.copy() if dark else List[Float32]()
+                _ = self.village.water.compose(
+                    image,
+                    scene,
+                    self.camera,
+                    self.village.level,
+                    self.village.bed,
+                )
+                if dark:
+                    dim_water(image, before, share)
+            watered = perf_counter_ns()
+            self.weather.cover(image, self.camera)
+            self.day.night_sky(image, self.camera, 1 - self.weather.look.clouds)
+            covered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
         self.water_ms = Float64(watered - drawn) / 1.0e6
         self.smooth_ms = 0
-        if self.quality.smooth_edges:
+        if self.quality.smooth_edges and not passes:
             smooth_edges(image, available_workers())
             self.smooth_ms = Float64(perf_counter_ns() - covered) / 1.0e6
         self.upscale_ms = 0
         if image.width == self.width and image.height == self.height:
-            self.window = image^
+            swap(self.window, image)
         else:
             var smoothed = perf_counter_ns()
             upscale_into(image, self.window, available_workers())
@@ -901,7 +1141,7 @@ struct VillageGame(Movable):
                 self.prompt(),
                 self.note,
                 self.note_age,
-                self.talk.speech,
+                self.speech(),
                 self.talk.age,
                 self.talk.errands(self.gathering.satchel),
                 self.skills.lines(),
@@ -909,6 +1149,85 @@ struct VillageGame(Movable):
             draw_battle(
                 self.window, self.battle, scene, self.camera, self.view.look()
             )
+            # A fighting warden's bars take the top of the frame, so the
+            # compass and the target panel stand under them.
+            # The hour and the weather give way there too: the numbers of
+            # the blows over a giant warden's head would cross them.
+            var drop = hud_drop(self.battle)
+            var caption = String(
+                clock_text(self.day.hour),
+                "  ",
+                weather_label(self.weather.kind),
+            )
+            draw_compass(
+                self.window,
+                self.player.position,
+                self.view.yaw,
+                self.compass_marks(),
+                caption if drop == 0 else String(),
+                drop,
+            )
+            draw_target(
+                self.window,
+                self.battle,
+                (TARGET_TOP + drop) * hud_scale(self.window.height),
+            )
+
+    def speech(self) -> String:
+        """Return what the villager last said, for the heads-up display.
+
+        Returns:
+            Their name and their words. The words show as far as the
+            villager's mouth has said them: see `revealed`.
+        """
+        if self.talker < 0:
+            return self.talk.speech.copy()
+        ref life = self.residents.bodies[self.talker].life
+        var total = life.speech.duration()
+        var share = life.spoken / total if total > 0 else Float32(1)
+        var words = self.talk.words.byte_length()
+        var name = self.talk.speech.byte_length() - words
+        var bytes = self.talk.speech.as_bytes()
+        var out = String()
+        for i in range(name):  # pragma: no branch
+            out += chr(Int(bytes[i]))
+        return out + revealed(self.talk.words, share)
+
+    def compass_marks(self) -> List[CompassMark]:
+        """Return the places the compass points to.
+
+        Returns:
+            A gold mark at each villager with an errand to offer, a silver
+            one at each villager whose errand is taken, and a red one at
+            the nearest foe that stands, within `FOE_SIGHT`.
+        """
+        var marks = List[CompassMark]()
+        for index in range(len(self.talk.speakers)):
+            var state = self.talk.states[index]
+            if state == DONE:
+                continue
+            var v = self.talk.speakers[index].villager
+            var color = GOLD_TEXT if state == OFFERED else SILVER_MARK
+            marks.append(CompassMark(self.residents.people[v].position, color))
+        ref feet = self.player.position
+        var nearest = -1
+        var best = FOE_SIGHT * FOE_SIGHT
+        for index in range(len(self.battle.foes)):
+            ref foe = self.battle.foes[index]
+            if foe.down >= 0:
+                continue
+            var d = foe.character.position - feet
+            var far = d.x * d.x + d.z * d.z
+            if far < best:
+                best = far
+                nearest = index
+        if nearest >= 0:
+            marks.append(
+                CompassMark(
+                    self.battle.foes[nearest].character.position, DANGER
+                )
+            )
+        return marks^
 
     def prompt(self) -> String:
         """Return what the use button does now, for the heads-up display.

@@ -39,7 +39,9 @@ stderr; ordinary diagnostics follow stderr.
 
 Each full static hit ID, including
 condition index and true/false suffix, is cached only after a complete write.
-The fixed 4,096-entry cache stores exact bytes. Collisions, eviction and
+The fixed 4,096-entry cache stores exact bytes. It has 512 sets of eight
+ways. A record can use any way of its set, so the hot lines of one loop stay
+cached together. A full set replaces its oldest way. Eviction and
 contention can add duplicate writes.
 
 Every complete `COVEVAL2` record is still

@@ -22,9 +22,13 @@ The geotech subject analyzes earth-retaining walls: earth and water pressure, LR
 
 The castle subject draws a moated brick castle from a plan and checks it as a structural engineer would. It finds wind on a tower and the line of thrust in a masonry arch. It checks a wall at the edge of the moat and the water balance of the moat. It draws the shadows of the sun. See [Castle](Castle) and [Castle analysis](Castle-analysis).
 
+The chemistry subject is a library for the steps of a process. It models the thermodynamic, phase, kinetic, physical and engineering requirements that turn a material into a product. Each step has an operating window, and new constraints and data plug in. It also solves equilibria, draws process maps and solves flowsheets. See [Process chemistry](Process-chemistry) and [Why a process runs where it does](Why-a-process-runs-where-it-does).
+
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
 The gamepad subject ports the gamepad subsystem of SDL. It reads Xbox, PlayStation, Nintendo and other controllers on Linux and through a host's own gamepad API, and names their controls by position. It runs their rumble, lights, motion sensors and touchpads. See [Gamepads](Gamepads).
+
+The warp subject ports WarpFactory. It finds the stress-energy tensor that a warp drive metric needs, and checks the energy conditions. It adds exact derivatives, more metrics, energy totals, curvilinear grids and geodesics. See [Warp drives](Warp-drives).
 
 The Streamline subject types NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction: modes, presets, options, per-frame constants and buffer checks. It has a CPU fallback upscaler. It does not run DLSS yet. See [Streamline](Streamline).
 
@@ -179,6 +183,45 @@ extensions/
     constants.mojo  the per-frame constants from two cameras
     tags.mojo       the check of a frame's tagged buffers
     upscaler.mojo   the upscaler trait and a CPU fallback
+  warp/
+    kinds.mojo, quantities.mojo, grid.mojo     kinds, units and the grid
+    tensor.mojo, three_plus_one.mojo           tensor fields and the 3+1 split
+    metrics.mojo, warp_shell.mojo              the metrics of WarpFactory
+    natario.mojo, krasnikov.mojo               more metrics
+    curvilinear.mojo                           spherical and cylindrical metrics
+    derivatives.mojo, solver.mojo              the Einstein equations
+    jet.mojo, analytic.mojo                    exact derivatives
+    frame.mojo, conditions.mojo, scalars.mojo  the analysis
+    totals.mojo, geodesics.mojo                totals, geodesics, the passenger view
+    flow.mojo, evaluation.mojo, plot.mojo      flow lines, one call, planes
+  chemistry/
+    quantities.mojo       molar values, amounts, pressures, angstroms
+    kinds.mojo            phases, requirement kinds, checks and hazards
+    elements.mojo         elements, atomic weights, formulas and their parser
+    thermo.mojo           NASA-7, NASA-9 and Shomate fits, species, substances
+    chemkin.mojo          CHEMKIN thermo files, read and written
+    cea.mojo              a reader for NASA CEA thermo.inp files
+    fitting.mojo          NASA-7 fits to tabulated data
+    catalog.mojo          built-in substances
+    reaction.mojo         reactions, their driving force, equilibria, uncertainty
+    requirement.mojo      the Constraint trait and the built-in requirements
+    window.mojo           operating windows for any constraint
+    step.mojo             process steps and their reports
+    equilibrium.mojo      multiphase chemical equilibrium
+    maps.mojo             scans, Ellingham diagrams and predominance maps
+    kinetics.mojo         Arrhenius rates and the shrinking core
+    transport.mojo        evaporation, case depth and heating time
+    electrochemistry.mojo cell voltages, Faraday's law and cell energy
+    optics.mojo           the color of a thin film on a metal
+    solution.mojo         binary solutions and their phase boundaries
+    balance.mojo          stream enthalpies and heat duties
+    flowsheet.mojo        units joined by streams, with recycle
+    routes.mojo           the search for reaction routes
+    materials.mojo        expansion curves, melting points, eutectics
+    coating.mojo          coating stress, peeling, buckling and thermal shock
+    crystal.mojo          a CIF reader, unit cells and bonds
+    plot.mojo             chart axes for process figures
+    processes/            worked processes: titanium, diamond and lime
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.
