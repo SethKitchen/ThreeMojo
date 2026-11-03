@@ -107,6 +107,8 @@ Look something up.
   - [SOG files](SOG-files)
   - [Cleaning and orienting scans](Cleaning-and-orienting-scans)
   - [Walking through a scan](Walking-through-a-scan)
+- [Castle](Castle)
+  - [Castle analysis](Castle-analysis)
 - [CARLA](CARLA)
   - [CARLA geometry](CARLA-geometry)
   - [CARLA maps](CARLA-maps)

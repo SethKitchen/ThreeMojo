@@ -234,3 +234,7 @@ $(call gallery,scanned-buildings,building_scan)
 # A demonstration site of splats on a hillside, cut into parts, with a copy of
 # its largest part beside it, drawn with levels of detail on every core.
 $(call gallery,scan-parts,scan_parts)
+# Wijnendale Castle in autumn, with the moat as a mirror and the sun of 15:30 on 19 October.
+$(call gallery,castle,wijnendale)
+# Wijnendale Castle from morning to evening, with the shadow of the keep on the moat.
+$(call gallery,castle-simulation,wijnendale_simulation)
