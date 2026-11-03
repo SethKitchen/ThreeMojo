@@ -2602,8 +2602,6 @@ __async def _setup_task(
             and c[unsafe_offset=2] > c[unsafe_offset=3]
         ):
             continue
-        if _beyond_a_side(a, b, c) > 0:
-            continue
         if inside0 and inside1 and inside2:
             _emit(
                 vertices,
@@ -2664,48 +2662,6 @@ __async def _setup_task(
                 slot,
                 d.texels,
             )
-
-
-@always_inline
-def _beyond_a_side(
-    a: MutPointer[Float32, MutAnyOrigin],
-    b: MutPointer[Float32, MutAnyOrigin],
-    c: MutPointer[Float32, MutAnyOrigin],
-) -> Float32:
-    """Return a positive number when a triangle's three corners are in
-    front of the eye and past one side of the view, and zero or less
-    otherwise.
-
-    Such a triangle covers no pixel: `_emit` would find its bounds empty,
-    as every corner lands past the same edge of the frame. Clipping it at
-    the near plane makes nothing that is drawn either. The test needs no
-    division. A sum or difference has the sign of the exact one, so each
-    term is positive exactly when its comparison holds; a NaN makes it
-    fail.
-
-    Args:
-        a: The first corner's clip position, `x, y, z, w`.
-        b: The second corner's.
-        c: The third corner's.
-
-    Returns:
-        A positive number to skip the triangle.
-    """
-    var ax = a[unsafe_offset=0]
-    var ay = a[unsafe_offset=1]
-    var aw = a[unsafe_offset=3]
-    var bx = b[unsafe_offset=0]
-    var by = b[unsafe_offset=1]
-    var bw = b[unsafe_offset=3]
-    var cx = c[unsafe_offset=0]
-    var cy = c[unsafe_offset=1]
-    var cw = c[unsafe_offset=3]
-    var ahead = min(aw, min(bw, cw))
-    var right = min(ax - aw, min(bx - bw, cx - cw))
-    var left = -max(ax + aw, max(bx + bw, cx + cw))
-    var top = min(ay - aw, min(by - bw, cy - cw))
-    var bottom = -max(ay + aw, max(by + bw, cy + cw))
-    return min(ahead, max(max(right, left), max(top, bottom)))
 
 
 def _emit(
