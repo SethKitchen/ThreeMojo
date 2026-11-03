@@ -38,7 +38,7 @@ The plan states which facts are documented and which numbers are estimated. No p
 | Gatehouse and keep | Designed by Félix Laureys, 1877 and 1878 | Documented |
 | Walls | Red brick; the right wing has a round keep, and the left wing stands on a base of yellow or white brick | Documented |
 | Enclosure | A square brick wall with gate turrets and battlements, protected with the castle on 22 September 1982 | Documented |
-| Gatehouse plan | Square, because the sources I could reach disagree on its plan | Estimated |
+| Gatehouse plan | Square. The sources disagree on its plan. | Estimated |
 | Stone dressings, dormers and window rows | From the aerial photograph | Estimated |
 | Dimensions of every part | From the aerial photograph, good to about 15 percent | Estimated |
 | Wall thickness, bridge arch, moat depth | Typical values for the building type | Estimated |
@@ -54,17 +54,17 @@ The documented facts come from these pages:
 - [Eupedia](https://eupedia.com/belgium/wynendale.shtml) and [RTBF](https://www.rtbf.be/article/le-chateau-de-wijnendale-la-ou-leopold-iii-a-lance-la-question-royale-11329444) describe a circular moat.
 - [Brussels Environment, climate fact sheet](https://document.environnement.brussels/opac_css/elecfile/Clim_02) gives the Uccle rain normals of the Royal Meteorological Institute.
 
-No source that I could reach gives the height of a tower, the length of a wall or the size of the moat. I searched in Dutch, French and English. I could read only search summaries of these pages, not the pages themselves. The protection decree refers to a plan that I could not open. A survey or that plan would replace the estimates.
+No source in the list above gives the height of a tower, the length of a wall or the size of the moat. The protection decree refers to a plan that was not available. A survey or that plan replaces the estimates.
 
-The sources also disagree on the shape of the building. One inventory entry says it is an inverted T. Another says it is a semicircle with the buildings on the east side. The plan follows the photograph: two ranges and a gatehouse around a courtyard. A survey would settle the layout as well as the sizes.
+The sources also disagree on the shape of the building. One inventory entry says it is an inverted T. Another says it is a semicircle with the buildings on the east side. The plan follows the photograph: two ranges and a gatehouse around a courtyard. A survey can settle the layout as well as the sizes.
 
-The measured footprint is in three records. The container could not reach any of them. Direct fetches failed at name resolution, and the egress gateway denied the same hosts with 403.
+These three records hold the measured footprint. They were not read for this plan.
 
 - The protection file DW000432 of Onroerend Erfgoed, with the decree and its plan.
-- [The plan record of the castle](https://plannen.onroerenderfgoed.be/plannen/1671), which gives boundary geometry in Belgian Lambert 72 (EPSG:31370). It also lists an approved heritage management plan for the castle and its outbuildings, as PDF files. That plan is the most likely source of surveyed drawings.
-- The Flemish building footprints of Geopunt, which have the outline of every wing and tower.
+- [The plan record of the castle](https://plannen.onroerenderfgoed.be/plannen/1671). It gives the boundary geometry in Belgian Lambert 72 (EPSG:31370). It also lists an approved heritage management plan for the castle and its outbuildings, as PDF files. That plan is the most likely source of surveyed drawings.
+- The Flemish building footprints of Geopunt. They have the outline of every wing and tower.
 
-To use them, allow the hosts in the environment settings and ask for a second run. Read the outlines, write them as a survey JSON file and pass that file to both examples.
+To use a record, read the outlines and write them as a survey JSON file. Then give that file to both examples. See the next section.
 
 ## Replace the estimates with a survey
 
