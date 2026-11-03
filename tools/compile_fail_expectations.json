@@ -958,6 +958,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_design_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 20,
+        "message": "invalid call to 'require_design': value passed to 'design' cannot be converted from 'IntLiteral[1]' to 'Design'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_differential_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2269,6 +2281,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_limit_state_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LimitState'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_line_coverage_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2658,6 +2680,18 @@
         "column": 11,
         "line": 16,
         "message": "invalid call to 'check': value passed to 'value' cannot be converted from 'IntLiteral[0]' to 'NavigationSearchStatus'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_neckline_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_neckline': value passed to 'neckline' cannot be converted from 'IntLiteral[1]' to 'Neckline'"
       }
     ],
     "notes": [
@@ -3372,6 +3406,16 @@
       "candidate not viable: value passed to 'road_option' cannot be converted from 'IntLiteral[4]' to 'RoadOption'"
     ]
   },
+  "tests/compile_fail/a_roof_form_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'RoofForm'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_route_node_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3701,6 +3745,18 @@
         "column": 33,
         "line": 12,
         "message": "invalid call to 'skinned_morph_target': value passed to 'mesh' cannot be converted from 'IntLiteral[3]' to 'SkinnedMeshIndex'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_sleeve_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 20,
+        "message": "invalid call to 'require_sleeve': value passed to 'sleeve' cannot be converted from 'IntLiteral[1]' to 'Sleeve'"
       }
     ],
     "notes": [
@@ -4042,6 +4098,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_surface_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Surface'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_surface_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4284,6 +4350,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_tower_shape_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'TowerShape'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_track_target_is_not_a_bare_int.mojo": {
     "errors": [
@@ -5728,6 +5804,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/an_opening_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_opening': value passed to 'opening' cannot be converted from 'IntLiteral[1]' to 'Opening'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/an_opening_kind_is_not_a_bare_int.mojo": {
     "errors": [
@@ -9415,6 +9503,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/ruffles_are_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_ruffles': value passed to 'ruffles' cannot be converted from 'IntLiteral[1]' to 'Ruffles'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/sqrt_of_volume.mojo": {
     "errors": [
       {
@@ -9459,66 +9559,6 @@
         "column": 22,
         "line": 12,
         "message": "invalid call to 'plus': value passed to 'other' cannot be converted from 'IntLiteral[2]' to 'TorsoContents'"
-      }
-    ],
-    "notes": [
-      "function declared here"
-    ]
-  },
-  "tests/compile_fail/a_neckline_is_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 22,
-        "message": "invalid call to 'require_neckline': value passed to 'neckline' cannot be converted from 'IntLiteral[1]' to 'Neckline'"
-      }
-    ],
-    "notes": [
-      "function declared here"
-    ]
-  },
-  "tests/compile_fail/an_opening_is_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 21,
-        "message": "invalid call to 'require_opening': value passed to 'opening' cannot be converted from 'IntLiteral[1]' to 'Opening'"
-      }
-    ],
-    "notes": [
-      "function declared here"
-    ]
-  },
-  "tests/compile_fail/a_sleeve_is_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 20,
-        "message": "invalid call to 'require_sleeve': value passed to 'sleeve' cannot be converted from 'IntLiteral[1]' to 'Sleeve'"
-      }
-    ],
-    "notes": [
-      "function declared here"
-    ]
-  },
-  "tests/compile_fail/a_design_is_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 20,
-        "message": "invalid call to 'require_design': value passed to 'design' cannot be converted from 'IntLiteral[1]' to 'Design'"
-      }
-    ],
-    "notes": [
-      "function declared here"
-    ]
-  },
-  "tests/compile_fail/ruffles_are_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 21,
-        "message": "invalid call to 'require_ruffles': value passed to 'ruffles' cannot be converted from 'IntLiteral[1]' to 'Ruffles'"
       }
     ],
     "notes": [
