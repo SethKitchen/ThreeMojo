@@ -174,7 +174,7 @@ The host reads `encode()` and writes a result that `decode_result` reads:
 threemojo_streamline.exe FRAMES RESULT
 ```
 
-A path of `-` is the standard input or the standard output. Use the pipes from WSL 2. A file on the other side of the WSL 2 file bridge reads at about 16 MB/s, and a pipe is ten times faster. The host writes a report of its stages to the standard error. The exit status is 0 on success, 1 for a wrong command line, 2 for a bundle that cannot be read, 3 when Streamline refuses, and 4 for a Direct3D error.
+A path of `-` is the standard input or the standard output. Use the pipes from WSL 2. A file on the other side of the WSL 2 file bridge reads at about 16 MB/s, and a pipe is ten times faster. The host writes a report of its stages to the standard error. The exit status is 0 on success and 1 for a wrong command line. It is 2 for a bundle that cannot be read, 3 when Streamline refuses, and 4 for a Direct3D error.
 
 The file is little-endian, with four bytes for each field. The docstring of `bundle.mojo` gives the layout.
 

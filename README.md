@@ -731,7 +731,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Translation-stable traffic curvature](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-traffic-manager#curve-radius-and-coordinate-precision): widened circle radii and speed caps retain the absolute near-line cutoff [#489](https://github.com/SethKitchen/ThreeMojo/issues/489)
 - [x] [Gamepads](https://github.com/SethKitchen/ThreeMojo/wiki/Gamepads): SDL 3.2.24's gamepad subsystem, with mappings, controller types and a Linux evdev backend for Xbox, PlayStation and other pads [#844](https://github.com/SethKitchen/ThreeMojo/issues/844)
 - [x] [Gamepad drivers](https://github.com/SethKitchen/ThreeMojo/wiki/Gamepads#the-hidapi-drivers): DualSense, DualShock 4, Switch Pro and Xbox drivers, rumble, lights, sensors, touchpads, hotplug and a host-fed C ABI [#845](https://github.com/SethKitchen/ThreeMojo/issues/845)
-- [x] [DLSS 4.5 through Streamline](https://github.com/SethKitchen/ThreeMojo/wiki/Streamline): typed options, jitter, constants and buffer checks, a CPU fallback, and a native Direct3D 12 host that runs Super Resolution and Ray Reconstruction on ThreeMojo's frames [#771](https://github.com/SethKitchen/ThreeMojo/issues/771)
+- [x] [DLSS 4.5 through Streamline](https://github.com/SethKitchen/ThreeMojo/wiki/Streamline): typed options, a CPU fallback, and a Direct3D 12 host for Super Resolution and Ray Reconstruction [#771](https://github.com/SethKitchen/ThreeMojo/issues/771)
 
 </details>
 
@@ -793,8 +793,8 @@ Warp drive spacetimes, analyzed as WarpFactory analyzes them. A checked box reco
 - [x] [Spherical and cylindrical grids](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#spherical-and-cylindrical-grids): curvilinear grids, wrapping stencils, and shells and bubbles on them [#937](https://github.com/SethKitchen/ThreeMojo/issues/937)
 - [x] [Geodesics](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#geodesics): rays and free fall through a metric, proper time, and the sky seen from inside a bubble [#938](https://github.com/SethKitchen/ThreeMojo/issues/938)
 - [x] [Warp views](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#views): a turning surface of negative energy, and a bubble crossing the frame [#939](https://github.com/SethKitchen/ThreeMojo/issues/939)
-- [x] [Positive-energy soliton](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#more-metrics): the soliton of Fell and Heisenberg, its shift from a closed-form potential, and an energy density that is positive with no tilt [#940](https://github.com/SethKitchen/ThreeMojo/issues/940)
-- [x] [Warp solver on the GPU](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#on-the-gpu): a MAX kernel, one thread a point, that shares the CPU solver's arithmetic and matches it to 1e-12 [#941](https://github.com/SethKitchen/ThreeMojo/issues/941)
+- [x] [Positive-energy soliton](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#more-metrics): the Fell-Heisenberg soliton, its closed-form potential and shift, and a positive energy density [#940](https://github.com/SethKitchen/ThreeMojo/issues/940)
+- [x] [Warp solver on the GPU](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#on-the-gpu): a MAX kernel with one thread for each point, which matches the CPU solver to 1e-12 [#941](https://github.com/SethKitchen/ThreeMojo/issues/941)
 
 ### Process chemistry
 
