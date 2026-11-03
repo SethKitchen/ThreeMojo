@@ -23,14 +23,17 @@ computed alone, so the derivatives of the metric are not stored.
 - The second-order solver uses the same G and c as the fourth-order one.
   WarpFactory's `einE2` uses G = 6.674e-11 and c = 2.99792e8, so its
   second-order energy densities are larger by about 2 parts in 10⁵.
-- No GPU path. WarpFactory moves the arrays to a GPU with MATLAB's
-  Parallel Computing Toolbox.
+- The GPU path is `extensions/warp/gpu.mojo`, through MAX. WarpFactory
+  moves the arrays to a GPU with MATLAB's Parallel Computing Toolbox.
+  Both paths call `solve_point`, so they take the same steps at each
+  point.
 """
 
+from std.memory import AddressSpace
 from std.sys import num_logical_cores
 
 from render.tasks import TaskGroup
-from extensions.warp.derivatives import Stencil
+from extensions.warp.derivatives import FieldPointer, Stencil, field_pointer
 from extensions.warp.kinds import (
     CONTRAVARIANT,
     COORDINATE_FRAME,
@@ -43,7 +46,7 @@ from extensions.warp.tensor import (
     Matrix4,
     Metric,
     TensorField,
-    inverse4,
+    checked_inverse4,
     multiply4,
 )
 from units.si import InverseArea64
@@ -127,54 +130,75 @@ struct StressEnergy(Copyable, Movable):
 
 
 @always_inline
-def _d1(d1: List[Float64], i: Int, j: Int, k: Int) -> Float64:
+def _d1[
+    space: AddressSpace
+](d1: FieldPointer[space], i: Int, j: Int, k: Int) -> Float64:
     """Return ∂_k g_ij from the scratch storage."""
-    return d1[(4 * i + j) * 4 + k]
+    return d1[unsafe_offset=(4 * i + j) * 4 + k]
 
 
 @always_inline
-def _d2(d2: List[Float64], i: Int, j: Int, k: Int, n: Int) -> Float64:
+def _d2[
+    space: AddressSpace
+](d2: FieldPointer[space], i: Int, j: Int, k: Int, n: Int) -> Float64:
     """Return ∂_k ∂_n g_ij from the scratch storage."""
-    return d2[((4 * i + j) * 4 + k) * 4 + n]
+    return d2[unsafe_offset=((4 * i + j) * 4 + k) * 4 + n]
 
 
-def _metric_derivatives(
-    metric: Metric,
+def _metric_derivatives[
+    space: AddressSpace, scratch: AddressSpace
+](
+    data: FieldPointer[space],
     stencil: Stencil,
     point: Int,
-    mut d1: List[Float64],
-    mut d2: List[Float64],
+    n: Int,
+    d1: FieldPointer[scratch],
+    d2: FieldPointer[scratch],
 ):
     """Fill the first and second derivatives of g_ij at one point.
 
     Both are symmetric in i and j, and the second is symmetric in its two
     derivative axes, so each value is computed once and copied.
     """
-    var n = metric.tensor.grid.points()
-    var at = metric.tensor.grid.position(point)
+    var at = stencil.position(point)
     for i in range(4):
         for j in range(i, 4):  # pragma: no branch
             var base = (4 * i + j) * n
             for k in range(4):
-                var first = stencil.first(
-                    metric.tensor.data, base, point, at, k
-                )
-                d1[(4 * i + j) * 4 + k] = first
-                d1[(4 * j + i) * 4 + k] = first
+                var first = stencil.first(data, base, point, at, k)
+                d1[unsafe_offset=(4 * i + j) * 4 + k] = first
+                d1[unsafe_offset=(4 * j + i) * 4 + k] = first
                 for m in range(k, 4):  # pragma: no branch
-                    var second = stencil.second(
-                        metric.tensor.data, base, point, at, k, m
-                    )
-                    d2[((4 * i + j) * 4 + k) * 4 + m] = second
-                    d2[((4 * i + j) * 4 + m) * 4 + k] = second
-                    d2[((4 * j + i) * 4 + k) * 4 + m] = second
-                    d2[((4 * j + i) * 4 + m) * 4 + k] = second
+                    var second = stencil.second(data, base, point, at, k, m)
+                    d2[unsafe_offset=((4 * i + j) * 4 + k) * 4 + m] = second
+                    d2[unsafe_offset=((4 * i + j) * 4 + m) * 4 + k] = second
+                    d2[unsafe_offset=((4 * j + i) * 4 + k) * 4 + m] = second
+                    d2[unsafe_offset=((4 * j + i) * 4 + m) * 4 + k] = second
 
 
 def ricci_tensor(gu: Matrix4, d1: List[Float64], d2: List[Float64]) -> Matrix4:
     """Return R_ij at one point from g^ab and the derivatives of g_ab.
 
     This is WarpFactory's `ricciT`, term for term, at one point.
+
+    Args:
+        gu: The contravariant metric g^ab.
+        d1: ∂_k g_ij at (4 i + j) 4 + k.
+        d2: ∂_k ∂_n g_ij at ((4 i + j) 4 + k) 4 + n.
+
+    Returns:
+        The covariant Ricci tensor, per square meter.
+    """
+    return ricci_tensor(gu, field_pointer(d1), field_pointer(d2))
+
+
+def ricci_tensor[
+    space: AddressSpace
+](gu: Matrix4, d1: FieldPointer[space], d2: FieldPointer[space]) -> Matrix4:
+    """Return R_ij at one point from g^ab and derivatives in any storage.
+
+    Parameters:
+        space: The address space of the derivatives.
 
     Args:
         gu: The contravariant metric g^ab.
@@ -227,6 +251,62 @@ def _sum_products(a: Matrix4, b: Matrix4) -> Float64:
     return (a * b).reduce_add()
 
 
+def solve_point[
+    space: AddressSpace, scratch: AddressSpace
+](
+    data: FieldPointer[space],
+    stencil: Stencil,
+    point: Int,
+    d1: FieldPointer[scratch],
+    d2: FieldPointer[scratch],
+    kappa: Float64,
+    mut first: Matrix4,
+    mut second: Matrix4,
+    mut ok: Bool,
+) -> Float64:
+    """Solve the Einstein equations at one point of a metric.
+
+    The CPU tasks and the GPU kernel both call this, so they take the same
+    steps.
+
+    Parameters:
+        space: The address space of the metric's storage.
+        scratch: The address space of the scratch storage.
+
+    Args:
+        data: The covariant metric, g_ab of point p at (4 a + b) N + p,
+            where N is the number of points.
+        stencil: The stencil of the metric's grid.
+        point: The flat index of the point.
+        d1: Scratch storage for 64 values.
+        d2: Scratch storage for 256 values.
+        kappa: Zero for the curvatures, or c⁴ / (8 π G) for T^ab.
+        first: Set to R_ab, or to T^ab when `kappa` is not zero.
+        second: Set to G_ab when `kappa` is zero.
+        ok: Set to False if the metric is singular at the point.
+
+    Returns:
+        The Ricci scalar R, or zero at a singular point.
+    """
+    var n = Int(stencil.counts.reduce_mul())
+    var g = Matrix4(0)
+    for k in range(16):
+        g[k] = data[unsafe_offset=k * n + point]
+    var gu = checked_inverse4(g, ok)
+    if not ok:
+        return 0.0
+    _metric_derivatives(data, stencil, point, n, d1, d2)
+    var r = ricci_tensor(gu, d1, d2)
+    var s = _sum_products(gu, r)
+    var e = r - 0.5 * s * g
+    if kappa == 0.0:
+        first = r
+        second = e
+    else:
+        first = kappa * multiply4(multiply4(gu, e), gu)
+    return s
+
+
 def task_count(threads: Int, points: Int) raises -> Int:
     """Return how many tasks to split a grid's points among.
 
@@ -266,29 +346,35 @@ __async def _solve_chunk(
     `first_out`. A singular point sets `failed[task]`.
     """
     var n = metric[].tensor.grid.points()
+    var data = field_pointer(metric[].tensor.data)
     var d1 = List[Float64](length=64, fill=0.0)
     var d2 = List[Float64](length=256, fill=0.0)
     for point in range(first, past):  # pragma: no branch
-        var g = metric[].at(point)
-        var gu: Matrix4
-        try:
-            gu = inverse4(g)
-        except:
+        var ok = True
+        var r = Matrix4(0)
+        var e = Matrix4(0)
+        var s = solve_point(
+            data,
+            stencil,
+            point,
+            field_pointer(d1),
+            field_pointer(d2),
+            kappa,
+            r,
+            e,
+            ok,
+        )
+        if not ok:
             failed[unsafe_offset=task] = 1
             continue
-        _metric_derivatives(metric[], stencil, point, d1, d2)
-        var r = ricci_tensor(gu, d1, d2)
-        var s = _sum_products(gu, r)
-        var e = r - 0.5 * s * g
         if kappa == 0.0:
             scalar_out[unsafe_offset=point] = s
             for k in range(16):
                 first_out[unsafe_offset=k * n + point] = r[k]
                 second_out[unsafe_offset=k * n + point] = e[k]
         else:
-            var t = kappa * multiply4(multiply4(gu, e), gu)
             for k in range(16):
-                first_out[unsafe_offset=k * n + point] = t[k]
+                first_out[unsafe_offset=k * n + point] = r[k]
 
 
 def _solve(
