@@ -9,7 +9,10 @@ The peak velocity pressure follows EN 1991-1-4 (Eurocode 1, part 1-4),
 clauses 4.2 to 4.5. The mean speed is vm(z) = kr ln(z / z0) vb, with the
 terrain factor kr = 0.19 (z0 / 0.05)^0.07, and the turbulence intensity is
 Iv(z) = 1 / ln(z / z0). The peak pressure is qp = (1 + 7 Iv) 0.5 rho vm^2.
-Below zmin = 2 m the pressure at 2 m applies.
+Below the minimum height zmin of the terrain, the pressure at zmin applies.
+Table 4.1 gives zmin for each terrain category: 1 m for categories 0 and I,
+2 m for II, 5 m for III and 10 m for IV. `minimum_height` interpolates
+between the categories in ln z0.
 
 The force on a tower is a force coefficient times the peak pressure times
 the width, summed over strips of the shaft. The coefficient is an input.
@@ -50,8 +53,12 @@ comptime CATEGORY_II = 0.05
 # The roughness length of terrain category III, in meters: villages and
 # regular cover such as a forest edge.
 comptime CATEGORY_III = 0.3
-# The height below which the pressure at zmin applies, in meters.
-comptime _MINIMUM_HEIGHT = 2.0
+# The roughness length of terrain category I, in meters: lakes and flat
+# land with no obstacles.
+comptime CATEGORY_I = 0.01
+# The roughness length of terrain category IV, in meters: towns, with at
+# least 15 percent of the area under buildings above 15 m.
+comptime CATEGORY_IV = 1.0
 # The strips a shaft is cut into.
 comptime _STRIPS = 40
 
@@ -86,6 +93,49 @@ def flanders_wind() -> Wind:
     )
 
 
+def minimum_height(roughness: Length64) raises -> Length64:
+    """Return the height below which the wind profile is constant.
+
+    EN 1991-1-4, Table 4.1, gives zmin for each terrain category: 1 m for a
+    roughness length of 0.01 m or less, 2 m for 0.05 m, 5 m for 0.3 m and
+    10 m for 1 m or more. Between two categories the height is linear in
+    ln z0, so it is the value of the table at each category.
+
+    Args:
+        roughness: The roughness length of the terrain, z0.
+
+    Returns:
+        The minimum height zmin.
+
+    Raises:
+        Error: If the roughness length is not positive and finite.
+    """
+    require_positive_finite(
+        roughness.value, "A roughness length must be positive"
+    )
+    var z0 = roughness.value
+    if z0 <= CATEGORY_I:
+        return Length64(1.0, METER)
+    if z0 >= CATEGORY_IV:
+        return Length64(10.0, METER)
+    var low = CATEGORY_I
+    var high = CATEGORY_II
+    var low_height = 1.0
+    var high_height = 2.0
+    if z0 > CATEGORY_III:
+        low = CATEGORY_III
+        high = CATEGORY_IV
+        low_height = 5.0
+        high_height = 10.0
+    elif z0 > CATEGORY_II:
+        low = CATEGORY_II
+        high = CATEGORY_III
+        low_height = 2.0
+        high_height = 5.0
+    var t = log(z0 / low) / log(high / low)
+    return Length64(low_height + t * (high_height - low_height), METER)
+
+
 def peak_velocity_pressure(wind: Wind, height: Length64) raises -> Pressure64:
     """Return the peak velocity pressure at a height.
 
@@ -113,7 +163,7 @@ def peak_velocity_pressure(wind: Wind, height: Length64) raises -> Pressure64:
     )
     require_positive_finite(height.value, "A height must be positive")
     var z0 = wind.roughness.value
-    var z = max(height.value, _MINIMUM_HEIGHT)
+    var z = max(height.value, minimum_height(wind.roughness).value)
     require_positive_finite(
         log(z / z0), "A height must be above the roughness length"
     )

@@ -8,7 +8,9 @@
 
 ## Wind on a tower
 
-`wind.mojo` follows EN 1991-1-4 (Eurocode 1, part 1-4). The mean speed is `vm(z) = kr ln(z / z0) vb`. The terrain factor is `kr = 0.19 (z0 / 0.05)^0.07`. The turbulence intensity is `Iv(z) = 1 / ln(z / z0)`. The peak pressure is `qp = (1 + 7 Iv) 0.5 rho vm^2`. Below 2 m the pressure at 2 m applies.
+`wind.mojo` follows EN 1991-1-4 (Eurocode 1, part 1-4). The mean speed is `vm(z) = kr ln(z / z0) vb`. The terrain factor is `kr = 0.19 (z0 / 0.05)^0.07`. The turbulence intensity is `Iv(z) = 1 / ln(z / z0)`. The peak pressure is `qp = (1 + 7 Iv) 0.5 rho vm^2`.
+
+Below the minimum height `zmin` of the terrain, the pressure at `zmin` applies. `minimum_height` gives `zmin` from Table 4.1. It is 1 m for categories 0 and I, 2 m for II, 5 m for III and 10 m for IV. Between two categories, `zmin` is linear in `ln z0`.
 
 `tower_wind_load` cuts the shaft into 40 strips. A strip carries the force coefficient times `qp` times the width. The result is a force and its moment about the base. The structural factor `cs cd` is 1. `cantilever_frequency` gives the first natural frequency of the shaft, `f1 = (1.8751^2 / 2 pi) sqrt(E I / (m L^4))`. A frequency above 1 Hz makes the quasi-static load fair.
 
@@ -29,7 +31,9 @@ The finite element model of [Frame analysis](Frame-analysis) gives the same freq
 
 ## Masonry strength
 
-`characteristic_strength` is equation 3.1 of EN 1996-1-1: `fk = K fb^0.7 fm^0.3`. `clay_brick_masonry` uses units of 15 MPa, lime mortar of 2.5 MPa and K of 0.55. That gives `fk` of 4.82 MPa and a modulus of 1000 `fk`. The design strength is `fk` over a partial factor. The checks above use 2.2.
+`characteristic_strength` is equation 3.1 of EN 1996-1-1: `fk = K fb^0.7 fm^0.3`. `clay_brick_masonry` uses units of 15 MPa, lime mortar of 2.5 MPa and K of 0.55. That gives `fk` of 4.82 MPa and a modulus of 1000 `fk`.
+
+Clause 3.6.1.2(2) limits the inputs. `fb` is not taken above 75 MPa. `fm` is not taken above 20 MPa or above `2 fb`. The design strength is `fk` over a partial factor. The checks above use 2.2.
 
 ## A masonry arch
 

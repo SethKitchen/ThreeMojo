@@ -49,6 +49,36 @@ def test_characteristic_strength_follows_the_equation() raises:
     assert_almost_equal(stone.to(MEGAPASCAL), by_hand, atol=1e-9)
 
 
+def test_strength_limits_the_unit_and_mortar_strengths() raises:
+    # Clause 3.6.1.2(2): fm is not taken above 2 fb.
+    var weak_unit = characteristic_strength(
+        Pressure64(4.0, MEGAPASCAL), Pressure64(12.0, MEGAPASCAL), 0.55
+    )
+    assert_almost_equal(
+        weak_unit.to(MEGAPASCAL),
+        0.55 * pow(4.0, 0.7) * pow(8.0, 0.3),
+        atol=1e-9,
+    )
+    # fm is not taken above 20 MPa.
+    var strong_mortar = characteristic_strength(
+        Pressure64(40.0, MEGAPASCAL), Pressure64(30.0, MEGAPASCAL), 0.55
+    )
+    assert_almost_equal(
+        strong_mortar.to(MEGAPASCAL),
+        0.55 * pow(40.0, 0.7) * pow(20.0, 0.3),
+        atol=1e-9,
+    )
+    # fb is not taken above 75 MPa.
+    var strong_unit = characteristic_strength(
+        Pressure64(100.0, MEGAPASCAL), Pressure64(10.0, MEGAPASCAL), 0.55
+    )
+    assert_almost_equal(
+        strong_unit.to(MEGAPASCAL),
+        0.55 * pow(75.0, 0.7) * pow(10.0, 0.3),
+        atol=1e-9,
+    )
+
+
 def test_strength_refuses_values_that_are_not_positive() raises:
     var good = Pressure64(10.0, MEGAPASCAL)
     with assert_raises(contains="A unit strength must be positive"):

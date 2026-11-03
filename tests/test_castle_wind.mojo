@@ -25,12 +25,15 @@ from extensions.castle.masonry import Masonry, clay_brick_masonry
 from extensions.castle.plan import PlanPoint, Tower, wijnendale
 from extensions.castle.wind import (
     BaseCheck,
+    CATEGORY_I,
     CATEGORY_II,
     CATEGORY_III,
+    CATEGORY_IV,
     Wind,
     cantilever_frequency,
     check_tower_base,
     flanders_wind,
+    minimum_height,
     peak_velocity_pressure,
     ring_inertia,
     tower_wind_load,
@@ -65,12 +68,19 @@ def _keep() raises -> Tower:
     return wijnendale().towers[0].copy()
 
 
-def _qp(speed: Float64, z0: Float64, z: Float64) -> Float64:
+def _qp(
+    speed: Float64, z0: Float64, z: Float64, zmin: Float64 = 2.0
+) -> Float64:
     """EN 1991-1-4 by hand, with a density of 1.25 kg/m3."""
     var kr = 0.19 * pow(z0 / 0.05, 0.07)
-    var mean = kr * log(max(z, 2.0) / z0) * speed
-    var intensity = 1.0 / log(max(z, 2.0) / z0)
+    var mean = kr * log(max(z, zmin) / z0) * speed
+    var intensity = 1.0 / log(max(z, zmin) / z0)
     return (1.0 + 7.0 * intensity) * 0.5 * 1.25 * mean * mean
+
+
+def _rough(z0: Float64) -> Wind:
+    var w = flanders_wind()
+    return Wind(w.basic_speed, _m(z0), w.air_density, w.force_coefficient)
 
 
 def test_peak_pressure_matches_the_eurocode_by_hand() raises:
@@ -96,6 +106,66 @@ def test_peak_pressure_is_the_same_below_two_meters() raises:
     var at_two = peak_velocity_pressure(w, _m(2.0)).value
     assert_almost_equal(peak_velocity_pressure(w, _m(0.5)).value, at_two)
     assert_true(peak_velocity_pressure(w, _m(3.0)).value > at_two)
+
+
+def test_minimum_height_follows_table_4_1() raises:
+    # Categories 0, I, II, III and IV of EN 1991-1-4, Table 4.1.
+    assert_almost_equal(minimum_height(_m(0.003)).value, 1.0)
+    assert_almost_equal(minimum_height(_m(CATEGORY_I)).value, 1.0)
+    assert_almost_equal(minimum_height(_m(CATEGORY_II)).value, 2.0)
+    assert_almost_equal(minimum_height(_m(CATEGORY_III)).value, 5.0)
+    assert_almost_equal(minimum_height(_m(CATEGORY_IV)).value, 10.0)
+    assert_almost_equal(minimum_height(_m(3.0)).value, 10.0)
+
+
+def test_minimum_height_is_linear_in_the_log_of_the_roughness() raises:
+    # The geometric mean of two categories is halfway between their zmin.
+    assert_almost_equal(
+        minimum_height(_m(sqrt(CATEGORY_I * CATEGORY_II))).value,
+        1.5,
+        atol=1e-12,
+    )
+    assert_almost_equal(
+        minimum_height(_m(sqrt(CATEGORY_II * CATEGORY_III))).value,
+        3.5,
+        atol=1e-12,
+    )
+    assert_almost_equal(
+        minimum_height(_m(sqrt(CATEGORY_III * CATEGORY_IV))).value,
+        7.5,
+        atol=1e-12,
+    )
+    var previous = 0.0
+    for i in range(41):
+        var z0 = 0.005 * pow(400.0, Float64(i) / 40.0)
+        var zmin = minimum_height(_m(z0)).value
+        assert_true(zmin >= previous)
+        previous = zmin
+
+
+def test_minimum_height_refuses_a_bad_roughness() raises:
+    with assert_raises(contains="A roughness length must be positive"):
+        _ = minimum_height(_m(0.0))
+    with assert_raises(contains="A roughness length must be positive"):
+        _ = minimum_height(_m(nan[DType.float64]()))
+
+
+def test_rough_terrain_holds_the_pressure_below_its_minimum_height() raises:
+    # Category III has zmin = 5 m: the pressure at 3 m is that at 5 m.
+    var rough = _rough(CATEGORY_III)
+    var at_five = peak_velocity_pressure(rough, _m(5.0)).to(PASCAL)
+    assert_almost_equal(at_five, _qp(26.0, CATEGORY_III, 5.0, 5.0), atol=1e-9)
+    assert_almost_equal(
+        peak_velocity_pressure(rough, _m(3.0)).to(PASCAL), at_five, atol=1e-9
+    )
+    assert_true(peak_velocity_pressure(rough, _m(6.0)).to(PASCAL) > at_five)
+    # Category IV has zmin = 10 m.
+    var town = _rough(CATEGORY_IV)
+    assert_almost_equal(
+        peak_velocity_pressure(town, _m(4.0)).to(PASCAL),
+        _qp(26.0, CATEGORY_IV, 10.0, 10.0),
+        atol=1e-9,
+    )
 
 
 def test_rougher_terrain_slows_the_wind_near_the_ground() raises:
@@ -132,7 +202,7 @@ def test_peak_pressure_refuses_bad_input() raises:
     with assert_raises(contains="A height must be positive"):
         _ = peak_velocity_pressure(w, _m(0.0))
     bad = w
-    bad.roughness = _m(3.0)
+    bad.roughness = _m(12.0)
     with assert_raises(contains="above the roughness length"):
         _ = peak_velocity_pressure(bad, _m(1.0))
 

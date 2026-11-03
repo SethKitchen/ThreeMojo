@@ -15,7 +15,7 @@
 | `plan` | `PlanPoint`, `Tower`, `Block`, `Moat`, `Bridge`, `CastlePlan` and `wijnendale` |
 | `survey` | `plan_to_json` and `plan_from_json`, which carry a surveyed plan in and out as JSON |
 | `render` | `CastleOptions`, `add_castle`, `surface_color` and `foliage_color` |
-| `wind` | `Wind`, `flanders_wind`, `peak_velocity_pressure`, `tower_wind_load`, `cantilever_frequency` and `check_tower_base` |
+| `wind` | `Wind`, `flanders_wind`, `minimum_height`, `peak_velocity_pressure`, `tower_wind_load`, `cantilever_frequency` and `check_tower_base` |
 | `arch` | `analyze_arch` and `analyze_bridge` |
 | `wall` | `GravityWall`, `check_wall` and `required_thickness` |
 | `water_balance` | `Climate`, `Weir`, `flanders_climate`, `simulate_year` and `required_inflow` |

@@ -9,7 +9,9 @@ The strength follows EN 1996-1-1 (Eurocode 6), clause 3.6.1.2, equation 3.1:
 fk = K fb^0.7 fm^0.3, where fb is the normalized compressive strength of the
 units and fm is the compressive strength of the mortar, both in MPa. The
 elastic modulus is 1000 fk, clause 3.7.2. The design strength is fk divided
-by a partial factor. The library values are typical values. They are not
+by a partial factor. Clause 3.6.1.2(2) limits the inputs of equation 3.1:
+fb is not taken above 75 MPa, and fm is not taken above 20 MPa or above
+2 fb. The library values are typical values. They are not
 design values for a surveyed wall.
 """
 
@@ -26,6 +28,10 @@ from units.si import KILOGRAM_PER_CUBIC_METER
 
 # Standard gravity, the conventional value of the 3rd CGPM (1901).
 comptime GRAVITY = Acceleration64(9.80665)
+# The greatest unit strength fb that equation 3.1 takes, in MPa.
+comptime _UNIT_LIMIT = 75.0
+# The greatest mortar strength fm that equation 3.1 takes, in MPa.
+comptime _MORTAR_LIMIT = 20.0
 
 
 @fieldwise_init
@@ -96,7 +102,10 @@ def characteristic_strength(
     """Return the characteristic compressive strength of masonry.
 
     EN 1996-1-1, equation 3.1: fk = K fb^0.7 fm^0.3. K is 0.55 for clay
-    units of group 1 in general purpose mortar, Table 3.3.
+    units of group 1 in general purpose mortar, Table 3.3. Clause
+    3.6.1.2(2) limits the inputs: fb is not taken above 75 MPa, and fm is
+    not taken above 20 MPa or above 2 fb. A stronger unit or mortar does
+    not give a higher strength.
 
     Args:
         unit: The normalized compressive strength of the units, fb.
@@ -112,8 +121,8 @@ def characteristic_strength(
     require_positive_finite(unit.value, "A unit strength must be positive")
     require_positive_finite(mortar.value, "A mortar strength must be positive")
     require_positive_finite(k, "The constant K must be positive")
-    var fb = unit.to(MEGAPASCAL)
-    var fm = mortar.to(MEGAPASCAL)
+    var fb = min(unit.to(MEGAPASCAL), _UNIT_LIMIT)
+    var fm = min(min(mortar.to(MEGAPASCAL), _MORTAR_LIMIT), 2.0 * fb)
     return Pressure64(k * pow(fb, 0.7) * pow(fm, 0.3), MEGAPASCAL)
 
 
