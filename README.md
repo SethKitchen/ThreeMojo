@@ -763,6 +763,13 @@ Procedural buildings for engineering analysis and for games share one canonical 
 - [x] [Walking through a scan](https://github.com/SethKitchen/ThreeMojo/wiki/Walking-through-a-scan): a capsule walks a scan's floor in a physics world, with a first-person camera, as a game does [#786](https://github.com/SethKitchen/ThreeMojo/issues/786)
 - [x] [GPU splats](https://github.com/SethKitchen/ThreeMojo/wiki/GPU-splats): a scan kept on the GPU and drawn a tile at a time. A scan of a building draws at 1920 by 1080 in 21 milliseconds, twice as fast as 24 CPU threads [#790](https://github.com/SethKitchen/ThreeMojo/issues/790)
 
+### Castles
+
+A moated brick castle as a plan, a scene and a set of engineering checks. A checked box records implemented scope. It does not establish engineering validity. Every dimension of the Wijnendale plan is an estimate.
+
+- [x] [Castle](https://github.com/SethKitchen/ThreeMojo/wiki/Castle): a unit-typed castle plan, masonry strength, a mesh view with a mirrored moat, and the Wijnendale plan [#778](https://github.com/SethKitchen/ThreeMojo/issues/778)
+- [x] [Castle analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Castle-analysis): wind on a tower, masonry arch limit analysis, a moat wall, the water balance of the moat and sun shadows [#779](https://github.com/SethKitchen/ThreeMojo/issues/779)
+
 ### Earth retaining
 
 Earth-retaining structures and the pictures that explain them. A checked box records implemented scope. It does not establish engineering validity for a project.

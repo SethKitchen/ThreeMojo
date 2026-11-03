@@ -20,6 +20,8 @@ The scan subject reads splat scans of real places, in SOG and other formats, and
 
 The geotech subject analyzes earth-retaining walls: earth and water pressure, LRFD stability and slip circles. The visual subject draws engineering results with meshes, labels and textures. See [Retaining walls](Retaining-walls) and [Engineering views](Engineering-views).
 
+The castle subject draws a moated brick castle from a plan and checks it as a structural engineer would. It finds wind on a tower and the line of thrust in a masonry arch. It checks a wall at the edge of the moat and the water balance of the moat. It draws the shadows of the sun. See [Castle](Castle) and [Castle analysis](Castle-analysis).
+
 The chemistry subject is a library for the steps of a process. It models the thermodynamic, phase, kinetic, physical and engineering requirements that turn a material into a product. Each step has an operating window, and new constraints and data plug in. It also solves equilibria, draws process maps and solves flowsheets. See [Process chemistry](Process-chemistry) and [Why a process runs where it does](Why-a-process-runs-where-it-does).
 
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
@@ -162,6 +164,17 @@ extensions/
     agents*.mojo, navigation*.mojo               agents and walker navigation
     recorder*.mojo, replayer*.mojo               the recorder
     town.mojo, render_*.mojo, camera_render.mojo rendering
+  castle/
+    kinds.mojo         tower shapes, roof forms, surfaces and limit states
+    masonry.mojo       masonry weight, strength and stiffness
+    plan.mojo          towers, blocks, moat, bridge and the Wijnendale plan
+    render.mojo        the mesh view of a plan
+    wind.mojo          wind on a tower and its base check
+    arch.mojo          limit analysis of a masonry arch
+    wall.mojo          the gravity wall at the edge of the moat
+    water_balance.mojo the water balance of the moat
+    sun.mojo           the sun over the site and its shadows
+    survey.mojo        a plan as JSON, so a survey can replace the estimates
   streamline/
     kinds.mojo      modes, presets and buffer kinds
     options.mojo    the options of Super Resolution and Ray Reconstruction
