@@ -259,11 +259,11 @@ Under the open sky, a house's ceiling under the eye does not hold it. A sight li
 
 | Residents | Where they wander |
 |---|---|
-| A woman of 65 inches, in a hooded green tunic | By the brick house, which she visits. |
-| A man of 70 inches, in a blue tunic | Along the trail. He visits the stone cottage. |
-| A child of 50 inches, in a yellow tunic, who runs | Around the pond. |
-| A man of 67 inches, in a hooded gray tunic | By the framed cottage, which he visits. |
-| A woman of 64 inches, in a red tunic | By the framed house, which she visits. |
+| A woman of 65 inches, dressed as a goodwife | By the brick house, which she visits. |
+| A man of 70 inches, dressed as a peasant | Along the trail. He visits the stone cottage. |
+| A child of 50 inches, dressed as a farmer, who runs | Around the pond. |
+| A man of 67 inches, dressed as a monk | By the framed cottage, which he visits. |
+| A woman of 64 inches, dressed as a noblewoman | By the framed house, which she visits. |
 | Four sheep and a goat | Right of the trail. |
 | Two cows and a horse | Left of the trail. |
 | A pig | By the barn. |
@@ -279,9 +279,28 @@ Each resident bumps into the trees, the player and every other resident. A resid
 
 **A person** is a `Body`: a game humanoid of 3,000 triangles, dressed in its `Outfit`, with its idle, walk, run and jump clips. The body fades to the clip of its stance in 0.2 seconds. The walk and the run play from 0.6 to 1.6 times their own rate, by the speed. So the feet keep pace with the ground. A jump plays from the moment the feet leave the ground. The player is a `Body` too.
 
+A person's skin, hair and beard are meshed on every core.
+
 **An animal** is a flipbook: its mesh in six poses of its walk, and one mesh standing. The mesh shows the pose of how far the animal has walked, so one stride covers one stride of ground. An animal walks at its stride times its stride frequency at a Froude number of 0.25. An animal that does not walk on four legs keeps its standing mesh.
 
 **A shy animal** runs from the player. `Herd.flee` is how near the player can come before the herd runs, a `Length`. Zero, the default, is tame. An animal nearer than that runs straight away from the player, at three times its walk, and its flipbook plays faster. It walks back to its route once the player is further away. The deer run from 12 meters, the rabbits from 6, the sheep from 3 and the goat from 2.
+
+## Faces
+
+Every villager and the player has a face that moves. A `Body` built with `speaks=True` keeps the preserved face, teeth and tongue of [Audio-aligned game faces](Audio-aligned-game-faces). It also keeps a still face of `FACE_TRIANGLES`, 900 triangles, for a distance. The still face is what the budget counts, so a person costs about as much as before. `ResidentsParameters.faces` turns the villagers' faces on or off. It is on by default.
+
+`face_reach` gives the distance at which a face is drawn `FACE_PIXELS`, 16 pixels, tall. It reads the quality's frame height and the camera's field of view. Nearer than that, `Body.show_face` shows the preserved face and sets its weights. Further, the still face shows. At the `medium` quality, the reach is about 2.6 meters.
+
+`FaceLife`, in `extensions/village/faces.mojo`, keeps one face moving:
+
+1. The eyes blink every 2 to 5.5 seconds, for 0.16 seconds. Each face blinks at its own times, by its seed.
+2. `say` starts words. The mouth makes the shape of each sound of the words, in its time. See [Head](Head#expressions-and-speech) for the shapes.
+3. `feel` sets an expression, how strong it is, and how long it is held. The face eases to it at `MOOD_EASE`, 5 a second. A new expression comes in after the last goes out.
+4. `pant` opens the mouth a little, in and out, for a fighter out of breath.
+
+`player_mood` sets the player's face by the fight. An attack shows anger, at 0.55. The heavy attack and the specials show more anger, at 0.9. A blow that lands on the player shows fear, and so does stamina run out. A fall shows sadness.
+
+Each expression is held for `GRIMACE`, 0.5 seconds. Below `WINDED`, 60 % of their stamina, the player pants.
 
 ## Clothes
 
@@ -296,7 +315,18 @@ Every person of the village is dressed, and so is the player. `village_outfit` g
 | `NETTLE` | Nettle green |
 | `GRAY_WOOL`, `CREAM_WOOL` | Undyed wool |
 
+The villagers, the bandits, the companion and the raiders are dressed by calling: `dressed_as` from [Outfits and armor](Outfits-and-armor#archetypes) gives each their outfit. `calling_groom` gives the hair and the beard that suit the calling, as a `Groom`. `Villager`, `Bandit` and `Raider` each hold a `groom`; a plain one, grown hair and no beard, by default. The raiders wear plate, a monk's robe, a knight's harness and a ranger's green.
+
 The player wears a madder-red tunic trimmed in weld yellow, over walnut hose. `PlayParameters.outfit` holds the player's clothes. An empty `Outfit` leaves a person bare.
+
+The clothes follow the skin, and the skin follows the bones, so they move together as a person runs, jumps and fights. Six things keep them apart where they must part:
+
+- The skin's arms are parted from the trunk before it is weighed. So an arm swung out does not stretch the skin or the tunic to the hip. See [Game humanoid](Game-humanoid#the-skin-and-its-weights).
+- A boot's last takes its weights from its own leg only. So a kick does not stretch the boot to the other foot.
+- The scabbard swings clear of the thigh beside it: see [Village combat](Village-combat#the-sword-clips).
+- Round the armpits, a garment under a closed one is cut deeper. So it does not show through when an arm rises. See [Garments](Garments).
+- A platebody keeps off the arms. So its side does not tear open under a raised arm. See [Outfits and armor](Outfits-and-armor#plate).
+- A long robe or gown hides the legs inside it. So a running leg does not push out through its front. See [Garments](Garments).
 
 ## The lighter village
 

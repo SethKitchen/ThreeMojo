@@ -32,11 +32,14 @@
    its bars.
 5. **A dummy's stamina**, over its head, while its stamina is not full.
 6. **The lock's mark**: four gold dots around the locked target's chest.
-7. **The numbers and the words** of the blows, which rise and fade.
+7. **The numbers and the words** of the blows, which rise and fade. They
+   stand under `TOP_BAND`, so they do not cross the compass.
 8. **The edges of the frame**, tinted: blue while the player's perfect
    dodge slows the foes; gold through an ultimate; and red below a
    quarter of the player's health. A stamina recovery rings the player's feet
    with blue light.
+9. **The way of each blow on the player**, for `HURT_SECONDS`: a red arc
+   near the frame's edge, toward where the blow came from. It fades.
 
 A point behind the camera is not drawn.
 """
@@ -47,6 +50,7 @@ from extensions.village.battle import (
     CHEST,
     WAVE_RANGE,
     HEAD,
+    HURT_SECONDS,
     POPUP_SECONDS,
     Battle,
 )
@@ -68,7 +72,7 @@ from extensions.village.combat import (
     move_data,
 )
 from extensions.village.companion import ASSIST_FULL
-from extensions.village.foes import POSTED
+from extensions.village.foes import POSTED, bandit_fighter
 from extensions.village.effects_hud import draw_effects
 from extensions.village.raid_hud import draw_raid
 from extensions.village.slashes import (
@@ -133,6 +137,19 @@ comptime RING_SECONDS = Float32(0.3)
 comptime GLOW_REACH = Float32(0.35)
 """How far a piercing attack's red glow reaches from the chest as it
 begins, in meters: half a man's shoulders."""
+comptime HURT_REACH = Float32(0.4)
+"""How far from the frame's middle a blow's mark stands, as a share of
+the frame's width across and of its height down."""
+comptime HURT_ARC = Float32(0.06)
+"""How far apart the squares of a blow's mark stand along its arc, as a
+share of the way from the middle."""
+comptime TOP_BAND = 46
+"""How many dots of the heads-up display's font the compass, its caption
+and the target panel take at the top of the frame. The numbers and the
+words of the blows stand under them."""
+comptime BOSS_ROOM = 40
+"""How many dots of the heads-up display's font a fighting warden's bars
+take at the top of the frame."""
 
 
 def stance_label(stance: CombatStance) -> String:
@@ -363,6 +380,7 @@ def _edges(
         tint_edges(frame, SLOW_TINT, 0.4 * min(Float32(1), battle.slow * 5))
     if f.health > 0 and f.health < 0.25 * f.parameters.health:
         tint_edges(frame, HURT_TINT, 0.3)
+    draw_hurts(frame, battle, look)
     if battle.pulsed >= 0 and battle.pulsed < PULSE_FLASH:
         var share = battle.pulsed / PULSE_FLASH
         var node = battle.trail.nodes[LIGHT_ONE.value].value()
@@ -623,6 +641,15 @@ def draw_battle(
                 fill_box(frame, cx - d, cy - d, cx + d, cy + d, GOLD_TEXT, 1)
     draw_raid(frame, battle, camera, look, scale)
     draw_effects(frame, battle, camera, look)
+    # Numbers over a head high in the frame stand under the compass and
+    # the target panel, so they do not cross them. They move down
+    # together, so they keep their order and do not cover each other.
+    var band = (TOP_BAND + hud_drop(battle)) * scale
+    var lowest = band
+    for popup in battle.popups:
+        var at = on_screen(camera, look, popup.at, w, h)
+        if at:
+            lowest = min(lowest, Int(at.value().y))
     for popup in battle.popups:
         var at = on_screen(camera, look, popup.at, w, h)
         if not at:
@@ -630,9 +657,152 @@ def draw_battle(
         _centered(
             frame,
             Int(at.value().x),
-            Int(at.value().y),
+            Int(at.value().y) + band - lowest,
             popup.text,
             scale,
             popup.color,
             note_alpha(popup.age, POPUP_SECONDS),
         )
+
+
+def target_name(battle: Battle, index: Int) -> String:
+    """Return the name of a foe the player can lock on to.
+
+    Args:
+        battle: The fight.
+        index: The foe's place in `battle.foes`.
+
+    Returns:
+        `WOLF` for a beast, `KNIFE THROWER` for a bandit that throws,
+        `BANDIT CAPTAIN` for one stronger than a bandit, else `BANDIT`.
+    """
+    ref foe = battle.foes[index]
+    if foe.beast:
+        return "WOLF"
+    if foe.brain.throws:
+        return "KNIFE THROWER"
+    if foe.fighter.parameters.health > bandit_fighter().health:
+        return "BANDIT CAPTAIN"
+    return "BANDIT"
+
+
+def draw_target(mut frame: Framebuffer, battle: Battle, top: Int):
+    """Draw the foe the player is locked on to, under the compass: its
+    name, and its health and stamina as wide bars.
+
+    Nothing is drawn while the player is locked on to no foe, as on a
+    dummy or the warden, whose own bar is drawn apart.
+
+    Args:
+        frame: The frame, the window's size.
+        battle: The fight.
+        top: How far down the frame the panel starts, in pixels.
+    """
+    if battle.lock < 0 or battle.lock >= len(battle.foes):
+        return
+    ref foe = battle.foes[battle.lock]
+    var scale = hud_scale(frame.height)
+    var name = target_name(battle, battle.lock)
+    var width = frame.width // 4
+    var x = (frame.width - width) // 2
+    _centered(frame, frame.width // 2, top, name, scale, WHITE_TEXT, 1)
+    ref p = foe.fighter.parameters
+    var y = top + 9 * scale
+    draw_bar(
+        frame, x, y, width, 3 * scale, foe.fighter.health / p.health, WOUNDED
+    )
+    draw_bar(
+        frame,
+        x,
+        y + 4 * scale,
+        width,
+        scale,
+        foe.fighter.stamina / p.stamina,
+        STAMINA_COLOR,
+    )
+
+
+def hud_drop(battle: Battle) -> Int:
+    """Return how far down the compass and the target panel stand, so a
+    fighting warden's bars show over them.
+
+    Args:
+        battle: The fight.
+
+    Returns:
+        `BOSS_ROOM` dots of the heads-up display's font while a warden
+        fights, else zero.
+    """
+    return BOSS_ROOM if boss_fights(battle) else 0
+
+
+def hurt_way(feet: Vector3, source: Vector3, look: Vector3) -> Vector3:
+    """Return the way on the frame from its middle toward where a blow came
+    from: up for ahead, right for the camera's right.
+
+    Args:
+        feet: Where the player stands.
+        source: Where the blow came from.
+        look: The way the camera looks, of length one.
+
+    Returns:
+        A way on the frame in `x` and `y`, with `y` down, of length one; or
+        zero for a blow from where the player stands.
+    """
+    var wx = source.x - feet.x
+    var wz = source.z - feet.z
+    var ahead = wx * look.x + wz * look.z
+    var right = wz * look.x - wx * look.z
+    var length = sqrt(ahead * ahead + right * right)
+    if length < 1.0e-4:
+        return Vector3(0, 0, 0)
+    return Vector3(right / length, -ahead / length, 0)
+
+
+def draw_hurts(mut frame: Framebuffer, battle: Battle, look: Vector3):
+    """Mark, near the frame's edge, the way to each blow the player took
+    in the last `HURT_SECONDS`: a red arc that fades.
+
+    Args:
+        frame: The frame, the window's size.
+        battle: The fight.
+        look: The way the camera looks, of length one.
+    """
+    var scale = hud_scale(frame.height)
+    var mx = Float32(frame.width) / 2
+    var my = Float32(frame.height) / 2
+    var rx = Float32(frame.width) * HURT_REACH
+    var ry = Float32(frame.height) * HURT_REACH
+    var size = 3 * scale
+    for hurt in battle.hurts:
+        var way = hurt_way(battle.feet, hurt.source, look)
+        if way.x == 0 and way.y == 0:
+            continue
+        var alpha = 0.9 * (1 - hurt.age / HURT_SECONDS)
+        # Seven squares along the arc, across the way.
+        for k in range(-3, 4):  # pragma: no branch
+            var t = Float32(k) * HURT_ARC
+            var x = way.x - t * way.y
+            var y = way.y + t * way.x
+            var px = Int(mx + x * rx)
+            var py = Int(my + y * ry)
+            fill_box(
+                frame, px - size, py - size, px + size, py + size, DANGER, alpha
+            )
+
+
+def boss_fights(battle: Battle) -> Bool:
+    """Return whether a raid's boss fights, and shows its bar at the top of
+    the frame.
+
+    Args:
+        battle: The fight.
+
+    Returns:
+        Whether a warden is engaged and not yet defeated.
+    """
+    for index in range(len(battle.wardens)):
+        ref boss = battle.wardens[index].boss
+        if boss.engaged and not boss.defeated():
+            return True
+    return False

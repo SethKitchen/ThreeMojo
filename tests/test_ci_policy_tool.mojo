@@ -382,9 +382,13 @@ def test_text_helpers_follow_the_regular_expressions() raises:
 
 def test_lint_tools_and_native_gates_have_explicit_conditions() raises:
     var jobs = _jobs()
-    for name in ["lint", "lint-macos"]:
+    # The Mac lints one file at a time, so its hang guard is longer.
+    for guard in [("lint", "240"), ("lint-macos", "330")]:
+        var name = guard[0]
         var job = jobs[name]
-        assert_true(_has_line(job, "    timeout-minutes: 240"), name)
+        assert_true(
+            _has_line(job, "    timeout-minutes: " + guard[1]), String(name)
+        )
         assert_equal(job.find("test-tools"), -1)
         for pair in [
             ("coverage_tools", "test-coverage-tool"),

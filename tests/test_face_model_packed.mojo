@@ -34,7 +34,10 @@ from extensions.humanoid.skeleton.head.frame import (
     HeadMuscleDimensions,
     head_muscle_dimensions,
 )
-from extensions.humanoid.skeleton.head.skin.mouth import mouth_mesh
+from extensions.humanoid.skeleton.head.skin.mouth import (
+    mouth_mesh,
+    mouth_meshes,
+)
 from extensions.humanoid.skeleton.head.skin.scan import (
     place,
     rest_expression,
@@ -296,6 +299,12 @@ def test_template_mouth_keeps_all_named_targets_bitwise() raises:
             mouth_mesh(dims, part, shapes),
             _reference_mouth_mesh(dims, part, shapes),
         )
+    # Both parts at once, from shared placements, are the same.
+    var both = mouth_meshes(dims, shapes)
+    _same_geometry(both[0], _reference_mouth_mesh(dims, TEETH, shapes))
+    _same_geometry(
+        both[1], _reference_mouth_mesh(dims, GUMS_AND_TONGUE, shapes)
+    )
 
 
 def test_shaped_mouth_keeps_all_named_targets_bitwise() raises:
@@ -308,6 +317,12 @@ def test_shaped_mouth_keeps_all_named_targets_bitwise() raises:
             mouth_mesh(dims, part, shapes),
             _reference_mouth_mesh(dims, part, shapes),
         )
+    # Both parts at once, from shared placements, are the same.
+    var both = mouth_meshes(dims, shapes)
+    _same_geometry(both[0], _reference_mouth_mesh(dims, TEETH, shapes))
+    _same_geometry(
+        both[1], _reference_mouth_mesh(dims, GUMS_AND_TONGUE, shapes)
+    )
 
 
 def main() raises:

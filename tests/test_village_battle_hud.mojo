@@ -10,6 +10,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from extensions.village.battle import CHEST, Bolt, Knife, Popup, Wave
 from extensions.village.battle_hud import (
     HURT_TINT,
+    TOP_BAND,
     draw_bar,
     draw_battle,
     on_screen,
@@ -94,6 +95,19 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     draw_battle(rest, arena.battle, arena.scene, camera, look)
     var gauges = _changed(rest)
     assert_true(gauges > 0)
+    # A number over a head high in the frame stands under the top band.
+    var high = Vector3(0, 6, -6)
+    assert_true(on_screen(camera, look, high, 320, 180).value().y < TOP_BAND)
+    arena.battle.popups.append(Popup(high, "77", WHITE_TEXT, 0.1))
+    var lowered = _frame()
+    draw_battle(lowered, arena.battle, arena.scene, camera, look)
+    arena.battle.popups.clear()
+    var moved = 0
+    for k in range(len(rest.pixels)):
+        if rest.pixels[k] != lowered.pixels[k]:
+            moved += 1
+            assert_true(k // 4 // 320 >= TOP_BAND)
+    assert_true(moved > 0)
     # A combo, a fighting bandit, a tired dummy, a lock and a number.
     ref b = arena.battle
     b.fighter.combo = 5

@@ -276,5 +276,37 @@ def test_rebind_validates_each_revision_and_missing_or_duplicate_part() raises:
         _ = bind_game_face(scene, assets, face.holder)
 
 
+def test_animate_sets_weights_without_the_fingerprint() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var face = _attach(scene, assets)
+    var weights = FaceWeights()
+    weights.blink(0.5)
+    face.animate(scene, weights)
+    for index in face.meshes:
+        assert_true(scene.meshes[index].morph_influences.is_worn())
+    # A weight that is not a number, or a wrong mapping, changes nothing.
+    var broken = FaceWeights()
+    broken.weights[0] = inf[DType.float32]()
+    with assert_raises(contains="weights or mapping"):
+        face.animate(scene, broken)
+    var short = FaceWeights()
+    _ = short.weights.pop()
+    with assert_raises(contains="dimensions"):
+        face.animate(scene, short)
+    var shorter = FaceWeights()
+    _ = shorter.weights.pop()
+    _ = shorter.shapes.pop()
+    with assert_raises(contains="complete weight mapping"):
+        face.animate(scene, shorter)
+    var missing = face.copy()
+    missing.meshes[0] = 99
+    with assert_raises(contains="mesh is missing"):
+        missing.animate(scene, weights)
+    _ = missing.meshes.pop()
+    with assert_raises(contains="three preserved meshes"):
+        missing.animate(scene, weights)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

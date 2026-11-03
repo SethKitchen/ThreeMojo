@@ -18,7 +18,12 @@ from extensions.attire.kinds import (
 )
 from extensions.attire.outfit import Outfit
 from core.scene import Scene
+from extensions.animals.coat import EYE
+from extensions.animals.build import create_animal
+from extensions.animals.options import CROWD, animal_options
+from extensions.animals.rig import Pose
 from extensions.animals.registry import CHICKEN, RABBIT, SpeciesId
+from core.buffer_geometry import MaterialIndex
 from extensions.humanoid.rig.joints import CHEST, HIPS, SPINE
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
@@ -39,6 +44,7 @@ from extensions.village.residents import (
     INDOORS,
     THRESHOLD,
     Body,
+    EYE_HEIGHT,
     Flipbook,
     GIVE_UP,
     Herd,
@@ -49,7 +55,9 @@ from extensions.village.residents import (
     ResidentsParameters,
     Route,
     Villager,
+    animal_look,
     clip_of,
+    mesh_poses,
     facing_turn,
     play_rate,
     visit,
@@ -64,6 +72,7 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -334,6 +343,35 @@ def test_residents_that_cannot_be_built_are_refused() raises:
             p.check()
 
 
+def _eye_triangles(coarseness: Float64) raises -> Int:
+    """Return how many triangles a rabbit's standing mesh's eyes have."""
+    var store = Assets()
+    var look = animal_look(store, RABBIT, 3, 1, CROWD, coarseness)
+    var count = 0
+    for group in store.geometries.get(look.book.stand).groups:
+        if group.material_index == MaterialIndex(EYE.value):
+            count += group.count // 3
+    return count
+
+
+def test_poses_are_meshed_at_once_and_a_foreign_pose_is_refused() raises:
+    var rabbit = create_animal(RABBIT, animal_options(3, quality=CROWD))
+    var chicken = create_animal(CHICKEN, animal_options(3, quality=CROWD))
+    var poses = List[Pose]()
+    poses.append(rabbit.bind_pose())
+    poses.append(chicken.bind_pose())
+    with assert_raises(contains="another rig"):
+        _ = mesh_poses(rabbit, poses)
+
+
+def test_a_coarse_animals_eyes_are_as_coarse() raises:
+    var fine = _eye_triangles(1)
+    var coarse = _eye_triangles(3)
+    assert_true(coarse > 0)
+    # Three times the cell is about a ninth of the triangles.
+    assert_true(coarse * 5 < fine)
+
+
 def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
     var ground = _flat()
     var assets = Assets()
@@ -367,6 +405,58 @@ def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
     ref jump = body.mixer.action(body.actions[3])
     assert_true(jump.phase > 0.5)
     assert_almost_equal(jump.time_scale, JUMP_PLAY, atol=1e-6)
+
+
+def test_a_speaking_body_shows_its_moving_face_near_the_camera() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var body = Body(
+        scene,
+        assets,
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        Outfit(),
+        800,
+        8,
+        speaks=True,
+        seed=4,
+    )
+    assert_true(body.speaks)
+    var walker = Character(
+        CharacterParameters(), 2, 3, Angle(0.0, RADIAN), _flat()
+    )
+    var step = Duration(0.1, SECOND)
+    body.pose(scene, walker, step)
+    scene.update()
+    # The eyes are near the top of the person, over their feet.
+    var head = body.head(scene)
+    var tall = body.person.rig.stature
+    assert_almost_equal(head.x, 2, atol=1e-5)
+    assert_almost_equal(head.y, EYE_HEIGHT * tall, atol=1e-4)
+    ref face = body.person.face.value()
+    var mouth = face.meshes[0]
+    var still = body.person.far_face.value()
+    # Far away, the still face shows.
+    body.show_face(scene, Vector3(2, 1, 40), 3, step)
+    assert_false(body.near)
+    assert_true(scene.node(still).visible)
+    # Near, the preserved face shows, and says its words.
+    body.life.say("Hello")
+    body.show_face(scene, Vector3(2, 1.5, 4), 3, step)
+    assert_true(body.near)
+    assert_false(scene.node(still).visible)
+    assert_true(scene.meshes[mouth].morph_influences.is_worn())
+    # A body that does not speak is left as it is.
+    var quiet = Body(
+        scene,
+        assets,
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        Outfit(),
+        500,
+        8,
+    )
+    quiet.show_face(scene, Vector3(0, 0, 0), 3, step)
+    assert_false(quiet.speaks)
+    assert_false(quiet.near)
 
 
 def test_a_garment_that_shows_nothing_casts_nothing() raises:

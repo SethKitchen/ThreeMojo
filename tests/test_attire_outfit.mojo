@@ -31,6 +31,7 @@ from extensions.attire.garment import (
     tunic,
 )
 from extensions.attire.kinds import (
+    OPEN_BELOW,
     NO_RUFFLES,
     ARMOR_LAYER,
     LEGS_SLOT,
@@ -48,15 +49,17 @@ from extensions.attire.kinds import (
 )
 from extensions.humanoid.rig.joints import (
     CHEST,
+    HEAD,
     HIPS,
     LEFT_THIGH,
+    RIGHT_SHIN,
     RIGHT_THIGH,
     SPINE,
 )
 from render.framebuffer import Color
 from extensions.attire.skirt import skirt_top
 from math.vector3 import Vector3
-from extensions.attire.apparel import crown, straw_hat
+from extensions.attire.apparel import cassock, crown, straw_hat, tall_boots
 from extensions.attire.armory import (
     great_helm,
     great_pauldrons,
@@ -69,9 +72,11 @@ from extensions.attire.outfit import (
     Outfit,
     dress,
     dress_pieces,
+    _head_skin,
     garment_detail,
+    still_face_geometry,
 )
-from objects.skinned_mesh import SKIN_INDEX
+from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 from extensions.attire.tailor import chemise, doublet, skirt
 from extensions.attire.apparel import trousers
 from core.deform import skin_carriers, skin_pose
@@ -162,28 +167,17 @@ def test_a_person_is_dressed_from_the_skin_out() raises:
     var coif_look = assets.materials.get(
         scene.skinned_meshes[dressed.meshes[4]].material
     )
-    var gambeson_look = assets.materials.get(
-        scene.skinned_meshes[dressed.meshes[2]].material
-    )
     var boots_look = assets.materials.get(
         scene.skinned_meshes[dressed.meshes[5]].material
     )
     assert_true(hauberk_look.bump_map != NO_TEXTURE)
     assert_true(hauberk_look.bump_map == coif_look.bump_map)
-    assert_true(gambeson_look.bump_map != NO_TEXTURE)
-    assert_true(gambeson_look.bump_map != hauberk_look.bump_map)
     assert_true(boots_look.bump_map != NO_TEXTURE)
     assert_true(boots_look.bump_map != hauberk_look.bump_map)
-    # The shirt shows at most a sliver past the gambeson and the mail.
-    var shirt_shown = 0
-    if dressed.meshes[0] >= 0:
-        shirt_shown = assets.geometries.get(
-            scene.skinned_meshes[dressed.meshes[0]].geometry
-        ).triangle_count()
-    var gambeson_shown = assets.geometries.get(
-        scene.skinned_meshes[dressed.meshes[2]].geometry
-    ).triangle_count()
-    assert_true(shirt_shown < gambeson_shown)
+    # The mail has no opening, so the shirt and the gambeson under it are
+    # cut away to its hems: they draw nothing.
+    assert_equal(dressed.meshes[0], -1)
+    assert_equal(dressed.meshes[2], -1)
     # The outfit hides most of the skin.
     var skin_after = assets.geometries.get(
         scene.skinned_meshes[person.skins[0]].geometry
@@ -193,6 +187,16 @@ def test_a_person_is_dressed_from_the_skin_out() raises:
     assert_false(scene.node(person.hair.value()).visible)
     assert_false(scene.node(person.strands[0].node.value()).visible)
     assert_false(scene.node(person.cards[0].node.value()).visible)
+    # A gambeson worn alone shows, with its quilting.
+    var padded = Outfit()
+    padded.add(gambeson())
+    var alone = dress(scene, assets, person, padded)
+    assert_true(alone.meshes[0] >= 0)
+    var gambeson_look = assets.materials.get(
+        scene.skinned_meshes[alone.meshes[0]].material
+    )
+    assert_true(gambeson_look.bump_map != NO_TEXTURE)
+    assert_true(gambeson_look.bump_map != hauberk_look.bump_map)
 
 
 def _pieces(
@@ -210,6 +214,26 @@ def _pieces(
         over,
         shells,
     )
+
+
+def test_a_shorter_closed_skirt_hides_the_top_of_the_one_under_it() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var closed = Outfit()
+    closed.add(tunic())
+    closed.add(jerkin())
+    var parted = jerkin()
+    parted.opening = OPEN_BELOW
+    var open = Outfit()
+    open.add(tunic())
+    open.add(parted^)
+    # Under the closed jerkin, the tunic's skirt draws only below its hem;
+    # under the parted one, it draws whole, to show in the parting.
+    var under_closed = _pieces(scene, assets, person, closed)[0].clone()
+    var under_open = _pieces(scene, assets, person, open)[0].clone()
+    assert_true(under_closed.triangle_count() > 0)
+    assert_true(under_closed.triangle_count() < under_open.triangle_count())
 
 
 def test_a_last_over_a_last_hides_it() raises:
@@ -365,6 +389,176 @@ def test_a_hood_hides_a_beard() raises:
     _ = dress(scene, assets, bearded, hooded)
     assert_false(scene.node(bearded.beard.value()).visible)
     assert_false(scene.node(bearded.hair.value()).visible)
+
+
+def test_a_hood_closes_over_a_speaking_face() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var speaker = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        coarse_spec(),
+        2400,
+        12,
+        8,
+        8,
+        workers=1,
+        facial_animation=True,
+        face_stand_in=400,
+    )
+    var still = still_face_geometry(scene, speaker).value()
+    var before = assets.geometries.get(still).triangle_count()
+    var hooded = Outfit()
+    hooded.add(hood())
+    var dressed = dress(scene, assets, speaker, hooded)
+    # The hood is cut from the still face too: some of its vertices only
+    # the head bone turns. It hides the still face's scalp.
+    ref piece = assets.geometries.get(
+        scene.skinned_meshes[dressed.meshes[0]].geometry
+    )
+    ref bones = piece.attribute_view(String(SKIN_INDEX))
+    ref weights = piece.attribute_view(String(SKIN_WEIGHT))
+    var headed = 0
+    for v in range(piece.vertex_count()):
+        if Int(bones.component(v, 0)) == HEAD.value and (
+            weights.component(v, 0) == 1
+        ):
+            headed += 1
+    assert_true(headed > 0)
+    assert_true(assets.geometries.get(still).triangle_count() < before)
+    assert_false(scene.node(speaker.hair.value()).visible)
+    # A person without a still face has none to dress.
+    var plain = coarse_person(scene, assets)
+    assert_false(Bool(still_face_geometry(scene, plain)))
+
+
+def test_a_face_is_dressed_as_a_skin_the_head_turns() raises:
+    var body = BufferGeometry()
+    body.set_attribute(String(POSITION), BufferAttribute([0, 0, 0], 3))
+    body.set_attribute(String(UV), BufferAttribute([0.5, 0.5], 2))
+    body.set_attribute("thinness", BufferAttribute([0.2], 1))
+    body.set_attribute(String(SKIN_INDEX), BufferAttribute([3, 0, 0, 0], 4))
+    body.set_attribute(String(SKIN_WEIGHT), BufferAttribute([1, 0, 0, 0], 4))
+    var face = BufferGeometry()
+    face.set_attribute(
+        String(POSITION), BufferAttribute([0, 1, 0, 1, 1, 0, 0, 2, 0], 3)
+    )
+    face.set_attribute(String(UV), BufferAttribute([0, 0, 1, 0, 0, 1], 2))
+    face.set_index([0, 1, 2])
+    var skin = _head_skin(face, body)
+    # The head turns each vertex wholly; the face keeps what it has, and
+    # what it lacks is zero.
+    assert_equal(skin.vertex_count(), 3)
+    for v in range(3):
+        assert_equal(
+            Int(skin.attribute_view(String(SKIN_INDEX)).component(v, 0)),
+            HEAD.value,
+        )
+        assert_equal(
+            skin.attribute_view(String(SKIN_WEIGHT)).component(v, 0), 1
+        )
+        assert_equal(skin.attribute_view("thinness").component(v, 0), 0)
+    assert_equal(skin.attribute_view(String(UV)).component(1, 0), 1)
+    assert_equal(len(skin.index), 3)
+
+
+def test_a_hat_sits_on_a_speaking_head() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var speaker = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        coarse_spec(),
+        2400,
+        12,
+        8,
+        8,
+        workers=1,
+        facial_animation=True,
+        face_stand_in=400,
+    )
+    var hatted = Outfit()
+    hatted.add(straw_hat())
+    var dressed = dress(scene, assets, speaker, hatted)
+    # The hat is made round the still face's head.
+    assert_true(
+        assets.geometries.get(
+            scene.skinned_meshes[dressed.meshes[0]].geometry
+        ).triangle_count()
+        > 0
+    )
+
+
+def _legs_drawn(
+    scene: Scene, assets: Assets, person: GameHumanoid
+) raises -> Int:
+    """Count the skin's triangles wholly on a leg, from the knee to the
+    hips."""
+    ref skin = assets.geometries.get(
+        scene.skinned_meshes[person.skins[0]].geometry
+    )
+    ref points = skin.attribute_view(String(POSITION))
+    var knee = person.rig.at(RIGHT_SHIN).y
+    var hips = person.rig.at(HIPS).y - 0.1
+    var count = 0
+    for t in range(len(skin.index) // 3):
+        var inside = True
+        for c in range(3):
+            var p = points.vector3(skin.index[3 * t + c])
+            if not (p.y > knee and p.y < hips and abs(p.x) > 0.03):
+                inside = False
+        if inside:
+            count += 1
+    return count
+
+
+def test_a_long_skirt_hides_the_legs_inside_it() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var bare = coarse_person(scene, assets)
+    var before = _legs_drawn(scene, assets, bare)
+    assert_true(before > 0)
+    # A robe to the ankles hides the thighs and the knees inside it, but
+    # for a few triangles by the crotch, where its own cover decides.
+    var robed = Outfit()
+    robed.add(cassock())
+    _ = dress(scene, assets, bare, robed)
+    var under_robe = _legs_drawn(scene, assets, bare)
+    assert_true(under_robe * 8 < before)
+    # Tall boots, dressed over the robe, lose their shafts inside it too:
+    # a shaft would push out through the robe's front.
+    var fresh = coarse_person(scene, assets)
+    var shod = Outfit()
+    shod.add(tall_boots())
+    var alone = _pieces(scene, assets, fresh, shod)[0].triangle_count()
+    var robe_and_boots = Outfit()
+    robe_and_boots.add(cassock())
+    robe_and_boots.add(tall_boots())
+    var inside = _pieces(scene, assets, fresh, robe_and_boots)[
+        1
+    ].triangle_count()
+    assert_true(inside * 10 < alone * 9)
+    # A tunic's short skirt hides them only from `SHORT_SKIRT_SHOW` over
+    # its hem up: less than the robe does, and the knees still show.
+    var other = coarse_person(scene, assets)
+    var short = Outfit()
+    short.add(tunic())
+    _ = dress(scene, assets, other, short)
+    var under_tunic = _legs_drawn(scene, assets, other)
+    assert_true(under_tunic < before)
+    assert_true(under_tunic > under_robe)
+    # A skirt parted open hides none of them.
+    var parted = tunic()
+    parted.opening = OPEN_BELOW
+    var third = coarse_person(scene, assets)
+    var open = Outfit()
+    open.add(parted^)
+    _ = dress(scene, assets, third, open)
+    assert_true(_legs_drawn(scene, assets, third) >= under_tunic)
 
 
 def test_an_outfit_that_does_not_check_is_refused() raises:
@@ -523,10 +717,16 @@ def test_a_design_draws_a_garment_in_parts() raises:
     outfit.add(legs^)
     outfit.add(boots())
     var dressed = dress(scene, assets, person, outfit)
-    # A plain shirt is one part, drawn without a map.
-    assert_equal(len(dressed.parts[0]), 1)
-    assert_equal(dressed.parts[0][0], dressed.meshes[0])
-    ref linen = scene.skinned_meshes[dressed.meshes[0]]
+    # The doublet has no opening, so the shirt under it draws nothing.
+    assert_equal(len(dressed.parts[0]), 0)
+    assert_equal(dressed.meshes[0], -1)
+    # A plain shirt worn alone is one part, drawn without a map.
+    var plain = Outfit()
+    plain.add(shirt())
+    var alone = dress(scene, assets, person, plain)
+    assert_equal(len(alone.parts[0]), 1)
+    assert_equal(alone.parts[0][0], alone.meshes[0])
+    ref linen = scene.skinned_meshes[alone.meshes[0]]
     assert_equal(assets.materials.get(linen.material).map, NO_TEXTURE)
     # A brocade doublet: the brocade, its plain panel, its braided trim.
     assert_equal(len(dressed.parts[1]), 3)

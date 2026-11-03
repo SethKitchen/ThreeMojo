@@ -676,6 +676,10 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Village facade details](https://github.com/SethKitchen/ThreeMojo/wiki/Village-houses#the-villages-view-of-the-model): weathered and mossy roofs, and a tiled hood and a lantern at each front door [#881](https://github.com/SethKitchen/ThreeMojo/issues/881)
 - [x] [Village day and night](https://github.com/SethKitchen/ThreeMojo/wiki/Village-day): dusk, moonlight, stars, and windows that glow with lamplight from dusk to dawn [#882](https://github.com/SethKitchen/ThreeMojo/issues/882)
 - [x] [Villagers face the player](https://github.com/SethKitchen/ThreeMojo/wiki/Village-errands#talk-to-a-villager): a villager stops and turns to the player while they talk [#883](https://github.com/SethKitchen/ThreeMojo/issues/883)
+- [x] [Village faces](https://github.com/SethKitchen/ThreeMojo/wiki/Village-walk#faces): faces that blink, speak and feel, still faces at a distance, and beards that move with the mouth [#926](https://github.com/SethKitchen/ThreeMojo/issues/926)
+- [x] [Village fighters in clothes and armor](https://github.com/SethKitchen/ThreeMojo/wiki/Village-walk#clothes): people dressed by calling, whose skin, cloth, plate and boots fight without tearing or webbing [#927](https://github.com/SethKitchen/ThreeMojo/issues/927)
+- [x] [Village compass](https://github.com/SethKitchen/ThreeMojo/wiki/Village-gathering#the-heads-up-display): a compass to errands and foes, the hour and the weather, and words that follow the mouth [#928](https://github.com/SethKitchen/ThreeMojo/issues/928)
+- [x] [Village combat display](https://github.com/SethKitchen/ThreeMojo/wiki/Village-combat#what-the-fight-shows): the foe locked on to, the way of each blow on the player, and room for a warden's bars [#951](https://github.com/SethKitchen/ThreeMojo/issues/951)
 - [x] [Village critters](https://github.com/SethKitchen/ThreeMojo/wiki/Village-critters): fireflies that blink at night and butterflies that flutter by day, and a pond that mirrors the night sky [#884](https://github.com/SethKitchen/ThreeMojo/issues/884)
 - [x] [Village skills](https://github.com/SethKitchen/ThreeMojo/wiki/Village-skills): foraging, mining and fishing levels that rise with experience and make gathering better [#885](https://github.com/SethKitchen/ThreeMojo/issues/885)
 - [x] [Village combat](https://github.com/SethKitchen/ThreeMojo/wiki/Village-combat): sword fights against bandits, wolves and dummies, with stamina, stances, specials, perfect dodges and a companion [#887](https://github.com/SethKitchen/ThreeMojo/issues/887)
@@ -766,6 +770,37 @@ Earth-retaining structures and the pictures that explain them. A checked box rec
 - [x] [Retaining walls](https://github.com/SethKitchen/ThreeMojo/wiki/Retaining-walls): earth and water pressure, trial wedges, LRFD wall stability, concrete strips, Bishop slip circles and failure motions [#753](https://github.com/SethKitchen/ThreeMojo/issues/753)
 - [x] [Design checks](https://github.com/SethKitchen/ThreeMojo/wiki/Design-checks): US member and foundation checks. AISC steel members and connections, NDS joists and bolts. ACI walls, footings, plain concrete and chapter 17 anchors. ASCE 7 wind. Patterned continuous beams, LaTeX/TikZ calculation writers and staged utilization views
 - [x] [Engineering views](https://github.com/SethKitchen/ThreeMojo/wiki/Engineering-views): a mesh builder for walls, pipes and ground, a text and label overlay, and civil-works textures [#754](https://github.com/SethKitchen/ThreeMojo/issues/754)
+
+### General relativity
+
+Warp drive spacetimes, analyzed as WarpFactory analyzes them. A checked box records implemented scope. It does not establish that a warp drive is physical.
+
+- [x] [Warp drives](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives): a port of WarpFactory. Alcubierre, Lentz, Van Den Broeck and warp shell metrics, stress-energy by the Einstein equations, energy conditions, expansion, shear and vorticity [#931](https://github.com/SethKitchen/ThreeMojo/issues/931)
+- [x] [WarpFactory parity](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#verification): WarpFactory run in GNU Octave, and the port matched to 1e-12 of each point's largest component [#932](https://github.com/SethKitchen/ThreeMojo/issues/932)
+- [x] [Exact derivatives](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#exact-derivatives): closed-form metrics differentiated by automatic differentiation, with an exact solver and Christoffel symbols [#933](https://github.com/SethKitchen/ThreeMojo/issues/933)
+- [x] [More warp metrics](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#more-metrics): a zero-expansion drive, the Krasnikov tube, shells from any profiles and an accelerating shell [#934](https://github.com/SethKitchen/ThreeMojo/issues/934)
+- [x] [Energy totals](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#totals): the joules a metric needs over a time slice, and the total of a condition's violation [#935](https://github.com/SethKitchen/ThreeMojo/issues/935)
+- [x] [Warp solver on every core](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#analyze-a-metric): the solvers and the energy conditions on CPU tasks, with the same values bit for bit [#936](https://github.com/SethKitchen/ThreeMojo/issues/936)
+- [x] [Spherical and cylindrical grids](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#spherical-and-cylindrical-grids): curvilinear grids, wrapping stencils, and shells and bubbles on them [#937](https://github.com/SethKitchen/ThreeMojo/issues/937)
+- [x] [Geodesics](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#geodesics): rays and free fall through a metric, proper time, and the sky seen from inside a bubble [#938](https://github.com/SethKitchen/ThreeMojo/issues/938)
+- [x] [Warp views](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#views): a turning surface of negative energy, and a bubble crossing the frame [#939](https://github.com/SethKitchen/ThreeMojo/issues/939)
+- [ ] [Positive-energy soliton](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#more-metrics): the soliton of Fell and Heisenberg; its construction needs the paper's equations [#940](https://github.com/SethKitchen/ThreeMojo/issues/940)
+- [ ] [Warp solver on the GPU](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#limits): a MAX kernel with a parity test against the CPU solver [#941](https://github.com/SethKitchen/ThreeMojo/issues/941)
+
+### Process chemistry
+
+A library for the requirements that turn a material into a product. A checked box records implemented scope. It is not an operating procedure.
+
+- [x] [Process chemistry](https://github.com/SethKitchen/ThreeMojo/wiki/Process-chemistry): NASA thermochemical data and a CHEMKIN reader, formulas, reactions and their equilibrium temperature and pressure. Steps with thermodynamic, phase, kinetic, physical and engineering requirements, a `Constraint` trait, operating windows, coating stress and heat duties. Worked processes: Kroll titanium, a diamond-coated tool and lime [#929](https://github.com/SethKitchen/ThreeMojo/issues/929)
+- [x] [Thermochemical data](https://github.com/SethKitchen/ThreeMojo/wiki/Thermochemical-data): NASA-7, NASA-9 and Shomate fits, CHEMKIN files read and written, NASA CEA records, fits to tables, and enthalpy uncertainty [#930](https://github.com/SethKitchen/ThreeMojo/issues/930)
+- [x] [Chemical equilibrium](https://github.com/SethKitchen/ThreeMojo/wiki/Chemical-equilibrium): multiphase Gibbs minimization by the NASA CEA method, with phases that enter and leave, and an equilibrium yield constraint [#942](https://github.com/SethKitchen/ThreeMojo/issues/942)
+- [x] [Process maps](https://github.com/SethKitchen/ThreeMojo/wiki/Process-maps): scans over temperature and pressure, Ellingham lines, Kellogg predominance maps and the Baur-Glaessner map [#943](https://github.com/SethKitchen/ThreeMojo/issues/943)
+- [x] [Rates and transport](https://github.com/SethKitchen/ThreeMojo/wiki/Rates-and-transport): Arrhenius rates as constraints, the shrinking-core model, evaporation, case depth and heating time [#945](https://github.com/SethKitchen/ThreeMojo/issues/945)
+- [x] [Electrolysis and film color](https://github.com/SethKitchen/ThreeMojo/wiki/Electrolysis-and-film-color): reversible, decomposition and thermoneutral voltages, Faraday's law, cell energy, and the colors of thin oxide films [#946](https://github.com/SethKitchen/ThreeMojo/issues/946)
+- [x] [Binary solutions](https://github.com/SethKitchen/ThreeMojo/wiki/Binary-solutions): Redlich-Kister phases, activities and phase boundaries from the convex hull [#947](https://github.com/SethKitchen/ThreeMojo/issues/947)
+- [x] [Flowsheets and routes](https://github.com/SethKitchen/ThreeMojo/wiki/Flowsheets-and-routes): mixers, reactors and splitters with recycle, solved to steady state, and a breadth-first search for reaction routes [#948](https://github.com/SethKitchen/ThreeMojo/issues/948)
+- [x] [Materials and coatings](https://github.com/SethKitchen/ThreeMojo/wiki/Materials-and-coatings): expansion curves, melting points and eutectics with sources, Stoney's stress, buckling and thermal shock [#949](https://github.com/SethKitchen/ThreeMojo/issues/949)
+- [x] [Crystals and figures](https://github.com/SethKitchen/ThreeMojo/wiki/Crystals-and-figures): a CIF reader with symmetry expansion, densities and bonds, chart axes, and six gallery figures [#950](https://github.com/SethKitchen/ThreeMojo/issues/950)
 
 ### Out of scope
 

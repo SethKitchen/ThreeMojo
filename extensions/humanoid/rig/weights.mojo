@@ -29,13 +29,18 @@ This is not a three.js port. See Extensions.
 """
 
 from math.finite import require_finite
+from std.math import sqrt
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import POSITION, BufferGeometry
+from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from extensions.humanoid.rig.joints import (
     HEAD,
     HIPS,
+    LEFT_FOREARM,
     LEFT_HAND,
+    LEFT_UPPER_ARM,
+    RIGHT_FOREARM,
+    RIGHT_UPPER_ARM,
     LEFT_TOES,
     RIGHT_HAND,
     RIGHT_TOES,
@@ -73,6 +78,9 @@ comptime THICKNESS: List[Float32] = [
 ]
 # The power a nearness is raised to: the higher, the sharper each bend.
 comptime SHARPNESS = 6
+# How far a vertex on the side of the chest faces away from the midline,
+# as its normal's x on that side, at least: see `part_arms`.
+comptime SIDE_FACING = Float32(0.7)
 # How far past the midline a limb's bones still reach, in meters.
 comptime MIDLINE = Float32(0.01)
 # How far below the hips their bone starts, in meters on the template.
@@ -510,6 +518,267 @@ def _mirror(joint: Int) -> Int:
         14,
     ]
     return mirrored[joint]
+
+
+def _side_owner(skin: BufferGeometry, rig: HumanoidRig, v: Int) raises -> Int:
+    """Return the joint a vertex of a skin is given to, to part the arms:
+    the bone it lies nearest through the air, in each bone's thicknesses.
+    A vertex an arm's bone wins that lies nearer the midline than the
+    bone and faces away from the midline lies on the side of the chest
+    the arm hangs against: it goes to the nearest bone not of an arm."""
+    var p = skin.attribute_view(String(POSITION)).vector3(v)
+    var near = bone_weights(rig, p)
+    var best = 0
+    for j in range(1, JOINT_COUNT):  # pragma: no branch
+        if near[j] > near[best]:
+            best = j
+    if not _same_arm(best, best) or not skin.has_attribute(String(NORMAL)):
+        return best
+    var a = rig.joints[best]
+    var b = rig.ends[best]
+    var ab = b - a
+    var t = clamp((p - a).dot(ab) / max(ab.dot(ab), Float32(1.0e-12)), 0, 1)
+    var axis = a + ab * t
+    var facing = skin.attribute_view(String(NORMAL)).vector3(v).x
+    var side = Float32(1) if p.x > 0 else Float32(-1)
+    if abs(p.x) >= abs(axis.x) or facing * side <= SIDE_FACING:
+        return best
+    var other = HIPS.value
+    for j in range(JOINT_COUNT):  # pragma: no branch
+        if not _same_arm(j, j) and near[j] > near[other]:
+            other = j
+    return other
+
+
+def _forearm(joint: Int) -> Bool:
+    """Return True for a forearm or a hand, of either side."""
+    return (
+        joint == RIGHT_FOREARM.value
+        or joint == RIGHT_HAND.value
+        or joint == LEFT_FOREARM.value
+        or joint == LEFT_HAND.value
+    )
+
+
+def _same_arm(a: Int, b: Int) -> Bool:
+    """Return True if two joints are both of one arm: its upper arm, its
+    forearm or its hand."""
+    var right: List[Int] = [
+        RIGHT_UPPER_ARM.value,
+        RIGHT_FOREARM.value,
+        RIGHT_HAND.value,
+    ]
+    var left: List[Int] = [
+        LEFT_UPPER_ARM.value,
+        LEFT_FOREARM.value,
+        LEFT_HAND.value,
+    ]
+    return (a in right and b in right) or (a in left and b in left)
+
+
+def part_arms(
+    mut skin: BufferGeometry, rig: HumanoidRig, armpit: Float32
+) raises -> Int:
+    """Part each arm from the trunk and the legs where the skin joins
+    them, below the armpit, before the skin is weighed.
+
+    A hanging arm lies against the side and the hip, and the skin joins
+    them there. Weighed over the skin, the arm's inner side would then be
+    turned by the trunk, and the trunk by the arm: as the arm swings out,
+    the skin would tear open along the arm and stretch into a web to the
+    hip. So each vertex is first given to the bone it lies nearest
+    through the air, in that bone's thicknesses, as `bone_weights` weighs
+    it. A vertex an arm's bone wins that lies nearer the midline than the
+    bone, and faces away from the midline, lies on the side of the chest
+    the arm hangs against: it goes to the nearest bone not of an arm, so
+    the garments over it stay on the trunk. A triangle is dropped, so a slit opens, when one corner is given
+    to a joint of one arm and another to a joint not of that arm, and
+    either the arm's corner is given to its forearm or its hand, or the
+    other corner lies below the armpit. The skin over the shoulder joins
+    the arm above the armpit, so it stays. Each hole the slit opens, in
+    the arm or in the trunk, is closed: see `close_holes`. Weigh the skin
+    after, with `skin_weights`, so no weight passes over the slit.
+
+    Args:
+        skin: An indexed skin at rest, in the pelvis frame.
+        rig: The rig it is bound to.
+        armpit: The height of the armpits, in the skin's frame, in
+            meters.
+
+    Returns:
+        How many triangles were dropped.
+
+    Raises:
+        Error: If the skin has no positions.
+    """
+    ref points = skin.attribute_view(String(POSITION))
+    var most = List[Int](capacity=points.count())
+    for v in range(points.count()):  # pragma: no branch
+        most.append(_side_owner(skin, rig, v))
+    ref placed = skin.attribute_view(String(POSITION))
+    var kept = List[Int](capacity=len(skin.index))
+    var dropped = 0
+    var cut = List[Bool](length=placed.count(), fill=False)
+    for t in range(0, len(skin.index) - 2, 3):  # pragma: no branch
+        var bridge = False
+        for c in range(3):  # pragma: no branch
+            var a = most[skin.index[t + c]]
+            if not _same_arm(a, a):
+                continue
+            for d in range(3):  # pragma: no branch
+                var b = skin.index[t + d]
+                if _same_arm(a, most[b]):
+                    continue
+                if _forearm(a) or placed.vector3(b).y < armpit:
+                    bridge = True
+        if bridge:
+            dropped += 1
+            for c in range(3):  # pragma: no branch
+                cut[skin.index[t + c]] = True
+            continue
+        for c in range(3):  # pragma: no branch
+            kept.append(skin.index[t + c])
+    skin.index = kept^
+    if dropped > 0:
+        close_holes(skin, cut)
+    return dropped
+
+
+def keep_arms_off(
+    mut skin: BufferGeometry, rig: HumanoidRig, armpit: Float32
+) raises:
+    """Take the arms' weights off the trunk and the legs below the armpit,
+    after the skin is weighed.
+
+    Over the skin, an arm's weight still spreads round the shoulder and
+    down the side of the chest, so the side would follow a raised arm a
+    little, and every garment over it would stretch into a wedge from the
+    arm to the waist. A vertex below the armpit that `part_arms` gives to
+    a joint not of an arm keeps only the weights of the joints that are not
+    an arm's, in their shares, and they add up to one again. A vertex that
+    held no other weight keeps its own.
+
+    Args:
+        skin: A skin with `skinIndex` and `skinWeight`, in the pelvis
+            frame.
+        rig: The rig it is bound to.
+        armpit: The height of the armpits, in the skin's frame, in
+            meters.
+
+    Raises:
+        Error: If the skin has no positions or skin attributes.
+    """
+    ref points = skin.attribute_view(String(POSITION))
+    var bones = skin.clone_attribute(String(SKIN_INDEX))
+    var weights = skin.clone_attribute(String(SKIN_WEIGHT))
+    for v in range(points.count()):  # pragma: no branch
+        var p = points.vector3(v)
+        if p.y >= armpit:
+            continue
+        var best = _side_owner(skin, rig, v)
+        if _same_arm(best, best):
+            continue
+        var kept = Float32(0)
+        for k in range(4):  # pragma: no branch
+            var joint = Int(bones.component(v, k))
+            if not _same_arm(joint, joint):
+                kept += weights.component(v, k)
+        if kept <= 0:
+            continue
+        for k in range(4):  # pragma: no branch
+            var joint = Int(bones.component(v, k))
+            var w = weights.component(v, k)
+            var share = Float32(0) if _same_arm(joint, joint) else w / kept
+            weights.set_component(v, k, share)
+    skin.set_attribute(String(SKIN_INDEX), bones^)
+    skin.set_attribute(String(SKIN_WEIGHT), weights^)
+
+
+def close_holes(mut skin: BufferGeometry, touched: List[Bool]) raises:
+    """Close each hole of an indexed mesh whose edge passes a touched
+    vertex, by a fan of triangles round a new vertex at its middle.
+
+    A hole is a loop of edges each of which only one triangle has. The
+    new vertex takes the mean of the loop's vertices in every attribute.
+    A normal's mean is made of length one. The new vertex's skin
+    attributes are zero: weigh the skin again after. Each fan
+    triangle runs the other way round its edge from the triangle that
+    has it, so it faces the same way.
+
+    Args:
+        skin: An indexed mesh.
+        touched: Per vertex, whether a hole there is closed.
+
+    Raises:
+        Error: If the mesh has no positions.
+    """
+    var count = skin.attribute_view(String(POSITION)).count()
+    # Each edge's count of triangles, and the way round the one triangle
+    # that has a lone edge goes.
+    var uses = Dict[Int, Int]()
+    for t in range(0, len(skin.index) - 2, 3):  # pragma: no branch
+        for c in range(3):  # pragma: no branch
+            var a = skin.index[t + c]
+            var b = skin.index[t + (c + 1) % 3]
+            var key = min(a, b) * count + max(a, b)
+            uses[key] = uses.get(key, 0) + 1
+    # A lone edge from a to b leaves the hole's loop from b to a.
+    var next = Dict[Int, Int]()
+    for t in range(0, len(skin.index) - 2, 3):  # pragma: no branch
+        for c in range(3):  # pragma: no branch
+            var a = skin.index[t + c]
+            var b = skin.index[t + (c + 1) % 3]
+            if uses[min(a, b) * count + max(a, b)] == 1:
+                next[b] = a
+    var names = List[String]()
+    var data = List[List[Float32]]()
+    var sizes = List[Int]()
+    for k in range(len(skin.names)):  # pragma: no branch
+        names.append(skin.names[k])
+        sizes.append(skin.values[k].item_size)
+        data.append(skin.values[k].packed())
+    var made = count
+    var done = List[Bool](length=count, fill=False)
+    for start in range(count):  # pragma: no branch
+        if done[start] or not touched[start] or start not in next:
+            continue
+        var loop = List[Int]()
+        var v = start
+        while not done[v] and v in next:
+            done[v] = True
+            loop.append(v)
+            v = next[v]
+        # Where two holes meet at one vertex, a walk can end off its start.
+        if v != start:
+            continue
+        for k in range(len(names)):  # pragma: no branch
+            data[k].extend(_mean(data[k], sizes[k], loop, names[k]))
+        for i in range(len(loop)):  # pragma: no branch
+            skin.index.append(loop[i])
+            skin.index.append(loop[(i + 1) % len(loop)])
+            skin.index.append(made)
+        made += 1
+    for k in range(len(names)):  # pragma: no branch
+        skin.set_attribute(names[k], BufferAttribute(data[k].copy(), sizes[k]))
+
+
+def _mean(
+    data: List[Float32], size: Int, loop: List[Int], name: String
+) -> List[Float32]:
+    """Return the mean of an attribute over a loop of vertices: a unit
+    normal for the normals, and zeros for the skin's joints and weights."""
+    var out = List[Float32](length=size, fill=0)
+    if name == String(SKIN_WEIGHT) or name == String(SKIN_INDEX):
+        return out^
+    for v in loop:  # pragma: no branch
+        for c in range(size):  # pragma: no branch
+            out[c] += data[v * size + c] / Float32(len(loop))
+    if name == "normal":
+        var n = sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2])
+        if n > 0:
+            for c in range(size):  # pragma: no branch
+                out[c] /= n
+    return out^
 
 
 def part_legs(mut skin: BufferGeometry, crotch: Float32) raises:

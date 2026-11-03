@@ -16,7 +16,14 @@ from extensions.village.gathering import (
     TRINKET,
 )
 from extensions.village.surfaces import house_looks
+from extensions.humanoid.skeleton.head.expression import (
+    NEUTRAL,
+    SADNESS,
+    SMILE,
+)
 from extensions.village.talk import (
+    ASKING,
+    CHATTING,
     DONE,
     Errand,
     ErrandState,
@@ -25,7 +32,10 @@ from extensions.village.talk import (
     SPEECH_SECONDS,
     Speaker,
     TAKEN,
+    THANKFUL,
     Talk,
+    WANTING,
+    revealed,
     default_speakers,
 )
 from math.vector3 import Vector3
@@ -133,20 +143,30 @@ def test_an_errand_is_asked_taken_and_paid() raises:
     var scene = Scene()
     var talk = _talk(scene, assets)
     var satchel = Satchel()
+    assert_true(talk.feeling == NEUTRAL)
     assert_equal(talk.speak(0, satchel), "Three herbs, please.")
     assert_true(talk.states[0] == TAKEN)
+    # Each answer has its feeling: asking smiles a little, wanting looks
+    # sad, thanks smile broadly, and a line smiles.
+    assert_true(talk.feeling == SMILE)
+    assert_almost_equal(talk.strength, ASKING, atol=1e-6)
     assert_equal(talk.speak(0, satchel), "I still need 3 more herbs.")
+    assert_true(talk.feeling == SADNESS)
+    assert_almost_equal(talk.strength, WANTING, atol=1e-6)
     satchel.counts[HERBS.value] = 2
     assert_equal(talk.errands(satchel)[0], "herbs for Ann 2/3")
     satchel.counts[HERBS.value] = 4
     assert_equal(talk.errands(satchel)[0], "herbs for Ann 3/3")
     assert_equal(talk.speak(0, satchel), "Thank you.")
     assert_true(talk.states[0] == DONE)
+    assert_almost_equal(talk.strength, THANKFUL, atol=1e-6)
     assert_equal(satchel.count(HERBS), 1)
     assert_equal(satchel.count(CHEST), 10)
     assert_equal(len(talk.errands(satchel)), 0)
     # Once done, and with no errand, a speaker says their lines in turn.
     assert_equal(talk.speak(0, satchel), "Hello.")
+    assert_true(talk.feeling == SMILE)
+    assert_almost_equal(talk.strength, CHATTING, atol=1e-6)
     assert_equal(talk.speak(1, satchel), "One.")
     assert_equal(talk.speak(1, satchel), "Two.")
     assert_equal(talk.speak(1, satchel), "One.")
@@ -154,6 +174,13 @@ def test_an_errand_is_asked_taken_and_paid() raises:
         _ = talk.speak(2, satchel)
     with assert_raises(contains="one of the village's"):
         _ = talk.speak(-1, satchel)
+
+
+def test_words_are_revealed_and_keep_their_width() raises:
+    assert_equal(revealed("Good day", 0.5), "Good    ")
+    assert_equal(revealed("Good day", -1), "        ")
+    assert_equal(revealed("Good day", 2), "Good day")
+    assert_equal(revealed("", 0.5), "")
 
 
 def test_a_press_speaks_and_the_markers_follow() raises:
@@ -168,6 +195,7 @@ def test_a_press_speaks_and_the_markers_follow() raises:
     # A held button speaks once, on its press.
     assert_true(talk.update(scene, feet, places, heads, True, satchel, step))
     assert_equal(talk.speech, "Ann: Three herbs, please.")
+    assert_equal(talk.words, "Three herbs, please.")
     assert_equal(talk.age, 0)
     assert_false(talk.update(scene, feet, places, heads, True, satchel, step))
     assert_almost_equal(talk.age, 0.1, atol=1e-6)

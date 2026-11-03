@@ -442,6 +442,9 @@ comptime FINISH_STOP = Float32(0.2)
 """How long a finisher stops the fight, in seconds."""
 comptime SHAKE = Float32(0.06)
 """How far a strong blow shakes the camera, in meters."""
+comptime HURT_SECONDS = Float32(1.2)
+"""How long the display marks the way a blow on the player came from, in
+seconds."""
 comptime SHAKE_FADE = Float32(10)
 """How fast the camera's shake dies away: each second it keeps
 `exp(-SHAKE_FADE)` of itself."""
@@ -677,6 +680,16 @@ struct Flash(Copyable, Movable):
     # player. Each is at chest height.
     var at: Vector3
     var to: Vector3
+    var age: Float32
+
+
+@fieldwise_init
+struct Hurt(Copyable, Movable):
+    """A blow the player took, and where it came from: the display marks
+    the way to it at the frame's edge."""
+
+    var source: Vector3
+    # How long ago it landed, in seconds.
     var age: Float32
 
 
@@ -1070,6 +1083,9 @@ struct Battle(Movable):
     # Where the player's feet were at the end of the last frame, for the
     # display.
     var feet: Vector3
+    # The blows the player took in the last `HURT_SECONDS`, for the
+    # display.
+    var hurts: List[Hurt]
     # How many frames the fight has run.
     var frame: Int
 
@@ -1130,7 +1146,14 @@ struct Battle(Movable):
             if ground.wet(bandit.x, bandit.z):
                 continue
             var person = Body(
-                scene, assets, bandit.spec, bandit.outfit, triangles, detail
+                scene,
+                assets,
+                bandit.spec,
+                bandit.outfit,
+                triangles,
+                detail,
+                hair=bandit.groom.hair,
+                beard=bandit.groom.beard,
             )
             var arms = Arms(scene, assets, person, swords, DULL_IRON)
             var size = person.person.rig.stature / Float32(1.8288)
@@ -1163,7 +1186,14 @@ struct Battle(Movable):
         self.allies = List[Ally]()
         for ally in parameters.allies:
             var person = Body(
-                scene, assets, ally.spec, ally.outfit, triangles, detail
+                scene,
+                assets,
+                ally.spec,
+                ally.outfit,
+                triangles,
+                detail,
+                hair=ally.groom.hair,
+                beard=ally.groom.beard,
             )
             var arms = Arms(scene, assets, person, swords, BRIGHT_STEEL)
             var size = person.person.rig.stature / Float32(1.8288)
@@ -1261,6 +1291,7 @@ struct Battle(Movable):
         self.taunt_wait = 0
         self.dodge_hold = 0
         self.feet = start
+        self.hurts = List[Hurt]()
         self.frame = 0
         self.sparks = Sparks(scene, assets, glow)
         self.popups = List[Popup]()
@@ -1370,7 +1401,14 @@ struct Battle(Movable):
         _ = add_stones(scene, assets, looks, home, heights)
         for raider in raid.raiders:
             var body = Body(
-                scene, assets, raider.spec, raider.outfit, triangles, detail
+                scene,
+                assets,
+                raider.spec,
+                raider.outfit,
+                triangles,
+                detail,
+                hair=raider.groom.hair,
+                beard=raider.groom.beard,
             )
             var style = role_style(raider.role)
             var kit = Arms(scene, assets, body, swords, BRIGHT_STEEL, [style])
@@ -2806,6 +2844,11 @@ struct Battle(Movable):
         member.shove = push_of(struck, blow.value(), _way(at, there))
         self._show(scene, struck, there, False)
 
+    def _felt(mut self, source: Vector3, before: Float32):
+        """Keep a blow from `source` for the display, if it took health."""
+        if self.fighter.health < before:
+            self.hurts.append(Hurt(source, 0))
+
     def _hurt(
         mut self,
         mut scene: Scene,
@@ -2820,7 +2863,9 @@ struct Battle(Movable):
         var front = faces(
             feet, player.heading, self.fighter.parameters.guard_arc, source
         )
+        var before = self.fighter.health
         var struck = self.fighter.receive(hit, front)
+        self._felt(source, before)
         self.foes[index].fighter.landed(struck)
         self.shove = push_of(struck, hit, _way(source, feet))
         throw_up(player, struck, hit)
@@ -3103,7 +3148,9 @@ struct Battle(Movable):
             var front = faces(
                 feet, player.heading, self.fighter.parameters.guard_arc, source
             )
+            var before = self.fighter.health
             var struck = self.fighter.receive(blow, front)
+            self._felt(source, before)
             self.shove = push_of(struck, blow, _way(source, feet))
             throw_up(player, struck, blow)
             self._show(scene, struck, feet, True)
@@ -3528,6 +3575,11 @@ struct Battle(Movable):
         self.trail.color = OVER_TRAIL if over else PLAYER_TRAIL
         self._settle(scene, player, terrain, still)
         self.feet = player.position
+        var kept = List[Hurt]()
+        for hurt in self.hurts:
+            if hurt.age + real < HURT_SECONDS:
+                kept.append(Hurt(hurt.source, hurt.age + real))
+        self.hurts = kept^
         self.arms.pose(scene, body, player, self.fighter, self.drawn, still)
         self.trail.show(scene, self.fighter)
         # Fists and shots leave no blade's trail; a spinning kick does.

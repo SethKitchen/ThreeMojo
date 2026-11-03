@@ -941,6 +941,52 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## WarpFactory
+
+<https://github.com/NerdsWithAttitudes/WarpFactory>
+
+`extensions/warp/` ports WarpFactory's metrics, its finite-difference
+solver for the stress-energy tensor, its Eulerian frame transfer, energy
+conditions, metric scalars, momentum flow lines and red-blue color map,
+from the MATLAB sources at commit `03b10cb`. The Mojo implementation is
+original work; the formulas and the order of their terms follow
+WarpFactory's. `tests/test_warp_metrics.mojo` copies WarpFactory's Lentz
+region tests as an oracle. `docs/warpfactory-parity/shims/` holds three
+WarpFactory files, `verifyTensor.m`, `getEulerianTransformationMatrix.m`
+and `getEvenPointsOnSphere.m`, each changed only so that GNU Octave can
+run it, and `docs/warpfactory-parity/reference.txt` holds values that
+WarpFactory computed. WarpFactory is distributed under the MIT License,
+reproduced in full below.
+
+Anyone may obtain WarpFactory directly from its authors under the MIT
+License. The noncommercial restriction in ThreeMojo's own license applies
+only to ThreeMojo's code and has no effect whatsoever on your rights in
+WarpFactory.
+
+```
+MIT License
+
+Copyright (c) 2023 Christopher Helmerich & Jared Fuchs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## NVIDIA Streamline
 
 <https://github.com/NVIDIA-RTX/Streamline>
@@ -1098,3 +1144,56 @@ changed, when you share a scan or a render that uses it. The
 [asset credit](assets/building_scans/ATTRIBUTION.md) holds the wording, and
 `building_scans credits` prints it for the scans in a cache. ThreeMojo's code
 license does not replace or restrict these asset licenses.
+
+## NASA thermochemical data
+
+<https://ntrs.nasa.gov/citations/19940013151>
+
+`extensions/chemistry/catalog.mojo` holds NASA seven-coefficient polynomials
+from B. J. McBride, S. Gordon and M. A. Reno, "Coefficients for Calculating
+Thermodynamic and Transport Properties of Individual Species", NASA TM-4513,
+1993. That report is a work of the United States government. The
+coefficients were read, unchanged, from the conversion of that data that
+Cantera 3.2 ships as `nasa_gas.yaml` and `nasa_condensed.yaml`
+(<https://cantera.org>). Cantera is distributed under the BSD 3-Clause
+License, reproduced in full below.
+
+```
+Copyright (c) 2001-2009, California Institute of Technology
+All rights reserved.
+
+Copyright (c) 2009 Sandia Corporation. Under the terms of
+Contract AC04-94AL85000 with Sandia Corporation, the U.S. Government
+retains certain rights in this software.
+
+Copyright (c) 2011-2025, Cantera Developers.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+- Redistributions of source code must retain the above copyright
+  notice, this list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+
+- Neither the name of the California Institute of Technology, Sandia
+  Corporation nor the names of other  contributors may be used to
+  endorse or promote products derived from this software without
+  specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
