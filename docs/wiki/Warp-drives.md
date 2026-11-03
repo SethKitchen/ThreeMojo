@@ -20,10 +20,12 @@ The port follows WarpFactory at commit `03b10cb`, dated 2024-05-23. Its method i
 | `metrics` | Minkowski, Alcubierre, Lentz, Van Den Broeck, modified time and Schwarzschild | `Metrics/` |
 | `natario` | A drive with zero expansion | None |
 | `krasnikov` | The Krasnikov tube | None |
+| `fell_heisenberg` | The positive-energy soliton of Fell and Heisenberg | None |
 | `warp_shell` | The warp shell, shells from any profiles, and an accelerating shell | `metricGet_WarpShellComoving` |
 | `curvilinear` | Metrics on spherical and cylindrical grids | None |
 | `derivatives` | `derivative`, `second_derivative` and `Stencil` | `takeFiniteDifference1` and `2` |
 | `solver` | `stress_energy` and `curvature` | `getEnergyTensor`, `ricciT`, `ricciS`, `einT`, `einE` |
+| `gpu` | `gpu_stress_energy`, `gpu_curvature` and `warp_gpu_available` | `getEnergyTensor` with its GPU option |
 | `jet`, `analytic` | Exact derivatives of closed-form metrics, and the exact solver | None |
 | `frame` | `to_eulerian` and `eulerian_transform` | `doFrameTransfer` and `getEulerianTransformationMatrix` |
 | `conditions` | `energy_condition`, `energy_condition_samples` and the sampled directions | `getEnergyConditions` and `generateUniformField` |
@@ -37,6 +39,12 @@ The port follows WarpFactory at commit `03b10cb`, dated 2024-05-23. Its method i
 ## Analyze a metric
 
 Make a grid, build a metric on it, and call `evaluate_metric`. The result holds the stress-energy tensor, the four energy conditions and the three scalars.
+
+### On the GPU
+
+`gpu_stress_energy` and `gpu_curvature` in `extensions/warp/gpu.mojo` solve the Einstein equations on a GPU through MAX. One thread solves one point. The kernel calls `solve_point`, the function that the CPU tasks call, so both take the same differences and the same Ricci tensor. The results agree with the CPU's to 1e-12 of each point's largest component. They are not equal bit for bit, because a GPU compiler can fuse a multiply and an add that the CPU rounds twice.
+
+The solver uses 64-bit floats. A Metal GPU has no 64-bit floats, so on Apple silicon the two functions refuse to run, and `warp_gpu_available` returns False. Use `stress_energy` there.
 
 ```mojo
 from extensions.warp.evaluation import evaluate_metric
@@ -105,6 +113,7 @@ Each metric function takes the grid and the center. Then it takes the metric's o
 | `modified_time`, `modified_time_comoving` | Speed, R, σ, lapse factor A | 5 or more, or 1 |
 | `natario`, `natario_comoving` | Speed, R, σ | 5 or more, or 1 |
 | `krasnikov` | δ, wall ε, length D, radius ρ_max | 5 or more |
+| `fell_heisenberg` | A `FellHeisenbergSoliton`: Π, r, V, σ, tilt k, scale L | Any |
 | `schwarzschild` | Schwarzschild radius | 1 |
 | `warp_shell_comoving` | Mass, R₁, R₂, buffer, σ, smoothing, speed, warp | 1 |
 | `shell_from_profile` | Radial profiles of g_tt, g_rr and the shift, speed | Any |
@@ -124,7 +133,11 @@ The Krasnikov tube is a passage that a ship lays down on its way out. Inside it,
 
 `accelerating_shell` changes the speed inside a shell over time, along a smooth step. How to accelerate a physical warp shell is an open question. This metric is a test case, not a solution. The tests show one result. Inside the shell, a shift that changes only with time leaves space flat. So any cost of the change is in the shell.
 
-The positive-energy soliton of Fell and Heisenberg is not ported. Its construction needs equations from the paper, which this port could not read.
+The soliton of Fell and Heisenberg has positive Eulerian energy. Its shift is the gradient of a potential φ, so its momentum density is zero. Its energy density is (h₁ + h₂ + h₃) c⁴ / (8π G), where h₁, h₂ and h₃ are the 2 × 2 principal minors of the Hessian of φ. `FellHeisenbergSoliton` gives φ, the shift and this energy density in closed form, and it is an `AnalyticMetric`.
+
+The paper's potential has two functions m and n that the paper does not give. The port uses m = 1 / (1 - τ) and n = 1 / (1 + τ), so φ is zero at the center, as the paper asks. With τ = 0 the soliton is spherical. Its shift is zero inside the radius r and radial outside, and its energy density is positive everywhere. The tilt k sets τ = tanh(k ẑ / u), which makes m larger than n in +z, as in the paper. The center then has a level shift along z of V √(σπ) erf(r/√σ) k. The paper's values (Π, r, V, σ) = (1/4, 6, 10, 1) with k = 0.071 give 1.26, the paper's superluminal center. The tilted soliton is not proven positive: check its energy density on a grid.
+
+The last product of the paper's equation 13 must read m (n r + u), not m (n r - u). Only then does the shift vanish inside and fall off outside, as the paper says. The tests check the potential against equation 13 with this change. They check the energy density against the exact Einstein equations and the finite-difference solver.
 
 ## The warp shell
 
@@ -242,10 +255,12 @@ The other tests compare the port with independent results.
 
 ## Limits
 
-- The port has no GPU path. This environment had no GPU to run one on.
+- The GPU path solves the Einstein equations only. The energy conditions, the scalars and the totals run on the CPU.
+- The GPU path needs 64-bit floats, so it does not run on a Metal GPU.
 - The plots draw planes on the red-blue map, a passenger's view and a surface. They have no titles or axes.
 - The derivatives at the edge of the grid copy the nearest derivative, as in WarpFactory. Values in the two outer layers of points are not reliable.
 - The Natário shift and the Krasnikov smooth step come from this port's own derivation and choice, not from the papers' text.
+- The Fell-Heisenberg functions m and n are this port's choice. The paper does not give its own.
 - The passenger view shows where the light comes from, but not its change of color.
 
 ## References
@@ -258,6 +273,7 @@ The other tests compare the port with independent results.
 - Natário, "Warp drive with zero expansion", Classical and Quantum Gravity 19 (2002) 1157.
 - Krasnikov, "Hyperfast travel in general relativity", Physical Review D 57 (1998) 4760.
 - Everett and Roman, "A superluminal subway: the Krasnikov tube", Physical Review D 56 (1997) 2100.
+- Fell and Heisenberg, "Positive energy warp drive from hidden geometric structures", Classical and Quantum Gravity 38 (2021) 155020, arXiv 2104.06488.
 - Bobrick and Martire, "Introducing physical warp drives", Classical and Quantum Gravity 38 (2021) 105009.
 - Hawking and Ellis, "The Large Scale Structure of Space-Time", 1973, section 4.3.
 - Griewank and Walther, "Evaluating Derivatives", 2nd edition, 2008.

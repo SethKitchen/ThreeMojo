@@ -385,6 +385,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_castle_material_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[2]' value to 'Material'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_catmull_rom_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2301,16 +2311,6 @@
       "function declared here"
     ]
   },
-  "tests/compile_fail/a_limit_state_is_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 26,
-        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LimitState'"
-      }
-    ],
-    "notes": []
-  },
   "tests/compile_fail/a_line_coverage_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3236,6 +3236,20 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_provenance_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 22,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'provenance' cannot be converted from 'IntLiteral[0]' to 'Provenance'"
+    ]
+  },
   "tests/compile_fail/a_quality_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3446,15 +3460,19 @@
       "candidate not viable: value passed to 'road_option' cannot be converted from 'IntLiteral[4]' to 'RoadOption'"
     ]
   },
-  "tests/compile_fail/a_roof_form_is_not_a_bare_int.mojo": {
+  "tests/compile_fail/a_roof_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "line": 12,
-        "column": 24,
-        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'RoofForm'"
+        "line": 15,
+        "column": 22,
+        "message": "no matching function in initialization"
       }
     ],
-    "notes": []
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'roof' cannot be converted from 'IntLiteral[1]' to 'RoofKind'"
+    ]
   },
   "tests/compile_fail/a_route_node_id_is_not_a_bare_int.mojo": {
     "errors": [
@@ -4148,16 +4166,6 @@
     ],
     "notes": []
   },
-  "tests/compile_fail/a_surface_is_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 23,
-        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Surface'"
-      }
-    ],
-    "notes": []
-  },
   "tests/compile_fail/a_surface_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4400,16 +4408,6 @@
     "notes": [
       "function declared here"
     ]
-  },
-  "tests/compile_fail/a_tower_shape_is_not_a_bare_int.mojo": {
-    "errors": [
-      {
-        "line": 12,
-        "column": 26,
-        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'TowerShape'"
-      }
-    ],
-    "notes": []
   },
   "tests/compile_fail/a_track_target_is_not_a_bare_int.mojo": {
     "errors": [

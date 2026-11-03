@@ -3,169 +3,99 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Wijnendale Castle in autumn, seen from the air.
+"""Wijnendale Castle from the air, in autumn.
 
-    mojo run -I . examples/wijnendale.mojo [path.png [survey.json]]
+    mojo run -I . examples/wijnendale.mojo [path.png]
 
-The page is Castle. `wijnendale` is the plan: towers, ranges, a gatehouse,
-a moat and a bridge in meters. `add_castle` draws it. The sun stands where
-it stood over Torhout at 15:30 on 19 October, from the equations of Duffie
-and Beckman. The camera looks north from above the moat, as the aerial
-photograph does.
+The page is Castle. `wijnendale_plan` is the plan of the castle at Torhout,
+built from the Flemish survey and the airborne laser scan, and `castle_meshes`
+turns it into geometry with the depth of the real building: walls with their
+windows cut through, dormers, spires and crenellations. `castle_look` gives
+each surface a physically based material, and the woods are grown from a branch
+skeleton with cards of leaves.
 
-Every dimension of the built-in plan is an estimate. A second argument names
-a JSON file of surveyed dimensions, in the form of `plan_to_json`. The picture
-then shows the survey in place of the estimate.
+The sun is where it stands over Torhout at 15:00 local time on 19 October 2026.
+The sky lights the scene through a prefiltered environment, and the sun casts
+soft shadows. The moat is Clearwater water: the renderer draws the scene, and
+`compose` puts the water into the picture where it is nearest. The castle and
+the wood are reflected in it by Fresnel's law.
+
+The camera looks north-east from the south-west and from the air, as the
+photograph that the plan was checked against does. The gate stands on the
+right, the bridge leaves it for the lower right, and the donjon rises behind
+the courtyard.
 """
 
 from tools._example_output import (
     example_destination,
     gallery_camera,
-    gallery_renderer,
+    write_example,
 )
 
-from core.assets import Assets
-from core.fog import linear_fog
-from core.object3d import Object3D
-from core.scene import Scene
-from extensions.castle.plan import CastlePlan, PlanPoint, wijnendale
-from extensions.castle.survey import plan_from_json
-from extensions.castle.render import CastleOptions, add_castle
-from extensions.castle.sun import castle_sun, scene_direction
-from extensions.energy.solar import day_of_year
-from geometries.plane import plane
-from lights.light import ambient_light, directional_light
-from lights.shadow import PCF_SOFT_SHADOW_MAP
+from core.clock import Clock
+from extensions.castle.scene import (
+    aim_sun,
+    build_castle_scene,
+    castle_renderer,
+    default_settings,
+    draw_castle,
+)
+from extensions.castle.sun import day_of_year, solar_position
+from extensions.castle.wijnendale import (
+    latitude,
+    longitude,
+    wijnendale_plan,
+)
 from math.vector3 import Vector3
-from objects.reflector import Reflector
-from objects.sky import Sky
-from render.framebuffer import Color
-from render.png import encode
-from render.tonemap import ACES_FILMIC_TONE_MAPPING
-from std.pathlib import Path
-from std.sys import argv
-from units.si import (
-    DEGREE,
-    HOUR,
-    METER,
-    Angle,
-    Duration64,
-    Length,
-    Length64,
-)
+from render.framebuffer import Framebuffer
+from units.si import Angle, DEGREE, Length, METER
 
-comptime DEFAULT_OUTPUT = "out/castle.png"
-comptime WIDTH = 480
-comptime HEIGHT = 600
-
-
-def _plan() raises -> CastlePlan:
-    """Return the plan: a survey if a file is named, else the estimate."""
-    var args = argv()
-    if len(args) > 2:
-        return plan_from_json(Path(String(args[2])).read_text())
-    return wijnendale()
+comptime DEFAULT_OUTPUT = "out/wijnendale.png"
+comptime WIDTH = 800
+comptime HEIGHT = 1000
+comptime FRAMES = 1
+comptime DELAY_MS = 100
+# 15:00 on 19 October 2026 at Torhout is 13:00 UTC: summer time is two hours
+# ahead, and ends on 25 October.
+comptime HOURS_UTC = 13.0
+comptime CLOUD_COVER = 0.55
 
 
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
-    var plan = _plan()
-    var assets = Assets()
-    var scene = Scene()
-    var eye = Vector3(6, 50, 108)
-    var options = CastleOptions.default()
-    options.water = False
-    options.clearing = PlanPoint(
-        Length64(Float64(eye.x), METER), Length64(Float64(-eye.z), METER)
-    )
-    options.clearing_radius = Length64(58.0, METER)
-    var castle = add_castle(scene, assets, plan, options)
-    print(
-        plan.name,
-        "-",
-        castle.meshes,
-        "meshes,",
-        castle.triangles,
-        "triangles",
+
+    var plan = wijnendale_plan()
+    var renderer = castle_renderer(WIDTH, HEIGHT)
+    # Local x east and y north become x and -z. The camera stands south-west
+    # of the castle, 49 m up, and looks at the courtyard. No tree stands
+    # within 45 m of it.
+    var eye = Vector3(-30, 49, 16)
+    var castle = build_castle_scene(
+        plan, default_settings(), Float64(eye.x), Float64(-eye.z), 45.0
     )
 
-    var sun = castle_sun(
-        plan,
-        day_of_year(10, 19),
-        Duration64(15.5, HOUR),
-        Duration64(2.0, HOUR),
+    var sun = solar_position(
+        latitude(), longitude(), 2026, day_of_year(2026, 10, 19), HOURS_UTC
     )
-    var toward = scene_direction(sun)
+    var toward = sun.toward()
+    aim_sun(
+        castle,
+        renderer,
+        Vector3(Float32(toward[0]), Float32(toward[2]), Float32(-toward[1])),
+    )
 
-    var dome = Object3D()
-    dome.set_scale(4400, 4400, 4400)
-    var sky_node = scene.add(dome^)
-    var sky = Sky(assets, sky_node)
-    scene.add_mesh(sky.mesh)
-    assets.programs.get(sky.program).set_uniform(
-        "sunPosition",
-        Vector3(Float32(toward.x), Float32(toward.y), Float32(toward.z)),
-    )
-    assets.programs.get(sky.program).set_uniform("turbidity", Float32(2.5))
-    assets.programs.get(sky.program).set_uniform("rayleigh", Float32(1.6))
-    assets.materials.materials[sky.mesh.material.value].fog = False
-
-    # The water is a mirror at the level of the moat.
-    var water = Object3D()
-    water.rotate_x(Angle(-90.0, DEGREE))
-    water.set_position(
-        Float32(plan.moat.center.x.value),
-        Float32(-plan.moat.freeboard.value),
-        Float32(-plan.moat.center.y.value),
-    )
-    var water_node = scene.add(water^)
-    var mirror = Reflector(
-        assets,
-        assets.geometries.add(
-            plane(Length(130.0, METER), Length(110.0, METER))
-        ),
-        water_node,
-        color=Color(104, 128, 126),
-        texture_width=WIDTH,
-        texture_height=HEIGHT,
-        multisample=0,
-    )
-    scene.add_mesh(mirror.mesh)
-
-    var lamp = Object3D()
-    lamp.set_position(
-        Float32(toward.x) * 160,
-        Float32(toward.y) * 160,
-        Float32(toward.z) * 160,
-    )
-    var lamp_node = scene.add(lamp^)
-    var light = directional_light(Color(255, 232, 196), lamp_node, 3.4)
-    light.cast_shadow = True
-    light.shadow.map_size = 2048
-    light.shadow.bias = -0.0005
-    light.shadow.normal_bias = 0.15
-    light.shadow.set_extent(Length(70.0, METER))
-    light.shadow.near = Length(40.0, METER)
-    light.shadow.far = Length(300.0, METER)
-    scene.add_light(light)
-    scene.add_light(ambient_light(Color(176, 198, 232), 0.75))
-
-    var haze = Color(176, 192, 208)
-    scene.fog = linear_fog(haze, Length(300.0, METER), Length(3000.0, METER))
-    var renderer = gallery_renderer(WIDTH, HEIGHT, haze)
-    renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
-    renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, Float32(0.8))
     var camera = gallery_camera(
         WIDTH,
         HEIGHT,
         eye,
-        Vector3(13, 8, -2),
-        field_of_view=Angle(55.0, DEGREE),
+        Vector3(32, 20, -42),
+        field_of_view=Angle(58.0, DEGREE),
         near=Length(1.0, METER),
-        far=Length(4000.0, METER),
+        far=Length(6000.0, METER),
     )
-    scene.update()
-    _ = mirror.update(renderer, scene, assets, camera)
-    var image = renderer.render(scene, assets, camera)
-    Path(destination).write_bytes(encode(image))
-    print("Wrote", destination)
+
+    var frame_clock = Clock()
+    frame_clock.start()
+    var frames = List[Framebuffer]()
+    frames.append(draw_castle(castle, renderer, camera, CLOUD_COVER, 5))
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

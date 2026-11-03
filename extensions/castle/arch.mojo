@@ -3,357 +3,288 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The limit analysis of a masonry arch, and of the bridge of a castle.
+"""Limit analysis of a masonry arch, after Heyman.
 
-Heyman's safe theorem (1966) states that an arch stands if one line of
-thrust, in equilibrium with the loads, lies wholly inside the masonry. The
-masonry takes no tension, it does not crush, and the joints do not slide.
-This module looks for such a line.
+Heyman's three assumptions make masonry a rigid-plastic material: it has no
+tensile strength, its compressive strength is so high that crushing does not
+govern, and one stone does not slide on another. The safe theorem then says
+that an arch stands if a line of thrust, in equilibrium with the loads, lies
+inside the masonry everywhere. Nothing more is needed. The arch need not be
+shown to be elastic, and the line need not be the one that the arch carries.
 
-The half arch is cut by radial joints into voussoirs. Each voussoir carries
-its own weight, the fill above it, and the load on the deck. The crown
-carries a horizontal thrust H at a height m / H. Moments about the two edge
-points of each joint give two bounds on m, linear in H:
+A semicircular ring of mean radius R and thickness t carries its own weight.
+A free body from the crown to a joint at the angle theta from the crown has
+the horizontal thrust H of the crown on its end, the weight W of the ring
+over it, and the force at the joint. Moments about the point where the line
+of thrust cuts the joint, at the distance rho from the center, give
 
-    y_in H - A_in <= m <= y_ex H - A_ex
+    rho (H cos(theta) + W sin(theta)) = M0 + W x(theta),
 
-where A is the moment of the loads between the crown and the joint, about
-the edge point. For a given H the bounds make an interval of m. The
-interval is open for the thrusts between a least and a greatest thrust. The
-geometric factor of safety is the ring thickness over the least thickness
-that still holds a line of thrust, with the loads unchanged. A semicircular
-arch under its own weight has a least thickness of 0.1075 of the mean
-radius, which the tests reproduce.
+with M0 the moment H rho0 of the crown thrust about the center, and x the
+distance of the centroid of the weight from the crown axis. The line is inside
+the masonry when the inner radius is no more than rho, and the outer radius no
+less, at every joint. Each limit is linear in H and M0, so for any H the
+possible M0 form an interval. The interval is the largest at the thrust that
+the arch needs, and the arch stands if it is not empty there. The difference
+of the limits is a concave function of H, so a ternary search finds its
+maximum.
+
+The least thickness is found by bisection. For the semicircular arch with
+only its own weight it is 0.1075 of the mean radius (Couplet, 1730;
+Heyman, 1966). The ratio of the real thickness to the least is Heyman's
+geometrical factor of safety. A factor of 2 means that the ring could be half
+as thick and still stand.
 """
 
-from extensions.castle.masonry import Masonry
-from extensions.castle.plan import Bridge
-from extensions.geotech.quantities import UnitWeight64
-from math.finite import require_positive_finite
-from std.math import asin, cos, inf, pi, sin, sqrt
-from units.si import Force64, Length64, Pressure64
+from std.math import cos, isfinite, pi, sin, sqrt
+from extensions.castle.masonry import Masonry, historic_brick
+from extensions.castle.plan import CastlePlan
+from units.si import Length64, LineLoad64
+
+# The number of joints between the crown and the springing that the search
+# checks. At 720 they are an eighth of a degree apart.
+comptime DEFAULT_JOINTS = 720
+# The largest horizontal thrust that the search considers, in units of the
+# unit weight times the radius squared. A semicircular ring of any thickness up
+# to the radius needs under 1.
+comptime _LARGEST_THRUST = 3.0
+# The width of the bisection, in thicknesses over radius, at which it stops.
+comptime _TOLERANCE = 1.0e-9
+
+
+def _slack(ratio: Float64, thrust: Float64, joints: Int) -> Float64:
+    """Return how much room the moment of the crown thrust has, for a ring of
+    a thickness, a thrust and a number of joints.
+
+    The ring has a mean radius of 1 and a unit weight of 1. The result is the
+    upper bound of the moment least the lower bound, so it is not negative when
+    a line of thrust fits.
+    """
+    var outer = 1.0 + ratio / 2.0
+    var inner = 1.0 - ratio / 2.0
+    var centroid_factor = (
+        4.0 / 3.0 * (outer**3 - inner**3) / (outer * outer - inner * inner)
+    )
+    var lowest_upper = Float64(1.0e30)
+    var highest_lower = Float64(-1.0e30)
+    for k in range(joints + 1):
+        var theta = pi / 2.0 * Float64(k) / Float64(joints)
+        var weight = ratio * theta
+        var centroid = Float64(0)
+        if theta > 0.0:
+            var half = sin(theta / 2.0)
+            centroid = centroid_factor * half * half / theta
+        var arm = thrust * cos(theta) + weight * sin(theta)
+        var offset = weight * centroid
+        var upper = outer * arm - offset
+        var lower = inner * arm - offset
+        lowest_upper = min(lowest_upper, upper)
+        highest_lower = max(highest_lower, lower)
+    return lowest_upper - highest_lower
+
+
+def _best_thrust(ratio: Float64, joints: Int) -> Tuple[Float64, Float64]:
+    """Return the thrust at which the room is greatest, and the room there,
+    by ternary search on a concave function."""
+    var low = Float64(0)
+    var high = _LARGEST_THRUST
+    for _ in range(100):
+        var a = low + (high - low) / 3.0
+        var b = high - (high - low) / 3.0
+        if _slack(ratio, a, joints) < _slack(ratio, b, joints):
+            low = a
+        else:
+            high = b
+    var thrust = (low + high) / 2.0
+    return (thrust, _slack(ratio, thrust, joints))
+
+
+def minimum_thickness_ratio(joints: Int = DEFAULT_JOINTS) raises -> Float64:
+    """Return the least thickness over the mean radius at which a semicircular
+    ring stands under its own weight.
+
+    Args:
+        joints: The number of joints between the crown and the springing at
+            which the line of thrust is held inside the ring. At least 8.
+
+    Returns:
+        The ratio, 0.1075 for a fine mesh of joints.
+
+    Raises:
+        Error: If there are too few joints.
+    """
+    if joints < 8:
+        raise Error("A search needs at least 8 joints")
+    var low = Float64(1.0e-4)
+    var high = Float64(1.0)
+    while high - low > _TOLERANCE:
+        var middle = (low + high) / 2.0
+        if _best_thrust(middle, joints)[1] >= 0.0:
+            high = middle
+        else:
+            low = middle
+    return high
+
+
+def thrust_range(
+    ratio: Float64, joints: Int = DEFAULT_JOINTS
+) raises -> Tuple[Float64, Float64]:
+    """Return the least and the greatest horizontal thrust that a line of thrust
+    in the ring can have.
+
+    Args:
+        ratio: The thickness over the mean radius.
+        joints: The number of joints that the line is held inside at.
+
+    Returns:
+        The two thrusts, in units of the unit weight times the radius squared
+        for a unit width.
+
+    Raises:
+        Error: If the ratio is not positive and finite, there are too few
+            joints, or no line of thrust fits, so the ring does not stand.
+    """
+    if not (isfinite(ratio) and ratio > 0.0):
+        raise Error("A thickness ratio must be positive and finite")
+    if joints < 8:
+        raise Error("A search needs at least 8 joints")
+    var best = _best_thrust(ratio, joints)
+    if best[1] < 0.0:
+        raise Error("No line of thrust fits inside this ring: it falls")
+    var peak = best[0]
+    # On each side of the peak the room falls to 0. Bisection finds where.
+    var left = Float64(0)
+    var right = peak
+    for _ in range(100):
+        var middle = (left + right) / 2.0
+        if _slack(ratio, middle, joints) < 0.0:
+            left = middle
+        else:
+            right = middle
+    var low = right
+    left = peak
+    right = _LARGEST_THRUST
+    for _ in range(100):
+        var middle = (left + right) / 2.0
+        if _slack(ratio, middle, joints) < 0.0:
+            right = middle
+        else:
+            left = middle
+    var high = left
+    return (low, high)
 
 
 @fieldwise_init
-struct ArchResult(ImplicitlyCopyable):
-    """What the limit analysis of an arch finds."""
+struct Arch(Copyable, Movable):
+    """A semicircular ring of masonry, for a unit width."""
 
-    # Whether a line of thrust fits inside the ring.
-    var safe: Bool
-    # The least and the greatest horizontal thrust of a line that fits.
-    var thrust_min: Force64
-    var thrust_max: Force64
-    # The vertical reaction at one springing.
-    var vertical: Force64
-    # The thickness over the least thickness that holds a line of thrust.
+    # The radius of the center line of the ring, and its thickness.
+    var mean_radius: Length64
+    var thickness: Length64
+    # The masonry.
+    var masonry: Masonry
+
+    def check(self) raises:
+        """Refuse a ring that cannot be.
+
+        Raises:
+            Error: If the radius or the thickness is not positive and finite,
+                the ring is thicker than twice its mean radius, or the
+                masonry is not valid.
+        """
+        if not (
+            isfinite(self.mean_radius.value)
+            and self.mean_radius.value > 0.0
+            and isfinite(self.thickness.value)
+            and self.thickness.value > 0.0
+        ):
+            raise Error("An arch needs a positive finite radius and thickness")
+        if not (self.thickness.value < 2.0 * self.mean_radius.value):
+            raise Error("A ring cannot be thicker than its mean diameter")
+        self.masonry.check()
+
+    def thickness_ratio(self) -> Float64:
+        """Return the thickness over the mean radius.
+
+        Returns:
+            The ratio.
+        """
+        return self.thickness.value / self.mean_radius.value
+
+
+@fieldwise_init
+struct ArchCheck(Copyable, Movable):
+    """What the limit analysis finds for a ring."""
+
+    # The least thickness over the radius at which a ring stands, and the
+    # ratio of this ring.
+    var minimum_ratio: Float64
+    var ratio: Float64
+    # Heyman's geometrical factor of safety: the ratio over the least.
     var geometric_factor: Float64
-    # The least thickness, with the loads unchanged.
-    var minimum_thickness: Length64
+    # The least and the greatest horizontal thrust, per meter of width.
+    var least_thrust: LineLoad64
+    var greatest_thrust: LineLoad64
+    # The force at the springing when the thrust is least, per meter of width,
+    # and the share of the design strength of the masonry that it would take if
+    # it acted over the whole thickness.
+    var springing_force: LineLoad64
+    var crushing_utilization: Float64
 
 
-struct _Joints(Movable):
-    """The joints of a half arch and the loads that have built up to them."""
-
-    var sine: List[Float64]
-    var cosine: List[Float64]
-    # The weight on the half arch from the crown to each joint.
-    var weight: List[Float64]
-    # The moment of that weight about the vertical through the crown.
-    var moment: List[Float64]
-    # The height of the center of the arch above the springing line.
-    var center: Float64
-
-    def __init__(out self, center: Float64):
-        self.sine = List[Float64]()
-        self.cosine = List[Float64]()
-        self.weight = List[Float64]()
-        self.moment = List[Float64]()
-        self.center = center
-
-
-def _disc(radius: Float64, x: Float64) -> Float64:
-    """Return the height of a circle above its center at a distance x."""
-    return sqrt(max(radius * radius - x * x, 0.0))
-
-
-def _segment(
-    r_in: Float64,
-    r_ex: Float64,
-    top: Float64,
-    center: Float64,
-    a0: Float64,
-    a1: Float64,
-    ring_weight: Float64,
-    fill_weight: Float64,
-    surcharge: Float64,
-    width: Float64,
-) -> Tuple[Float64, Float64]:
-    """Return the weight of one voussoir with its fill and load, and the
-    moment of that weight about the vertical through the crown.
-
-    The angles a0 and a1 are the two joints, measured from the crown.
-    """
-    var delta = a1 - a0
-    var mid = (a0 + a1) / 2.0
-    var area = 0.5 * (r_ex * r_ex - r_in * r_in) * delta
-    var w_ring = ring_weight * width * area
-    var half = delta / 2.0
-    var centroid = (
-        (2.0 / 3.0)
-        * (r_ex * r_ex * r_ex - r_in * r_in * r_in)
-        / (r_ex * r_ex - r_in * r_in)
-        * sin(half)
-        / half
-    )
-    var x_ring = centroid * sin(mid)
-    var x0 = r_ex * sin(a0)
-    var x1 = r_ex * sin(a1)
-    var reach = top - center
-    # The integral of sqrt(R^2 - x^2) is (x sqrt(R^2 - x^2) + R^2 asin(x/R))/2.
-    var g0 = 0.5 * (x0 * _disc(r_ex, x0) + r_ex * r_ex * asin(x0 / r_ex))
-    var g1 = 0.5 * (x1 * _disc(r_ex, x1) + r_ex * r_ex * asin(x1 / r_ex))
-    var column = reach * (x1 - x0) - (g1 - g0)
-    var first = (
-        reach * (x1 * x1 - x0 * x0) / 2.0
-        + (
-            _disc(r_ex, x1) * (r_ex * r_ex - x1 * x1)
-            - _disc(r_ex, x0) * (r_ex * r_ex - x0 * x0)
-        )
-        / 3.0
-    )
-    var w_fill = fill_weight * width * column
-    var m_fill = fill_weight * width * first
-    var w_load = surcharge * width * (x1 - x0)
-    var m_load = w_load * (x0 + x1) / 2.0
-    return (
-        w_ring + w_fill + w_load,
-        w_ring * x_ring + m_fill + m_load,
-    )
-
-
-def _interval(
-    joints: _Joints, r_in: Float64, r_ex: Float64, thrust: Float64
-) -> Float64:
-    """Return the room for the crown moment at a thrust: the upper bound
-    less the lower bound. A negative value means no line of thrust fits."""
-    var low = -inf[DType.float64]()
-    var high = inf[DType.float64]()
-    # The crown joint is always there, so the loop always runs.
-    for k in range(len(joints.sine)):  # pragma: no branch
-        var x_in = r_in * joints.sine[k]
-        var y_in = joints.center + r_in * joints.cosine[k]
-        var x_ex = r_ex * joints.sine[k]
-        var y_ex = joints.center + r_ex * joints.cosine[k]
-        var a_in = joints.moment[k] - joints.weight[k] * x_in
-        var a_ex = joints.moment[k] - joints.weight[k] * x_ex
-        low = max(low, y_in * thrust - a_in)
-        high = min(high, y_ex * thrust - a_ex)
-    return high - low
-
-
-def _widest(
-    joints: _Joints, r_in: Float64, r_ex: Float64, limit: Float64
-) -> Float64:
-    """Return the thrust with the most room, by golden-section search."""
-    var ratio = (sqrt(5.0) - 1.0) / 2.0
-    var a = 0.0
-    var b = limit
-    for _ in range(120):
-        var c = b - ratio * (b - a)
-        var d = a + ratio * (b - a)
-        if _interval(joints, r_in, r_ex, c) < _interval(joints, r_in, r_ex, d):
-            a = c
-        else:
-            b = d
-    return (a + b) / 2.0
-
-
-def _bounds(
-    joints: _Joints, r_in: Float64, r_ex: Float64, limit: Float64
-) -> Tuple[Bool, Float64, Float64]:
-    """Return whether a line of thrust fits, and the least and the greatest
-    thrust of one that does."""
-    var best = _widest(joints, r_in, r_ex, limit)
-    var tolerance = 1e-9 * (1.0 + joints.weight[len(joints.weight) - 1] * r_ex)
-    if _interval(joints, r_in, r_ex, best) < -tolerance:
-        return (False, 0.0, 0.0)
-    var low = 0.0
-    var high = best
-    for _ in range(80):
-        var middle = (low + high) / 2.0
-        if _interval(joints, r_in, r_ex, middle) >= 0.0:
-            high = middle
-        else:
-            low = middle
-    var least = high
-    low = best
-    high = limit
-    if _interval(joints, r_in, r_ex, high) < 0.0:
-        for _ in range(80):
-            var middle = (low + high) / 2.0
-            if _interval(joints, r_in, r_ex, middle) >= 0.0:
-                low = middle
-            else:
-                high = middle
-    return (True, least, low)
-
-
-def analyze_arch(
-    span: Length64,
-    rise: Length64,
-    ring: Length64,
-    width: Length64,
-    masonry: Masonry,
-    fill_weight: UnitWeight64,
-    fill_depth: Length64,
-    surcharge: Pressure64,
-    voussoirs: Int,
-) raises -> ArchResult:
-    """Find the line of thrust of a symmetric circular arch.
-
-    The arch is a segment of a circle. Its intrados springs from a level
-    line, `span` apart, and rises `rise` at the crown. The loads are the
-    ring, the fill from the extrados up to a deck `fill_depth` above the
-    crown, and a uniform `surcharge` on the deck. The fill carries no load
-    sideways and does not stiffen the arch.
+def arch_check(arch: Arch, joints: Int = DEFAULT_JOINTS) raises -> ArchCheck:
+    """Check a ring by Heyman's safe theorem.
 
     Args:
-        span: The clear span at the springing line.
-        rise: The rise of the intrados at the crown. It must not exceed
-            half the span.
-        ring: The thickness of the ring, measured along a radius.
-        width: The width of the arch along its axis.
-        masonry: The masonry of the ring.
-        fill_weight: The unit weight of the fill above the ring. Zero with
-            a zero load leaves a bare ring that carries only itself.
-        fill_depth: The depth of fill above the extrados at the crown.
-        surcharge: The load on the deck, per area. Zero or more.
-        voussoirs: The number of voussoirs in the half arch, at least 2.
+        arch: The ring.
+        joints: The number of joints the line of thrust is held inside at.
 
     Returns:
-        Whether a line of thrust fits, the least and greatest thrust, the
-        reaction, the geometric factor and the least thickness.
+        The least thickness, the geometrical factor of safety, the range of
+        the thrust, and the force at the springing.
 
     Raises:
-        Error: If a size or the masonry is not valid, the rise is more than
-            half the span, the fill weight, the fill depth or the load is
-            negative, or there are fewer than two voussoirs.
+        Error: If the ring is not valid or does not stand.
     """
-    masonry.check()
-    require_positive_finite(span.value, "An arch span must be positive")
-    require_positive_finite(rise.value, "An arch rise must be positive")
-    require_positive_finite(ring.value, "An arch ring must be positive")
-    require_positive_finite(width.value, "An arch width must be positive")
-    if not (fill_weight.value >= 0.0 and fill_weight.value < 1.0e12):
-        raise Error("A fill weight must be zero or more")
-    if not (fill_depth.value >= 0.0 and fill_depth.value < 1.0e9):
-        raise Error("A fill depth must be zero or more")
-    if not (surcharge.value >= 0.0 and surcharge.value < 1.0e12):
-        raise Error("A surcharge must be zero or more")
-    if voussoirs < 2:
-        raise Error("An arch needs at least two voussoirs in its half")
-    if not rise.value * 2.0 <= span.value:
-        raise Error("An arch cannot rise more than half its span")
-    var half_span = span.value / 2.0
-    var f = rise.value
-    var r_in = (half_span * half_span + f * f) / (2.0 * f)
-    var t = ring.value
-    var r_ex = r_in + t
-    var center = f - r_in
-    var springing = pi / 2.0
-    if f < half_span:
-        springing = asin(half_span / r_in)
-    var joints = _Joints(center)
-    var top = f + t + fill_depth.value
-    var gamma = masonry.unit_weight().value
-    var weight = 0.0
-    var moment = 0.0
-    joints.sine.append(0.0)
-    joints.cosine.append(1.0)
-    joints.weight.append(0.0)
-    joints.moment.append(0.0)
-    # There are two voussoirs at least, so the loop always runs.
-    for j in range(1, voussoirs + 1):  # pragma: no branch
-        var a0 = springing * Float64(j - 1) / Float64(voussoirs)
-        var a1 = springing * Float64(j) / Float64(voussoirs)
-        var load = _segment(
-            r_in,
-            r_ex,
-            top,
-            center,
-            a0,
-            a1,
-            gamma,
-            fill_weight.value,
-            surcharge.value,
-            width.value,
-        )
-        weight += load[0]
-        moment += load[1]
-        joints.sine.append(sin(a1))
-        joints.cosine.append(cos(a1))
-        joints.weight.append(weight)
-        joints.moment.append(moment)
-    var limit = 100.0 * weight
-    var mid = r_in + t / 2.0
-    var found = _bounds(joints, r_in, r_ex, limit)
-    # Find the least envelope that still holds a line of thrust.
-    var low = 0.0
-    var high = 50.0 * t
-    if high > 1.99 * mid:
-        high = 1.99 * mid
-    for _ in range(60):
-        var middle = (low + high) / 2.0
-        if _bounds(joints, mid - middle / 2.0, mid + middle / 2.0, limit)[0]:
-            high = middle
-        else:
-            low = middle
-    var least = high
-    return ArchResult(
-        found[0],
-        Force64(found[1]),
-        Force64(found[2]),
-        Force64(weight),
-        t / least,
-        Length64(least),
+    arch.check()
+    var minimum = minimum_thickness_ratio(joints)
+    var ratio = arch.thickness_ratio()
+    var range_ = thrust_range(ratio, joints)
+    var scale = arch.masonry.unit_weight().value * arch.mean_radius.value**2
+    var weight = ratio * pi / 2.0
+    var spring = sqrt(range_[0] * range_[0] + weight * weight)
+    var strength = arch.masonry.design_strength().value
+    return ArchCheck(
+        minimum,
+        ratio,
+        ratio / minimum,
+        LineLoad64(range_[0] * scale),
+        LineLoad64(range_[1] * scale),
+        LineLoad64(spring * scale),
+        spring * scale / (strength * arch.thickness.value),
     )
 
 
-def analyze_bridge(
-    bridge: Bridge,
-    masonry: Masonry,
-    fill_weight: UnitWeight64,
-    surcharge: Pressure64,
-    voussoirs: Int,
-) raises -> ArchResult:
-    """Find the line of thrust of one arch of a bridge.
+def bridge_arch(plan: CastlePlan) raises -> Arch:
+    """Return an arch of the bridge of a plan.
 
-    Every arch of a `Bridge` is the same, and the load is the same on all
-    of them, so one arch stands for the row. The thrusts of two arches
-    that meet at a pier cancel, and an end arch pushes on an abutment.
+    The ring is a semicircle across the clear span, as many courses thick as
+    the ring of the plan.
 
     Args:
-        bridge: The bridge.
-        masonry: The masonry of the arch ring.
-        fill_weight: The unit weight of the fill above the ring.
-        surcharge: The load on the deck, per area.
-        voussoirs: The number of voussoirs in the half arch.
+        plan: The plan.
 
     Returns:
-        The result for one arch.
+        The ring, with the masonry assumed for the castle.
 
     Raises:
-        Error: If the bridge or an input is not valid.
+        Error: If the bridge is not valid.
     """
-    bridge.check()
-    return analyze_arch(
-        bridge.span,
-        bridge.rise,
-        bridge.ring,
-        bridge.width,
-        masonry,
-        fill_weight,
-        bridge.fill,
-        surcharge,
-        voussoirs,
+    ref bridge = plan.bridge
+    var arch = Arch(
+        Length64(bridge.clear_span().value / 2.0 + bridge.ring.value / 2.0),
+        Length64(bridge.ring.value),
+        historic_brick(),
     )
+    arch.check()
+    return arch^

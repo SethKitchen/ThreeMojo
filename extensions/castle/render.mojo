@@ -3,1471 +3,1221 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The render view: meshes of a castle plan for a scene.
+"""The mesh view of a castle plan: the building, the ground and the bridge
+as triangles that a renderer can draw.
 
-`add_castle` adds one node for the castle and one mesh for each surface:
-brick, dressed stone, slate, water, lawn, gravel, trunks and foliage. Every
-mesh takes its color from its vertex colors, so each brick course, each
-slate and each tree has its own shade, and one seed fixes them all.
+The plan gives the footprints and the heights. This module gives them the
+look of the building, from what a photograph shows and what a building of the
+style has. Nothing here is surveyed, and the plan says so by marking those
+parts `ESTIMATED`.
 
-The plan frame is z up, with x to the east and y to the north. The scene is
-y up, and a plan point (x, y, z) is the scene point (x, z, -y). The ground
-of the island is z = 0. The water stands `freeboard` below it.
+- A **wing** has a stone plinth, brick walls with rows of windows cut
+  through them, string courses and a cornice. Its slate roof overhangs the
+  walls, and carries dormers, chimneys and a leaded ridge.
+- A **round tower** is a ring of plates with slit windows, on a plinth with
+  bands of stone. It ends in a slate spire on a corbel table, or in a
+  crenellated crown.
+- The **gate** is a block with a pointed portal on the side of the bridge,
+  windows and a crenellated parapet.
+- The **quay wall** is brick with a stone coping. The **bridge** has three
+  arches, cutwaters on its piers, parapets and a railing.
+- The **ground** is a grid of heights: the bed of the moat, its banks, the
+  island and the meadow, which runs on to the horizon.
 
-A round tower is a shaft of facets with a stone plinth and a string course.
-It has arrow slits, and a cone of slate or a corbelled parapet of merlons. A
-block has brick walls with a stone string course, rows of windows and a roof:
-a gable with dormers, or a flat roof behind a corbelled, battlemented
-parapet. A gate arch opens in the face at the end of a parapet block's
-length. A bridge has segmental stone arches on brick piers, spandrel walls, a
-gravel deck and parapets. The moat is a ring of water between a brick
-revetment and a lawn bank. Trees stand in a ring beyond a gravel path: round
-autumn crowns and dark conifers.
+The materials are named in `kinds`. A surface with a texture takes the color
+of the texture and a tint from the vertex. The z axis is up, and z is zero
+at the ground of the island.
 """
 
-from core.assets import Assets
-from core.object3d import NodeId, Object3D
-from core.scene import Scene
-from extensions.castle.kinds import (
-    BRICK,
-    CONE,
-    FOLIAGE,
-    GABLE,
-    GRAVEL,
-    LAWN,
-    PARAPET,
-    ROUND,
-    SLATE,
-    SQUARE,
-    STONE,
-    Surface,
-    TRUNK,
-    WATER,
+from std.math import atan2, cos, floor, isfinite, pi, sin, sqrt
+from extensions.castle.kinds import CONE
+from extensions.castle.parts import (
+    Kit,
+    at_height,
+    MaterialMesh,
+    Opening,
+    box_at,
+    chimney,
+    corbel_ring,
+    dormer,
+    finial,
+    merlon_row,
+    quad_uv,
+    ridge_cap,
+    ring_band,
+    round_crown,
+    round_wall,
+    signed_area,
+    spire,
+    srgb,
+    unit_noise,
+    wall,
+    white,
+    window_row,
 )
 from extensions.castle.plan import (
-    Block,
-    Bridge,
     CastlePlan,
-    Moat,
-    PlanPoint,
+    Gate,
+    Point,
     Tower,
+    Wing,
+    convex_hull,
+    distance_to_outline,
+    offset_outline,
+    point,
+    polygon_contains,
 )
-from extensions.visual.mesh import MeshBuilder
-from generators.utils import Vec3d, generator_random
-from materials.material import Material, standard_material
-from math.utils import SeededRandom
-from objects.mesh import Mesh
-from render.color_spaces import srgb_to_linear_three
-from render.framebuffer import Color
-from std.math import asin, cos, floor, pi, sin, sqrt
-from units.si import Length64, METER
+from generators.utils import Vec3d
+from units.si import Length64
 
-# The surfaces, in the order of their meshes.
-comptime _SURFACES = 8
-# The height of one storey, and of a window row, in meters.
-comptime _STOREY = 3.6
-# The height of a merlon, and its length and thickness.
-comptime _MERLON = 1.2
-# The depth below the ground at which walls start, in meters.
-comptime _FOOT = 0.4
-# How far a roof overhangs a wall.
-comptime _OVERHANG = 0.45
+# The width of the bank of the island, and of the ground outside, in meters.
+comptime _ISLAND_BANK = Float64(1.5)
+comptime _OUTER_BANK = Float64(6.0)
+# The ring path: its distance from the water, and its width, in meters.
+comptime _PATH_FROM = Float64(7.0)
+comptime _PATH_TO = Float64(9.0)
+# How far the roof of a wing overhangs its walls, in meters.
+comptime _OVERHANG = Float64(0.45)
+# The spacing of the grid of the far meadow, and how far it reaches.
+comptime _FAR_STEP = Float64(40.0)
+comptime _FAR_REACH = Float64(3200.0)
 
 
 @fieldwise_init
-struct CastleOptions(ImplicitlyCopyable):
-    """What `add_castle` draws."""
+struct ViewSettings(ImplicitlyCopyable):
+    """The choices of the view that no survey makes."""
 
-    # The facets of a round tower or a cone, six or more.
-    var sides: Int
-    # The trees of the wood around the castle, zero or more.
-    var trees: Int
-    # The seed of every shade and of the trees.
+    # The height of the stone plinth above the water: a guess from a
+    # photograph.
+    var plinth: Length64
+    # The spacing of the terrain's grid.
+    var terrain_step: Length64
+    # The spacing of the windows along a wall: a guess of the style.
+    var window_pitch: Length64
+    # The spacing of the trees.
+    var tree_spacing: Length64
+    # Where the trees' random numbers start.
     var seed: Int
-    # Whether the meshes cast and receive shadows.
-    var shadows: Bool
-    # Whether to draw the water as a mesh. Turn it off to put a mirror there.
-    var water: Bool
-    # No tree stands within the clearing radius of this point of the plan.
-    # Put it under the camera so that no crown fills the frame.
-    var clearing: PlanPoint
-    var clearing_radius: Length64
 
-    @staticmethod
-    def default() -> CastleOptions:
-        """Return 20 facets, 700 trees, seed 1085, shadows and water.
+    def check(self) raises:
+        """Refuse settings that cannot be built.
 
-        Returns:
-            The options. They have no clearing.
+        Raises:
+            Error: If the plinth is negative or not finite, or a spacing is
+                not positive and finite.
         """
-        return CastleOptions(
-            20,
-            700,
-            1085,
-            True,
-            True,
-            PlanPoint(Length64(0.0, METER), Length64(0.0, METER)),
-            Length64(0.0, METER),
-        )
+        if not (isfinite(self.plinth.value) and self.plinth.value >= 0):
+            raise Error("A plinth must be zero or more and finite")
+        if not (
+            isfinite(self.terrain_step.value) and self.terrain_step.value > 0
+        ):
+            raise Error("A terrain step must be positive and finite")
+        if not (
+            isfinite(self.window_pitch.value) and self.window_pitch.value > 0
+        ):
+            raise Error("A window pitch must be positive and finite")
+        if not (
+            isfinite(self.tree_spacing.value) and self.tree_spacing.value > 0
+        ):
+            raise Error("A tree spacing must be positive and finite")
 
 
-struct RenderedCastle(Movable):
-    """What `add_castle` added."""
-
-    var root: NodeId
-    var meshes: Int
-    var triangles: Int
-
-    def __init__(out self, root: NodeId, meshes: Int, triangles: Int):
-        """Hold a summary.
-
-        Args:
-            root: The castle's node.
-            meshes: How many meshes were added.
-            triangles: How many triangles they hold.
-        """
-        self.root = root
-        self.meshes = meshes
-        self.triangles = triangles
-
-
-def _linear(red: Float64, green: Float64, blue: Float64) -> Vec3d:
-    """Return a color of 0 to 255 sRGB channels as a linear color."""
-    return Vec3d(
-        srgb_to_linear_three(red / 255.0),
-        srgb_to_linear_three(green / 255.0),
-        srgb_to_linear_three(blue / 255.0),
-    )
-
-
-def surface_color(surface: Surface) -> Vec3d:
-    """Return the linear base color of a surface.
-
-    Args:
-        surface: The surface.
+def default_view() -> ViewSettings:
+    """Return the settings that the example uses.
 
     Returns:
-        A color with each channel from zero to one. An unnamed surface
-        gives mid gray.
+        A plinth of 2.2 m, a terrain step of 1.5 m, windows 3.2 m apart and
+        trees 6 m apart.
     """
-    if surface == BRICK:
-        return _linear(168.0, 96.0, 70.0)
-    if surface == STONE:
-        return _linear(204.0, 195.0, 174.0)
-    if surface == SLATE:
-        return _linear(88.0, 100.0, 118.0)
-    if surface == WATER:
-        return _linear(34.0, 58.0, 66.0)
-    if surface == LAWN:
-        return _linear(136.0, 154.0, 64.0)
-    if surface == GRAVEL:
-        return _linear(178.0, 162.0, 136.0)
-    if surface == TRUNK:
-        return _linear(78.0, 60.0, 46.0)
-    if surface == FOLIAGE:
-        return _linear(200.0, 120.0, 40.0)
-    return _linear(128.0, 128.0, 128.0)
-
-
-struct _Layers(Movable):
-    """One mesh builder for each surface, and the random shades."""
-
-    var builders: List[MeshBuilder]
-    var random: SeededRandom
-
-    def __init__(out self, seed: Int):
-        self.builders = List[MeshBuilder]()
-        for _ in range(_SURFACES):  # pragma: no branch
-            self.builders.append(MeshBuilder())
-        self.random = generator_random(seed)
-
-    def tone(mut self, base: Vec3d, spread: Float64) -> Vec3d:
-        """Return a base color, made lighter or darker by up to `spread`."""
-        var k = 1.0 + spread * (self.random.next() * 2.0 - 1.0)
-        return Vec3d(base.x * k, base.y * k, base.z * k)
-
-
-def _p(x: Float64, y: Float64, z: Float64) -> Vec3d:
-    """Return a point."""
-    return Vec3d(x, y, z)
-
-
-def _quad(
-    mut layers: _Layers,
-    surface: Surface,
-    a: Vec3d,
-    b: Vec3d,
-    c: Vec3d,
-    d: Vec3d,
-    facing: Vec3d,
-    color: Vec3d,
-) raises:
-    """Add a quad that faces `facing`, as two triangles."""
-    layers.builders[surface.value].oriented(a, b, c, facing, color)
-    layers.builders[surface.value].oriented(a, c, d, facing, color)
-
-
-def _triangle(
-    mut layers: _Layers,
-    surface: Surface,
-    a: Vec3d,
-    b: Vec3d,
-    c: Vec3d,
-    facing: Vec3d,
-    color: Vec3d,
-) raises:
-    """Add a triangle that faces `facing`."""
-    layers.builders[surface.value].oriented(a, b, c, facing, color)
-
-
-def _frustum_colored(
-    mut layers: _Layers,
-    surface: Surface,
-    base: Vec3d,
-    cx: Float64,
-    cy: Float64,
-    r0: Float64,
-    z0: Float64,
-    r1: Float64,
-    z1: Float64,
-    sides: Int,
-    phase: Float64,
-    spread: Float64,
-):
-    """Add the side of a cone or a cylinder, smooth shaded.
-
-    The radius goes from r0 at the height z0 to r1 at z1. A radius of zero
-    makes a point. Each facet has its own shade.
-    """
-    var slope = (r0 - r1) / (z1 - z0)
-    # `add_castle` refuses fewer than six facets, so the loop always runs.
-    for k in range(sides):  # pragma: no branch
-        var t0 = phase + 2.0 * pi * Float64(k) / Float64(sides)
-        var t1 = phase + 2.0 * pi * Float64(k + 1) / Float64(sides)
-        var color = layers.tone(base, spread)
-        var n0 = Vec3d(cos(t0), sin(t0), slope).normalized()
-        var n1 = Vec3d(cos(t1), sin(t1), slope).normalized()
-        var a = _p(cx + r0 * cos(t0), cy + r0 * sin(t0), z0)
-        var b = _p(cx + r0 * cos(t1), cy + r0 * sin(t1), z0)
-        var c = _p(cx + r1 * cos(t1), cy + r1 * sin(t1), z1)
-        var d = _p(cx + r1 * cos(t0), cy + r1 * sin(t0), z1)
-        layers.builders[surface.value].smooth_triangle(
-            a, b, c, n0, n1, n1, color, color, color
-        )
-        layers.builders[surface.value].smooth_triangle(
-            a, c, d, n0, n1, n0, color, color, color
-        )
-
-
-def _frustum(
-    mut layers: _Layers,
-    surface: Surface,
-    cx: Float64,
-    cy: Float64,
-    r0: Float64,
-    z0: Float64,
-    r1: Float64,
-    z1: Float64,
-    sides: Int,
-    phase: Float64,
-    spread: Float64,
-):
-    """Add the side of a cone or a cylinder in the base color of a surface."""
-    _frustum_colored(
-        layers,
-        surface,
-        surface_color(surface),
-        cx,
-        cy,
-        r0,
-        z0,
-        r1,
-        z1,
-        sides,
-        phase,
-        spread,
+    return ViewSettings(
+        Length64(2.2), Length64(1.0), Length64(3.2), Length64(6.0), 7
     )
 
 
-def _disc(
-    mut layers: _Layers,
-    surface: Surface,
-    cx: Float64,
-    cy: Float64,
-    r: Float64,
-    z: Float64,
-    sides: Int,
-    color: Vec3d,
+def _tint(x: Float64, y: Float64, seed: Int) -> Vec3d:
+    """Return a tint that varies a little from wall to wall."""
+    var shade = 0.93 + 0.12 * unit_noise(x, y, seed)
+    return Vec3d(shade, shade * 0.99, shade * 0.98)
+
+
+def _smooth(x: Float64) -> Float64:
+    """Return the smooth step of a number clamped to 0 through 1."""
+    var t = min(max(x, 0.0), 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _ease(x: Float64) -> Float64:
+    """Return a curve that rises steeply from 0 at 0 and levels off at 1
+    for a number of 1 or more."""
+    var t = 1.0 - min(max(x, 0.0), 1.0)
+    return 1.0 - t * t
+
+
+def ground_height(
+    plan: CastlePlan, hull: List[Point], at: Point
+) raises -> Float64:
+    """Return the height of the ground at a point, above the island.
+
+    The ground is continuous across the shore and has a slope there, so that
+    the water meets the bank along a clean line and not along a step.
+    """
+    var water = plan.moat.water_level.value - plan.island_level.value
+    var near = distance_to_outline(plan.moat.outline, at).value
+    var ripple = 0.1 * (
+        unit_noise(at.x.value * 0.7, at.y.value * 0.7, 11) - 0.5
+    )
+    if polygon_contains(plan.moat.outline, at):
+        # The bed shelves down from the shore to the full depth.
+        return water - plan.moat.depth.value * _ease(near / 3.0)
+    if polygon_contains(hull, at):
+        return water + (0.0 - water) * _ease(near / _ISLAND_BANK) + ripple
+    var ground = plan.ground_level.value - plan.island_level.value
+    return water + (ground - water) * _ease(near / _OUTER_BANK) + ripple
+
+
+def _terrain(plan: CastlePlan, settings: ViewSettings, mut kit: Kit) raises:
+    """Add the ground: the island, the banks, the meadow and the far fields."""
+    var hull = convex_hull(plan.moat.outline)
+    var low_x = Float64(1.0e30)
+    var low_y = Float64(1.0e30)
+    var high_x = Float64(-1.0e30)
+    var high_y = Float64(-1.0e30)
+    for corner in plan.moat.outline:
+        low_x = min(low_x, corner.x.value)
+        low_y = min(low_y, corner.y.value)
+        high_x = max(high_x, corner.x.value)
+        high_y = max(high_y, corner.y.value)
+    var margin = 75.0
+    low_x -= margin
+    low_y -= margin
+    high_x += margin
+    high_y += margin
+    var step = settings.terrain_step.value
+    var columns = Int((high_x - low_x) / step) + 1
+    var rows = Int((high_y - low_y) / step) + 1
+    var heights = List[Float64](capacity=columns * rows)
+    var colors = List[Vec3d](capacity=columns * rows)
+    var dry = Vec3d(1.0, 0.86, 0.6)
+    for row in range(rows):
+        for column in range(columns):
+            var at = point(
+                low_x + Float64(column) * step, low_y + Float64(row) * step
+            )
+            heights.append(ground_height(plan, hull, at))
+            var near = distance_to_outline(plan.moat.outline, at).value
+            var shade = 0.8 + 0.4 * unit_noise(
+                at.x.value * 0.35, at.y.value * 0.35, settings.seed
+            )
+            var color = Vec3d(shade, shade, shade)
+            # Autumn: some patches of the meadow have gone dry.
+            if unit_noise(at.x.value * 0.08, at.y.value * 0.08, 3) > 0.62:
+                color = Vec3d(shade * dry.x, shade * dry.y, shade * dry.z)
+            # The wet margin of the water is dark.
+            if near < 1.6:
+                var wet = 0.45 + 0.55 * _smooth(near / 1.6)
+                color = Vec3d(
+                    color.x * wet, color.y * wet * 0.95, color.z * wet
+                )
+            colors.append(color)
+    kit.lawn.heightfield(
+        Vec3d(low_x, low_y, 0), step, step, columns, rows, heights, colors
+    )
+    # The far fields: four strips round the near ground, which run on to the
+    # horizon as a patchwork of fields. Each strip meets the near ground
+    # along an edge, at the same height.
+    var ground = plan.ground_level.value - plan.island_level.value
+    var far_low_x = low_x - _FAR_REACH
+    var far_high_x = high_x + _FAR_REACH
+    var far_low_y = low_y - _FAR_REACH
+    var far_high_y = high_y + _FAR_REACH
+    _strip(kit, far_low_x, far_low_y, low_x, far_high_y, ground, settings.seed)
+    _strip(
+        kit, high_x, far_low_y, far_high_x, far_high_y, ground, settings.seed
+    )
+    _strip(kit, low_x, far_low_y, high_x, low_y, ground, settings.seed)
+    _strip(kit, low_x, high_y, high_x, far_high_y, ground, settings.seed)
+
+
+def _strip(
+    mut kit: Kit,
+    x0: Float64,
+    y0: Float64,
+    x1: Float64,
+    y1: Float64,
+    ground: Float64,
+    seed: Int,
 ) raises:
-    """Add a disc that faces up."""
-    var up = Vec3d(0.0, 0.0, 1.0)
-    var middle = _p(cx, cy, z)
-    for k in range(sides):  # pragma: no branch
-        var t0 = 2.0 * pi * Float64(k) / Float64(sides)
-        var t1 = 2.0 * pi * Float64(k + 1) / Float64(sides)
-        _triangle(
-            layers,
-            surface,
-            middle,
-            _p(cx + r * cos(t0), cy + r * sin(t0), z),
-            _p(cx + r * cos(t1), cy + r * sin(t1), z),
+    """Add a flat strip of far meadow, colored in patches like fields."""
+    var columns = max(2, Int((x1 - x0) / _FAR_STEP) + 1)
+    var rows = max(2, Int((y1 - y0) / _FAR_STEP) + 1)
+    var step_x = (x1 - x0) / Float64(columns - 1)
+    var step_y = (y1 - y0) / Float64(rows - 1)
+    var heights = List[Float64](capacity=columns * rows)
+    var colors = List[Vec3d](capacity=columns * rows)
+    var fields = List[Vec3d]()
+    fields.append(Vec3d(0.9, 0.95, 0.7))
+    fields.append(Vec3d(1.2, 1.1, 0.6))
+    fields.append(Vec3d(0.8, 0.8, 0.55))
+    fields.append(Vec3d(1.0, 0.9, 0.55))
+    fields.append(Vec3d(0.7, 0.85, 0.6))
+    for row in range(rows):
+        for column in range(columns):
+            var x = x0 + Float64(column) * step_x
+            var y = y0 + Float64(row) * step_y
+            heights.append(ground)
+            var pick = unit_noise(floor(x / 110.0), floor(y / 90.0), seed + 5)
+            var tone = fields[Int(pick * 5.0) % 5]
+            var fine = 0.9 + 0.2 * unit_noise(x, y, seed + 6)
+            colors.append(Vec3d(tone.x * fine, tone.y * fine, tone.z * fine))
+    kit.lawn.heightfield(
+        Vec3d(x0, y0, 0), step_x, step_y, columns, rows, heights, colors
+    )
+
+
+def _water(plan: CastlePlan, mut kit: Kit) raises:
+    """Add the surface of the moat."""
+    var outline = List[Tuple[Float64, Float64]]()
+    for corner in plan.moat.outline:
+        outline.append((corner.x.value, corner.y.value))
+    var level = plan.moat.water_level.value - plan.island_level.value
+    kit.water.plate(
+        outline,
+        List[List[Tuple[Float64, Float64]]](),
+        Vec3d(0, 0, level),
+        Vec3d(1, 0, 0),
+        Vec3d(0, 1, 0),
+        Vec3d(0, 0, -0.05),
+        white(),
+    )
+
+
+def _facade(
+    mut kit: Kit,
+    p: Vec3d,
+    q: Vec3d,
+    away: Vec3d,
+    bottom: Float64,
+    plinth: Float64,
+    eave: Float64,
+    pitch: Float64,
+    seed: Int,
+) raises:
+    """Add one wall of a block: the plinth, the brick with its windows, the
+    ledge, a string course between the floors, and the cornice."""
+    var run = Vec3d(q.x - p.x, q.y - p.y, 0)
+    var length = run.length()
+    if not (length > 1e-6):
+        return
+    var along = run * (1.0 / length)
+    var up = Vec3d(0, 0, 1)
+    var tint = _tint(p.x, p.y, seed)
+    wall(kit, True, p, q, away, bottom, plinth, List[Opening](), tint)
+    var openings = List[Opening]()
+    var sill = plinth + 0.9
+    while sill + 1.9 < eave - 0.8:
+        var row = window_row(length, 1.4, pitch, 1.1, 1.9, sill, False)
+        for o in row:
+            openings.append(o.copy())
+        sill += 3.5
+    wall(kit, False, p, q, away, plinth, eave, openings, tint)
+    var mid = Vec3d(p.x, p.y, 0) + along * (length / 2)
+    box_at(
+        kit.stone,
+        mid + away * 0.12 + Vec3d(0, 0, plinth),
+        along,
+        away,
+        up,
+        length / 2,
+        0.14,
+        0.07,
+        white(),
+    )
+    if plinth + 3.6 < eave - 1.0:
+        box_at(
+            kit.stone,
+            mid + away * 0.05 + Vec3d(0, 0, plinth + 3.6),
+            along,
+            away,
             up,
-            color,
+            length / 2,
+            0.07,
+            0.11,
+            white(),
         )
-
-
-def _box(
-    mut layers: _Layers,
-    surface: Surface,
-    corner: Vec3d,
-    u: Vec3d,
-    v: Vec3d,
-    height: Float64,
-    color: Vec3d,
-) raises:
-    """Add the sides and the top of a box with no bottom.
-
-    The box stands on the parallelogram of `corner`, `u` and `v`. The
-    vector u cross v points up.
-    """
-    var up = Vec3d(0.0, 0.0, height)
-    var a = corner
-    var b = corner + u
-    var c = corner + u + v
-    var d = corner + v
-    var middle = (a + c) * 0.5 + up * 0.5
-    var faces = [(a, b), (b, c), (c, d), (d, a)]
-    for f in range(4):
-        var p = faces[f][0]
-        var q = faces[f][1]
-        var facing = (p + q) * 0.5 + up * 0.5 - middle
-        _quad(layers, surface, p, q, q + up, p + up, facing, color)
-    _quad(
-        layers, surface, a + up, b + up, c + up, d + up, Vec3d(0, 0, 1), color
+    box_at(
+        kit.stone,
+        mid + away * 0.17 + Vec3d(0, 0, eave - 0.13),
+        along,
+        away,
+        up,
+        length / 2 + 0.1,
+        0.2,
+        0.13,
+        white(),
     )
 
 
-def _dark() -> Vec3d:
-    """Return the color of a window or an arrow slit."""
-    return _linear(22.0, 26.0, 34.0)
-
-
-def _slit(
-    mut layers: _Layers,
-    origin: Vec3d,
-    along: Vec3d,
-    normal: Vec3d,
-    width: Float64,
-    height: Float64,
+def _wing(
+    plan: CastlePlan, wing: Wing, settings: ViewSettings, mut kit: Kit
 ) raises:
-    """Add a dark rectangle that stands proud of a wall by a hair."""
-    var a = origin - along * (width / 2.0) + normal * 0.03
-    var b = origin + along * (width / 2.0) + normal * 0.03
-    var up = Vec3d(0.0, 0.0, height)
-    _quad(layers, SLATE, a, b, b + up, a + up, normal, _dark())
-
-
-def _merlon_ring(
-    mut layers: _Layers, cx: Float64, cy: Float64, radius: Float64, z: Float64
-) raises:
-    """Add merlons around a circle, each facing outward, on a floor at z."""
-    var count = max(3, Int(2.0 * pi * radius / 1.7))
-    var stone = surface_color(STONE)
-    # There are three merlons at least, so the loop always runs.
-    for k in range(count):  # pragma: no branch
-        var theta = 2.0 * pi * (Float64(k) + 0.5) / Float64(count)
-        var radial = Vec3d(cos(theta), sin(theta), 0.0)
-        var tangent = Vec3d(-sin(theta), cos(theta), 0.0)
-        var corner = _p(cx, cy, z) + radial * (radius - 0.25) - tangent * 0.4
-        _box(
-            layers,
-            STONE,
-            corner,
-            radial * 0.5,
-            tangent * 0.8,
-            _MERLON,
-            layers.tone(stone, 0.06),
+    """Add a wing: walls with windows, a gable at each end, a slate roof
+    with dormers, chimneys and a leaded ridge."""
+    var datum = plan.island_level.value
+    var bottom = wing.base.value - datum
+    var eave = bottom + wing.eave_height.value
+    var ridge = bottom + wing.ridge_height.value
+    var plinth = bottom + settings.plinth.value
+    var half = wing.width.value / 2
+    var count = len(wing.axis)
+    var outline = wing.outline()
+    var up = Vec3d(0, 0, 1)
+    var left = List[Vec3d]()
+    var right = List[Vec3d]()
+    var crest = List[Vec3d]()
+    var left_eave = List[Vec3d]()
+    var right_eave = List[Vec3d]()
+    var scale = (half + _OVERHANG) / half
+    for at in range(count):
+        var axis = Vec3d(wing.axis[at].x.value, wing.axis[at].y.value, 0)
+        var l = Vec3d(outline[at].x.value, outline[at].y.value, 0)
+        var r = Vec3d(
+            outline[2 * count - 1 - at].x.value,
+            outline[2 * count - 1 - at].y.value,
+            0,
         )
+        left.append(l)
+        right.append(r)
+        crest.append(Vec3d(axis.x, axis.y, ridge))
+        var lo = axis + (l - axis) * scale
+        var ro = axis + (r - axis) * scale
+        left_eave.append(Vec3d(lo.x, lo.y, eave - 0.3))
+        right_eave.append(Vec3d(ro.x, ro.y, eave - 0.3))
+    var pitch = settings.window_pitch.value
+    for at in range(count - 1):
+        var run = Vec3d(
+            wing.axis[at + 1].x.value - wing.axis[at].x.value,
+            wing.axis[at + 1].y.value - wing.axis[at].y.value,
+            0,
+        )
+        var d = run.normalized()
+        var across = Vec3d(-d.y, d.x, 0)
+        _facade(
+            kit, left[at], left[at + 1], across, bottom, plinth, eave, pitch, at
+        )
+        _facade(
+            kit,
+            right[at + 1],
+            right[at],
+            across * -1.0,
+            bottom,
+            plinth,
+            eave,
+            pitch,
+            at + 40,
+        )
+        var slate = _tint(left[at].x, left[at].y, 17)
+        for side in range(2):
+            var facing = across if side == 0 else across * -1.0
+            var e0 = left_eave[at]
+            var e1 = left_eave[at + 1]
+            if side == 1:
+                e0 = right_eave[at]
+                e1 = right_eave[at + 1]
+            var r0 = crest[at]
+            var r1 = crest[at + 1]
+            var slope = r0 - e0
+            var v_axis = (slope - d * slope.dot(d)).normalized()
+            quad_uv(
+                kit.slate, e0, e1, r1, r0, facing + up, slate, e0, d, v_axis
+            )
+            # The gutter along the eave.
+            var length = (e1 - e0).length()
+            box_at(
+                kit.metal,
+                (e0 + e1) * 0.5 - facing * 0.05,
+                d,
+                facing,
+                up,
+                length / 2,
+                0.08,
+                0.09,
+                srgb(96, 100, 104),
+            )
+            # The dormers: one every five meters, away from the ends.
+            var dormers = Int(length / 5.0)
+            var horizontal = sqrt(slope.x * slope.x + slope.y * slope.y)
+            for k in range(dormers):
+                var t = 0.5
+                if dormers > 1:
+                    t = 0.18 + 0.64 * Float64(k) / Float64(dormers - 1)
+                var base = e0 + (e1 - e0) * t
+                var crest_here = r0 + (r1 - r0) * t
+                var foot = base + (crest_here - base) * 0.5
+                dormer(
+                    kit,
+                    foot,
+                    facing,
+                    (ridge - e0.z) / horizontal,
+                    1.3,
+                    at * 8 + k,
+                )
+        ridge_cap(kit.metal, crest[at], crest[at + 1], 0.28)
+        # Chimneys on the long runs of the ridge.
+        if run.length() > 9.0:
+            for k in range(2):
+                var t = 0.3 + 0.4 * Float64(k)
+                var spot = crest[at] + (crest[at + 1] - crest[at]) * t
+                chimney(kit, spot.x, spot.y, ridge - 1.0, 3.4)
+    # The gables.
+    var first = Vec3d(
+        wing.axis[1].x.value - wing.axis[0].x.value,
+        wing.axis[1].y.value - wing.axis[0].y.value,
+        0,
+    ).normalized()
+    var last = Vec3d(
+        wing.axis[count - 1].x.value - wing.axis[count - 2].x.value,
+        wing.axis[count - 1].y.value - wing.axis[count - 2].y.value,
+        0,
+    ).normalized()
+    var width = wing.width.value
+    var cap_windows = List[Opening]()
+    var sill = plinth + 0.9
+    while sill + 1.7 < eave - 0.8:
+        var row = window_row(width, 1.9, 4.0, 1.0, 1.7, sill, False)
+        for o in row:
+            cap_windows.append(o.copy())
+        sill += 3.5
+    for end in range(2):
+        var p = right[0]
+        var q = left[0]
+        var away = first * -1.0
+        if end == 1:
+            p = left[count - 1]
+            q = right[count - 1]
+            away = last
+        var tint = _tint(p.x, p.y, 60 + end)
+        wall(kit, True, p, q, away, bottom, plinth, List[Opening](), tint)
+        wall(kit, False, p, q, away, plinth, eave, cap_windows, tint, ridge)
+        finial(kit.metal, (p.x + q.x) / 2, (p.y + q.y) / 2, ridge, 1.1)
 
 
-def _round_tower(mut layers: _Layers, tower: Tower, sides: Int) raises:
-    """Add a round tower: plinth, shaft, string course, slits and a top."""
+def _tower(
+    plan: CastlePlan,
+    tower: Tower,
+    index: Int,
+    settings: ViewSettings,
+    mut kit: Kit,
+) raises:
+    """Add a round tower: plinth, wall with slit windows, bands of stone,
+    and a spire or a crenellated crown."""
+    var datum = plan.island_level.value
+    var bottom = tower.base.value - datum
+    var wall_top = bottom + tower.wall_height.value
+    var radius = tower.radius.value
     var cx = tower.center.x.value
     var cy = tower.center.y.value
-    var r = tower.radius.value
-    var h = tower.height.value
-    var top = h - 0.5
-    if tower.roof == PARAPET:
-        top = h - 1.7
-    _frustum(layers, STONE, cx, cy, r + 0.35, -_FOOT, r, 1.0, sides, 0.0, 0.05)
-    _frustum(layers, BRICK, cx, cy, r, 1.0, r, top, sides, 0.0, 0.10)
-    var course = h * 0.5
-    _frustum(
-        layers,
-        STONE,
+    var plinth = min(bottom + settings.plinth.value, wall_top)
+    var facets = max(12, Int(2.0 * pi * radius / 0.75))
+    facets += facets % 2
+    var tint = _tint(cx, cy, 90 + index)
+    var none = List[Float64]()
+    round_wall(
+        kit,
         cx,
         cy,
-        r + 0.08,
-        course - 0.15,
-        r + 0.08,
-        course + 0.15,
-        sides,
-        0.0,
-        0.05,
+        radius + 0.06,
+        bottom,
+        plinth,
+        facets,
+        True,
+        tint,
+        none,
+        0,
+        0,
+        0.3,
     )
-    var level = 0
-    var z = 3.2
-    while z + 1.0 < top - 0.8:
-        for j in range(4):
-            var theta = 0.6 + 0.8 * Float64(level) + pi * Float64(j) / 2.0
-            var radial = Vec3d(cos(theta), sin(theta), 0.0)
-            var tangent = Vec3d(-sin(theta), cos(theta), 0.0)
-            _slit(
-                layers,
-                _p(cx, cy, z) + radial * (r + 0.0),
-                tangent,
-                radial,
-                0.28,
-                1.0,
-            )
-        level += 1
-        z += 4.2
-    if tower.roof == PARAPET:
-        _frustum(
-            layers,
-            STONE,
+    ring_band(
+        kit.stone,
+        cx,
+        cy,
+        radius + 0.16,
+        plinth - 0.18,
+        plinth,
+        0.14,
+        facets,
+        white(),
+    )
+    var levels = List[Float64]()
+    var z = plinth + 1.3
+    while z + 1.25 < wall_top - 1.0:
+        levels.append(z)
+        z += 3.3
+    round_wall(
+        kit,
+        cx,
+        cy,
+        radius,
+        plinth,
+        wall_top,
+        facets,
+        False,
+        tint,
+        levels,
+        3,
+        index,
+        0.3,
+    )
+    var band = plinth + 6.6
+    while band < wall_top - 2.0:
+        ring_band(
+            kit.stone,
             cx,
             cy,
-            r,
-            h - 1.7,
-            r + 0.55,
-            h - 1.0,
-            sides,
-            0.0,
-            0.04,
-        )
-        _frustum(
-            layers,
-            STONE,
-            cx,
-            cy,
-            r + 0.55,
-            h - 1.0,
-            r + 0.55,
-            h,
-            sides,
-            0.0,
-            0.04,
-        )
-        _disc(layers, STONE, cx, cy, r + 0.55, h, sides, surface_color(STONE))
-        _merlon_ring(layers, cx, cy, r + 0.55, h)
-    else:
-        var rise = tower.roof_rise.value
-        _frustum(
-            layers, STONE, cx, cy, r, h - 0.5, r + 0.3, h, sides, 0.0, 0.04
-        )
-        _frustum(
-            layers, SLATE, cx, cy, r + 0.3, h, 0.0, h + rise, sides, 0.0, 0.12
-        )
-        layers.builders[STONE.value].tube(
-            _p(cx, cy, h + rise),
-            _p(cx, cy, h + rise + 1.4),
+            radius + 0.07,
+            band,
+            band + 0.22,
             0.07,
-            0.0,
-            5,
-            surface_color(STONE),
-            surface_color(STONE),
+            facets,
+            white(),
         )
-
-
-struct _Frame(ImplicitlyCopyable):
-    """The rectangle of a block in the plan: a center and two directions."""
-
-    var cx: Float64
-    var cy: Float64
-    var length: Float64
-    var width: Float64
-    # The unit direction of the length, and the unit direction across it.
-    var a: Vec3d
-    var c: Vec3d
-
-    def __init__(
-        out self,
-        cx: Float64,
-        cy: Float64,
-        length: Float64,
-        width: Float64,
-        heading: Float64,
-    ):
-        self.cx = cx
-        self.cy = cy
-        self.length = length
-        self.width = width
-        self.a = Vec3d(cos(heading), sin(heading), 0.0)
-        self.c = Vec3d(-sin(heading), cos(heading), 0.0)
-
-    def at(self, along: Float64, across: Float64, z: Float64) -> Vec3d:
-        """Return a point from its place along and across the rectangle."""
-        return _p(self.cx, self.cy, z) + self.a * along + self.c * across
-
-    def start(self, face: Int, z: Float64) -> Vec3d:
-        """Return the start of a face, going counterclockwise."""
-        var u = self.length / 2.0
-        var v = self.width / 2.0
-        if face == 0:
-            return self.at(-u, -v, z)
-        if face == 1:
-            return self.at(u, -v, z)
-        if face == 2:
-            return self.at(u, v, z)
-        return self.at(-u, v, z)
-
-    def direction(self, face: Int) -> Vec3d:
-        """Return the unit direction along a face."""
-        if face == 0:
-            return self.a
-        if face == 1:
-            return self.c
-        if face == 2:
-            return self.a * -1.0
-        return self.c * -1.0
-
-    def size(self, face: Int) -> Float64:
-        """Return the length of a face."""
-        if face % 2 == 0:
-            return self.length
-        return self.width
-
-    def outward(self, face: Int) -> Vec3d:
-        """Return the unit normal of a face, pointing out."""
-        return self.direction(face).cross(Vec3d(0.0, 0.0, 1.0))
-
-
-def _gate(mut layers: _Layers, frame: _Frame) raises:
-    """Add a pointed-round gate arch in the face at the end of the length."""
-    var s = frame.start(1, 0.0)
-    var d = frame.direction(1)
-    var n = frame.outward(1)
-    var mid = frame.width / 2.0
-    var spring = 3.6
-    var radius = 1.6
-    var dark = _dark()
-    var stone = surface_color(STONE)
-    var up = Vec3d(0.0, 0.0, 1.0)
-    var base = s + d * mid + n * 0.05
-    _quad(
-        layers,
-        SLATE,
-        base - d * radius,
-        base + d * radius,
-        base + d * radius + up * spring,
-        base - d * radius + up * spring,
-        n,
-        dark,
+        band += 6.6
+    if tower.roof == CONE:
+        var count = max(8, Int(2.0 * pi * radius / 0.75))
+        _cornice(kit, cx, cy, radius, wall_top, count, facets)
+        spire(
+            kit,
+            cx,
+            cy,
+            radius + 0.45,
+            wall_top,
+            tower.roof_height.value,
+            facets,
+            index,
+        )
+        return
+    round_crown(
+        kit, cx, cy, radius, wall_top, max(tower.roof_height.value, 0.8)
     )
-    var steps = 12
-    var hub = base + up * spring
-    for k in range(steps):  # pragma: no branch
-        var t0 = pi * Float64(k) / Float64(steps)
-        var t1 = pi * Float64(k + 1) / Float64(steps)
-        var p0 = hub + d * (radius * cos(t0)) + up * (radius * sin(t0))
-        var p1 = hub + d * (radius * cos(t1)) + up * (radius * sin(t1))
-        _triangle(layers, SLATE, hub, p0, p1, n, dark)
-        var q0 = (
-            hub
-            + d * ((radius + 0.45) * cos(t0))
-            + up * ((radius + 0.45) * sin(t0))
+    if radius > 3.0:
+        # A stair turret on the crown, with a spire of its own.
+        var turn = 2.45
+        var tx = cx + radius * 0.5 * cos(turn)
+        var ty = cy + radius * 0.5 * sin(turn)
+        var turret = List[Float64]()
+        turret.append(wall_top + 1.2)
+        round_wall(
+            kit,
+            tx,
+            ty,
+            0.95,
+            wall_top,
+            wall_top + 3.6,
+            12,
+            False,
+            tint,
+            turret,
+            3,
+            0,
+            0.22,
         )
-        var q1 = (
-            hub
-            + d * ((radius + 0.45) * cos(t1))
-            + up * ((radius + 0.45) * sin(t1))
-        )
-        var rim = n * -0.01
-        _quad(layers, STONE, p0 + rim, p1 + rim, q1 + rim, q0 + rim, n, stone)
-    for side in range(2):
-        var sign = Float64(2 * side - 1)
-        var inner = base + d * (sign * radius) + n * -0.01
-        var outer = base + d * (sign * (radius + 0.45)) + n * -0.01
-        _quad(
-            layers,
-            STONE,
-            inner,
-            outer,
-            outer + up * spring,
-            inner + up * spring,
-            n,
-            stone,
-        )
+        spire(kit, tx, ty, 1.3, wall_top + 3.6, 3.2, 12, index + 5)
 
 
-def _walls(
-    mut layers: _Layers, frame: _Frame, height: Float64, gate: Bool
-) raises:
-    """Add the brick walls of a block with plinth, string course and
-    windows, and a gate arch in the face at the end of the length."""
-    var brick = surface_color(BRICK)
-    var stone = surface_color(STONE)
-    var up = Vec3d(0.0, 0.0, 1.0)
-    for face in range(4):
-        var s = frame.start(face, 0.0)
-        var d = frame.direction(face)
-        var n = frame.outward(face)
-        var size = frame.size(face)
-        var pieces = Int(floor(size / 2.2)) + 1
-        var step = size / Float64(pieces)
-        # A face has one piece at least, so the loop always runs.
-        for k in range(pieces):  # pragma: no branch
-            var p = s + d * (step * Float64(k)) - up * _FOOT
-            var q = s + d * (step * Float64(k + 1)) - up * _FOOT
-            var rise = up * (height + _FOOT)
-            _quad(
-                layers,
-                BRICK,
-                p,
-                q,
-                q + rise,
-                p + rise,
-                n,
-                layers.tone(brick, 0.08),
-            )
-        var proud = n * 0.12
-        var ledge = up * (0.9 + _FOOT)
-        var p0 = s - up * _FOOT + proud
-        var p1 = s + d * size - up * _FOOT + proud
-        _quad(layers, STONE, p0, p1, p1 + ledge, p0 + ledge, n, stone)
-        _quad(
-            layers,
-            STONE,
-            p0 + ledge,
-            p1 + ledge,
-            p1 + ledge - proud,
-            p0 + ledge - proud,
-            up,
-            stone,
-        )
-        var band = up * (height - 0.55)
-        var b0 = s + band + n * 0.08
-        var b1 = s + d * size + band + n * 0.08
-        _quad(layers, STONE, b0, b1, b1 + up * 0.3, b0 + up * 0.3, n, stone)
-        var count = Int(floor(size / 3.6))
-        if count < 1:
-            count = 1
-        var spacing = size / Float64(count)
-        var row = 0
-        var z = 1.4
-        while z + 1.7 < height - 0.9:
-            for k in range(count):  # pragma: no branch
-                var along = spacing * (Float64(k) + 0.5)
-                var in_gate = (
-                    gate
-                    and face == 1
-                    and row == 0
-                    and abs(along - size / 2.0) < 2.6
-                )
-                if not in_gate:
-                    var origin = s + d * along + up * z
-                    var frame_color = layers.tone(stone, 0.05)
-                    var f0 = origin - d * 0.7 + n * 0.02
-                    var f1 = origin + d * 0.7 + n * 0.02
-                    _quad(
-                        layers,
-                        STONE,
-                        f0 - up * 0.15,
-                        f1 - up * 0.15,
-                        f1 + up * 1.85,
-                        f0 + up * 1.85,
-                        n,
-                        frame_color,
-                    )
-                    _slit(layers, origin, d, n, 1.1, 1.7)
-            row += 1
-            z += _STOREY
-    if gate:
-        _gate(layers, frame)
-
-
-def _slope_height(
-    q: Float64, half: Float64, eave: Float64, ridge: Float64
-) -> Float64:
-    """Return the height of a gable roof at a distance q from its ridge."""
-    return ridge - (ridge - eave) * q / half
-
-
-def _dormer(
-    mut layers: _Layers,
-    frame: _Frame,
-    along: Float64,
-    side: Float64,
-    half: Float64,
-    eave: Float64,
-    ridge: Float64,
-) raises:
-    """Add a dormer window to one slope of a gable roof."""
-    var up = Vec3d(0.0, 0.0, 1.0)
-    var wide = 0.8
-    var wall = 1.5
-    var peak = 0.6
-    var qf = half * 0.62
-    var zf = _slope_height(qf, half, eave, ridge)
-    var zt = zf + wall + peak
-    var qb = max(0.0, (ridge - zt) * half / (ridge - eave))
-    var brick = surface_color(BRICK)
-    var slate = surface_color(SLATE)
-    var outward = frame.c * side
-    var fl = frame.at(along - wide, side * qf, zf)
-    var fr = frame.at(along + wide, side * qf, zf)
-    var tl = fl + up * wall
-    var tr = fr + up * wall
-    var apex = frame.at(along, side * qf, zt)
-    var back = frame.at(along, side * qb, zt)
-    var bl = frame.at(along - wide, side * qb, zt)
-    var br = frame.at(along + wide, side * qb, zt)
-    _quad(layers, BRICK, fl, fr, tr, tl, outward, layers.tone(brick, 0.06))
-    _triangle(layers, BRICK, tl, tr, apex, outward, layers.tone(brick, 0.06))
-    _slit(
-        layers,
-        frame.at(along, side * qf, zf + 0.25),
-        frame.a,
-        outward,
-        0.9,
-        1.0,
-    )
-    var roof = outward + up
-    _triangle(layers, SLATE, tl, apex, back, roof, layers.tone(slate, 0.1))
-    _triangle(layers, SLATE, tl, back, bl, roof, layers.tone(slate, 0.1))
-    _triangle(layers, SLATE, tr, br, back, roof, layers.tone(slate, 0.1))
-    _triangle(layers, SLATE, tr, back, apex, roof, layers.tone(slate, 0.1))
-    _triangle(layers, BRICK, fl, tl, bl, frame.a * -1.0, brick)
-    _triangle(layers, BRICK, fr, br, tr, frame.a, brick)
-
-
-def _gable_roof(
-    mut layers: _Layers, frame: _Frame, height: Float64, rise: Float64
-) raises:
-    """Add a gable roof of slate rows with end walls, a ridge cap and
-    dormers."""
-    var up = Vec3d(0.0, 0.0, 1.0)
-    var half = frame.width / 2.0 + _OVERHANG
-    var reach = frame.length / 2.0 + _OVERHANG
-    var eave = height - 0.25
-    var ridge = height + rise
-    var slate = surface_color(SLATE)
-    var rows = 8
-    for side in range(2):
-        var s = Float64(2 * side - 1)
-        var facing = frame.c * (s * rise) + up * half
-        for r in range(rows):  # pragma: no branch
-            var f0 = Float64(r) / Float64(rows)
-            var f1 = Float64(r + 1) / Float64(rows)
-            var q0 = s * half * (1.0 - f0)
-            var q1 = s * half * (1.0 - f1)
-            var z0 = eave + (ridge - eave) * f0
-            var z1 = eave + (ridge - eave) * f1
-            _quad(
-                layers,
-                SLATE,
-                frame.at(-reach, q0, z0),
-                frame.at(reach, q0, z0),
-                frame.at(reach, q1, z1),
-                frame.at(-reach, q1, z1),
-                facing,
-                layers.tone(slate, 0.12),
-            )
-    var brick = surface_color(BRICK)
-    for end in range(2):
-        var e = Float64(2 * end - 1)
-        var x = e * frame.length / 2.0
-        _triangle(
-            layers,
-            BRICK,
-            frame.at(x, -frame.width / 2.0, height),
-            frame.at(x, frame.width / 2.0, height),
-            frame.at(x, 0.0, ridge),
-            frame.a * e,
-            layers.tone(brick, 0.05),
-        )
-    _box(
-        layers,
-        STONE,
-        frame.at(-reach, -0.12, ridge - 0.02),
-        frame.a * (2.0 * reach),
-        frame.c * 0.24,
-        0.2,
-        surface_color(STONE),
-    )
-    var count = Int(frame.length / 6.5)
-    for side in range(2):
-        for k in range(count):
-            var along = (Float64(k) + 0.5) * frame.length / Float64(
-                count
-            ) - frame.length / 2.0
-            _dormer(
-                layers, frame, along, Float64(2 * side - 1), half, eave, ridge
-            )
-
-
-def _battlements(mut layers: _Layers, frame: _Frame, height: Float64) raises:
-    """Add a flat roof behind a corbelled parapet of merlons."""
-    var up = Vec3d(0.0, 0.0, 1.0)
-    var stone = surface_color(STONE)
-    var u = frame.length / 2.0
-    var v = frame.width / 2.0
-    var slate = surface_color(SLATE)
-    _quad(
-        layers,
-        SLATE,
-        frame.at(-u, -v, height),
-        frame.at(u, -v, height),
-        frame.at(u, v, height),
-        frame.at(-u, v, height),
-        up,
-        slate,
-    )
-    for face in range(4):
-        var s = frame.start(face, 0.0)
-        var d = frame.direction(face)
-        var n = frame.outward(face)
-        var size = frame.size(face)
-        var e = s + d * size
-        _quad(
-            layers,
-            STONE,
-            s + up * (height - 1.0),
-            e + up * (height - 1.0),
-            e + n * 0.45 + up * (height - 0.55),
-            s + n * 0.45 + up * (height - 0.55),
-            n - up,
-            stone,
-        )
-        _quad(
-            layers,
-            STONE,
-            s + n * 0.45 + up * (height - 0.55),
-            e + n * 0.45 + up * (height - 0.55),
-            e + n * 0.45 + up * height,
-            s + n * 0.45 + up * height,
-            n,
-            stone,
-        )
-        _quad(
-            layers,
-            STONE,
-            s + n * 0.45 + up * height,
-            e + n * 0.45 + up * height,
-            e + up * height,
-            s + up * height,
-            up,
-            stone,
-        )
-        var count = max(1, Int(size / 1.7))
-        var spacing = size / Float64(count)
-        for k in range(count):  # pragma: no branch
-            var along = spacing * (Float64(k) + 0.5)
-            _box(
-                layers,
-                STONE,
-                s + d * (along - 0.45) + n * 0.45 + up * height,
-                d * 0.9,
-                n * -0.5,
-                _MERLON,
-                layers.tone(stone, 0.06),
-            )
-
-
-def _square_tower(mut layers: _Layers, tower: Tower) raises:
-    """Add a square tower: walls and a pyramid or a parapet."""
-    var side = tower.radius.value * 2.0
-    var frame = _Frame(
-        tower.center.x.value, tower.center.y.value, side, side, 0.0
-    )
-    var h = tower.height.value
-    _walls(layers, frame, h, False)
-    if tower.roof == PARAPET:
-        _battlements(layers, frame, h)
-    else:
-        var corner = tower.radius.value * sqrt(2.0) + 0.4
-        _frustum(
-            layers,
-            SLATE,
-            frame.cx,
-            frame.cy,
-            corner,
-            h,
-            0.0,
-            h + tower.roof_rise.value,
-            4,
-            pi / 4.0,
-            0.1,
-        )
-
-
-def _bridge(mut layers: _Layers, bridge: Bridge, water: Float64) raises:
-    """Add a bridge of segmental stone arches on brick piers.
-
-    The deck starts at `bridge.start`. `water` is the height of the water.
-    """
-    var up = Vec3d(0.0, 0.0, 1.0)
-    var length = bridge.length().value
-    var width = bridge.width.value
-    var middle = bridge.point(bridge.length().scaled(0.5), Length64(0.0, METER))
-    var frame = _Frame(
-        middle.x.value, middle.y.value, length, width, bridge.heading.value
-    )
-    var brick = surface_color(BRICK)
-    var stone = surface_color(STONE)
-    var span = bridge.span.value
-    var pier = bridge.pier.value
-    var deck = water + bridge.deck_height().value
-    var floor = water - 0.6
-    var half = width / 2.0
-    var radius = bridge.intrados_radius().value
-    var outer = radius + bridge.ring.value
-    var rise = bridge.rise.value
-    var springing = water + bridge.springing.value
-    var center_z = springing + rise - radius
-    var reach = asin(min(1.0, span / 2.0 / radius))
-    var steps = 12
-    for i in range(bridge.spans + 1):  # pragma: no branch
-        var x0 = (pier + span) * Float64(i) - length / 2.0
-        _box(
-            layers,
-            BRICK,
-            frame.at(x0, -half, floor),
-            frame.a * pier,
-            frame.c * width,
-            deck - floor,
-            layers.tone(brick, 0.06),
-        )
-    for i in range(bridge.spans):  # pragma: no branch
-        var xc = pier + span / 2.0 + (pier + span) * Float64(i) - length / 2.0
-        for j in range(steps):  # pragma: no branch
-            var t0 = -reach + 2.0 * reach * Float64(j) / Float64(steps)
-            var t1 = -reach + 2.0 * reach * Float64(j + 1) / Float64(steps)
-            var tone = layers.tone(stone, 0.07)
-            for face in range(2):
-                var side = Float64(2 * face - 1)
-                var proud = side * (half + 0.02)
-                _quad(
-                    layers,
-                    STONE,
-                    frame.at(
-                        xc + radius * sin(t0),
-                        proud,
-                        center_z + radius * cos(t0),
-                    ),
-                    frame.at(
-                        xc + radius * sin(t1),
-                        proud,
-                        center_z + radius * cos(t1),
-                    ),
-                    frame.at(
-                        xc + outer * sin(t1), proud, center_z + outer * cos(t1)
-                    ),
-                    frame.at(
-                        xc + outer * sin(t0), proud, center_z + outer * cos(t0)
-                    ),
-                    frame.c * side,
-                    tone,
-                )
-            var p0 = frame.at(
-                xc + radius * sin(t0), -half, center_z + radius * cos(t0)
-            )
-            var p1 = frame.at(
-                xc + radius * sin(t1), -half, center_z + radius * cos(t1)
-            )
-            var q0 = frame.at(
-                xc + radius * sin(t0), half, center_z + radius * cos(t0)
-            )
-            var q1 = frame.at(
-                xc + radius * sin(t1), half, center_z + radius * cos(t1)
-            )
-            var hub = frame.at(xc, 0.0, center_z)
-            _quad(
-                layers, STONE, p0, p1, q1, q0, hub - (p0 + q1) * 0.5, tone * 0.8
-            )
-        var columns = 10
-        for k in range(columns):  # pragma: no branch
-            var x_a = -span / 2.0 + span * Float64(k) / Float64(columns)
-            var x_b = -span / 2.0 + span * Float64(k + 1) / Float64(columns)
-            var z_a = center_z + sqrt(max(outer * outer - x_a * x_a, 0.0))
-            var z_b = center_z + sqrt(max(outer * outer - x_b * x_b, 0.0))
-            for face in range(2):
-                var side = Float64(2 * face - 1)
-                _quad(
-                    layers,
-                    BRICK,
-                    frame.at(xc + x_a, side * half, z_a),
-                    frame.at(xc + x_b, side * half, z_b),
-                    frame.at(xc + x_b, side * half, deck),
-                    frame.at(xc + x_a, side * half, deck),
-                    frame.c * side,
-                    layers.tone(brick, 0.07),
-                )
-    var lane = half - 0.45
-    _quad(
-        layers,
-        GRAVEL,
-        frame.at(-length / 2.0, -lane, deck + 0.01),
-        frame.at(length / 2.0, -lane, deck + 0.01),
-        frame.at(length / 2.0, lane, deck + 0.01),
-        frame.at(-length / 2.0, lane, deck + 0.01),
-        up,
-        surface_color(GRAVEL),
-    )
-    var wall = bridge.parapet.value
-    for face in range(2):
-        var side = Float64(2 * face - 1)
-        var edge = side * lane
-        var inner = side * half
-        var low = min(edge, inner)
-        _box(
-            layers,
-            BRICK,
-            frame.at(-length / 2.0, low, deck),
-            frame.a * length,
-            frame.c * 0.45,
-            wall,
-            layers.tone(brick, 0.05),
-        )
-        _box(
-            layers,
-            STONE,
-            frame.at(-length / 2.0, low - 0.04, deck + wall),
-            frame.a * length,
-            frame.c * 0.53,
-            0.12,
-            stone,
-        )
-
-
-def _ring(
-    mut layers: _Layers,
-    surface: Surface,
-    inner: Vec3d,
-    inner_x: Float64,
-    inner_y: Float64,
-    outer: Vec3d,
-    outer_x: Float64,
-    outer_y: Float64,
-    steps: Int,
-    spread: Float64,
-) raises:
-    """Add a horizontal or sloping strip between two ellipses.
-
-    An ellipse is a center (x, y, z) and two semi-axes. The strip faces up.
-    """
-    var base = surface_color(surface)
-    var up = Vec3d(0.0, 0.0, 1.0)
-    for k in range(steps):  # pragma: no branch
-        var t0 = 2.0 * pi * Float64(k) / Float64(steps)
-        var t1 = 2.0 * pi * Float64(k + 1) / Float64(steps)
-        _quad(
-            layers,
-            surface,
-            _p(
-                inner.x + inner_x * cos(t0),
-                inner.y + inner_y * sin(t0),
-                inner.z,
-            ),
-            _p(
-                inner.x + inner_x * cos(t1),
-                inner.y + inner_y * sin(t1),
-                inner.z,
-            ),
-            _p(
-                outer.x + outer_x * cos(t1),
-                outer.y + outer_y * sin(t1),
-                outer.z,
-            ),
-            _p(
-                outer.x + outer_x * cos(t0),
-                outer.y + outer_y * sin(t0),
-                outer.z,
-            ),
-            up,
-            layers.tone(base, spread),
-        )
-
-
-def _revetment(
-    mut layers: _Layers, moat: Moat, bed: Float64, steps: Int
-) raises:
-    """Add the brick wall that holds the island, from the bed to the ground."""
-    var brick = surface_color(BRICK)
-    var cx = moat.island_center.x.value
-    var cy = moat.island_center.y.value
-    var a = moat.island_semi_x.value
-    var b = moat.island_semi_y.value
-    var up = Vec3d(0.0, 0.0, 1.0)
-    for k in range(steps):  # pragma: no branch
-        var t0 = 2.0 * pi * Float64(k) / Float64(steps)
-        var t1 = 2.0 * pi * Float64(k + 1) / Float64(steps)
-        var p0 = _p(cx + a * cos(t0), cy + b * sin(t0), bed)
-        var p1 = _p(cx + a * cos(t1), cy + b * sin(t1), bed)
-        var rise = up * (-bed)
-        var facing = _p(cos((t0 + t1) / 2.0) * b, sin((t0 + t1) / 2.0) * a, 0.0)
-        _quad(
-            layers,
-            BRICK,
-            p0,
-            p1,
-            p1 + rise,
-            p0 + rise,
-            facing,
-            layers.tone(brick, 0.08),
-        )
-
-
-def _ground(
-    mut layers: _Layers, plan: CastlePlan, steps: Int, water_mesh: Bool
-) raises:
-    """Add the island, the water, the bank, the path and the meadow."""
-    var moat = plan.moat.copy()
-    var up = Vec3d(0.0, 0.0, 1.0)
-    var water = -moat.freeboard.value
-    var bed = water - moat.depth.value
-    var cx = moat.center.x.value
-    var cy = moat.center.y.value
-    var ax = moat.semi_x.value
-    var ay = moat.semi_y.value
-    var ix = moat.island_center.x.value
-    var iy = moat.island_center.y.value
-    var iax = moat.island_semi_x.value
-    var iay = moat.island_semi_y.value
-    var lawn = surface_color(LAWN)
-    for k in range(steps):  # pragma: no branch
-        var t0 = 2.0 * pi * Float64(k) / Float64(steps)
-        var t1 = 2.0 * pi * Float64(k + 1) / Float64(steps)
-        _triangle(
-            layers,
-            LAWN,
-            _p(ix, iy, 0.0),
-            _p(ix + iax * cos(t0), iy + iay * sin(t0), 0.0),
-            _p(ix + iax * cos(t1), iy + iay * sin(t1), 0.0),
-            up,
-            layers.tone(lawn, 0.06),
-        )
-    _disc(layers, GRAVEL, 0.0, 0.0, 5.5, 0.03, steps, surface_color(GRAVEL))
-    _revetment(layers, moat, bed, steps)
-    if water_mesh:
-        _ring(
-            layers,
-            WATER,
-            _p(ix, iy, water),
-            iax,
-            iay,
-            _p(cx, cy, water),
-            ax,
-            ay,
-            steps,
-            0.04,
-        )
-    _ring(
-        layers,
-        LAWN,
-        _p(cx, cy, water),
-        ax,
-        ay,
-        _p(cx, cy, 0.0),
-        ax + 2.4,
-        ay + 2.4,
-        steps,
-        0.05,
-    )
-    _ring(
-        layers,
-        LAWN,
-        _p(cx, cy, 0.0),
-        ax + 2.4,
-        ay + 2.4,
-        _p(cx, cy, 0.0),
-        ax + 5.0,
-        ay + 5.0,
-        steps,
-        0.05,
-    )
-    _ring(
-        layers,
-        GRAVEL,
-        _p(cx, cy, 0.0),
-        ax + 5.0,
-        ay + 5.0,
-        _p(cx, cy, 0.0),
-        ax + 8.0,
-        ay + 8.0,
-        steps,
-        0.04,
-    )
-    _ring(
-        layers,
-        LAWN,
-        _p(cx, cy, 0.0),
-        ax + 8.0,
-        ay + 8.0,
-        _p(cx, cy, 0.0),
-        ax + 3000.0,
-        ay + 3000.0,
-        steps,
-        0.05,
-    )
-
-
-def foliage_color(index: Int) -> Vec3d:
-    """Return the linear color of an autumn crown.
-
-    Args:
-        index: Which of the six colors, 0 to 5. Another index is taken
-            modulo six.
-
-    Returns:
-        Orange, amber, red, olive, deep conifer green or gold.
-    """
-    var k = index % 6
-    if k == 0:
-        return _linear(222.0, 120.0, 32.0)
-    if k == 1:
-        return _linear(236.0, 176.0, 44.0)
-    if k == 2:
-        return _linear(178.0, 66.0, 38.0)
-    if k == 3:
-        return _linear(112.0, 128.0, 52.0)
-    if k == 4:
-        return _linear(30.0, 62.0, 42.0)
-    return _linear(232.0, 200.0, 70.0)
-
-
-def _crown(
-    mut layers: _Layers,
-    x: Float64,
-    y: Float64,
-    z: Float64,
+def _cornice(
+    mut kit: Kit,
+    cx: Float64,
+    cy: Float64,
     radius: Float64,
-    squash: Float64,
-    color: Vec3d,
+    top: Float64,
+    count: Int,
+    facets: Int,
 ):
-    """Add a squashed ball of foliage, smooth shaded."""
-    var bands = 6
-    var around = 8
-    for i in range(bands):  # pragma: no branch
-        var p0 = pi * Float64(i) / Float64(bands)
-        var p1 = pi * Float64(i + 1) / Float64(bands)
-        for j in range(around):  # pragma: no branch
-            var t0 = 2.0 * pi * Float64(j) / Float64(around)
-            var t1 = 2.0 * pi * Float64(j + 1) / Float64(around)
-            var tone = layers.tone(color, 0.10)
-            var n00 = Vec3d(
-                sin(p0) * cos(t0), sin(p0) * sin(t0), cos(p0) / squash
-            ).normalized()
-            var n01 = Vec3d(
-                sin(p0) * cos(t1), sin(p0) * sin(t1), cos(p0) / squash
-            ).normalized()
-            var n10 = Vec3d(
-                sin(p1) * cos(t0), sin(p1) * sin(t0), cos(p1) / squash
-            ).normalized()
-            var n11 = Vec3d(
-                sin(p1) * cos(t1), sin(p1) * sin(t1), cos(p1) / squash
-            ).normalized()
-            var a = _p(
-                x + radius * sin(p0) * cos(t0),
-                y + radius * sin(p0) * sin(t0),
-                z + radius * squash * cos(p0),
-            )
-            var b = _p(
-                x + radius * sin(p0) * cos(t1),
-                y + radius * sin(p0) * sin(t1),
-                z + radius * squash * cos(p0),
-            )
-            var c = _p(
-                x + radius * sin(p1) * cos(t1),
-                y + radius * sin(p1) * sin(t1),
-                z + radius * squash * cos(p1),
-            )
-            var d = _p(
-                x + radius * sin(p1) * cos(t0),
-                y + radius * sin(p1) * sin(t0),
-                z + radius * squash * cos(p1),
-            )
-            layers.builders[FOLIAGE.value].smooth_triangle(
-                a, c, b, n00, n11, n01, tone, tone, tone
-            )
-            layers.builders[FOLIAGE.value].smooth_triangle(
-                a, d, c, n00, n10, n11, tone, tone, tone
-            )
+    """Add the cornice under a spire: corbels that carry a stone band."""
+    corbel_ring(kit.stone, cx, cy, radius, top - 0.05, count, white())
+    ring_band(
+        kit.stone, cx, cy, radius + 0.42, top - 0.45, top, 0.0, facets, white()
+    )
 
 
-def _wood(mut layers: _Layers, plan: CastlePlan, options: CastleOptions) raises:
-    """Add a wood of autumn crowns and conifers beyond the path."""
-    var moat = plan.moat.copy()
-    var trunk = surface_color(TRUNK)
-    for _ in range(options.trees):
-        var theta = 2.0 * pi * layers.random.next()
-        var depth = layers.random.next()
-        var size = 0.8 + 0.7 * layers.random.next()
-        var palette = Int(layers.random.next() * 4.0)
-        var chance = layers.random.next()
-        var reach_x = moat.semi_x.value + 11.0 + depth * 260.0
-        var reach_y = moat.semi_y.value + 11.0 + depth * 260.0
-        var x = moat.center.x.value + reach_x * cos(theta)
-        var y = moat.center.y.value + reach_y * sin(theta)
-        var away_x = x - options.clearing.x.value
-        var away_y = y - options.clearing.y.value
-        if (
-            sqrt(away_x * away_x + away_y * away_y)
-            < options.clearing_radius.value
-        ):
-            continue
-        var conifer_chance = 0.1 + 0.4 * depth
-        if sin(theta) > 0.2:
-            conifer_chance += 0.25
-        if chance < conifer_chance:
-            var height = (10.0 + 6.0 * size) * 0.8
-            layers.builders[TRUNK.value].tube(
-                _p(x, y, 0.0), _p(x, y, 2.0), 0.2 * size, 0.0, 5, trunk, trunk
-            )
-            for tier in range(3):
-                var z = 1.8 + height * 0.26 * Float64(tier)
-                var r = (2.9 - 0.7 * Float64(tier)) * size
-                _frustum_colored(
-                    layers,
-                    FOLIAGE,
-                    foliage_color(4),
-                    x,
-                    y,
-                    r,
-                    z,
-                    0.0,
-                    z + height * 0.42,
-                    8,
-                    0.0,
-                    0.10,
-                )
-        else:
-            var crown = (3.4 + 1.8 * layers.random.next()) * size
-            var stem = 3.0 + 2.0 * size
-            layers.builders[TRUNK.value].tube(
-                _p(x, y, 0.0),
-                _p(x, y, stem + crown * 0.4),
-                0.28 * size,
-                0.0,
-                5,
-                trunk,
-                trunk,
-            )
-            _crown(
-                layers,
-                x,
-                y,
-                stem + crown * 0.55,
-                crown,
-                0.85,
-                foliage_color(palette),
-            )
-
-
-def _material(surface: Surface) raises -> Material:
-    """Return the material of a surface: vertex colors with a roughness."""
-    var roughness = Float32(0.9)
-    if surface == STONE:
-        roughness = 0.82
-    elif surface == SLATE:
-        roughness = 0.6
-    elif surface == WATER:
-        roughness = 0.04
-    elif surface == GRAVEL:
-        roughness = 0.97
-    var material = standard_material(Color(255, 255, 255), roughness=roughness)
-    material.vertex_colors = True
-    return material
-
-
-def add_castle(
-    mut scene: Scene,
-    mut assets: Assets,
+def _gate(
     plan: CastlePlan,
-    options: CastleOptions,
-) raises -> RenderedCastle:
-    """Add meshes of a castle plan to a scene.
+    gate: Gate,
+    settings: ViewSettings,
+    mut kit: Kit,
+) raises:
+    """Add the gate tower: walls on a plinth with windows and a pointed
+    portal, a crenellated parapet and a leaded roof."""
+    var datum = plan.island_level.value
+    var bottom = gate.base.value - datum
+    var top = bottom + gate.height.value
+    var plinth = bottom + settings.plinth.value
+    var corners = gate.outline()
+    var deck = plan.bridge.deck.value - datum
+    for edge in range(4):
+        var p = Vec3d(corners[edge].x.value, corners[edge].y.value, 0)
+        var q = Vec3d(
+            corners[(edge + 1) % 4].x.value, corners[(edge + 1) % 4].y.value, 0
+        )
+        var run = q - p
+        var length = run.length()
+        var along = run * (1.0 / length)
+        var away = Vec3d(along.y, -along.x, 0)
+        var tint = _tint(p.x, p.y, 120 + edge)
+        wall(kit, True, p, q, away, bottom, plinth, List[Opening](), tint)
+        var openings = List[Opening]()
+        var sill = plinth + 1.4
+        while sill + 2.4 < top - 1.6:
+            var row = window_row(length, 1.8, 3.6, 1.0, 2.4, sill, True)
+            for o in row:
+                # The portal side keeps its middle clear.
+                if edge == 0 and abs(o.at - length / 2) < 3.0:
+                    continue
+                openings.append(o.copy())
+            sill += 3.6
+        if edge == 0:
+            openings.append(Opening(length / 2, deck, 3.4, 5.6, True, False))
+            openings.append(
+                Opening(length / 2, deck + 7.0, 1.7, 3.6, True, True)
+            )
+        wall(kit, False, p, q, away, plinth, top, openings, tint)
+        var up = Vec3d(0, 0, 1)
+        var mid = p + along * (length / 2)
+        box_at(
+            kit.stone,
+            mid + away * 0.12 + Vec3d(0, 0, plinth),
+            along,
+            away,
+            up,
+            length / 2,
+            0.14,
+            0.07,
+            white(),
+        )
+        merlon_row(kit, p, q, away, top, gate.parapet.value)
+    # The leaded roof inside the parapet.
+    var lead = srgb(84, 90, 94)
+    var a = Vec3d(corners[0].x.value, corners[0].y.value, top)
+    var b = Vec3d(corners[1].x.value, corners[1].y.value, top)
+    var c = Vec3d(corners[2].x.value, corners[2].y.value, top)
+    var d = Vec3d(corners[3].x.value, corners[3].y.value, top)
+    kit.metal.oriented(a, b, c, Vec3d(0, 0, 1), lead)
+    kit.metal.oriented(a, c, d, Vec3d(0, 0, 1), lead)
 
-    The castle node's user data records the plan's name and what the view
-    leaves out: interiors, the thickness of walls and the structure.
+
+def _quay(plan: CastlePlan, mut kit: Kit) raises:
+    """Add the wall of the quay, from the bed of the moat to its top, with
+    pilasters and a stone coping."""
+    var datum = plan.island_level.value
+    var outline = offset_outline(plan.quay.axis, plan.quay.thickness)
+    var bottom = plan.quay.foot.value - datum
+    var top = plan.quay.top.value - datum
+    var count = len(outline)
+    var up = Vec3d(0, 0, 1)
+    for at in range(count):
+        var p = outline[at]
+        var q = outline[(at + 1) % count]
+        var run = Vec3d(q.x.value - p.x.value, q.y.value - p.y.value, 0)
+        var length = run.length()
+        if not (length > 1e-6):
+            continue
+        var along = run * (1.0 / length)
+        # The outline of a band runs along its left side and back along its
+        # right side, so it runs clockwise, and the left of each edge faces
+        # out of the wall.
+        var away = Vec3d(-along.y, along.x, 0)
+        var a = Vec3d(p.x.value, p.y.value, 0)
+        var b = Vec3d(q.x.value, q.y.value, 0)
+        wall(
+            kit,
+            False,
+            a,
+            b,
+            away,
+            bottom,
+            top,
+            List[Opening](),
+            _tint(a.x, a.y, 150),
+        )
+        if length > 3.0:
+            var pilasters = Int(length / 4.5)
+            for k in range(pilasters):
+                var offset = (Float64(k) + 0.5) * length / Float64(pilasters)
+                box_at(
+                    kit.stone,
+                    a
+                    + along * offset
+                    + away * 0.1
+                    + Vec3d(0, 0, (bottom + top) / 2),
+                    along,
+                    away,
+                    up,
+                    0.3,
+                    0.12,
+                    (top - bottom) / 2,
+                    Vec3d(0.75, 0.72, 0.68),
+                )
+    var coping = List[Tuple[Float64, Float64]]()
+    for corner in outline:
+        coping.append((corner.x.value, corner.y.value))
+    kit.stone.plate(
+        coping,
+        List[List[Tuple[Float64, Float64]]](),
+        Vec3d(0, 0, top),
+        Vec3d(1, 0, 0),
+        Vec3d(0, 1, 0),
+        Vec3d(0, 0, -0.15),
+        white(),
+    )
+
+
+def _bridge(plan: CastlePlan, gate: Gate, mut kit: Kit) raises:
+    """Add the bridge: spandrel walls with arches, soffits, a deck, cutwaters
+    on the piers, a coping, a railing and a lead-in from the gate."""
+    ref bridge = plan.bridge
+    var datum = plan.island_level.value
+    var deck = bridge.deck.value - datum
+    var heading = bridge.heading.value
+    var along = Vec3d(cos(heading), sin(heading), 0)
+    var across = Vec3d(-sin(heading), cos(heading), 0)
+    var up = Vec3d(0, 0, 1)
+    var start = Vec3d(bridge.start.x.value, bridge.start.y.value, 0)
+    # The gate's face stands back from the first pier. The lead-in is solid.
+    var from_gate = (
+        (start.x - gate.center.x.value) * along.x
+        + (start.y - gate.center.y.value) * along.y
+        - gate.width.value / 2
+    )
+    var lead_in = max(from_gate - bridge.pier.value / 2, 0.0)
+    var launch = start - along * lead_in
+    var length = bridge.length().value
+    var half = bridge.width.value / 2 - 0.8
+    var thick = 0.7
+    var crown_gap = 0.3
+    var radius = bridge.clear_span().value / 2
+    var springing = deck - crown_gap - bridge.ring.value - bridge.rise().value
+    var parapet_top = deck + 0.9
+    var low = springing - 0.8
+    var water = plan.moat.water_level.value - datum
+    # Two spandrel walls, one each side, each a plate with the arches cut.
+    for side in range(2):
+        var offset = half if side == 0 else -half - thick
+        var origin = launch - along * (bridge.pier.value / 2) + across * offset
+        var outline = List[Tuple[Float64, Float64]]()
+        var reach = lead_in + length + bridge.pier.value
+        outline.append((0.0, low))
+        outline.append((reach, low))
+        outline.append((reach, parapet_top))
+        outline.append((0.0, parapet_top))
+        var holes = List[List[Tuple[Float64, Float64]]]()
+        for span in range(bridge.spans):
+            var arch = List[Tuple[Float64, Float64]]()
+            var middle = (
+                lead_in
+                + bridge.pier.value / 2
+                + (Float64(span) + 0.5) * bridge.pitch.value
+            )
+            # The semicircle from the left springing, over the crown.
+            for step in range(13):
+                var turn = pi - pi * Float64(step) / 12.0
+                arch.append(
+                    (
+                        middle + radius * cos(turn),
+                        springing + radius * sin(turn),
+                    )
+                )
+            holes.append(arch^)
+        kit.stone.plate(
+            outline,
+            holes,
+            Vec3d(origin.x, origin.y, 0),
+            along,
+            up,
+            across * thick,
+            _tint(origin.x, origin.y, 200),
+        )
+    # The soffit of each arch: strips across the bridge between the walls.
+    var inner = across * half
+    var other = across * (-half)
+    for span in range(bridge.spans):
+        var middle = lead_in + (Float64(span) + 0.5) * bridge.pitch.value
+        for step in range(12):
+            var t0 = pi - pi * Float64(step) / 12.0
+            var t1 = pi - pi * Float64(step + 1) / 12.0
+            var p0 = launch + along * (middle + radius * cos(t0))
+            var p1 = launch + along * (middle + radius * cos(t1))
+            var z0 = springing + radius * sin(t0)
+            var z1 = springing + radius * sin(t1)
+            var a0 = Vec3d(p0.x + inner.x, p0.y + inner.y, z0)
+            var a1 = Vec3d(p1.x + inner.x, p1.y + inner.y, z1)
+            var b1 = Vec3d(p1.x + other.x, p1.y + other.y, z1)
+            var b0 = Vec3d(p0.x + other.x, p0.y + other.y, z0)
+            # Seen from below, inside the arch.
+            var down = Vec3d(0, 0, -1)
+            kit.stone.oriented(a0, a1, b1, down, srgb(150, 146, 138))
+            kit.stone.oriented(a0, b1, b0, down, srgb(150, 146, 138))
+    # The deck, a little below the tops of the walls.
+    var p0 = launch - along * (bridge.pier.value / 2) + across * half
+    var p1 = (
+        launch
+        + along * (lead_in + length + bridge.pier.value / 2)
+        + across * half
+    )
+    var p2 = (
+        launch
+        + along * (lead_in + length + bridge.pier.value / 2)
+        - across * half
+    )
+    var p3 = launch - along * (bridge.pier.value / 2) - across * half
+    var top = Vec3d(0, 0, deck)
+    kit.gravel.oriented(p0 + top, p1 + top, p2 + top, up, white())
+    kit.gravel.oriented(p0 + top, p2 + top, p3 + top, up, white())
+    var span_length = lead_in + length + bridge.pier.value
+    for side in range(2):
+        var offset = half if side == 0 else -half - thick
+        var foot = (
+            launch
+            + along * (span_length / 2 - bridge.pier.value / 2)
+            + across * (offset + thick / 2)
+        )
+        box_at(
+            kit.stone,
+            Vec3d(foot.x, foot.y, parapet_top + 0.07),
+            along,
+            across,
+            up,
+            span_length / 2,
+            (thick + 0.16) / 2,
+            0.08,
+            white(),
+        )
+        # The railing: posts and two rails on the coping.
+        var iron = srgb(40, 42, 44)
+        var posts = Int(span_length / 1.4)
+        for k in range(posts + 1):
+            var s = Float64(k) * span_length / Float64(posts)
+            var at = (
+                launch
+                - along * (bridge.pier.value / 2)
+                + along * s
+                + across * (offset + thick / 2)
+            )
+            box_at(
+                kit.metal,
+                Vec3d(at.x, at.y, parapet_top + 0.62),
+                along,
+                across,
+                up,
+                0.025,
+                0.025,
+                0.5,
+                iron,
+            )
+        for rail in range(2):
+            box_at(
+                kit.metal,
+                Vec3d(foot.x, foot.y, parapet_top + 0.4 + 0.45 * Float64(rail)),
+                along,
+                across,
+                up,
+                span_length / 2,
+                0.02,
+                0.02,
+                iron,
+            )
+    # The cutwaters: the piers stand out from the walls in points.
+    for pier in range(bridge.spans + 1):
+        var s = lead_in + Float64(pier) * bridge.pitch.value
+        var centre = launch + along * s
+        var reach = half + thick + 1.3
+        var wedge = List[Tuple[Float64, Float64]]()
+        # Corners in the plan, counterclockwise: the pier and its two points.
+        wedge.append((-1.0, -half - thick))
+        wedge.append((0.0, -reach))
+        wedge.append((1.0, -half - thick))
+        wedge.append((1.0, half + thick))
+        wedge.append((0.0, reach))
+        wedge.append((-1.0, half + thick))
+        var rotated = List[Tuple[Float64, Float64]]()
+        for corner in wedge:
+            rotated.append(
+                (
+                    centre.x + along.x * corner[0] + across.x * corner[1],
+                    centre.y + along.y * corner[0] + across.y * corner[1],
+                )
+            )
+        var height = (water + 0.9) - low
+        kit.stone.plate(
+            rotated,
+            List[List[Tuple[Float64, Float64]]](),
+            Vec3d(0, 0, low),
+            Vec3d(1, 0, 0),
+            Vec3d(0, 1, 0),
+            Vec3d(0, 0, height),
+            white(),
+        )
+
+
+def shore_ring(plan: CastlePlan, hull: List[Point]) raises -> List[Point]:
+    """Return the outer shore of the moat as a closed ring, in order.
+
+    The outline of the water is one polygon with the island cut out of it.
+    Its outer shore is the part that lies near the convex hull; the shore of
+    the island lies a moat's width farther in.
+    """
+    var ring = List[Point]()
+    for corner in plan.moat.outline:
+        if distance_to_outline(hull, corner).value < 7.0:
+            ring.append(corner)
+    return ring^
+
+
+def resample_ring(ring: List[Point], spacing: Float64) -> List[Point]:
+    """Return a closed ring with a corner at least every `spacing` meters."""
+    var result = List[Point]()
+    var count = len(ring)
+    for at in range(count):
+        var a = ring[at]
+        var b = ring[(at + 1) % count]
+        var dx = b.x.value - a.x.value
+        var dy = b.y.value - a.y.value
+        var steps = max(1, Int(sqrt(dx * dx + dy * dy) / spacing + 0.5))
+        for step in range(steps):
+            var t = Float64(step) / Float64(steps)
+            result.append(point(a.x.value + dx * t, a.y.value + dy * t))
+    return result^
+
+
+def offset_ring(ring: List[Point], distance: Float64) -> List[Point]:
+    """Return a ring moved away from its inside by a distance, with the
+    corners mitered."""
+    var count = len(ring)
+    var sign = 1.0 if signed_area(ring) > 0 else -1.0
+    var result = List[Point]()
+    for at in range(count):
+        var before = ring[(at + count - 1) % count]
+        var here = ring[at]
+        var after = ring[(at + 1) % count]
+        var d0 = Vec3d(
+            here.x.value - before.x.value, here.y.value - before.y.value, 0
+        ).normalized()
+        var d1 = Vec3d(
+            after.x.value - here.x.value, after.y.value - here.y.value, 0
+        ).normalized()
+        var n0 = Vec3d(d0.y, -d0.x, 0) * sign
+        var n1 = Vec3d(d1.y, -d1.x, 0) * sign
+        var bisector = (n0 + n1).normalized()
+        var reach = distance / max(bisector.dot(n1), 0.5)
+        result.append(
+            point(
+                here.x.value + bisector.x * reach,
+                here.y.value + bisector.y * reach,
+            )
+        )
+    return result^
+
+
+def _ring_path(plan: CastlePlan, hull: List[Point], mut kit: Kit) raises:
+    """Add the path of gravel that runs round the moat, and the fence that
+    keeps walkers from the water."""
+    var ring = resample_ring(shore_ring(plan, hull), 2.4)
+    var inner = offset_ring(ring, _PATH_FROM + 0.2)
+    var outer = offset_ring(ring, _PATH_TO - 0.2)
+    var fence = offset_ring(ring, 4.6)
+    var count = len(ring)
+    for at in range(count):
+        var next = (at + 1) % count
+        var a = Vec3d(inner[at].x.value, inner[at].y.value, 0)
+        var b = Vec3d(inner[next].x.value, inner[next].y.value, 0)
+        var c = Vec3d(outer[next].x.value, outer[next].y.value, 0)
+        var d = Vec3d(outer[at].x.value, outer[at].y.value, 0)
+        a.z = ground_height(plan, hull, inner[at]) + 0.03
+        b.z = ground_height(plan, hull, inner[next]) + 0.03
+        c.z = ground_height(plan, hull, outer[next]) + 0.03
+        d.z = ground_height(plan, hull, outer[at]) + 0.03
+        kit.gravel.oriented(a, b, c, Vec3d(0, 0, 1), white())
+        kit.gravel.oriented(a, c, d, Vec3d(0, 0, 1), white())
+    # The fence: a post every 2.4 m and two rails between them.
+    var wood = srgb(98, 82, 62)
+    var up = Vec3d(0, 0, 1)
+    for at in range(count):
+        var next = (at + 1) % count
+        var here = Vec3d(fence[at].x.value, fence[at].y.value, 0)
+        var there = Vec3d(fence[next].x.value, fence[next].y.value, 0)
+        here.z = ground_height(plan, hull, fence[at])
+        there.z = ground_height(plan, hull, fence[next])
+        var run = there - here
+        var length = sqrt(run.x * run.x + run.y * run.y)
+        var along = Vec3d(run.x / length, run.y / length, 0)
+        var across = Vec3d(-along.y, along.x, 0)
+        box_at(
+            kit.wood,
+            here + Vec3d(0, 0, 0.55),
+            along,
+            across,
+            up,
+            0.06,
+            0.06,
+            0.55,
+            wood,
+        )
+        for rail in range(2):
+            var z = 0.5 + 0.42 * Float64(rail)
+            var low = here + Vec3d(0, 0, z)
+            var high = there + Vec3d(0, 0, z)
+            var middle = (low + high) * 0.5
+            var tilt = (high - low).normalized()
+            box_at(
+                kit.wood,
+                middle,
+                tilt,
+                across,
+                tilt.cross(across) * -1.0,
+                (high - low).length() / 2,
+                0.025,
+                0.04,
+                wood,
+            )
+
+
+def _shift_axis(axis: List[Point], distance: Float64) -> List[Point]:
+    """Return an open polyline moved to the right of its direction of
+    travel, with the corners mitered."""
+    var count = len(axis)
+    var result = List[Point]()
+    for at in range(count):
+        var before = axis[max(at - 1, 0)]
+        var here = axis[at]
+        var after = axis[min(at + 1, count - 1)]
+        var d0 = Vec3d(
+            here.x.value - before.x.value, here.y.value - before.y.value, 0
+        )
+        var d1 = Vec3d(
+            after.x.value - here.x.value, after.y.value - here.y.value, 0
+        )
+        if d0.length() < 1e-9:
+            d0 = d1
+        if d1.length() < 1e-9:
+            d1 = d0
+        d0 = d0.normalized()
+        d1 = d1.normalized()
+        var n0 = Vec3d(d0.y, -d0.x, 0)
+        var n1 = Vec3d(d1.y, -d1.x, 0)
+        var bisector = (n0 + n1).normalized()
+        var reach = distance / max(bisector.dot(n1), 0.5)
+        result.append(
+            point(
+                here.x.value + bisector.x * reach,
+                here.y.value + bisector.y * reach,
+            )
+        )
+    return result^
+
+
+def _courtyard(plan: CastlePlan, mut kit: Kit) raises:
+    """Add the garden of the courtyard: a gravel path that follows the
+    wall of the quay, with a low hedge on the lawn side of it."""
+    var centre = _shift_axis(plan.quay.axis, 5.2)
+    var path = offset_outline(centre, Length64(2.2))
+    var count = len(path)
+    var lift = Vec3d(0, 0, 0.04)
+    # The band comes as a closed outline: one side, then the other, back.
+    var half = count // 2
+    for at in range(half - 1):
+        var a = at_height(path[at], 0.0) + lift
+        var b = at_height(path[at + 1], 0.0) + lift
+        var c = at_height(path[count - 2 - at], 0.0) + lift
+        var d = at_height(path[count - 1 - at], 0.0) + lift
+        kit.gravel.oriented(a, b, c, Vec3d(0, 0, 1), white())
+        kit.gravel.oriented(a, c, d, Vec3d(0, 0, 1), white())
+    var hedge = _shift_axis(plan.quay.axis, 6.7)
+    var green = Vec3d(0.5, 0.65, 0.4)
+    var up = Vec3d(0, 0, 1)
+    for at in range(len(hedge) - 1):
+        var a = at_height(hedge[at], 0.0)
+        var b = at_height(hedge[at + 1], 0.0)
+        var run = b - a
+        var length = run.length()
+        if not (length > 0.5):
+            continue
+        var along = run * (1.0 / length)
+        var across = Vec3d(-along.y, along.x, 0)
+        box_at(
+            kit.lawn,
+            (a + b) * 0.5 + Vec3d(0, 0, 0.3),
+            along,
+            across,
+            up,
+            length / 2,
+            0.3,
+            0.3,
+            green,
+        )
+
+
+def castle_meshes(
+    plan: CastlePlan, settings: ViewSettings
+) raises -> List[MaterialMesh]:
+    """Build the mesh view of a castle plan.
 
     Args:
-        scene: The scene to add the castle's node and meshes to.
-        assets: The store for the geometries and materials.
-        plan: The plan. It is checked first.
-        options: The facets, the trees, the seed and the shadows.
+        plan: The plan. It must be consistent.
+        settings: The choices of the view.
 
     Returns:
-        The castle's node and the number of meshes and triangles.
+        One geometry for each material that has triangles, in the order of
+        the materials in `kinds`.
 
     Raises:
-        Error: If the plan is not sound, there are fewer than six facets, or
-            the tree count is negative.
+        Error: If the plan or the settings are refused, or a mesh cannot be
+            built.
     """
     plan.check()
-    if options.sides < 6:
-        raise Error("A round tower needs at least six facets")
-    if options.trees < 0:
-        raise Error("A wood cannot have fewer than no trees")
-    var layers = _Layers(options.seed)
-    for i in range(len(plan.towers)):  # pragma: no branch
-        ref tower = plan.towers[i]
-        if tower.shape == ROUND:
-            _round_tower(layers, tower, options.sides)
-        else:
-            _square_tower(layers, tower)
-    for i in range(len(plan.blocks)):
-        ref block = plan.blocks[i]
-        var frame = _Frame(
-            block.center.x.value,
-            block.center.y.value,
-            block.length.value,
-            block.width.value,
-            block.heading.value,
-        )
-        var gate = block.roof == PARAPET
-        _walls(layers, frame, block.height.value, gate)
-        if gate:
-            _battlements(layers, frame, block.height.value)
-        else:
-            _gable_roof(
-                layers, frame, block.height.value, block.roof_rise.value
-            )
-    _bridge(layers, plan.bridge, -plan.moat.freeboard.value)
-    _ground(layers, plan, 96, options.water)
-    _wood(layers, plan, options)
-    var root_node = Object3D()
-    root_node.name = plan.name
-    root_node.user_data.set_string("model", plan.name)
-    root_node.user_data.set_string(
-        "dropped",
-        (
-            "interiors, wall thickness, openings through walls and"
-            " structural data; every dimension is estimated"
-        ),
-    )
-    var root = scene.add(root_node^)
-    var meshes = 0
-    var triangles = 0
-    for k in range(_SURFACES):  # pragma: no branch
-        ref builder = layers.builders[k]
-        if builder.count() == 0:
-            continue
-        triangles += builder.count()
-        var node = Object3D()
-        node.name = Surface(k).name()
-        node.parent = root
-        var mesh_node = scene.add(node^)
-        var cast = options.shadows and k != WATER.value
-        scene.add_mesh(
-            Mesh(
-                assets.geometries.add(builder.geometry()),
-                assets.materials.add(_material(Surface(k))),
-                mesh_node,
-                cast_shadow=cast,
-                receive_shadow=options.shadows,
-            )
-        )
-        meshes += 1
-    return RenderedCastle(root, meshes, triangles)
+    settings.check()
+    var kit = Kit()
+    build_castle(plan, settings, kit)
+    return kit.meshes()
+
+
+def build_castle(plan: CastlePlan, settings: ViewSettings, mut kit: Kit) raises:
+    """Add the building, the ground and the bridge of a plan to a kit.
+
+    Args:
+        plan: The plan. It must be consistent.
+        settings: The choices of the view.
+        kit: The builders that receive the triangles.
+
+    Raises:
+        Error: If a mesh cannot be built.
+    """
+    _terrain(plan, settings, kit)
+    build_structures(plan, settings, kit)
+
+
+def build_structures(
+    plan: CastlePlan, settings: ViewSettings, mut kit: Kit
+) raises:
+    """Add everything of a plan but its ground to a kit: the moat, the path,
+    the wings, the towers, the gate, the quay, the courtyard and the bridge.
+
+    The ground is left out so that a landscape can lay its own, which meets
+    the castle at `ground_height`.
+
+    Args:
+        plan: The plan. It must be consistent.
+        settings: The choices of the view.
+        kit: The builders that receive the triangles.
+
+    Raises:
+        Error: If a mesh cannot be built.
+    """
+    var hull = convex_hull(plan.moat.outline)
+    _water(plan, kit)
+    _ring_path(plan, hull, kit)
+    for wing in plan.wings:
+        _wing(plan, wing, settings, kit)
+    for at in range(len(plan.towers)):
+        _tower(plan, plan.towers[at], at, settings, kit)
+    _gate(plan, plan.gate, settings, kit)
+    _quay(plan, kit)
+    _courtyard(plan, kit)
+    _bridge(plan, plan.gate, kit)

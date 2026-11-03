@@ -3,809 +3,854 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A castle as data: towers, blocks, a moat and a bridge, in meters.
+"""The plan of a moated castle: towers, wings, a gate, a quay wall, a moat
+and a bridge.
 
-The plan frame has x to the east, y to the north and z up. Every height is
-above the ground of the castle island. A `Tower` is a round or square shaft
-with a cone or a battlemented parapet. A `Block` is a long wall-bounded
-range with a gable roof, or a gatehouse with a parapet. A `Moat` is an
-ellipse of water around an island. A `Bridge` is a row of segmental masonry
-arches.
+Points are in a flat plan frame in meters, x east and y north of an origin
+that the plan names. Levels are elevations above a datum, in meters. Every
+length is a `Length64` and every angle an `Angle64`, and every part carries a
+`Provenance` that says how its dimensions were found.
 
-`wijnendale` is the plan of Wijnendale Castle. See the wiki page Castle for
-what the plan documents and what it estimates.
+The parts are the solids an engineer counts:
+
+- A `Tower` is a round tower with a wall to a height and a roof over it.
+- A `Wing` is a band of constant width along an axis, with a gable roof
+  whose ridge follows the axis. Its outline is the axis offset to both
+  sides, with mitered corners.
+- A `Gate` is a rectangular block with a flat top.
+- A `QuayWall` is a wall that holds the island's earth at the edge of the
+  moat, from the bed to a top level.
+- A `Moat` is the water: an outline, a level and a depth.
+- A `Bridge` is a run of semicircular brick arches on piers.
+
+A `CastlePlan` holds them with the outline that a survey gave for the
+building. `footprint_overlap` says how well the solids reproduce that
+outline, as the area they share over the area they cover together.
 """
 
-from extensions.castle.kinds import (
-    CONE,
-    GABLE,
-    PARAPET,
-    ROUND,
-    RoofForm,
-    SQUARE,
-    TowerShape,
-    require_roof_form,
-    require_tower_shape,
-)
-from math.finite import require_finite, require_positive_finite
-from std.math import cos, pi, sin, sqrt
-from units.si import (
-    Angle64,
-    Area64,
-    DEGREE64,
-    METER,
-    Length64,
-    Volume64,
-)
+from std.math import cos, isfinite, sin, sqrt
+from extensions.castle.kinds import CONE, FLAT, Provenance, RoofKind
+from units.si import Angle64, Area64, Length64
 
-
-def _m(value: Float64) -> Length64:
-    """Return meters as a length."""
-    return Length64(value, METER)
+# The shortest segment of an axis that is not a point, in meters.
+comptime _TINY = 1e-9
+# The least value of 1 + cos(turn) for a mitered corner. Below it the miter
+# is longer than about ten half-widths.
+comptime _SHARPEST = 0.1
 
 
 @fieldwise_init
-struct PlanPoint(ImplicitlyCopyable):
-    """A point of the plan."""
+struct Point(ImplicitlyCopyable):
+    """A point of the plan: meters east and north of its origin."""
 
-    # East of the origin.
     var x: Length64
-    # North of the origin.
     var y: Length64
 
 
-def _scaled_point(point: PlanPoint, factor: Float64) -> PlanPoint:
-    """Return a point with both its distances multiplied by a factor."""
-    return PlanPoint(point.x.scaled(factor), point.y.scaled(factor))
+def point(east: Float64, north: Float64) -> Point:
+    """Return a point from meters east and north of the plan's origin.
+
+    Args:
+        east: The distance east, in meters.
+        north: The distance north, in meters.
+
+    Returns:
+        The point.
+    """
+    return Point(Length64(east), Length64(north))
+
+
+def points(meters: List[Float64]) raises -> List[Point]:
+    """Return points from a flat list of east and north pairs, in meters.
+
+    Args:
+        meters: East, north, east, north and so on.
+
+    Returns:
+        The points.
+
+    Raises:
+        Error: If the list has an odd length, or a value is not finite.
+    """
+    if len(meters) % 2 != 0:
+        raise Error("A list of points needs an east and a north each")
+    var out = List[Point](capacity=len(meters) // 2)
+    for at in range(len(meters) // 2):
+        var east = meters[2 * at]
+        var north = meters[2 * at + 1]
+        if not (isfinite(east) and isfinite(north)):
+            raise Error("A point must be finite")
+        out.append(point(east, north))
+    return out^
+
+
+def polygon_area(outline: List[Point]) raises -> Area64:
+    """Return the area of a polygon.
+
+    Args:
+        outline: The corners, in either winding.
+
+    Returns:
+        The area, whichever way the corners run.
+
+    Raises:
+        Error: If the outline has fewer than three points.
+    """
+    if len(outline) < 3:
+        raise Error("A polygon needs at least three points")
+    var twice = Float64(0)
+    var count = len(outline)
+    for at in range(count):
+        var p = outline[at]
+        var q = outline[(at + 1) % count]
+        twice += p.x.value * q.y.value - q.x.value * p.y.value
+    return Area64(abs(twice) / 2)
+
+
+def polygon_contains(outline: List[Point], at: Point) -> Bool:
+    """Return whether a point lies inside a polygon, by the even-odd rule.
+
+    Args:
+        outline: The corners, in either winding.
+        at: The point.
+
+    Returns:
+        True if the point is inside. A polygon of fewer than three points
+        holds nothing.
+    """
+    var count = len(outline)
+    if count < 3:
+        return False
+    var inside = False
+    var last = count - 1
+    for first in range(count):
+        var a = outline[first]
+        var b = outline[last]
+        if (a.y.value > at.y.value) != (b.y.value > at.y.value):
+            var across = (b.x.value - a.x.value) * (at.y.value - a.y.value) / (
+                b.y.value - a.y.value
+            ) + a.x.value
+            if at.x.value < across:
+                inside = not inside
+        last = first
+    return inside
+
+
+def check_polygon(outline: List[Point]) raises:
+    """Refuse an outline that is not a polygon with an area.
+
+    Args:
+        outline: The corners.
+
+    Raises:
+        Error: If there are fewer than three points, a coordinate is not
+            finite, or the area is zero.
+    """
+    if len(outline) < 3:
+        raise Error("A polygon needs at least three points")
+    for corner in outline:
+        if not (isfinite(corner.x.value) and isfinite(corner.y.value)):
+            raise Error("A point must be finite")
+    if polygon_area(outline).value == 0:
+        raise Error("A polygon must have an area")
+
+
+def convex_hull(outline: List[Point]) raises -> List[Point]:
+    """Return the convex hull of a set of points.
+
+    Args:
+        outline: The points, in any order. Three at least, not all on a line.
+
+    Returns:
+        The corners of the hull, counterclockwise, starting from the
+        lowest point to the west.
+
+    Raises:
+        Error: If there are fewer than three points, or they all lie on one
+            line.
+    """
+    var count = len(outline)
+    if count < 3:
+        raise Error("A hull needs at least three points")
+    # An index list sorted by x and then by y, by insertion.
+    var order = List[Int]()
+    for at in range(count):
+        var place = len(order)
+        while place > 0:
+            var before = outline[order[place - 1]]
+            var here = outline[at]
+            var later = before.x.value > here.x.value or (
+                before.x.value == here.x.value and before.y.value > here.y.value
+            )
+            if not later:
+                break
+            place -= 1
+        order.insert(place, at)
+    var chain = List[Int]()
+    # The lower hull, then the upper hull.
+    for pass_ in range(2):
+        var start = len(chain)
+        for step in range(count):
+            var at = order[step] if pass_ == 0 else order[count - 1 - step]
+            while len(chain) >= start + 2 and (
+                _turn(
+                    outline[chain[len(chain) - 2]],
+                    outline[chain[len(chain) - 1]],
+                    outline[at],
+                )
+                <= 0
+            ):
+                _ = chain.pop()
+            chain.append(at)
+        # The last point of a pass is the first of the next.
+        _ = chain.pop()
+    if len(chain) < 3:
+        raise Error("A hull needs points that do not lie on one line")
+    var hull = List[Point]()
+    for at in chain:
+        hull.append(outline[at])
+    return hull^
+
+
+def _turn(a: Point, b: Point, c: Point) -> Float64:
+    """Return twice the signed area of a, b, c: positive for a left turn."""
+    return (b.x.value - a.x.value) * (c.y.value - a.y.value) - (
+        b.y.value - a.y.value
+    ) * (c.x.value - a.x.value)
+
+
+def distance_to_outline(outline: List[Point], at: Point) raises -> Length64:
+    """Return how far a point is from the edges of a polygon.
+
+    Args:
+        outline: The corners; the edge from the last back to the first is
+            included.
+        at: The point.
+
+    Returns:
+        The distance to the nearest edge, inside or outside the polygon.
+
+    Raises:
+        Error: If the outline has fewer than three points.
+    """
+    var count = len(outline)
+    if count < 3:
+        raise Error("A polygon needs at least three points")
+    var nearest = Float64(1.0e30)
+    for first in range(count):
+        var a = outline[first]
+        var b = outline[(first + 1) % count]
+        var dx = b.x.value - a.x.value
+        var dy = b.y.value - a.y.value
+        var length2 = dx * dx + dy * dy
+        var along = Float64(0)
+        if length2 > 0:
+            along = (
+                (at.x.value - a.x.value) * dx + (at.y.value - a.y.value) * dy
+            ) / length2
+            along = max(Float64(0), min(Float64(1), along))
+        var ex = a.x.value + along * dx - at.x.value
+        var ey = a.y.value + along * dy - at.y.value
+        nearest = min(nearest, ex * ex + ey * ey)
+    return Length64(sqrt(nearest))
+
+
+def offset_outline(axis: List[Point], width: Length64) raises -> List[Point]:
+    """Return the outline of a band of constant width along an axis.
+
+    The corners are mitered: at a bend, the two edges meet where the offset
+    lines cross. The outline runs along the left side of the axis and back
+    along the right side.
+
+    Args:
+        axis: The points of the axis, two at least.
+        width: The width of the band.
+
+    Returns:
+        The outline, with twice as many corners as the axis has points.
+
+    Raises:
+        Error: If the axis has fewer than two points, a coordinate is not
+            finite, the width is not positive and finite, a segment has no
+            length, or a bend is too sharp to miter.
+    """
+    var count = len(axis)
+    if count < 2:
+        raise Error("An axis needs at least two points")
+    if not (isfinite(width.value) and width.value > 0):
+        raise Error("A band's width must be positive and finite")
+    var half = width.value / 2
+    # The unit normal of each segment, to the left of its direction.
+    var nx = List[Float64]()
+    var ny = List[Float64]()
+    for at in range(count - 1):
+        var p = axis[at]
+        var q = axis[at + 1]
+        if not (
+            isfinite(p.x.value)
+            and isfinite(p.y.value)
+            and isfinite(q.x.value)
+            and isfinite(q.y.value)
+        ):
+            raise Error("A point must be finite")
+        var dx = q.x.value - p.x.value
+        var dy = q.y.value - p.y.value
+        var length = sqrt(dx * dx + dy * dy)
+        if length < _TINY:
+            raise Error("A segment of an axis must have a length")
+        nx.append(-dy / length)
+        ny.append(dx / length)
+    var left = List[Point]()
+    var right = List[Point]()
+    for at in range(count):
+        var ox: Float64
+        var oy: Float64
+        if at == 0:
+            ox = nx[0] * half
+            oy = ny[0] * half
+        elif at == count - 1:
+            ox = nx[count - 2] * half
+            oy = ny[count - 2] * half
+        else:
+            var turn = 1.0 + nx[at - 1] * nx[at] + ny[at - 1] * ny[at]
+            if turn < _SHARPEST:
+                raise Error("A bend of an axis is too sharp to miter")
+            ox = (nx[at - 1] + nx[at]) / turn * half
+            oy = (ny[at - 1] + ny[at]) / turn * half
+        var base = axis[at]
+        left.append(point(base.x.value + ox, base.y.value + oy))
+        right.append(point(base.x.value - ox, base.y.value - oy))
+    var outline = left^
+    for at in range(count):
+        outline.append(right[count - 1 - at])
+    return outline^
 
 
 @fieldwise_init
 struct Tower(Copyable, Movable):
-    """A tower: a shaft of masonry under a cone or a parapet."""
+    """A round tower: a wall to a height, and a roof over it."""
 
+    # What the plan calls it.
     var name: String
-    var shape: TowerShape
-    var center: PlanPoint
-    # The outer radius of a round tower, or half the side of a square one.
+    # The center of the tower.
+    var center: Point
+    # The outer radius of the wall.
     var radius: Length64
-    # The thickness of the shaft wall at its base.
-    var wall: Length64
-    # The height of the shaft above the ground, to the eave or the parapet.
-    var height: Length64
-    # CONE or PARAPET.
-    var roof: RoofForm
-    # The rise of a cone above the eave. It is ignored for a parapet.
-    var roof_rise: Length64
+    # The elevation of the ground at its foot.
+    var base: Length64
+    # The height of the wall above the base.
+    var wall_height: Length64
+    # A cone, or a flat top behind a parapet.
+    var roof: RoofKind
+    # The height of the cone, or of the parapet over the wall.
+    var roof_height: Length64
+    # How these dimensions were found.
+    var provenance: Provenance
 
     def check(self) raises:
         """Refuse a tower that cannot stand.
 
-        Nothing. The call returns when the tower is sound.
-
         Raises:
-            Error: If the shape or roof is not named, a size is not
-                positive and finite, the roof is a gable, or the wall is
-                not thinner than the radius.
+            Error: If the center or a size is not finite, the radius or the
+                wall is not positive, the roof is not a cone or a flat top,
+                a cone has no height, the parapet height is negative, or the
+                provenance is not valid.
         """
-        require_tower_shape(self.shape)
-        require_roof_form(self.roof)
-        require_finite(self.center.x.value, "A tower must have a position")
-        require_finite(self.center.y.value, "A tower must have a position")
-        require_positive_finite(
-            self.radius.value, "A tower radius must be positive"
-        )
-        require_positive_finite(
-            self.wall.value, "A tower wall must be positive"
-        )
-        require_positive_finite(
-            self.height.value, "A tower height must be positive"
-        )
-        if self.roof == GABLE:
-            raise Error("A tower has a cone or a parapet, not a gable")
-        if self.roof == CONE:
-            require_positive_finite(
-                self.roof_rise.value, "A cone must have a rise"
-            )
-        if not self.wall < self.radius:
-            raise Error("A tower wall must be thinner than its radius")
+        if not (
+            isfinite(self.center.x.value) and isfinite(self.center.y.value)
+        ):
+            raise Error("A tower's center must be finite")
+        if not (isfinite(self.radius.value) and self.radius.value > 0):
+            raise Error("A tower's radius must be positive and finite")
+        if not isfinite(self.base.value):
+            raise Error("A tower's base must be finite")
+        if not (
+            isfinite(self.wall_height.value) and self.wall_height.value > 0
+        ):
+            raise Error("A tower's wall must be positive and finite")
+        if not (self.roof == CONE or self.roof == FLAT):
+            raise Error("A tower's roof must be a cone or a flat top")
+        if not (
+            isfinite(self.roof_height.value) and self.roof_height.value >= 0
+        ):
+            raise Error("A tower's roof height must be zero or more")
+        if self.roof == CONE and self.roof_height.value == 0:
+            raise Error("A cone roof must have a height")
+        if not self.provenance.is_valid():
+            raise Error("A tower's provenance must be one of the four")
 
-    def apex(self) -> Length64:
-        """Return the height of the top of the tower above the ground.
+    def top(self) -> Length64:
+        """Return the elevation of the highest point of the tower.
 
         Returns:
-            The shaft height, plus the cone rise for a cone.
+            The base, the wall and the roof added.
         """
-        if self.roof == CONE:
-            return self.height + self.roof_rise
-        return self.height
+        return self.base + self.wall_height + self.roof_height
 
-    def footprint(self) -> Area64:
-        """Return the plan area of the tower, walls and core.
+    def contains(self, at: Point) -> Bool:
+        """Return whether a point lies within the tower's wall.
+
+        Args:
+            at: The point.
 
         Returns:
-            Pi r squared for a round tower, and the square of the side for
-            a square one.
+            True if it is no farther than the radius from the center.
         """
-        if self.shape == ROUND:
-            return (self.radius * self.radius).scaled(pi)
-        return (self.radius * self.radius).scaled(4.0)
-
-    def core_radius(self) -> Length64:
-        """Return the radius of the hollow inside the shaft.
-
-        Returns:
-            The radius less the wall. For a square tower it is the
-            half-side less the wall.
-        """
-        return self.radius - self.wall
-
-    def shaft_volume(self) -> Volume64:
-        """Return the volume of masonry in the shaft.
-
-        Returns:
-            The footprint less the core, times the height.
-        """
-        var core = self.core_radius()
-        var hollow = (core * core).scaled(pi)
-        if self.shape == SQUARE:
-            hollow = (core * core).scaled(4.0)
-        return (self.footprint() - hollow) * self.height
+        var dx = at.x.value - self.center.x.value
+        var dy = at.y.value - self.center.y.value
+        return dx * dx + dy * dy <= self.radius.value * self.radius.value
 
 
 @fieldwise_init
-struct Block(Copyable, Movable):
-    """A long range or a gatehouse, a rectangle of wall under a roof."""
+struct Wing(Copyable, Movable):
+    """A band of constant width with a gable roof along its axis."""
 
+    # What the plan calls it.
     var name: String
-    var center: PlanPoint
-    # The size along the heading.
+    # The axis, two points at least.
+    var axis: List[Point]
+    # The width between the outer faces of the walls.
+    var width: Length64
+    # The elevation of the ground at its foot.
+    var base: Length64
+    # The height of the eaves above the base.
+    var eave_height: Length64
+    # The height of the ridge above the base.
+    var ridge_height: Length64
+    # How these dimensions were found.
+    var provenance: Provenance
+
+    def check(self) raises:
+        """Refuse a wing that cannot stand.
+
+        Raises:
+            Error: If the axis or the width is refused by `offset_outline`,
+                the base is not finite, the eaves are not positive, the
+                ridge is not above the eaves, or the provenance is not
+                valid.
+        """
+        _ = offset_outline(self.axis, self.width)
+        if not isfinite(self.base.value):
+            raise Error("A wing's base must be finite")
+        if not (
+            isfinite(self.eave_height.value) and self.eave_height.value > 0
+        ):
+            raise Error("A wing's eaves must be positive and finite")
+        if not (
+            isfinite(self.ridge_height.value)
+            and self.ridge_height.value > self.eave_height.value
+        ):
+            raise Error("A wing's ridge must be above its eaves")
+        if not self.provenance.is_valid():
+            raise Error("A wing's provenance must be one of the four")
+
+    def outline(self) raises -> List[Point]:
+        """Return the outline of the wing.
+
+        Returns:
+            The corners of the walls, as `offset_outline` gives them.
+
+        Raises:
+            Error: If the axis or the width is refused.
+        """
+        return offset_outline(self.axis, self.width)
+
+    def roof_rise(self) -> Length64:
+        """Return how far the ridge stands above the eaves.
+
+        Returns:
+            The ridge height less the eave height.
+        """
+        return self.ridge_height - self.eave_height
+
+
+@fieldwise_init
+struct Gate(Copyable, Movable):
+    """A rectangular block with a flat top behind a parapet."""
+
+    # What the plan calls it.
+    var name: String
+    # The center of the block.
+    var center: Point
+    # The length, along the heading.
     var length: Length64
-    # The size across the heading.
+    # The width, across the heading.
     var width: Length64
     # The direction of the length, counterclockwise from east.
     var heading: Angle64
-    # The thickness of the outer walls.
-    var wall: Length64
-    # The height of the walls above the ground, to the eave or the parapet.
+    # The elevation of the ground at its foot.
+    var base: Length64
+    # The height of the walls above the base.
     var height: Length64
-    # GABLE or PARAPET.
-    var roof: RoofForm
-    # The rise of a gable above the eave. It is ignored for a parapet.
-    var roof_rise: Length64
+    # The height of the parapet over the walls.
+    var parapet: Length64
+    # How these dimensions were found.
+    var provenance: Provenance
 
     def check(self) raises:
-        """Refuse a block that cannot stand.
-
-        Nothing. The call returns when the block is sound.
+        """Refuse a gate that cannot stand.
 
         Raises:
-            Error: If the roof is not named, a size is not positive and
-                finite, the roof is a cone, or the walls are not thinner
-                than half the width.
+            Error: If the center, a size or the heading is not finite, the
+                length, the width or the height is not positive, the
+                parapet is negative, or the provenance is not valid.
         """
-        require_roof_form(self.roof)
-        require_finite(self.center.x.value, "A block must have a position")
-        require_finite(self.center.y.value, "A block must have a position")
-        require_finite(self.heading.value, "A block must have a heading")
-        require_positive_finite(
-            self.length.value, "A block length must be positive"
-        )
-        require_positive_finite(
-            self.width.value, "A block width must be positive"
-        )
-        require_positive_finite(
-            self.wall.value, "A block wall must be positive"
-        )
-        require_positive_finite(
-            self.height.value, "A block height must be positive"
-        )
-        if self.roof == CONE:
-            raise Error("A block has a gable or a parapet, not a cone")
-        if self.roof == GABLE:
-            require_positive_finite(
-                self.roof_rise.value, "A gable must have a rise"
+        if not (
+            isfinite(self.center.x.value) and isfinite(self.center.y.value)
+        ):
+            raise Error("A gate's center must be finite")
+        if not (isfinite(self.length.value) and self.length.value > 0):
+            raise Error("A gate's length must be positive and finite")
+        if not (isfinite(self.width.value) and self.width.value > 0):
+            raise Error("A gate's width must be positive and finite")
+        if not isfinite(self.heading.value):
+            raise Error("A gate's heading must be finite")
+        if not isfinite(self.base.value):
+            raise Error("A gate's base must be finite")
+        if not (isfinite(self.height.value) and self.height.value > 0):
+            raise Error("A gate's height must be positive and finite")
+        if not (isfinite(self.parapet.value) and self.parapet.value >= 0):
+            raise Error("A gate's parapet must be zero or more")
+        if not self.provenance.is_valid():
+            raise Error("A gate's provenance must be one of the four")
+
+    def outline(self) -> List[Point]:
+        """Return the corners of the block, counterclockwise.
+
+        Returns:
+            The four corners.
+        """
+        var ux = cos(self.heading.value)
+        var uy = sin(self.heading.value)
+        var vx = -uy
+        var vy = ux
+        var half_length = self.length.value / 2
+        var half_width = self.width.value / 2
+        var cx = self.center.x.value
+        var cy = self.center.y.value
+        var corners = List[Point]()
+        corners.append(
+            point(
+                cx - ux * half_length - vx * half_width,
+                cy - uy * half_length - vy * half_width,
             )
-        if not self.wall.scaled(2.0) < self.width:
-            raise Error("A block wall must be thinner than half its width")
-
-    def apex(self) -> Length64:
-        """Return the height of the top of the block above the ground.
-
-        Returns:
-            The wall height, plus the gable rise for a gable.
-        """
-        if self.roof == GABLE:
-            return self.height + self.roof_rise
-        return self.height
-
-    def corner(self, along: Float64, across: Float64) -> PlanPoint:
-        """Return a point of the block's rectangle in the plan.
-
-        Args:
-            along: The place along the length, -1 at one end, +1 at the
-                other.
-            across: The place across the width, -1 at one side, +1 at the
-                other.
-
-        Returns:
-            The point, turned by the heading about the center.
-        """
-        var u = self.length.scaled(0.5 * along)
-        var v = self.width.scaled(0.5 * across)
-        var c = cos(self.heading.value)
-        var s = sin(self.heading.value)
-        return PlanPoint(
-            self.center.x + u.scaled(c) - v.scaled(s),
-            self.center.y + u.scaled(s) + v.scaled(c),
         )
+        corners.append(
+            point(
+                cx + ux * half_length - vx * half_width,
+                cy + uy * half_length - vy * half_width,
+            )
+        )
+        corners.append(
+            point(
+                cx + ux * half_length + vx * half_width,
+                cy + uy * half_length + vy * half_width,
+            )
+        )
+        corners.append(
+            point(
+                cx - ux * half_length + vx * half_width,
+                cy - uy * half_length + vy * half_width,
+            )
+        )
+        return corners^
 
-    def footprint(self) -> Area64:
-        """Return the plan area of the block.
+
+@fieldwise_init
+struct QuayWall(Copyable, Movable):
+    """The wall that holds the island's earth at the edge of the moat."""
+
+    # What the plan calls it.
+    var name: String
+    # The axis along the face of the wall.
+    var axis: List[Point]
+    # The thickness of the wall.
+    var thickness: Length64
+    # The elevation of the foot, on the bed of the moat.
+    var foot: Length64
+    # The elevation of the top.
+    var top: Length64
+    # How these dimensions were found.
+    var provenance: Provenance
+
+    def check(self) raises:
+        """Refuse a wall that cannot stand.
+
+        Raises:
+            Error: If the axis or the thickness is refused by
+                `offset_outline`, the foot or the top is not finite, the top
+                is not above the foot, or the provenance is not valid.
+        """
+        _ = offset_outline(self.axis, self.thickness)
+        if not (isfinite(self.foot.value) and isfinite(self.top.value)):
+            raise Error("A wall's foot and top must be finite")
+        if not self.top.value > self.foot.value:
+            raise Error("A wall's top must be above its foot")
+        if not self.provenance.is_valid():
+            raise Error("A wall's provenance must be one of the four")
+
+    def height(self) -> Length64:
+        """Return the height of the wall.
 
         Returns:
-            The length times the width.
+            The top less the foot.
         """
-        return self.length * self.width
+        return self.top - self.foot
 
 
 @fieldwise_init
 struct Moat(Copyable, Movable):
-    """The water ring: an outer ellipse around an island."""
+    """The water around the island."""
 
-    var center: PlanPoint
-    # The semi-axes of the outer edge of the water.
-    var semi_x: Length64
-    var semi_y: Length64
-    var island_center: PlanPoint
-    # The semi-axes of the island, where the water meets its wall.
-    var island_semi_x: Length64
-    var island_semi_y: Length64
-    # The depth of the water at its normal level.
+    # What the plan calls it.
+    var name: String
+    # The outline of the water, a polygon.
+    var outline: List[Point]
+    # The elevation of the water's surface.
+    var water_level: Length64
+    # The depth of the water.
     var depth: Length64
-    # How far the island ground stands above the water.
-    var freeboard: Length64
+    # How these dimensions were found.
+    var provenance: Provenance
 
     def check(self) raises:
-        """Refuse a moat that is not a ring.
-
-        Nothing. The call returns when the island lies inside the water.
+        """Refuse a moat that cannot hold water.
 
         Raises:
-            Error: If a size is not positive and finite, or the island
-                does not lie inside the outer edge.
+            Error: If the outline is not a polygon, the level is not
+                finite, the depth is not positive and finite, or the
+                provenance is not valid.
         """
-        require_finite(self.center.x.value, "A moat must have a center")
-        require_finite(self.center.y.value, "A moat must have a center")
-        require_finite(
-            self.island_center.x.value, "An island must have a center"
-        )
-        require_finite(
-            self.island_center.y.value, "An island must have a center"
-        )
-        require_positive_finite(
-            self.semi_x.value, "A moat semi-axis must be positive"
-        )
-        require_positive_finite(
-            self.semi_y.value, "A moat semi-axis must be positive"
-        )
-        require_positive_finite(
-            self.island_semi_x.value, "An island semi-axis must be positive"
-        )
-        require_positive_finite(
-            self.island_semi_y.value, "An island semi-axis must be positive"
-        )
-        require_positive_finite(
-            self.depth.value, "A moat depth must be positive"
-        )
-        require_positive_finite(
-            self.freeboard.value, "A moat freeboard must be positive"
-        )
-        if not self.island_inside():
-            raise Error("The island must lie inside the moat")
+        check_polygon(self.outline)
+        if not isfinite(self.water_level.value):
+            raise Error("A moat's water level must be finite")
+        if not (isfinite(self.depth.value) and self.depth.value > 0):
+            raise Error("A moat's depth must be positive and finite")
+        if not self.provenance.is_valid():
+            raise Error("A moat's provenance must be one of the four")
 
-    def island_inside(self) -> Bool:
-        """Return True if the island ellipse lies inside the outer ellipse.
-
-        The test samples the island edge at 64 points.
+    def area(self) raises -> Area64:
+        """Return the area of the water's surface.
 
         Returns:
-            Whether every sample is inside the outer ellipse.
-        """
-        # The 64 samples are a literal, so the loop always runs.
-        for k in range(64):  # pragma: no branch
-            var t = 2.0 * pi * Float64(k) / 64.0
-            var x = self.island_center.x.value + self.island_semi_x.value * cos(
-                t
-            )
-            var y = self.island_center.y.value + self.island_semi_y.value * sin(
-                t
-            )
-            var u = (x - self.center.x.value) / self.semi_x.value
-            var v = (y - self.center.y.value) / self.semi_y.value
-            if u * u + v * v >= 1.0:
-                return False
-        return True
+            The area of the outline.
 
-    def water_area(self) -> Area64:
-        """Return the area of the water surface.
+        Raises:
+            Error: If the outline has fewer than three points.
+        """
+        return polygon_area(self.outline)
+
+    def bed(self) -> Length64:
+        """Return the elevation of the bed.
 
         Returns:
-            The outer ellipse less the island.
+            The water level less the depth.
         """
-        var outer = (self.semi_x * self.semi_y).scaled(pi)
-        var inner = (self.island_semi_x * self.island_semi_y).scaled(pi)
-        return outer - inner
-
-    def volume(self) -> Volume64:
-        """Return the volume of water at the normal level.
-
-        Returns:
-            The water area times the depth.
-        """
-        return self.water_area() * self.depth
+        return self.water_level - self.depth
 
 
 @fieldwise_init
 struct Bridge(Copyable, Movable):
-    """A bridge of equal segmental masonry arches on piers."""
+    """A run of semicircular brick arches on piers."""
 
-    # Where the deck meets the gatehouse.
-    var start: PlanPoint
-    # The direction of the deck, counterclockwise from east.
+    # What the plan calls it.
+    var name: String
+    # The center of the first pier, at the gate.
+    var start: Point
+    # The direction of the bridge, counterclockwise from east.
     var heading: Angle64
-    # The number of arches.
+    # How many arches there are.
     var spans: Int
-    # The clear span of one arch, between the faces of its piers.
-    var span: Length64
-    # The thickness of one pier, and of each abutment.
-    var pier: Length64
-    # The rise of an arch from the springing line to the crown intrados.
-    var rise: Length64
-    # The thickness of the arch ring at the crown.
-    var ring: Length64
-    # The width of the deck between the parapets.
+    # The distance between the centers of two piers.
+    var pitch: Length64
+    # The width between the faces of the spandrel walls.
     var width: Length64
-    # The depth of fill over the extrados at the crown, under the deck.
-    var fill: Length64
-    # The height of the springing line above the water.
-    var springing: Length64
-    # The height of the parapet above the deck.
-    var parapet: Length64
+    # The thickness of a pier along the bridge.
+    var pier: Length64
+    # The elevation of the deck.
+    var deck: Length64
+    # The thickness of the arch ring.
+    var ring: Length64
+    # How these dimensions were found.
+    var provenance: Provenance
 
     def check(self) raises:
-        """Refuse a bridge that cannot stand.
-
-        Nothing. The call returns when the bridge is sound.
+        """Refuse a bridge that cannot span.
 
         Raises:
-            Error: If there is no arch, a size is not positive and finite,
-                or an arch is no shallower than a semicircle.
+            Error: If the start or the heading is not finite, there are no
+                spans, a size is not positive and finite, the pier fills the
+                pitch, the deck is not finite, the ring is thicker than half
+                the clear span, or the provenance is not valid.
         """
-        require_finite(self.start.x.value, "A bridge must have a start")
-        require_finite(self.start.y.value, "A bridge must have a start")
-        require_finite(self.heading.value, "A bridge must have a heading")
+        if not (isfinite(self.start.x.value) and isfinite(self.start.y.value)):
+            raise Error("A bridge's start must be finite")
+        if not isfinite(self.heading.value):
+            raise Error("A bridge's heading must be finite")
         if self.spans < 1:
-            raise Error("A bridge must have at least one span")
-        require_positive_finite(
-            self.span.value, "A bridge span must be positive"
-        )
-        require_positive_finite(
-            self.pier.value, "A bridge pier must be positive"
-        )
-        require_positive_finite(
-            self.rise.value, "A bridge rise must be positive"
-        )
-        require_positive_finite(
-            self.ring.value, "A bridge ring must be positive"
-        )
-        require_positive_finite(
-            self.width.value, "A bridge width must be positive"
-        )
-        require_positive_finite(
-            self.fill.value, "A bridge fill must be positive"
-        )
-        require_positive_finite(
-            self.springing.value, "A bridge springing must be positive"
-        )
-        require_positive_finite(
-            self.parapet.value, "A bridge parapet must be positive"
-        )
-        if not self.rise.scaled(2.0) <= self.span:
-            raise Error("An arch cannot rise more than half its span")
+            raise Error("A bridge needs at least one span")
+        if not (isfinite(self.pitch.value) and self.pitch.value > 0):
+            raise Error("A bridge's pitch must be positive and finite")
+        if not (isfinite(self.width.value) and self.width.value > 0):
+            raise Error("A bridge's width must be positive and finite")
+        if not (isfinite(self.pier.value) and self.pier.value > 0):
+            raise Error("A bridge's pier must be positive and finite")
+        if not self.pier.value < self.pitch.value:
+            raise Error("A bridge's pier must be thinner than its pitch")
+        if not isfinite(self.deck.value):
+            raise Error("A bridge's deck must be finite")
+        if not (isfinite(self.ring.value) and self.ring.value > 0):
+            raise Error("A bridge's ring must be positive and finite")
+        if not self.ring.value < self.clear_span().value / 2:
+            raise Error("A bridge's ring must be thinner than half its span")
+        if not self.provenance.is_valid():
+            raise Error("A bridge's provenance must be one of the four")
+
+    def clear_span(self) -> Length64:
+        """Return the clear span of an arch, between two piers.
+
+        Returns:
+            The pitch less the pier.
+        """
+        return self.pitch - self.pier
 
     def length(self) -> Length64:
-        """Return the length of the bridge, abutment face to abutment face.
+        """Return the length of the bridge between the first and last pier.
 
         Returns:
-            The spans plus one more pier than there are spans.
+            The spans times the pitch.
         """
-        return self.span.scaled(Float64(self.spans)) + self.pier.scaled(
-            Float64(self.spans + 1)
-        )
+        return self.pitch.scaled(Float64(self.spans))
 
-    def intrados_radius(self) -> Length64:
-        """Return the radius of the underside of an arch.
+    def rise(self) -> Length64:
+        """Return the rise of an arch: a semicircle has half its span.
 
         Returns:
-            (s^2 / 4 + f^2) / (2 f) for the clear span s and the rise f.
+            Half the clear span.
         """
-        var half = self.span.scaled(0.5)
-        return (half * half + self.rise * self.rise) / self.rise.scaled(2.0)
-
-    def deck_height(self) -> Length64:
-        """Return the height of the deck above the water at the crown.
-
-        Returns:
-            The springing, plus the rise, the ring and the fill.
-        """
-        return self.springing + self.rise + self.ring + self.fill
-
-    def point(self, along: Length64, across: Length64) -> PlanPoint:
-        """Return a point of the deck in the plan.
-
-        Args:
-            along: The distance from the start along the heading.
-            across: The distance to the left of the heading.
-
-        Returns:
-            The point.
-        """
-        var c = cos(self.heading.value)
-        var s = sin(self.heading.value)
-        return PlanPoint(
-            self.start.x + along.scaled(c) - across.scaled(s),
-            self.start.y + along.scaled(s) + across.scaled(c),
-        )
+        return self.clear_span().scaled(0.5)
 
 
-struct CastlePlan(Movable):
-    """The whole castle: where it stands and what it is made of."""
+@fieldwise_init
+struct CastlePlan(Copyable, Movable):
+    """A castle: its parts, and the outline a survey gave for the building."""
 
+    # The name of the castle.
     var name: String
-    # The latitude of the castle, north positive.
-    var latitude: Angle64
-    # The longitude of the castle, east positive.
-    var longitude: Angle64
+    # The elevation of the island's ground, in the courtyard.
+    var island_level: Length64
+    # The elevation of the ground outside the moat.
+    var ground_level: Length64
+    # The outline of the building, from a survey.
+    var surveyed_footprint: List[Point]
+    # The round towers.
     var towers: List[Tower]
-    var blocks: List[Block]
+    # The wings.
+    var wings: List[Wing]
+    # The gate.
+    var gate: Gate
+    # The wall of the quay.
+    var quay: QuayWall
+    # The moat.
     var moat: Moat
+    # The bridge.
     var bridge: Bridge
 
-    def __init__(
-        out self,
-        var name: String,
-        latitude: Angle64,
-        longitude: Angle64,
-        var towers: List[Tower],
-        var blocks: List[Block],
-        var moat: Moat,
-        var bridge: Bridge,
-    ):
-        """Hold a plan. Call `check` before use.
-
-        Args:
-            name: The castle's name.
-            latitude: The latitude, north positive.
-            longitude: The longitude, east positive.
-            towers: The towers.
-            blocks: The blocks.
-            moat: The moat.
-            bridge: The bridge.
-        """
-        self.name = name^
-        self.latitude = latitude
-        self.longitude = longitude
-        self.towers = towers^
-        self.blocks = blocks^
-        self.moat = moat^
-        self.bridge = bridge^
-
     def check(self) raises:
-        """Refuse a plan that has a part that cannot stand.
-
-        Nothing. The call returns when every part is sound.
+        """Refuse a plan that is not consistent.
 
         Raises:
-            Error: If the site is outside the globe, there is no tower, a
-                part is not sound, or a tower stands outside the island.
+            Error: If a part is refused, the levels are not finite, the
+                island is not above the water, the surveyed footprint is
+                not a polygon, there are no towers or wings, or the
+                bridge's deck is below the water.
         """
-        if not (abs(self.latitude.value) <= pi / 2.0):
-            raise Error("A latitude must be from -90 to 90 degrees")
-        if not (abs(self.longitude.value) <= pi):
-            raise Error("A longitude must be from -180 to 180 degrees")
+        if not (
+            isfinite(self.island_level.value)
+            and isfinite(self.ground_level.value)
+        ):
+            raise Error("The levels of a plan must be finite")
+        check_polygon(self.surveyed_footprint)
         if len(self.towers) == 0:
-            raise Error("A castle must have a tower")
-        # A castle has a tower, so this loop always runs.
-        for i in range(len(self.towers)):  # pragma: no branch
-            self.towers[i].check()
-            if not self.on_island(self.towers[i].center):
-                raise Error("A tower must stand on the island")
-        for i in range(len(self.blocks)):
-            self.blocks[i].check()
+            raise Error("A castle needs a tower")
+        if len(self.wings) == 0:
+            raise Error("A castle needs a wing")
+        for tower in self.towers:
+            tower.check()
+        for wing in self.wings:
+            wing.check()
+        self.gate.check()
+        self.quay.check()
         self.moat.check()
         self.bridge.check()
+        if not self.island_level.value > self.moat.water_level.value:
+            raise Error("The island must stand above the water")
+        if not self.bridge.deck.value > self.moat.water_level.value:
+            raise Error("The bridge's deck must stand above the water")
 
-    def scaled(self, factor: Float64) raises -> CastlePlan:
-        """Return the plan with every length multiplied by a factor.
-
-        The angles, the counts, the shapes and the roof forms stay. A
-        survey that differs from an estimate by a known ratio gives the
-        sensitivity of an analysis to the error of the estimate.
-
-        Args:
-            factor: The factor, above zero.
+    def footprint_area(self) raises -> Area64:
+        """Return the area of the surveyed outline of the building.
 
         Returns:
-            The scaled plan. It is not checked.
+            The area of the polygon.
 
         Raises:
-            Error: If the factor is not positive and finite.
+            Error: If the outline has fewer than three points.
         """
-        require_positive_finite(factor, "A scale factor must be positive")
-        var towers = List[Tower]()
-        for i in range(len(self.towers)):
-            ref t = self.towers[i]
-            towers.append(
-                Tower(
-                    t.name,
-                    t.shape,
-                    _scaled_point(t.center, factor),
-                    t.radius.scaled(factor),
-                    t.wall.scaled(factor),
-                    t.height.scaled(factor),
-                    t.roof,
-                    t.roof_rise.scaled(factor),
-                )
-            )
-        var blocks = List[Block]()
-        for i in range(len(self.blocks)):
-            ref b = self.blocks[i]
-            blocks.append(
-                Block(
-                    b.name,
-                    _scaled_point(b.center, factor),
-                    b.length.scaled(factor),
-                    b.width.scaled(factor),
-                    b.heading,
-                    b.wall.scaled(factor),
-                    b.height.scaled(factor),
-                    b.roof,
-                    b.roof_rise.scaled(factor),
-                )
-            )
-        var moat = Moat(
-            _scaled_point(self.moat.center, factor),
-            self.moat.semi_x.scaled(factor),
-            self.moat.semi_y.scaled(factor),
-            _scaled_point(self.moat.island_center, factor),
-            self.moat.island_semi_x.scaled(factor),
-            self.moat.island_semi_y.scaled(factor),
-            self.moat.depth.scaled(factor),
-            self.moat.freeboard.scaled(factor),
-        )
-        var bridge = Bridge(
-            _scaled_point(self.bridge.start, factor),
-            self.bridge.heading,
-            self.bridge.spans,
-            self.bridge.span.scaled(factor),
-            self.bridge.pier.scaled(factor),
-            self.bridge.rise.scaled(factor),
-            self.bridge.ring.scaled(factor),
-            self.bridge.width.scaled(factor),
-            self.bridge.fill.scaled(factor),
-            self.bridge.springing.scaled(factor),
-            self.bridge.parapet.scaled(factor),
-        )
-        return CastlePlan(
-            self.name,
-            self.latitude,
-            self.longitude,
-            towers^,
-            blocks^,
-            moat^,
-            bridge^,
-        )
+        return polygon_area(self.surveyed_footprint)
 
-    def on_island(self, point: PlanPoint) -> Bool:
-        """Return True if a point lies on the island.
+    def footprint_overlap(self, step: Length64) raises -> Float64:
+        """Return how well the solids reproduce the surveyed outline.
+
+        The plan is sampled on a grid. A sample is built when it lies in a
+        tower, a wing or the gate, and surveyed when it lies in the outline.
 
         Args:
-            point: The point.
+            step: The spacing of the samples.
 
         Returns:
-            Whether the point is inside the island ellipse.
+            The samples that are both, over the samples that are either:
+            one for a perfect match.
+
+        Raises:
+            Error: If the step is not positive and finite, a wing is
+                refused, or nothing is built or surveyed.
         """
-        var u = (point.x - self.moat.island_center.x) / self.moat.island_semi_x
-        var v = (point.y - self.moat.island_center.y) / self.moat.island_semi_y
-        return u.value * u.value + v.value * v.value < 1.0
-
-    def tallest(self) -> Length64:
-        """Return the height of the highest part of the castle.
-
-        Returns:
-            The greatest apex of a tower or a block.
-        """
-        var top = _m(0.0)
-        for i in range(len(self.towers)):
-            var apex = self.towers[i].apex()
-            if apex > top:
-                top = apex
-        for i in range(len(self.blocks)):
-            var apex = self.blocks[i].apex()
-            if apex > top:
-                top = apex
-        return top
-
-    def masonry_footprint(self) -> Area64:
-        """Return the plan area that towers and blocks cover.
-
-        Overlaps count twice, so this is an upper bound of the area.
-
-        Returns:
-            The sum of the tower and block footprints.
-        """
-        var total = Area64(0.0)
-        for i in range(len(self.towers)):
-            total = total + self.towers[i].footprint()
-        for i in range(len(self.blocks)):
-            total = total + self.blocks[i].footprint()
-        return total
-
-
-def _round_tower(
-    name: String,
-    x: Float64,
-    y: Float64,
-    radius: Float64,
-    height: Float64,
-    roof: RoofForm,
-    rise: Float64,
-) -> Tower:
-    """Return a round tower with a wall of one meter."""
-    return Tower(
-        name,
-        ROUND,
-        PlanPoint(_m(x), _m(y)),
-        _m(radius),
-        _m(1.0),
-        _m(height),
-        roof,
-        _m(rise),
-    )
-
-
-def wijnendale() -> CastlePlan:
-    """Return the plan of Wijnendale Castle.
-
-    The site and the history are documented: the castle stands near
-    Torhout in West Flanders at 51 deg 4' 44" N, 3 deg 3' 34" E. Felix
-    Laureys designed the brick gatehouse and the keep in 1877 and 1878.
-    The sources do not agree on the plan of the gatehouse, so the plan
-    takes it as square. Sources describe the castle as round, with a
-    circular moat around a round inner courtyard, so the moat is a circle:
-    the oval in the aerial photograph is foreshortening. Every dimension
-    here is an estimate from that photograph, good to about 15 percent.
-    Replace the numbers with a survey to analyze the real walls.
-
-    Returns:
-        The plan, with the keep, five round towers and the four corner
-        turrets of the gatehouse, a rear range, a front range and the
-        gatehouse, a moat and a three-arch bridge.
-    """
-    var towers = List[Tower]()
-    # The keep, at the west end of the rear range.
-    towers.append(
-        Tower(
-            "keep",
-            ROUND,
-            PlanPoint(_m(-14.0), _m(10.0)),
-            _m(3.6),
-            _m(1.2),
-            _m(28.0),
-            PARAPET,
-            _m(0.0),
-        )
-    )
-    towers.append(
-        _round_tower("south-west tower", -20.0, -13.0, 3.3, 15.0, PARAPET, 0.0)
-    )
-    towers.append(
-        _round_tower("south tower", -11.0, -17.0, 3.0, 15.0, CONE, 9.0)
-    )
-    towers.append(
-        _round_tower("south-east tower", 10.0, -15.5, 2.8, 15.0, CONE, 8.5)
-    )
-    towers.append(
-        _round_tower("courtyard turret", -10.0, 4.0, 1.7, 13.0, CONE, 6.5)
-    )
-    towers.append(
-        _round_tower("courtyard stair", -21.0, -2.0, 1.6, 12.0, CONE, 6.0)
-    )
-    towers.append(
-        _round_tower("gate turret north-west", 14.0, 6.0, 1.7, 21.0, CONE, 5.5)
-    )
-    towers.append(
-        _round_tower("gate turret north-east", 30.0, 6.0, 1.7, 21.0, CONE, 5.5)
-    )
-    towers.append(
-        _round_tower(
-            "gate turret south-west", 14.0, -10.0, 1.7, 21.0, CONE, 5.5
-        )
-    )
-    towers.append(
-        _round_tower(
-            "gate turret south-east", 30.0, -10.0, 1.7, 21.0, CONE, 5.5
-        )
-    )
-    var blocks = List[Block]()
-    blocks.append(
-        Block(
-            "rear range",
-            PlanPoint(_m(2.0), _m(9.0)),
-            _m(30.0),
-            _m(9.0),
-            Angle64(0.0, DEGREE64),
-            _m(1.1),
-            _m(11.0),
-            GABLE,
-            _m(7.0),
-        )
-    )
-    blocks.append(
-        Block(
-            "front range",
-            PlanPoint(_m(-3.0), _m(-13.0)),
-            _m(34.0),
-            _m(9.0),
-            Angle64(0.0, DEGREE64),
-            _m(1.1),
-            _m(11.0),
-            GABLE,
-            _m(6.5),
-        )
-    )
-    blocks.append(
-        Block(
-            "gatehouse",
-            PlanPoint(_m(22.0), _m(-2.0)),
-            _m(16.0),
-            _m(16.0),
-            Angle64(0.0, DEGREE64),
-            _m(1.6),
-            _m(19.0),
-            PARAPET,
-            _m(0.0),
-        )
-    )
-    var moat = Moat(
-        PlanPoint(_m(4.0), _m(-3.0)),
-        _m(46.0),
-        _m(46.0),
-        PlanPoint(_m(4.0), _m(-3.0)),
-        _m(33.0),
-        _m(33.0),
-        _m(1.6),
-        _m(2.4),
-    )
-    var bridge = Bridge(
-        PlanPoint(_m(30.0), _m(-2.0)),
-        Angle64(-8.0, DEGREE64),
-        3,
-        _m(5.0),
-        _m(1.4),
-        _m(1.4),
-        _m(0.4),
-        _m(4.2),
-        _m(0.5),
-        _m(0.1),
-        _m(0.9),
-    )
-    return CastlePlan(
-        "Wijnendale Castle",
-        Angle64(51.0 + 4.0 / 60.0 + 44.0 / 3600.0, DEGREE64),
-        Angle64(3.0 + 3.0 / 60.0 + 34.0 / 3600.0, DEGREE64),
-        towers^,
-        blocks^,
-        moat^,
-        bridge^,
-    )
+        if not (isfinite(step.value) and step.value > 0):
+            raise Error("A sampling step must be positive and finite")
+        var wings = List[List[Point]]()
+        for wing in self.wings:
+            wings.append(wing.outline())
+        var gate = self.gate.outline()
+        var low_x = Float64(1.0e30)
+        var low_y = Float64(1.0e30)
+        var high_x = Float64(-1.0e30)
+        var high_y = Float64(-1.0e30)
+        for corner in self.surveyed_footprint:
+            low_x = min(low_x, corner.x.value)
+            low_y = min(low_y, corner.y.value)
+            high_x = max(high_x, corner.x.value)
+            high_y = max(high_y, corner.y.value)
+        var both = 0
+        var either = 0
+        var across = Int((high_x - low_x) / step.value) + 1
+        var up = Int((high_y - low_y) / step.value) + 1
+        for row in range(up):
+            for column in range(across):
+                var at = point(
+                    low_x + (Float64(column) + 0.5) * step.value,
+                    low_y + (Float64(row) + 0.5) * step.value,
+                )
+                var built = polygon_contains(gate, at)
+                for tower in self.towers:
+                    built = built or tower.contains(at)
+                for wing in wings:
+                    built = built or polygon_contains(wing, at)
+                var surveyed = polygon_contains(self.surveyed_footprint, at)
+                if built and surveyed:
+                    both += 1
+                if built or surveyed:
+                    either += 1
+        if either == 0:
+            raise Error("Nothing is built or surveyed")
+        return Float64(both) / Float64(either)

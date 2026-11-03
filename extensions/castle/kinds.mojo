@@ -3,93 +3,44 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The kinds of a castle plan: tower shapes, roof forms, surfaces and the
-limit states that an analysis checks."""
-from core.ordinal import ordinal_valid, ordinal_label, require_valid
+"""What a castle is built of, how its roofs are shaped, and where a number
+came from.
+
+A `Material` names a surface of the mesh view, which gets its own color and
+texture. A `RoofKind` says how a tower or a wing is covered. A `Provenance`
+says how a dimension of a plan was found. It is the reason a plan can claim
+real dimensions: the plan of Wijnendale marks each figure as surveyed,
+measured, documented or estimated, and never lets an estimate pass as a
+survey.
+
+Each is a type and not an integer, and each has `is_valid`. The type stops a
+bare integer at compile time. A value that no name stands for is still
+constructible, and the boundary that reads it refuses it.
+"""
 
 
 @fieldwise_init
-struct TowerShape(Equatable, ImplicitlyCopyable, Writable):
-    """The plan shape of a tower."""
+struct Material(Equatable, ImplicitlyCopyable, Writable):
+    """What a surface of the mesh view is made of."""
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this names one of the 2 shapes.
+        """Return True if this names one of the 11 materials.
 
         Returns:
-            Whether the value is 0 to 1.
+            Whether the value is 0 to 10.
         """
-        return ordinal_valid(self.value, 2 - 1)
+        return self.value >= 0 and self.value < 11
 
     def name(self) -> String:
-        """Return the shape's name, in lowercase.
+        """Return the material's name, in lowercase.
 
         Returns:
             The name, or "unknown" for a value that is not valid.
         """
-        var names: List[String] = ["round", "square"]
-        return ordinal_label(self.is_valid(), self.value, names, "unknown")
-
-
-# A cylinder: the radius is the outer radius.
-comptime ROUND = TowerShape(0)
-# A square prism: the radius is half the side.
-comptime SQUARE = TowerShape(1)
-
-
-@fieldwise_init
-struct RoofForm(Equatable, ImplicitlyCopyable, Writable):
-    """How a tower or a block is covered."""
-
-    var value: Int
-
-    def is_valid(self) -> Bool:
-        """Return True if this names one of the 3 forms.
-
-        Returns:
-            Whether the value is 0 to 2.
-        """
-        return ordinal_valid(self.value, 3 - 1)
-
-    def name(self) -> String:
-        """Return the form's name, in lowercase.
-
-        Returns:
-            The name, or "unknown" for a value that is not valid.
-        """
-        var names: List[String] = ["cone", "gable", "parapet"]
-        return ordinal_label(self.is_valid(), self.value, names, "unknown")
-
-
-# A slate cone that rises to a point over a round tower.
-comptime CONE = RoofForm(0)
-# Two slate slopes that meet at a ridge along the long axis.
-comptime GABLE = RoofForm(1)
-# A flat roof behind a battlemented parapet of merlons and crenels.
-comptime PARAPET = RoofForm(2)
-
-
-@fieldwise_init
-struct Surface(Equatable, ImplicitlyCopyable, Writable):
-    """What a face of the scene is made of. It sets the color."""
-
-    var value: Int
-
-    def is_valid(self) -> Bool:
-        """Return True if this names one of the 8 surfaces.
-
-        Returns:
-            Whether the value is 0 to 7.
-        """
-        return ordinal_valid(self.value, 8 - 1)
-
-    def name(self) -> String:
-        """Return the surface's name, in lowercase.
-
-        Returns:
-            The name, or "unknown" for a value that is not valid.
-        """
+        if not self.is_valid():
+            return "unknown"
         var names: List[String] = [
             "brick",
             "stone",
@@ -97,160 +48,111 @@ struct Surface(Equatable, ImplicitlyCopyable, Writable):
             "water",
             "lawn",
             "gravel",
-            "trunk",
             "foliage",
+            "glass",
+            "wood",
+            "metal",
+            "bark",
         ]
-        return ordinal_label(self.is_valid(), self.value, names, "unknown")
+        return names[self.value]
 
 
-comptime BRICK = Surface(0)
-# Pale dressed stone: string courses, copings and arch rings.
-comptime STONE = Surface(1)
-comptime SLATE = Surface(2)
-comptime WATER = Surface(3)
-comptime LAWN = Surface(4)
-comptime GRAVEL = Surface(5)
-comptime TRUNK = Surface(6)
-# Leaves. Each tree carries its own autumn color.
-comptime FOLIAGE = Surface(7)
-
-
-def require_surface(surface: Surface) raises:
-    """Refuse a surface that is not named.
-
-    Nothing. The call returns when the surface is named.
-
-    Args:
-        surface: The surface to check.
-
-    Raises:
-        Error: If the surface is not named.
-    """
-    require_valid(surface.is_valid(), "A surface is not valid")
+# Red brick: the walls and the arches.
+comptime BRICK = Material(0)
+# Dressed natural stone: the plinth, the corbels and the gate's openings.
+comptime STONE = Material(1)
+# Slate: the roofs and the spires.
+comptime SLATE = Material(2)
+# The water of the moat.
+comptime WATER = Material(3)
+# Grass: the island, the banks and the meadow.
+comptime LAWN = Material(4)
+# Gravel: the paths.
+comptime GRAVEL = Material(5)
+# The crowns of trees.
+comptime FOLIAGE = Material(6)
+# Window glass.
+comptime GLASS = Material(7)
+# Timber: window frames, doors, fences and the rails of a bridge.
+comptime WOOD = Material(8)
+# Lead and zinc: ridges, finials and flat roofs.
+comptime METAL = Material(9)
+# The trunks and branches of trees.
+comptime BARK = Material(10)
 
 
 @fieldwise_init
-struct LimitState(Equatable, ImplicitlyCopyable, Writable):
-    """What an engineering check guards against."""
+struct RoofKind(Equatable, ImplicitlyCopyable, Writable):
+    """How the top of a tower, a wing or the gate is covered."""
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this names one of the 6 limit states.
+        """Return True if this names one of the 3 roof kinds.
 
         Returns:
-            Whether the value is 0 to 5.
+            Whether the value is 0 to 2.
         """
-        return ordinal_valid(self.value, 6 - 1)
+        return self.value >= 0 and self.value < 3
 
     def name(self) -> String:
-        """Return the limit state's name, in lowercase.
+        """Return the roof kind's name, in lowercase.
 
         Returns:
             The name, or "unknown" for a value that is not valid.
         """
+        if not self.is_valid():
+            return "unknown"
+        var names: List[String] = ["gable", "cone", "flat"]
+        return names[self.value]
+
+
+# Two slopes that meet at a ridge along the axis of a wing.
+comptime GABLE = RoofKind(0)
+# A spire over a round tower.
+comptime CONE = RoofKind(1)
+# A flat top behind a crenellated parapet.
+comptime FLAT = RoofKind(2)
+
+
+@fieldwise_init
+struct Provenance(Equatable, ImplicitlyCopyable, Writable):
+    """How a dimension of a plan was found."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the 4 provenances.
+
+        Returns:
+            Whether the value is 0 to 3.
+        """
+        return self.value >= 0 and self.value < 4
+
+    def name(self) -> String:
+        """Return the provenance's name, in lowercase.
+
+        Returns:
+            The name, or "unknown" for a value that is not valid.
+        """
+        if not self.is_valid():
+            return "unknown"
         var names: List[String] = [
-            "overturning",
-            "sliding",
-            "bearing",
-            "crushing",
-            "tension",
-            "arch_thrust",
+            "surveyed",
+            "measured",
+            "documented",
+            "estimated",
         ]
-        return ordinal_label(self.is_valid(), self.value, names, "unknown")
+        return names[self.value]
 
 
-# The overturning moment is more than the restoring moment allows.
-comptime OVERTURNING = LimitState(0)
-# The horizontal force is more than friction on the base resists.
-comptime SLIDING = LimitState(1)
-# The base pressure is more than the ground carries.
-comptime BEARING = LimitState(2)
-# The masonry stress is more than its design strength.
-comptime CRUSHING = LimitState(3)
-# A joint opens: the resultant leaves the middle of the section.
-comptime TENSION = LimitState(4)
-# No line of thrust fits inside an arch ring.
-comptime ARCH_THRUST = LimitState(5)
-
-
-def require_tower_shape(shape: TowerShape) raises:
-    """Refuse a tower shape that is not named.
-
-    Nothing. The call returns when the shape is named.
-
-    Args:
-        shape: The shape to check.
-
-    Raises:
-        Error: If the shape is not named.
-    """
-    require_valid(shape.is_valid(), "A tower shape is not valid")
-
-
-def require_roof_form(roof: RoofForm) raises:
-    """Refuse a roof form that is not named.
-
-    Nothing. The call returns when the form is named.
-
-    Args:
-        roof: The form to check.
-
-    Raises:
-        Error: If the form is not named.
-    """
-    require_valid(roof.is_valid(), "A roof form is not valid")
-
-
-def require_limit_state(state: LimitState) raises:
-    """Refuse a limit state that is not named.
-
-    Nothing. The call returns when the state is named.
-
-    Args:
-        state: The state to check.
-
-    Raises:
-        Error: If the state is not named.
-    """
-    require_valid(state.is_valid(), "A limit state is not valid")
-
-
-def tower_shape_from_name(name: String) raises -> TowerShape:
-    """Return the tower shape that a name says.
-
-    Args:
-        name: "round" or "square".
-
-    Returns:
-        The shape.
-
-    Raises:
-        Error: If the name is neither of them.
-    """
-    if name == "round":
-        return ROUND
-    if name == "square":
-        return SQUARE
-    raise Error("A tower shape is round or square, not " + name)
-
-
-def roof_form_from_name(name: String) raises -> RoofForm:
-    """Return the roof form that a name says.
-
-    Args:
-        name: "cone", "gable" or "parapet".
-
-    Returns:
-        The form.
-
-    Raises:
-        Error: If the name is none of them.
-    """
-    if name == "cone":
-        return CONE
-    if name == "gable":
-        return GABLE
-    if name == "parapet":
-        return PARAPET
-    raise Error("A roof form is cone, gable or parapet, not " + name)
+# Read from a survey of the site, to a few centimeters: the Flemish large
+# scale reference map.
+comptime SURVEYED = Provenance(0)
+# Derived from a measurement that is not of the object itself: a height from
+# the airborne laser scan, to about a meter.
+comptime MEASURED = Provenance(1)
+# Stated in a heritage record or a standard, with no survey behind it.
+comptime DOCUMENTED = Provenance(2)
+# Assumed from typical practice or read from a photograph. It is a guess.
+comptime ESTIMATED = Provenance(3)

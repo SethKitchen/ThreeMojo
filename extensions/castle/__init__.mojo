@@ -3,11 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A moated brick castle as data, as a scene and as engineering checks.
+"""A moated brick castle: its plan, its masonry and its mesh view.
 
-A `CastlePlan` holds towers, blocks, a moat and a bridge in meters. The
-Wijnendale plan is one plan. A mesh view draws a plan into a scene. The
-analysis modules check a plan the way a structural engineer would: wind
-on a tower, a masonry arch in limit analysis, a retaining wall at the
-moat edge and the water balance of the moat. See the wiki page Castle.
+A castle plan is a set of towers, wings and a gate on an island in a moat,
+with a bridge and a low wall about a courtyard. Every dimension carries a
+unit type and a provenance. The plan of Wijnendale Castle follows the survey
+of the Flemish large scale reference map and the airborne laser scan of
+Flanders. See the wiki page Castle.
 """

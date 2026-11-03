@@ -3,455 +3,457 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Wijnendale Castle through a day, and what an engineer reads from it.
+"""A day at Wijnendale Castle: the sun, the shadows, the moat and the wind.
 
-    mojo run -I . examples/wijnendale_simulation.mojo [path.png [survey.json]]
+    mojo run -I . examples/wijnendale_simulation.mojo [path.png]
 
-The page is Castle. The frames are 19 October from the morning to the
-evening. Each frame puts the sun where the equations of Duffie and Beckman
-put it over Torhout, so the shadow of the keep sweeps across the courtyard
-and the moat as the day goes on. The sky, the colour of the light and the
-mirror of the moat follow the sun.
+The page is Castle analysis. The example draws the castle each hour from 09:00
+to 18:00 local time on 19 October 2026 and writes the pictures as an animated
+PNG. The sun is where it stands over Torhout. The shadow of each tower, the
+share of the courtyard in the sun, and the level of the moat are worked out for
+the same hours and printed. Then the report gives the analyses of the
+engineering of the castle:
 
-The program prints what the analysis modules find for the same plan: the
-shadows of the keep, the wind on the keep, the line of thrust in a bridge
-arch, the wall at the edge of the moat and the water balance of the moat in
-a normal year and in a dry one. It also prints how the keep and the arch
-answer when every length of the plan is 15 percent too small or too large.
+- the wind on the donjon by EN 1991-1-4, and the stresses at its base;
+- the arch of the bridge by Heyman's limit analysis;
+- the quay wall as a gravity retaining wall;
+- the water balance of the moat, with its weir.
 
-Every dimension of the built-in plan is an estimate. A second argument names a
-JSON file of surveyed dimensions, in the form of `plan_to_json`. The program
-then uses the survey in place of the estimate.
+Every figure of the plan that no survey gives is marked as an estimate in the
+page.
 """
 
 from tools._example_output import (
     example_destination,
     gallery_camera,
-    gallery_renderer,
-    write_frames,
+    write_example,
 )
 
-from cameras.perspective_camera import PerspectiveCamera
-from core.assets import Assets
-from core.fog import linear_fog
-from core.object3d import NodeId, Object3D
-from core.scene import Scene
-from extensions.castle.arch import analyze_bridge
-from extensions.castle.masonry import clay_brick_masonry
-from extensions.castle.plan import CastlePlan, PlanPoint, wijnendale
-from extensions.castle.survey import plan_from_json
-from extensions.castle.render import CastleOptions, add_castle
-from extensions.castle.sun import (
-    castle_sun,
-    day_length,
-    scene_direction,
-    shadow_length,
+from core.clock import Clock
+from extensions.castle.arch import arch_check, bridge_arch
+from extensions.castle.moat_wall import (
+    least_thickness,
+    moat_drawn_down,
+    moat_full,
+    quay_wall,
+    wall_stability,
 )
-from extensions.castle.wall import GravityWall, check_wall, required_thickness
-from extensions.castle.water_balance import (
-    Weir,
-    flanders_climate,
-    required_inflow,
-    simulate_year,
+from extensions.castle.moat_water import DayWeather, wijnendale_moat
+from extensions.castle.scene import (
+    SceneSettings,
+    advance_water,
+    aim_sun,
+    build_castle_scene,
+    castle_renderer,
+    draw_castle,
+)
+from extensions.castle.shadow import donjon_shadow, lit_fraction
+from extensions.castle.sun import (
+    day_of_year,
+    solar_noon,
+    solar_position,
+    sunrise_and_sunset,
+)
+from extensions.castle.wijnendale import (
+    latitude,
+    longitude,
+    wijnendale_plan,
 )
 from extensions.castle.wind import (
-    check_tower_base,
-    cantilever_frequency,
-    flanders_wind,
-    tower_wind_load,
+    base_check,
+    donjon_shaft,
+    shaft_frequency_beam,
+    shaft_frequency_en,
+    shaft_frequency_fe,
+    tower_wind,
+    wijnendale_wind_site,
 )
-from extensions.energy.solar import SunPosition, day_of_year
-from extensions.geotech.quantities import (
-    KILONEWTON_PER_CUBIC_METER,
-    UnitWeight64,
-)
-from geometries.plane import plane
-from lights.light import ambient_light, directional_light
-from lights.shadow import PCF_SOFT_SHADOW_MAP
 from math.vector3 import Vector3
-from objects.reflector import Reflector
-from objects.sky import Sky
-from render.framebuffer import Color, Framebuffer
-from render.tonemap import ACES_FILMIC_TONE_MAPPING
-from std.math import floor
-from std.pathlib import Path
-from std.sys import argv
+from render.framebuffer import Framebuffer
+from std.math import atan2, pi
 from units.si import (
     Angle,
-    Angle64,
     DEGREE,
     DEGREE64,
     Duration64,
-    Force64,
-    HOUR,
-    KILONEWTON,
-    KILONEWTON_METER,
-    KILOPASCAL,
     Length,
     Length64,
-    MEGAPASCAL,
     METER,
-    METER_PER_SECOND,
-    Pressure64,
-    Velocity64,
+    PER_SECOND,
 )
 
-comptime DEFAULT_OUTPUT = "out/castle-simulation.png"
-comptime WIDTH = 256
-comptime HEIGHT = 320
-comptime FRAMES = 12
-comptime DELAY_MS = 400
-# Belgian clocks are two hours ahead of Greenwich until the last Sunday of
-# October, which was 25 October in 2026.
-comptime ZONE_HOURS = 2.0
-comptime FIRST_HOUR = 9.0
-comptime LAST_HOUR = 17.75
+comptime DEFAULT_OUTPUT = "out/wijnendale_simulation.png"
+comptime WIDTH = 480
+comptime HEIGHT = 600
+comptime DELAY_MS = 600
+comptime YEAR = 2026
+# Summer time: local time is two hours ahead of Coordinated Universal Time.
+comptime LOCAL_OFFSET = 2
+comptime FIRST_HOUR = 9
+comptime LAST_HOUR = 18
+# The weather of an average day of October at Torhout, as depths of water: the
+# normal rain is about 75 mm in the month, and the evaporation of open water
+# about 35 mm.
+comptime RAIN_MM = 2.4
+comptime EVAPORATION_MM = 1.1
 
 
-def _round(value: Float64, places: Int) -> Float64:
-    """Return a number rounded to some decimal places, for printing."""
-    var scale = 1.0
+def _fixed(value: Float64, places: Int) -> String:
+    """Return a number with a fixed count of decimal places."""
+    var scale = 1
     for _ in range(places):
-        scale *= 10.0
-    var shifted = value * scale
-    if shifted < 0.0:
-        return -floor(-shifted + 0.5) / scale
-    return floor(shifted + 0.5) / scale
+        scale *= 10
+    var scaled = Int(abs(value) * Float64(scale) + 0.5)
+    var text = String(scaled // scale)
+    if places > 0:
+        var digits = String(scaled % scale)
+        while digits.byte_length() < places:
+            digits = "0" + digits
+        text += "." + digits
+    if value < 0.0 and scaled > 0:
+        text = "-" + text
+    return text
 
 
-def _clock(hours: Float64) -> String:
-    """Return a time of day as hours and minutes, such as 15:30."""
-    var whole = Int(floor(hours))
-    var minutes = Int(floor((hours - Float64(whole)) * 60.0 + 0.5))
-    var pad = String("")
-    if minutes < 10:
-        pad = "0"
-    return String(whole, ":", pad, minutes)
+def _smooth(x: Float64) -> Float64:
+    """Return the smooth step of a number clamped to 0 through 1."""
+    var t = min(max(x, 0.0), 1.0)
+    return t * t * (3.0 - 2.0 * t)
 
 
-def _mix(low: Float64, high: Float64, t: Float64) -> Float64:
-    """Return a point between two numbers."""
-    return low + (high - low) * t
+def _left(text: String, width: Int) -> String:
+    """Return a text padded on the left to a width."""
+    var padded = text
+    while padded.byte_length() < width:
+        padded = " " + padded
+    return padded
 
 
-def _byte(value: Float64) -> UInt8:
-    """Return a number from 0 to 255 as a byte."""
-    return UInt8(Int(max(0.0, min(255.0, value))))
+def _clock(seconds_utc: Float64) -> String:
+    """Return a time of day as local hours and minutes."""
+    var minutes = Int(seconds_utc / 60.0 + 0.5) + LOCAL_OFFSET * 60
+    var hours = (minutes // 60) % 24
+    var rest = minutes % 60
+    var tens = "0" if rest < 10 else ""
+    var pad = "0" if hours < 10 else ""
+    return pad + String(hours) + ":" + tens + String(rest)
 
 
-def _report(plan: CastlePlan, day: Int) raises:
-    """Print the engineering results for the plan."""
-    var zone = Duration64(ZONE_HOURS, HOUR)
-    print(plan.name, "-", "19 October, day", day)
+def _compass(azimuth_degrees: Float64) -> String:
+    """Return the nearest of the eight points of the compass."""
+    var names = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    var at = Int((azimuth_degrees + 22.5) / 45.0) % 8
+    return names[at]
+
+
+def _heading(east: Float64, north: Float64) -> Float64:
+    """Return the bearing of a vector, clockwise from north, in degrees."""
+    var bearing = atan2(east, north) * 180.0 / pi
+    if bearing < 0.0:
+        bearing += 360.0
+    return bearing
+
+
+def _title(text: String):
+    print()
+    print(text)
+    var rule = String("")
+    for _ in range(text.byte_length()):
+        rule += "-"
+    print(rule)
+
+
+def _report_site() raises:
+    var day = day_of_year(YEAR, 10, 19)
+    var times = sunrise_and_sunset(latitude(), longitude(), YEAR, day)
+    var noon = solar_noon(longitude(), YEAR, day)
+    var high = solar_position(
+        latitude(), longitude(), YEAR, day, noon.value / 3600.0
+    )
+    _title("Wijnendale Castle, 19 October 2026")
     print(
-        "  site:",
-        _round(plan.latitude.to(DEGREE64), 4),
-        "N,",
-        _round(plan.longitude.to(DEGREE64), 4),
-        "E; day length",
-        _round(day_length(plan.latitude, day).to(HOUR), 2),
-        "h",
-    )
-    print(
-        "  the sun, and the shadow of the keep (", plan.tallest().value, "m ):"
-    )
-    for k in range(FRAMES):
-        var hours = _hour(k)
-        var sun = castle_sun(plan, day, Duration64(hours, HOUR), zone)
-        var altitude = sun.altitude().to(DEGREE64)
-        var line = String("   ", _clock(hours), "  altitude ")
-        line += String(_round(altitude, 1), " deg, azimuth ")
-        line += String(_round(sun.azimuth.to(DEGREE64), 1), " deg")
-        if sun.is_up():
-            line += String(
-                ", shadow ",
-                _round(shadow_length(plan.tallest(), sun).value, 1),
-                " m",
-            )
-        print(line)
-
-    var keep = plan.towers[_tallest_tower(plan)].copy()
-    var masonry = clay_brick_masonry()
-    var wind = flanders_wind()
-    var load = tower_wind_load(wind, keep)
-    var base = check_tower_base(
-        keep, masonry, wind, Force64(300.0, KILONEWTON), 2.2
-    )
-    print("  keep, wind of 26 m/s in open country:")
-    print(
-        "   wind force",
-        _round(load.force.to(KILONEWTON), 0),
-        "kN, moment",
-        _round(load.moment.to(KILONEWTON_METER), 0),
-        "kN m, first natural frequency",
-        _round(cantilever_frequency(keep, masonry).value, 2),
-        "Hz",
-    )
-    print(
-        "   base stress",
-        _round(base.windward.to(MEGAPASCAL), 2),
-        "to",
-        _round(base.leeward.to(MEGAPASCAL), 2),
-        "MPa against a design strength of",
-        _round(masonry.design_strength(2.2).to(MEGAPASCAL), 2),
-        "MPa; utilization",
-        _round(base.utilization, 2),
-        ", equilibrium ratio",
-        _round(base.equ_ratio, 1),
-        ", passes",
-        base.passes(),
-    )
-
-    var fill = UnitWeight64(19.0, KILONEWTON_PER_CUBIC_METER)
-    var arch = analyze_bridge(
-        plan.bridge, masonry, fill, Pressure64(5.0, KILOPASCAL), 24
-    )
-    print("  bridge arch, limit analysis with a deck load of 5 kPa:")
-    print(
-        "   a line of thrust fits:",
-        arch.safe,
-        "; horizontal thrust",
-        _round(arch.thrust_min.to(KILONEWTON), 0),
-        "to",
-        _round(arch.thrust_max.to(KILONEWTON), 0),
-        "kN; geometric factor",
-        _round(arch.geometric_factor, 1),
-        "; least ring",
-        _round(arch.minimum_thickness.value * 1000.0, 0),
-        "mm of",
-        _round(plan.bridge.ring.value * 1000.0, 0),
-        "mm",
-    )
-
-    var height = plan.moat.depth + Length64(plan.moat.freeboard.value, METER)
-    var wall = GravityWall(
-        height,
-        Length64(1.0, METER),
-        masonry.copy(),
-        UnitWeight64(18.0, KILONEWTON_PER_CUBIC_METER),
-        Angle64(30.0, DEGREE64),
-        0.4,
-        Pressure64(5.0, KILOPASCAL),
-        Pressure64(150.0, KILOPASCAL),
-    )
-    var full = Length64(plan.moat.depth.value, METER)
-    var empty = Length64(0.0, METER)
-    var full_wall = required_thickness(wall, full, full)
-    var drained = required_thickness(wall, full, empty)
-    print("  wall at the edge of the moat,", _round(height.value, 1), "m high:")
-    print(
-        "   least thickness with the moat full",
-        _round(full_wall.value, 2),
-        "m and with the moat drained",
-        _round(drained.value, 2),
-        "m (a plain gravity wall, with no buttress and no backing)",
-    )
-    var thin = wall.copy()
-    thin.thickness = Length64(1.0, METER)
-    var one_meter = check_wall(thin, full, empty)
-    print(
-        "   a wall of 1 m, drained: overturning",
-        _round(one_meter.overturning, 2),
-        ", sliding",
-        _round(one_meter.sliding, 2),
-        ", governs by",
-        one_meter.governing().name(),
-    )
-
-    var climate = flanders_climate()
-    var weir = Weir(Length64(1.5, METER), 0.62)
-    var leakage = Velocity64(2.0e-8, METER_PER_SECOND)
-    var normal = simulate_year(plan.moat, climate, weir, leakage, 1.0, 1.0)
-    var dry = simulate_year(plan.moat, climate, weir, leakage, 0.6, 0.0)
-    print("  moat of", _round(plan.moat.water_area().value, 0), "m2:")
-    print(
-        "   normal year: lowest level",
-        _round(normal.lowest().value * 100.0, 0),
-        "cm below the weir crest, spill",
-        _round(normal.spilled.value, 0),
-        "m3",
+        "Site: ",
+        _fixed(latitude().to(DEGREE64), 4),
+        " N, ",
+        _fixed(longitude().to(DEGREE64), 4),
+        " E (Torhout, West Flanders). Times are local, UTC+2.",
+        sep="",
     )
     print(
-        "   dry year with the stream failed: lowest level",
-        _round(dry.lowest().value * 100.0, 0),
-        "cm below the crest, more than 10 cm down on",
-        dry.days_below(Length64(0.1, METER)),
-        "days; the stream must give",
-        _round(
-            required_inflow(plan.moat, climate, leakage, 6, 0.6).value * 1000.0,
-            2,
-        ),
-        "L/s in July",
+        "Sunrise ",
+        _clock(times[0].value),
+        ", solar noon ",
+        _clock(noon.value),
+        ", sunset ",
+        _clock(times[1].value),
+        ". Greatest height of the sun ",
+        _fixed(high.altitude.to(DEGREE64), 1),
+        " degrees.",
+        sep="",
     )
 
 
-def _tallest_tower(plan: CastlePlan) -> Int:
-    """Return the place of the tallest tower, the keep."""
-    var best = 0
-    for i in range(len(plan.towers)):
-        if plan.towers[i].apex() > plan.towers[best].apex():
-            best = i
-    return best
+def _report_wind() raises:
+    var plan = wijnendale_plan()
+    var shaft = donjon_shaft(plan)
+    var site = wijnendale_wind_site()
+    var f_en = shaft_frequency_en(shaft)
+    var f_beam = shaft_frequency_beam(shaft)
+    var f_fe = shaft_frequency_fe(shaft, 12)
+    var wind = tower_wind(site, shaft, f_fe)
+    var check = base_check(shaft, wind)
+    _title("Wind on the donjon, EN 1991-1-4")
+    print(
+        "The donjon is a hollow brick shaft: ",
+        _fixed(shaft.outer_diameter.value, 2),
+        " m across, a wall of ",
+        _fixed(shaft.wall_thickness.value, 1),
+        " m (assumed), ",
+        _fixed(shaft.height.value, 2),
+        " m high from the water, ",
+        _fixed(shaft.weight().value / 1.0e6, 2),
+        " MN.",
+        sep="",
+    )
+    print(
+        "Natural frequency: F.3 chimney formula ",
+        _fixed(f_en.to(PER_SECOND), 2),
+        " Hz, cantilever beam ",
+        _fixed(f_beam.to(PER_SECOND), 2),
+        " Hz, finite element model ",
+        _fixed(f_fe.to(PER_SECOND), 2),
+        " Hz. The model is used.",
+        sep="",
+    )
+    print(
+        "Wind: basic velocity ",
+        _fixed(site.basic_velocity.value, 0),
+        " m/s (the top of the Belgian zones), terrain category II,",
+        " peak pressure ",
+        _fixed(wind.peak_pressure.value / 1000.0, 2),
+        " kN/m2 at the top.",
+        sep="",
+    )
+    print(
+        "Force coefficient: Re ",
+        _fixed(wind.reynolds / 1.0e6, 1),
+        "e6, cf0 ",
+        _fixed(wind.cf0, 2),
+        ", slenderness ",
+        _fixed(wind.slenderness, 1),
+        ", end effect ",
+        _fixed(wind.end_effect, 2),
+        ", cf ",
+        _fixed(wind.cf, 2),
+        ". Structural factor ",
+        _fixed(wind.structural.value, 3),
+        " (Annex B), 1.0 used.",
+        sep="",
+    )
+    print(
+        "Vortex shedding: critical velocity ",
+        _fixed(wind.critical_velocity.value, 0),
+        " m/s; the check is ",
+        "needed" if wind.vortex_check_needed else "not needed",
+        " (h/b ",
+        _fixed(shaft.height.value / shaft.outer_diameter.value, 1),
+        " is under 6).",
+        sep="",
+    )
+    print(
+        "Base: shear ",
+        _fixed(wind.base_shear.value / 1000.0, 0),
+        " kN, moment ",
+        _fixed(wind.base_moment.value / 1.0e6, 2),
+        " MN m. At the design level: compression ",
+        _fixed(check.maximum_stress.value / 1.0e6, 2),
+        " MPa of ",
+        _fixed(check.design_strength.value / 1.0e6, 2),
+        " (",
+        _fixed(100.0 * check.compression_utilization, 0),
+        " percent), no tension (",
+        "yes" if check.tension_free else "NO",
+        "), shear ",
+        _fixed(100.0 * check.shear_utilization, 0),
+        " percent, overturning ",
+        _fixed(100.0 * check.overturning_utilization, 0),
+        " percent.",
+        sep="",
+    )
 
 
-def _plan() raises -> CastlePlan:
-    """Return the plan: a survey if a file is named, else the estimate."""
-    var args = argv()
-    if len(args) > 2:
-        return plan_from_json(Path(String(args[2])).read_text())
-    return wijnendale()
+def _report_arch() raises:
+    var plan = wijnendale_plan()
+    var arch = bridge_arch(plan)
+    var check = arch_check(arch)
+    _title("Arch of the bridge, Heyman's limit analysis")
+    print(
+        "A semicircular ring of mean radius ",
+        _fixed(arch.mean_radius.value, 2),
+        " m and thickness ",
+        _fixed(arch.thickness.value, 2),
+        " m: t/R is ",
+        _fixed(check.ratio, 3),
+        ". A ring of uniform thickness stands down to ",
+        _fixed(check.minimum_ratio, 4),
+        " of the radius under its own weight.",
+        sep="",
+    )
+    print(
+        "Geometrical factor of safety ",
+        _fixed(check.geometric_factor, 2),
+        ". Horizontal thrust ",
+        _fixed(check.least_thrust.value / 1000.0, 1),
+        " to ",
+        _fixed(check.greatest_thrust.value / 1000.0, 1),
+        " kN per meter of width; the springing carries ",
+        _fixed(check.springing_force.value / 1000.0, 1),
+        " kN/m, ",
+        _fixed(100.0 * check.crushing_utilization, 1),
+        " percent of the strength of the masonry.",
+        sep="",
+    )
 
 
-def _sensitivity(plan: CastlePlan) raises:
-    """Print the keep and the arch with every length scaled by a factor."""
-    var masonry = clay_brick_masonry()
-    var wind = flanders_wind()
-    var fill = UnitWeight64(19.0, KILONEWTON_PER_CUBIC_METER)
-    print("  every length of the plan scaled, for the error of the estimate:")
-    for factor in [0.85, 1.0, 1.15]:
-        var scaled = plan.scaled(factor)
-        var keep = scaled.towers[_tallest_tower(scaled)].copy()
-        var base = check_tower_base(
-            keep, masonry, wind, Force64(300.0, KILONEWTON), 2.2
-        )
-        var arch = analyze_bridge(
-            scaled.bridge, masonry, fill, Pressure64(5.0, KILOPASCAL), 24
-        )
+def _report_wall() raises:
+    var plan = wijnendale_plan()
+    var wall = quay_wall(plan)
+    _title("Quay wall as a gravity wall")
+    print(
+        "A brick wall ",
+        _fixed(wall.thickness.value, 1),
+        " m thick (assumed) and ",
+        _fixed(wall.height.value, 2),
+        " m high holds ",
+        _fixed(wall.retained.value, 2),
+        " m of earth, with the moat in front of it.",
+        sep="",
+    )
+    var cases = [moat_full(plan), moat_drawn_down(plan)]
+    var names = ["moat full", "moat drawn down"]
+    for at in range(2):
+        var stable = wall_stability(wall, cases[at])
+        var least = least_thickness(wall, cases[at])
         print(
-            "   x",
-            factor,
-            ": keep",
-            _round(keep.height.value, 1),
-            "m, use of the strength",
-            _round(base.utilization, 2),
-            ", equilibrium ratio",
-            _round(base.equ_ratio, 1),
-            "; arch geometric factor",
-            _round(arch.geometric_factor, 1),
+            "  ",
+            names[at],
+            ": overturning factor ",
+            _fixed(stable.overturning_factor, 2),
+            ", sliding factor ",
+            _fixed(stable.sliding_factor, 2),
+            ", free-standing wall needs ",
+            _fixed(least.value, 1),
+            " m.",
+            sep="",
         )
-
-
-def _hour(frame: Int) -> Float64:
-    """Return the clock time of a frame."""
-    return _mix(FIRST_HOUR, LAST_HOUR, Float64(frame) / Float64(FRAMES - 1))
-
-
-def _camera() raises -> PerspectiveCamera:
-    """Return the camera, above the front of the moat and looking north."""
-    return gallery_camera(
-        WIDTH,
-        HEIGHT,
-        Vector3(6, 50, 108),
-        Vector3(13, 8, -2),
-        field_of_view=Angle(55.0, DEGREE),
-        near=Length(1.0, METER),
-        far=Length(4000.0, METER),
+    print(
+        "The thickness of 0.9 m is a facing. The earth is held by ties,",
+        " counterforts or the foundations of the buildings.",
+        sep="",
     )
 
 
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
-    var plan = _plan()
-    var day = day_of_year(10, 19)
-    _report(plan, day)
-    _sensitivity(plan)
+    var plan = wijnendale_plan()
+    var day = day_of_year(YEAR, 10, 19)
 
-    var assets = Assets()
-    var scene = Scene()
-    var options = CastleOptions.default()
-    options.water = False
-    options.trees = 360
-    options.clearing = PlanPoint(Length64(6.0, METER), Length64(-108.0, METER))
-    options.clearing_radius = Length64(58.0, METER)
-    _ = add_castle(scene, assets, plan, options)
+    _report_site()
 
-    var dome = Object3D()
-    dome.set_scale(4400, 4400, 4400)
-    var sky_node = scene.add(dome^)
-    var sky = Sky(assets, sky_node)
-    scene.add_mesh(sky.mesh)
-    assets.programs.get(sky.program).set_uniform("turbidity", Float32(2.5))
-    assets.programs.get(sky.program).set_uniform("rayleigh", Float32(1.6))
-    assets.materials.materials[sky.mesh.material.value].fog = False
-
-    var water = Object3D()
-    water.rotate_x(Angle(-90.0, DEGREE))
-    water.set_position(
-        Float32(plan.moat.center.x.value),
-        Float32(-plan.moat.freeboard.value),
-        Float32(-plan.moat.center.y.value),
-    )
-    var water_node = scene.add(water^)
-    var mirror = Reflector(
-        assets,
-        assets.geometries.add(
-            plane(Length(130.0, METER), Length(110.0, METER))
+    var renderer = castle_renderer(WIDTH, HEIGHT)
+    var eye = Vector3(-30, 49, 16)
+    var castle = build_castle_scene(
+        plan,
+        SceneSettings(
+            256,
+            64,
+            2048,
+            True,
+            String("assets/pebbles.jpg"),
+            Length64(1.0, METER),
         ),
-        water_node,
-        color=Color(104, 128, 126),
-        texture_width=WIDTH,
-        texture_height=HEIGHT,
-        multisample=0,
+        Float64(eye.x),
+        Float64(-eye.z),
+        45.0,
     )
-    scene.add_mesh(mirror.mesh)
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        eye,
+        Vector3(32, 20, -42),
+        field_of_view=Angle(58.0, DEGREE),
+        near=Length(1.0, METER),
+        far=Length(6000.0, METER),
+    )
 
-    var lamp = Object3D()
-    lamp.set_position(0, 160, 0)
-    var lamp_node = scene.add(lamp^)
-    var sun_light = directional_light(Color(255, 232, 196), lamp_node, 3.4)
-    sun_light.cast_shadow = True
-    sun_light.shadow.map_size = 1024
-    sun_light.shadow.bias = -0.0005
-    sun_light.shadow.normal_bias = 0.15
-    sun_light.shadow.set_extent(Length(70.0, METER))
-    sun_light.shadow.near = Length(40.0, METER)
-    sun_light.shadow.far = Length(300.0, METER)
-    scene.add_light(sun_light)
-    scene.add_light(ambient_light(Color(176, 198, 232), 0.75))
+    var moat = wijnendale_moat(plan)
+    var weather = DayWeather(
+        Length64(RAIN_MM / 1000.0), Length64(EVAPORATION_MM / 1000.0)
+    )
+    var level = plan.moat.water_level
 
-    var haze = Color(176, 192, 208)
-    scene.fog = linear_fog(haze, Length(300.0, METER), Length(3000.0, METER))
-    var renderer = gallery_renderer(WIDTH, HEIGHT, haze)
-    renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
-    renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, Float32(0.8))
-    var camera = _camera()
-
+    _title("The sun, the shadows and the moat, hour by hour")
+    print(
+        "  time  height  bearing  donjon shadow   tip toward  courtyard in sun",
+        "  moat (m TAW)  weir (L/s)",
+        sep="",
+    )
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
-    for k in range(FRAMES):
-        var sun = castle_sun(
-            plan,
-            day,
-            Duration64(_hour(k), HOUR),
-            Duration64(ZONE_HOURS, HOUR),
+    for hour in range(FIRST_HOUR, LAST_HOUR + 1):
+        var hours_utc = Float64(hour - LOCAL_OFFSET)
+        var sun = solar_position(latitude(), longitude(), YEAR, day, hours_utc)
+        var toward = sun.toward()
+        aim_sun(
+            castle,
+            renderer,
+            Vector3(
+                Float32(toward[0]), Float32(toward[2]), Float32(-toward[1])
+            ),
         )
-        _light(scene, assets, sky, lamp_node, sun)
-        scene.update()
-        _ = mirror.update(renderer, scene, assets, camera)
-        frames.append(renderer.render(scene, assets, camera))
-    write_frames(frames, destination, DELAY_MS, FRAMES)
+        advance_water(castle, 1.0)
+        # The eye adapts: the lower the sun, the more the exposure opens.
+        var height = sun.altitude.to(DEGREE64)
+        var open = 1.0 - _smooth(height / 20.0)
+        renderer.tone_mapping_exposure = Float32(0.55 * (1.0 + 1.2 * open))
+        frames.append(draw_castle(castle, renderer, camera, 0.55, 5))
+        var shadow = donjon_shadow(plan, sun)
+        var share = lit_fraction(plan, sun, Length64(2.0, METER))
+        level = moat.step(level, weather, Duration64(3600.0))
+        print(
+            _left(_clock(hours_utc * 3600.0), 6),
+            _left(_fixed(sun.altitude.to(DEGREE64), 1), 7),
+            _left(_fixed(sun.azimuth.to(DEGREE64), 0), 9),
+            _left(_fixed(shadow[0].value, 1) + " m", 13),
+            _left(_compass(_heading(shadow[1].value, shadow[2].value)), 14),
+            _left(_fixed(100.0 * share, 0) + " %", 18),
+            _left(_fixed(level.value, 3), 14),
+            _left(_fixed(moat.weir.discharge(level).value * 1000.0, 1), 12),
+            sep="",
+        )
 
-
-def _light(
-    mut scene: Scene,
-    mut assets: Assets,
-    sky: Sky,
-    lamp: NodeId,
-    sun: SunPosition,
-) raises:
-    """Move the sun and tint its light by how high it stands."""
-    var toward = scene_direction(sun)
-    var warm = max(0.0, min(1.0, (sun.altitude().to(DEGREE64) - 3.0) / 25.0))
-    var vector = Vector3(
-        Float32(toward.x), Float32(toward.y), Float32(toward.z)
+    _report_wind()
+    _report_arch()
+    _report_wall()
+    var written = moat.weir.discharge(level).value
+    _title("Moat water balance")
+    print(
+        "The moat holds ",
+        _fixed(moat.storage(level, Length64(plan.moat.bed().value)), 0),
+        " m3 on ",
+        _fixed(moat.area.value, 0),
+        " m2. A weir of ",
+        _fixed(moat.weir.width.value, 1),
+        " m (assumed) passes ",
+        _fixed(written * 1000.0, 1),
+        " L/s, so the water is renewed in ",
+        _fixed(
+            moat.residence_time(level, Length64(plan.moat.bed().value)).value
+            / 86400.0,
+            1,
+        ),
+        " days.",
+        sep="",
     )
-    assets.programs.get(sky.program).set_uniform("sunPosition", vector)
-    scene.node(lamp).set_position(
-        vector.x * 160, vector.y * 160, vector.z * 160
-    )
-    scene.lights[0].color = Color(
-        255,
-        _byte(_mix(150.0, 232.0, warm)),
-        _byte(_mix(90.0, 196.0, warm)),
-    )
-    scene.lights[0].intensity = Float32(_mix(1.8, 3.4, warm))
-    scene.lights[1].intensity = Float32(_mix(1.0, 0.75, warm))
+    write_example(frames, destination, DELAY_MS, len(frames), frame_clock)

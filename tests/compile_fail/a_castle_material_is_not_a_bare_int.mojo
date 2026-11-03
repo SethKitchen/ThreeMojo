@@ -3,11 +3,12 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A tower shape must be a `TowerShape`, not a bare integer."""
+"""A bare integer must not stand in for a castle material: name it, as
+`BRICK` or `SLATE`."""
 
-from extensions.castle.kinds import TowerShape
+from extensions.castle.kinds import Material
 
 
-def main():
-    var id: TowerShape = 0
-    _ = id.is_valid()
+def main() raises:
+    var kind: Material = 2
+    print(kind.name())

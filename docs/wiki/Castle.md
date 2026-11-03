@@ -1,151 +1,111 @@
 # Castle
 
-`extensions/castle/` holds a moated brick castle as data, as a scene and as a set of engineering checks. The Wijnendale plan is the one plan it ships.
+`extensions/castle/` builds a moated brick castle from a plan. It draws the castle with brick, slate, water, lawn and woods under the sun of a date and an hour. The extension ships the plan of Wijnendale Castle at Torhout in West Flanders, Belgium. Each figure of a plan says how it was found. The page [Castle analysis](Castle-analysis) holds the engineering checks that read the same plan. The page [Landscape](Landscape) stands the castle in mountains and woods, with a scanned church beside it.
 
-![Wijnendale Castle in autumn, seen from the air, with the towers mirrored in the moat](out/castle.png)
+![Wijnendale Castle from the air in autumn: red brick towers and wings with slate spires, a moat, a bridge and woods](out/wijnendale.png)
 
-`examples/wijnendale.mojo` renders the picture. The sun stands where it stood over Torhout at 15:30 on 19 October. The moat is a mirror. The analysis modules read the same plan. See [Castle analysis](Castle-analysis).
+The picture comes from `examples/wijnendale.mojo`. It takes about half a minute on 24 CPU threads. The sun is where it stands over Torhout at 15:00 local time on 19 October 2026. The moat is Clearwater's water, and the castle and the wood are reflected in it. The same castle is a scan of 3.65 million splats in [Virtual scans](Virtual-scans). That scan draws in milliseconds and can be walked through.
+
+```bash
+.venv/bin/mojo run -I . examples/wijnendale.mojo out/wijnendale.png
+```
 
 ## Modules
 
 | Module | What it gives |
 |---|---|
-| `kinds` | `TowerShape`, `RoofForm`, `Surface` and `LimitState`, and `tower_shape_from_name` and `roof_form_from_name` |
-| `masonry` | `Masonry`, `characteristic_strength`, `clay_brick_masonry` and `dressed_limestone` |
-| `plan` | `PlanPoint`, `Tower`, `Block`, `Moat`, `Bridge`, `CastlePlan` and `wijnendale` |
-| `survey` | `plan_to_json` and `plan_from_json`, which carry a surveyed plan in and out as JSON |
-| `render` | `CastleOptions`, `add_castle`, `surface_color` and `foliage_color` |
-| `wind` | `Wind`, `flanders_wind`, `minimum_height`, `peak_velocity_pressure`, `tower_wind_load`, `cantilever_frequency` and `check_tower_base` |
-| `arch` | `analyze_arch` and `analyze_bridge` |
-| `wall` | `GravityWall`, `check_wall` and `required_thickness` |
-| `water_balance` | `Climate`, `Weir`, `flanders_climate`, `simulate_year` and `required_inflow` |
-| `sun` | `castle_sun`, `scene_direction`, `shadow_length` and `day_length` |
+| `castle/kinds` | `Material`, `RoofKind` and `Provenance`, each a type with `is_valid` |
+| `castle/plan` | `CastlePlan`, `Tower`, `Wing`, `Gate`, `QuayWall`, `Moat`, `Bridge` and the point and band tools |
+| `castle/wijnendale` | `wijnendale_plan`, the survey's footprint and the castle's place |
+| `castle/masonry` | `Masonry` and `historic_brick`, the strength and stiffness of brickwork by EN 1996-1-1 |
+| `castle/parts` | Walls with windows cut through them, plinths, crowns, dormers and spires, as triangles |
+| `castle/render` | `castle_meshes`: the mesh view of a plan, one mesh for each material |
+| `castle/textures` | Maps of brick, stone and slate from the real sizes of a unit |
+| `castle/look` | `castle_look`: a physically based material for each surface |
+| `castle/trees` | Trees grown from a branch skeleton, with cards of leaves, and shrubs |
+| `castle/scene` | `build_castle_scene`, `aim_sun` and `draw_castle` |
+| `castle/sky`, `reflect` | The sky and its clouds, and the mirror image in the water |
+| `castle/sun`, `shadow` | The sun over a site, and the shadows of the towers; see [Castle analysis](Castle-analysis) |
+| `castle/landscape`, `landscape_mesh` | The ground from the castle's meadow to the mountains, and its triangles; see [Landscape](Landscape) |
+| `castle/forest`, `crowns` | The woods of a landscape by altitude and distance, and the crowns of far trees; see [Landscape](Landscape) |
 
-Every quantity has a unit type: `Length64`, `Angle64`, `Force64` and `Pressure64`. Every kind is a type with `is_valid`.
+## The plan
 
-## What the plan documents and what it estimates
+A plan is in a flat frame in meters, x east and y north of an origin that the plan names. Levels are meters above a datum. Every length is a `Length64`, every angle an `Angle64`, and every part carries a `Provenance` that says how its dimensions were found.
 
-The plan states which facts are documented and which numbers are estimated. No published survey of the castle was available. A reader can replace each estimate with a survey value.
-
-| Item | Value | Status |
-|---|---|---|
-| Place | Torhout, West Flanders, Belgium | Documented |
-| Moat and courtyard | A circular moat around a round inner courtyard | Documented |
-| Coordinates | 51°04′44″ N, 3°03′34″ E | Documented |
-| First castle | About 1085, built by Robert I, Count of Flanders | Documented |
-| North wing | Parts date from the 15th century | Documented |
-| Present form | Neo-Gothic, mainly of the 19th century | Documented |
-| Gatehouse and keep | Designed by Félix Laureys, 1877 and 1878 | Documented |
-| Walls | Red brick; the right wing has a round keep, and the left wing stands on a base of yellow or white brick | Documented |
-| Enclosure | A square brick wall with gate turrets and battlements, protected with the castle on 22 September 1982 | Documented |
-| Gatehouse plan | Square. The sources disagree on its plan. | Estimated |
-| Stone dressings, dormers and window rows | From the aerial photograph | Estimated |
-| Dimensions of every part | From the aerial photograph, good to about 15 percent | Estimated |
-| Wall thickness, bridge arch, moat depth | Typical values for the building type | Estimated |
-| Monthly rain | The 1991-2020 normals of Uccle, 837 mm a year | Measured, at a station about 90 km away |
-| Wind, evaporation, soil and masonry strength | Typical values from the Eurocodes and the Flemish lowland | Assumed |
-
-## Sources and what is missing
-
-The documented facts come from these pages:
-
-- [Flemish heritage inventory, Kasteeldomein van Wijnendale](https://inventaris.onroerenderfgoed.be/erfgoedobjecten/87491) gives the work of Félix Laureys in 1877 and 1878, and the gatehouse and keep.
-- [Wijnendale Castle on Wikipedia](https://en.wikipedia.org/wiki/Wijnendale_Castle) gives the coordinates and the history.
-- [Eupedia](https://eupedia.com/belgium/wynendale.shtml) and [RTBF](https://www.rtbf.be/article/le-chateau-de-wijnendale-la-ou-leopold-iii-a-lance-la-question-royale-11329444) describe a circular moat.
-- [Brussels Environment, climate fact sheet](https://document.environnement.brussels/opac_css/elecfile/Clim_02) gives the Uccle rain normals of the Royal Meteorological Institute.
-
-No source in the list above gives the height of a tower, the length of a wall or the size of the moat. The protection decree refers to a plan that was not available. A survey or that plan replaces the estimates.
-
-The sources also disagree on the shape of the building. One inventory entry says it is an inverted T. Another says it is a semicircle with the buildings on the east side. The plan follows the photograph: two ranges and a gatehouse around a courtyard. A survey can settle the layout as well as the sizes.
-
-These three records hold the measured footprint. They were not read for this plan.
-
-- The protection file DW000432 of Onroerend Erfgoed, with the decree and its plan.
-- [The plan record of the castle](https://plannen.onroerenderfgoed.be/plannen/1671). It gives the boundary geometry in Belgian Lambert 72 (EPSG:31370). It also lists an approved heritage management plan for the castle and its outbuildings, as PDF files. That plan is the most likely source of surveyed drawings.
-- The Flemish building footprints of Geopunt. They have the outline of every wing and tower.
-
-To use a record, read the outlines and write them as a survey JSON file. Then give that file to both examples. See the next section.
-
-## Replace the estimates with a survey
-
-A survey replaces the estimates without a change in the code. `plan_to_json(wijnendale())` writes the estimated plan as JSON. Edit the numbers in that text. `plan_from_json(text)` reads the plan back and runs `plan.check()`.
-
-All lengths are in meters. All angles are in degrees. The top-level keys are `name`, `latitude`, `longitude`, `towers`, `blocks`, `moat` and `bridge`.
-
-| Part | Keys |
+| Part | What it is |
 |---|---|
-| Tower | `name`, `shape` (`round` or `square`), `x`, `y`, `radius`, `wall`, `height`, `roof` (`cone` or `parapet`), `roof_rise` |
-| Block | `name`, `x`, `y`, `length`, `width`, `heading`, `wall`, `height`, `roof` (`gable` or `parapet`), `roof_rise` |
-| Moat | `x`, `y`, `semi_x`, `semi_y`, `island_x`, `island_y`, `island_semi_x`, `island_semi_y`, `depth`, `freeboard` |
-| Bridge | `x`, `y`, `heading`, `spans`, `span`, `pier`, `rise`, `ring`, `width`, `fill`, `springing`, `parapet` |
+| `Tower` | A round tower with a wall to a height and a roof over it: a spire or a crown |
+| `Wing` | A band of constant width along an axis, with a gable roof whose ridge follows it. Its corners are mitered |
+| `Gate` | A rectangular block with a flat top, at a heading |
+| `QuayWall` | The wall that holds the island's earth at the edge of the moat |
+| `Moat` | The water: an outline, a level and a depth |
+| `Bridge` | A run of semicircular brick arches on piers |
 
-A missing key, a value of the wrong kind, an unnamed shape and a plan that cannot stand are all refused with a message. Both examples take the survey as a second argument:
+`CastlePlan.check` refuses a plan whose parts do not stand together. `footprint_overlap` says how well the solids reproduce the outline that a survey gave: the area they share over the area they cover together.
 
-```bash
-mojo run -I . examples/wijnendale.mojo out/castle.png survey.json
-mojo run -I . examples/wijnendale_simulation.mojo out/castle-simulation.png survey.json
+`Provenance` is one of four kinds. A plan that relies on a figure can tell a survey from a guess.
+
+| Provenance | Meaning |
+|---|---|
+| `SURVEYED` | From a survey: the outline of the building and of the moat |
+| `MEASURED` | Fitted to survey data: a wing, the gate and a tower |
+| `DOCUMENTED` | From a document |
+| `ESTIMATED` | A guess from a photograph or from the style: the depth of the moat, the quay wall, the bridge's arches, the proportions of the roofs |
+
+## Wijnendale
+
+The Flemish heritage inventory (record 87491) and the history of the castle give the facts.
+
+- About 1276 to 1278: Count Guy of Dampierre has a stone castle built. It is round and moated, with eleven half-round towers and a heavy gate tower.
+- From 1833: the Matthieu family rebuilds the castle.
+- 1877 to 1878: the Brussels architect Felix Laureys builds the pseudo-medieval gate tower with its crenellations. He extends the right wing with a round donjon.
+- 1982: the castle becomes a protected monument.
+
+The inventory gives no dimensions. The plan comes from open data of Digitaal Vlaanderen. See THIRD-PARTY-NOTICES.md.
+
+- The outline of the building and the outline of the moat are from the Flemish large scale reference map, GRB. The building has 99 corners. The coordinates are Belgian Lambert 72. The moat outline is simplified by 0.25 m.
+- The heights are from the Digital Height Model of Flanders II. It is a 1 m raster of the surface and the terrain from an airborne laser scan. The water surface is the flat 34.31 m that the scan returns over the moat.
+- The towers are circles fitted to the arcs of the surveyed outline. The wings and the gate are the bands and the rectangle that best cover it. They reproduce 96 percent of the surveyed area.
+
+The plan holds these parts: the donjon and seven turrets, the north and the south wing, the gate tower, the moat and the bridge. It also holds the low wall of the courtyard with its four quay towers.
+
+## The mesh view
+
+`castle_meshes(plan, default_view())` gives one geometry for each material: brick, stone, slate, water, lawn, gravel, foliage, glass, wood, metal and bark. A wall is a plate with the openings cut through it, so a window has a reveal as deep as the wall is thick. A window has a stone surround, a sill, a frame, a mullion and a pane set back in the opening. A round wall is a ring of plates, and a crown is a ring of corbels under a parapet of merlons. A wing has dormers, chimneys and a leaded ridge. The ground is a grid of heights: the bed of the moat, its banks, the island and the meadow.
+
+The textures are procedural, and use the real sizes of a unit:
+
+- A brick is 210 by 65 mm with a 10 mm joint, in running bond.
+- A block of stone is 600 by 300 mm.
+- A slate is 300 by 400 mm, laid with a 120 mm exposure.
+
+The normals come from a height field that the same pattern makes. So a joint is a groove, and a slate has an edge that throws a shadow. `castle_look` gives each surface a metallic-roughness material.
+
+## The scene
+
+```mojo
+var plan = wijnendale_plan()
+var renderer = castle_renderer(800, 1000)
+var castle = build_castle_scene(plan, default_settings(), eye_east, eye_north, 45.0)
+aim_sun(castle, renderer, toward_the_sun)      # a unit vector, y up and z south
+var image = draw_castle(castle, renderer, camera, 0.55, 5)
 ```
 
-`plan.scaled(factor)` multiplies every length of a plan by a factor. It gives the sensitivity of an analysis to the error of an estimate. See [Castle analysis](Castle-analysis#sensitivity-to-the-estimates).
+A picture is made in four steps.
 
-## The plan frame
+1. The renderer draws the scene with the sky as a prefiltered environment, and soft shadows from a lamp that stands where the sun does.
+2. The sky and its cumulus are painted where the renderer drew only the clear ground.
+3. The water of the moat is Clearwater's, composed into the picture where it is nearest.
+4. The castle and the wood are reflected in the water, in the share that Fresnel's law gives.
 
-The plan has x to the east, y to the north and z up, in meters. The origin is the middle of the courtyard. The ground of the island is z = 0. The water stands `freeboard` below it. The scene is y up. A plan point (x, y, z) is the scene point (x, z, -y).
+`aim_sun` redirects the lamp and prefilters the sky again. A low sun is dimmer and redder, because its light crosses more of the air. The woods are an illustration: the survey does not say where the trees are. They follow the photograph, a meadow open to the north, broadleaf trees close to the moat and dark conifers behind. No tree stands within a radius that the caller gives of a place, such as the camera.
 
-A `CastlePlan` holds:
-
-| Part | Type | What it is |
-|---|---|---|
-| Towers | `Tower` | A round or square shaft with a cone or a battlemented parapet |
-| Blocks | `Block` | A rectangle of wall with a gable roof, or a gatehouse with a parapet |
-| Moat | `Moat` | An ellipse of water around an elliptical island. A circle has equal axes. |
-| Bridge | `Bridge` | A row of equal segmental masonry arches on piers |
-
-`plan.check()` refuses a part that cannot stand. It refuses a wall as thick as its radius and a gable with no rise. It refuses an island outside the moat and a tower off the island. It refuses an arch that rises more than half its span.
-
-## The Wijnendale plan
-
-`wijnendale()` returns the plan. All sizes are in meters.
-
-| Part | Shape | Size | Height to eave | Roof |
-|---|---|---|---|---|
-| Keep | Round | Radius 3.6, wall 1.2 | 28 | Parapet |
-| Courtyard turrets | Round | Radius 1.6 and 1.7 | 12 and 13 | Cone |
-| Front towers | Round | Radius 2.8 to 3.3 | 15 | Parapet and cones |
-| Gate turrets | Round | Radius 1.7 | 21 | Cone |
-| Rear range | Block | 30 by 9 | 11 | Gable, rise 7 |
-| Front range | Block | 34 by 9 | 11 | Gable, rise 6.5 |
-| Gatehouse | Block | 16 by 16 | 19 | Parapet |
-| Moat | Circle | Outer radius 46, island radius 33 | Water depth 1.6 | |
-| Bridge | Three arches | Span 5, pier 1.4, rise 1.4, ring 0.4 | Length 20.6 | |
-
-## Draw a plan
-
-`add_castle(scene, assets, plan, options)` adds one node for the castle and one mesh for each surface that has triangles. The surfaces are brick, stone, slate, water, lawn, gravel, trunk and foliage. Each mesh takes its color from its vertex colors. A seed sets the shade of every brick, slate and tree.
-
-| Option | Meaning |
-|---|---|
-| `sides` | Facets of a round tower. It must be six or more. |
-| `trees` | Trees in the wood around the castle. It must be zero or more. |
-| `seed` | The seed of every shade and of the trees |
-| `shadows` | Whether the meshes cast and receive shadows |
-| `water` | Whether to draw the water as a mesh. Turn it off to put a mirror there. |
-| `clearing`, `clearing_radius` | No tree stands within this radius of a point. Put it under the camera. |
-
-The view draws round towers with a stone plinth, a string course and arrow slits. It draws blocks with windows, dormers and a ridge cap, or with a corbelled parapet of merlons and a gate arch. It draws the bridge with stone arch rings, brick piers, spandrel walls and parapets. It draws the moat between a brick revetment and a lawn bank. The wood has autumn crowns and dark conifers.
-
-A mirror gives the moat its reflections. `examples/wijnendale.mojo` creates an `objects.reflector.Reflector` at the water level. It sets `options.water` to `False`, so the ring is not drawn twice.
+`SceneSettings` trades quality for time. It sets the size of a tile of material, of the sky's cube and of the shadow map. It also sets whether the woods are grown, and the spacing of the ground grid. `default_settings()` gives 512 texel tiles, a 128 texel sky, a 4096 texel shadow map, woods and a 1 m grid.
 
 ## Limits
 
-- The view does not draw interiors. It does not cut openings through walls. A window is a dark pane on the wall.
-- A block has no wall thickness in the view. The plan holds the thickness for analysis.
-- The plan is a reconstruction. Do not use it as a survey.
-- A checked box in the README records implemented scope. It does not establish engineering validity for a real structure.
-
-## Related pages
-
-- [Castle analysis](Castle-analysis) gives the wind, arch, wall, moat and sun checks.
-- [Building model](Building-model) holds buildings as one canonical model.
-- [Retaining walls](Retaining-walls) gives the earth pressure that the moat wall check uses.
-- [Water](Water) gives the Clearwater ocean.
+- The plan has no interiors. A wall is a plate and the inside is not modeled.
+- The openings are a regular pattern of the style, not a survey of the windows.
+- A figure that is `ESTIMATED` is a guess. The roofs' proportions, the plinth, the depth of the moat, the quay wall and the bridge's arches come from a photograph.
+- The renderer draws in software, with supersampling and a shadow map. A picture takes about half a minute. To walk through the castle, draw its [scan](Virtual-scans) instead.
