@@ -1688,23 +1688,35 @@ struct GameRenderer(Movable):
         self.triangles = triangles
 
     def _bin(self, width: Int, height: Int) raises -> List[List[Int32]]:
-        """List each tile's triangles, in order, for an image of a size."""
+        """List each tile's triangles, in order, for an image of a size.
+
+        Each row of tiles is listed by its own task. A task reads every
+        triangle's bounds and keeps those that reach its row, so each tile
+        lists its triangles in the order they were set up."""
         var tiles_x = (width + TILE - 1) // TILE
         var tiles_y = (height + TILE - 1) // TILE
         var bins = List[List[Int32]](
             length=tiles_x * tiles_y, fill=List[Int32]()
         )
-        var bounds = self._bounds.unsafe_ptr()
-        for j in range(self._jobs):
-            var first = self._batches[j].first
-            for t in range(first, first + self._batches[j].count):
-                var bx0 = Int(bounds[unsafe_offset=t * 4]) // TILE
-                var by0 = Int(bounds[unsafe_offset=t * 4 + 1]) // TILE
-                var bx1 = Int(bounds[unsafe_offset=t * 4 + 2]) // TILE
-                var by1 = Int(bounds[unsafe_offset=t * 4 + 3]) // TILE
-                for by in range(by0, by1 + 1):  # pragma: no branch
-                    for bx in range(bx0, bx1 + 1):  # pragma: no branch
-                        bins[by * tiles_x + bx].append(Int32(t))
+        var group = TaskGroup()
+        for row in range(tiles_y):  # pragma: no branch
+            group.create_task(
+                _bin_task(
+                    bins.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    Pointer(to=self._batches)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    self._jobs,
+                    self._bounds.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    row,
+                    tiles_x,
+                )
+            )
+        group.wait()
+        _ = len(self._batches)
+        _ = len(self._bounds)
         return bins^
 
     def _raster(
@@ -2760,6 +2772,30 @@ def _emit(
     bound[unsafe_offset=2] = Int32(Int(mxx))
     bound[unsafe_offset=3] = Int32(Int(mxy))
     bt.count += 1
+
+
+__async def _bin_task(
+    bins: MutPointer[List[Int32], MutAnyOrigin],
+    batches: Pointer[List[_Batch], ImmutAnyOrigin],
+    jobs: Int,
+    bounds: Pointer[Int32, ImmutAnyOrigin],
+    row: Int,
+    tiles_x: Int,
+):
+    """List the triangles of the first `jobs` batches that reach each tile
+    of a row of tiles, in order."""
+    var line = bins.unsafe_offset(row * tiles_x)
+    for j in range(jobs):
+        ref batch = batches[][j]
+        for t in range(batch.first, batch.first + batch.count):
+            var by0 = Int(bounds[unsafe_offset=t * 4 + 1]) // TILE
+            var by1 = Int(bounds[unsafe_offset=t * 4 + 3]) // TILE
+            if by0 > row or by1 < row:
+                continue
+            var bx0 = Int(bounds[unsafe_offset=t * 4]) // TILE
+            var bx1 = Int(bounds[unsafe_offset=t * 4 + 2]) // TILE
+            for bx in range(bx0, bx1 + 1):  # pragma: no branch
+                line[unsafe_offset=bx].append(Int32(t))
 
 
 __async def _raster_task(
