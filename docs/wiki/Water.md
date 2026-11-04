@@ -65,7 +65,17 @@ The start clock must be finite. Finite negative start times are valid. `WaterSce
 
 `reset` returns the ripples and the clock to the start. It keeps the spectrum and the glare kernels. The buffers keep their sizes for the life of the scene.
 
+`place_ripples` moves the ripple window over a part of the water, and calms it. The window is from 1 to 200 meters on a side. `splash` queues a drop at a point of the world for the next `advance`. A drop has a radius from 0 to 10 meters and a strength from 0 to 1. A drop outside the window is let go, and one step takes at most 64 drops.
+
 `render_water` is one scene step and one draw.
+
+### A basin
+
+`WaterScene.basin` holds the basin that the water fills. The default is no basin: the bed shelves as Clearwater's does.
+
+A `Basin` is round. Its inner `flat` share is level, at `depth` below the water. It rises smoothly to `rim` above the water at its radius. `basin_depth` gives the bed's depth at a point. Where the water is shallower than `BASIN_MUD_DEPTH`, 35 centimeters, `basin_mud` turns the bed toward mud.
+
+The CPU frame and the macOS host's Metal shader read the same basin. The Metal shader reads it from six of the compose words, from `WORD_BASIN`.
 
 ## Compose it with a scene
 

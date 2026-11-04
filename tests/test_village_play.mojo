@@ -25,7 +25,7 @@ from extensions.village.character import (
 )
 from extensions.village.day import DayCycle
 from extensions.village.foes import Bandit, Den, Post
-from extensions.village.gathering import CHEST, HERBS, Spot
+from extensions.village.gathering import BITING, CHEST, FISH, HERBS, Spot
 from extensions.village.house import HouseParameters, house_lot
 from extensions.humanoid.skeleton.head.expression import (
     ANGER,
@@ -731,6 +731,49 @@ def test_a_game_builds_its_animals_no_finer_than_its_quality() raises:
     # A coarser choice of the game's own is kept.
     game.residents.animal_coarseness = 5
     assert_almost_equal(game_residents(game).animal_coarseness, 5, atol=1e-9)
+
+
+def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.gathering.spots = [
+        Spot(HERBS, -4, -3, Angle(0.0, RADIAN)),
+        Spot(FISH, -4.5, 4, Angle(0.0, RADIAN)),
+    ]
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        32,
+        18,
+    )
+    assert_equal(len(game.gathering.spots), 2)
+    var step = Duration(0.25, SECOND)
+    scene.update()
+    # A downpour rings the pond.
+    game.weather.look.rain = 1
+    game.ripple_pond(scene, step)
+    var rained = len(game.village.water._drops)
+    assert_true(rained > 0)
+    # A player who wades in the pond leaves a wake, a few taps a second.
+    game.player.position = Vector3(0, game.village.level.to(METER) - 0.3, 4)
+    game.player.velocity = Vector3(1, 0, 0)
+    game.weather.look.rain = 0
+    game.ripple_pond(scene, step)
+    assert_equal(len(game.village.water._drops), rained + 1)
+    game.ripple_pond(scene, Duration(0.01, SECOND))
+    assert_equal(len(game.village.water._drops), rained + 1)
+    # A fish that bites jerks its float.
+    for index in range(len(game.gathering.spots)):
+        if game.gathering.spots[index].spot.kind == FISH:
+            game.gathering.spots[index].phase = BITING
+    game.player.velocity = Vector3(0, 0, 0)
+    game.ripple_pond(scene, step)
+    assert_true(len(game.village.water._drops) >= rained + 1)
 
 
 def main() raises:

@@ -355,6 +355,7 @@ def test_a_fish_is_cast_for_waited_on_and_hooked() raises:
     assert_false(_press(gathering, scene, shore))
     assert_equal(gathering.spots[6].phase, WAITING)
     assert_true(scene.node(hinge).visible)
+    assert_equal(len(gathering.biting(scene)), 0)
     assert_true(gathering.spots[6].timer >= 2)
     # Reel in before it bites: nothing.
     assert_false(_press(gathering, scene, shore))
@@ -368,6 +369,13 @@ def test_a_fish_is_cast_for_waited_on_and_hooked() raises:
         waited += 1
     assert_equal(gathering.spots[6].phase, BITING)
     assert_true(scene.node(hinge).position.y < gathering.water - foot)
+    # A biting fish jerks its float, where the float lies.
+    scene.update()
+    var bites = gathering.biting(scene)
+    assert_equal(len(bites), 1)
+    var floating = scene.world_position(hinge)
+    assert_almost_equal(bites[0].x, floating.x, atol=1e-6)
+    assert_almost_equal(bites[0].z, floating.z, atol=1e-6)
     # Hook it.
     assert_true(_press(gathering, scene, shore))
     assert_equal(gathering.satchel.count(FISH), 1)

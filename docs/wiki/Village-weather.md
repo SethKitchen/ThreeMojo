@@ -64,5 +64,5 @@ The thickness is found on a grid of `CLOUD_STEP`, 4, pixels and mixed bilinearly
 ## Limits
 
 - The clouds do not cast shadows, and they do not hide the sun's disk in the sky cube.
-- The rain does not wet the ground or ripple the pond.
+- The rain does not wet the ground. It rings the pond: see [Village](Village#the-basin-and-the-ripples).
 - The drops are drawn on the window. From outside, rain falls in front of a house's open door too.

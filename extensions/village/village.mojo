@@ -43,7 +43,14 @@ from extensions.vegetation.checks import (
     require_count_between,
 )
 from extensions.vegetation.field import FieldStats
-from extensions.vegetation.ground import Ground, Lot, Pond, footpath
+from extensions.vegetation.ground import (
+    POND_FLAT,
+    POND_FREEBOARD,
+    Ground,
+    Lot,
+    Pond,
+    footpath,
+)
 from extensions.vegetation.meadow import (
     Meadow,
     MeadowParameters,
@@ -88,6 +95,15 @@ from extensions.village.surfaces import HouseLooks, house_looks
 from extensions.village.terrain import Floor, Terrain
 from extensions.village.scanned import CutBuilding, scan_lot, stand_scan
 from extensions.water.frame import WaterScene
+from render.antialias import SUPERSAMPLE, downsample
+from core.fog import FogView
+from extensions.village.pond import PondLook
+from extensions.village.shore import (
+    ShoreParameters,
+    StandingShore,
+    stand_shore,
+)
+from extensions.water.optics import Basin
 from extensions.water.pebbles import PebbleBed
 from extensions.water.resolution import SpectrumResolution
 from render.framebuffer import Framebuffer
@@ -215,6 +231,8 @@ struct VillageParameters(Copyable, Movable):
     # The well, the barrels, the crates, the hay, the fences and the
     # benches.
     var props: List[Prop]
+    # The reeds, the stones and the lily pads at the pond.
+    var shore: ShoreParameters
     # Where the middle of a scanned building's footprint stands, and how
     # far it is turned, if the village has one.
     var scan_x: Float32
@@ -342,6 +360,7 @@ struct VillageParameters(Copyable, Movable):
             ref placed = self.houses[index]
             if hearthed(placed.house):
                 self.props.append(woodpile_by(placed))
+        self.shore = ShoreParameters()
         self.scan_x = 22
         self.scan_z = -78
         self.scan_turn = Angle(28.0, DEGREE)
@@ -354,7 +373,7 @@ struct VillageParameters(Copyable, Movable):
         """Refuse a village that cannot be built.
 
         Raises:
-            Error: If the meadow, a house or a prop is refused; there are
+            Error: If the meadow, a house, a prop or the shore is refused; there are
                 not from 0 to 64 houses or from 0 to 1,000 props; a house or
                 the scanned building stands
                 further than 10 kilometers away; a water resolution is not
@@ -373,6 +392,7 @@ struct VillageParameters(Copyable, Movable):
         )
         for prop in self.props:
             prop.check()
+        self.shore.check()
         for index in range(len(self.houses)):
             ref placed = self.houses[index]
             placed.house.check()
@@ -470,6 +490,58 @@ def _require_near(x: Float32, z: Float32, what: String) raises:
     require_between(z, -1.0e4, 1.0e4, what + " must stand within 10 kilometers")
 
 
+def pond_basin(ground: Ground) raises -> Basin:
+    """Return the basin that a ground's pond holds its water in.
+
+    The water's bed then follows the ground's own: level in the middle,
+    rising to the shore, and standing above the water at the rim.
+
+    Args:
+        ground: The ground.
+
+    Returns:
+        The pond's basin, or no basin for ground with no pond.
+
+    Raises:
+        Error: If the pond cannot be a basin.
+    """
+    ref pond = ground.pond
+    var radius = pond.radius.to(METER)
+    if radius <= 0:
+        return Basin()
+    var level = ground.water_level()
+    var x = pond.x.to(METER)
+    var z = pond.z.to(METER)
+    # The rim is the ground round the basin, above the water by at least
+    # its freeboard.
+    var rim = Float32(0)
+    for k in range(8):  # pragma: no branch
+        var a = Float32(k) * 0.7853982
+        rim += max(
+            ground.hills_at(x + radius * cos(a), z + radius * sin(a)) - level,
+            POND_FREEBOARD,
+        )
+    return Basin(
+        pond.x,
+        pond.z,
+        pond.radius,
+        pond.depth,
+        POND_FLAT,
+        Length(min(rim / 8, Float32(10)), METER),
+    )
+
+
+def _fill_pond(mut water: WaterScene, ground: Ground) raises:
+    """Give the water its pond's basin, and lay its ripple window over the
+    pond."""
+    water.basin = pond_basin(ground)
+    ref pond = ground.pond
+    var radius = pond.radius.to(METER)
+    water.place_ripples(
+        pond.x, pond.z, Length(min(2 * radius + 1, Float32(200)), METER)
+    )
+
+
 struct Village(Movable):
     """The village in a scene: its meadow, its buildings and its pond."""
 
@@ -484,10 +556,15 @@ struct Village(Movable):
     var doors: Doors
     # The props, and what of them stops a character.
     var props: StandingProps
+    # The reeds, the stones and the lily pads at the pond.
+    var shore: StandingShore
     # The lot of the scanned building, if the village has one.
     var scanned: Optional[Lot]
     # The houses' materials, which the props wear too.
     var looks: HouseLooks
+    # What finishes the pond's water: the mirrored village, the fog and
+    # the stars.
+    var look: PondLook
 
     def __init__(
         out self,
@@ -553,6 +630,9 @@ struct Village(Movable):
                 self.doors.add(hinge, standing.interior.doorways[hinge.door])
             self.houses.append(standing^)
         self.props = stand_props(scene, assets, looks, parameters.props, ground)
+        self.shore = stand_shore(
+            scene, assets, looks, parameters.shore, ground, meadow.lots
+        )
         self.scanned = None
         if scan:
             self.scanned = stand_scan(
@@ -576,6 +656,8 @@ struct Village(Movable):
         )
         self.bed = bed^
         self.level = Length(ground.water_level(), METER)
+        _fill_pond(self.water, ground)
+        self.look = PondLook()
 
     def terrain(self) -> Terrain:
         """Return what carries and stops a character in the village.
@@ -660,6 +742,24 @@ struct Village(Movable):
         self.water.advance(Duration(max(Float32(0), later), SECOND), False)
         return self.meadow.update(scene, assets, camera, time)
 
+    def splash(
+        mut self, x: Float32, z: Float32, radius: Length, strength: Float32
+    ) raises:
+        """Ripple the pond at a point on the next `update`.
+
+        A point out of the pond's ripple window is let go.
+
+        Args:
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+            radius: The drop's radius, from 0 to 10 meters.
+            strength: How far the drop pulls the water down, from 0 to 1.
+
+        Raises:
+            Error: If the point is not finite, or a value is out of range.
+        """
+        self.water.splash(Length(x, METER), Length(z, METER), radius, strength)
+
     def render(
         mut self,
         mut renderer: Renderer,
@@ -682,6 +782,18 @@ struct Village(Movable):
             Error: If the scene cannot be drawn, or the camera is not a
                 centered perspective camera above the water.
         """
-        var image = renderer.render(scene, assets, camera)
+        # The water is composed into each sample before they are averaged:
+        # composed after, a grass blade that covers one sample of a pixel
+        # keeps the whole pixel from the water, and shows as a dark line.
+        var image = renderer.supersampled().render(
+            scene, assets, camera
+        ) if renderer.antialias else renderer.render(scene, assets, camera)
+        var before = image.depth.copy()
         _ = self.water.compose(image, scene, camera, self.level, self.bed)
+        self.look.clock = self.water.clock.to(SECOND)
+        _ = self.look.apply(
+            image, before, camera, self.level, FogView(scene.fog), 0
+        )
+        if renderer.antialias:
+            return downsample(image, SUPERSAMPLE)
         return image^

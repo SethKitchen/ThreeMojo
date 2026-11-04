@@ -316,6 +316,28 @@ struct DayCycle(ImplicitlyCopyable):
         _ = len(image.pixels)
 
 
+def star_at(d: Vector3) -> Float32:
+    """Return how bright the star is that a direction meets.
+
+    The sky is cut into cells of `1 / STAR_GRID` along each axis, and a
+    `STARS` share of them hold a star.
+
+    Args:
+        d: A unit direction.
+
+    Returns:
+        The star's brightness, from 120 to 255 sRGB, or zero for none.
+    """
+    var cell = hash01(
+        Int(floor(d.x * STAR_GRID)),
+        Int(floor(d.z * STAR_GRID)) * 977 + Int(floor(d.y * STAR_GRID)),
+        83,
+    )
+    if cell < STARS:
+        return 120 + 135 * hash01(Int(cell * 1.0e7), 1, 84)
+    return 0
+
+
 __async def _night_rows(
     depth: Pointer[Float32, ImmutAnyOrigin],
     pixels: MutPointer[UInt8, MutAnyOrigin],
@@ -353,14 +375,9 @@ __async def _night_rows(
                 + (DUSK_ORANGE * 1.15 - Vector3(1, 1, 1)) * (dusk * low)
             )
             c = c + (NIGHT_SKY - c) * (1 - day)
-            var cell = hash01(
-                Int(floor(d.x * STAR_GRID)),
-                Int(floor(d.z * STAR_GRID)) * 977 + Int(floor(d.y * STAR_GRID)),
-                83,
-            )
-            if cell < STARS:
+            var bright = star_at(d)
+            if bright > 0:
                 # A star fades into the haze near the horizon.
-                var bright = 120 + 135 * hash01(Int(cell * 1.0e7), 1, 84)
                 var seen = stars * smoothstep(0.03, 0.12, d.y)
                 c = c + (Vector3(bright, bright, bright * 0.95) - c) * seen
             pixels[unsafe_offset=p] = UInt8(Int(min(Float32(255), c.x)))

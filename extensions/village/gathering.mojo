@@ -981,6 +981,24 @@ struct Gathering(Movable):
         )
         self.meshes = len(scene.meshes) - before
 
+    def biting(self, scene: Scene) raises -> List[Vector3]:
+        """Return where a fish bites at a float, one point for each.
+
+        Args:
+            scene: The scene, with current world matrices.
+
+        Returns:
+            The world place of each float that jerks with a bite.
+
+        Raises:
+            Error: If a float's node is not in the scene.
+        """
+        var out = List[Vector3]()
+        for spot in self.spots:
+            if spot.phase == BITING:
+                out.append(scene.world_position(spot.hinge))
+        return out^
+
     def obstacles(self) -> List[Obstacle]:
         """Return each solid spot as round: a boulder, a chest and a berry
         bush.

@@ -86,7 +86,9 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | `weather.mojo` | `WeatherKind`, `WeatherLook`, `weather_look`, `cloud_cover` and `Weather`. See [Village weather](Village-weather). |
 | `surfaces.mojo` | The textures, `HouseLooks` and `house_looks`. |
 | `scanned.mojo` | `CutBuilding`, `cut_building`, `grid_voxel`, `linear_splats`, `scan_lot` and `stand_scan`. |
-| `village.mojo` | `HousePlacement`, `VillageParameters` and `Village`. |
+| `pond.mojo` | `PondLook` and `water_mask`. |
+| `shore.mojo` | `ShoreParameters`, `StandingShore` and `stand_shore`. |
+| `village.mojo` | `HousePlacement`, `VillageParameters`, `pond_basin` and `Village`. |
 
 ## The default village
 
@@ -166,11 +168,47 @@ The pond's water is a `WaterScene`. Its sun is the meadow's sun, so the water's 
 
 `render` composes the water into the picture at the ground's `water_level`. The water is an endless plane, and the composition tests it against the depth of each pixel. The ground outside the basin lies above the water, so the water shows only in the basin. Grass and trees in front of the water keep their pixels.
 
+When the renderer supersamples, `render` composes the water into each sample before it averages them. So a grass blade that covers one sample of a pixel does not keep the whole pixel from the water.
+
 `update` moves the water's clock on to the frame's time. An earlier time leaves the clock where it is, because the water's state moves only forward.
+
+### The basin and the ripples
+
+`pond_basin` gives the water the pond's own basin. The water's bed is level in the middle and rises to the shore, as the ground does. So the water grows shallow toward its edge. Where it is shallower than 35 centimeters, its bed turns to mud. See [Water](Water#a-basin).
+
+The water's ripple window lies over the pond, one meter wider than the pond. `Village.splash` taps the water at a point on the next `update`. The game taps the pond in three ways:
+
+| What | Where | How often |
+|---|---|---|
+| Rain | At random points of the pond | 40 drops a second in a downpour, fewer in lighter rain |
+| A wading player | At the player's feet, while the player moves faster than 0.3 meters a second | Every 0.18 seconds |
+| A bite at a fishing float | At the float | Every frame of the bite |
+
+### The shore
+
+`stand_shore` dresses the pond's edge. `VillageParameters.shore` holds how much of each part it draws:
+
+| Part | Count | Where |
+|---|---|---|
+| Reeds | 16 clumps of 5 to 11 blades, in four beds | Where the water is at most 15 centimeters deep, and on the mud up to 12 centimeters above it |
+| Cattails | In about a third of the clumps | Near the top of every fourth blade |
+| Stones | 30 | On the damp band, from 6 centimeters under the water to 12 centimeters above it |
+| Lily pads | 14, some with a flower | Where the water is 60 centimeters deep or more |
+
+Nothing of the shore stands on a lot or its apron, and nothing of it stops a character. No grass blade roots under the water, no seed head stands on the wet shore, and no litter lies on the bed. The mud is darkest at the water's edge, and it dries over the 12 centimeters above it.
+
+### What the water mirrors
+
+`PondLook` finishes the water after the composition. `render` and the game both use it:
+
+1. **The village.** Each pixel above the water is mirrored in the water's plane. The mirror image shows at the water's Fresnel share, at most 85 percent, and it trembles a pixel or two. Where the frame does not show what the water would mirror, the water keeps its own sky.
+2. **The fog.** The water fades into the scene's fog by its distance, as the triangles do.
+3. **The stars.** At night, the water mirrors the stars of the sky. See [Village day and night](Village-day).
 
 ## Limits
 
-- The water does not reflect the houses, the trees or the sky cube. It reflects the Clearwater sky.
+- The water mirrors only what the frame shows. A house out of the frame, or behind another one, is not in the water. The water's own sky is the Clearwater sky, not the sky cube.
+- On a GPU that composes the water, the water does not mirror the village, the fog or the stars.
 - A house is a box of stories under one gable roof. It has no porch and no wing. Its upper stories have no stairs.
 - A scanned building's splats are lit by the scan's own light, not by the meadow's sun. They cast no shadow.
 - A lot keeps plants off the ground, but it does not level the ground. The plinth and the sunk foot fill the slope.

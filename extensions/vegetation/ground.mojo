@@ -68,6 +68,8 @@ comptime SOIL = Vector3(0.070, 0.074, 0.030)
 # in a tree's shade.
 comptime DIRT = Vector3(0.260, 0.190, 0.115)
 comptime DIRT_DARK = Vector3(0.140, 0.100, 0.060)
+comptime DAMP = Vector3(0.075, 0.058, 0.040)
+"""The linear color of wet mud at the water's edge."""
 comptime LITTER = Vector3(0.070, 0.050, 0.026)
 # The trail's course: its x where it passes z = `TRAIL_Z`, how far it
 # drifts toward +x for each meter toward -z, and how far and how long it
@@ -90,6 +92,8 @@ comptime POND_FLAT = Float32(0.3)
 comptime POND_DROP = Float32(0.3)
 comptime POND_FREEBOARD = Float32(0.05)
 comptime POND_SHORE = Float32(0.3)
+comptime POND_DAMP = Float32(0.12)
+"""How far above the pond's water its shore is damp and dark, in meters."""
 # How far out from a pond's middle the grass is short, as a multiple of
 # its radius, so the water shows from eye height.
 comptime POND_LAWN = Float32(1.6)
@@ -430,6 +434,21 @@ struct Ground(ImplicitlyCopyable):
             self.height_at(x, z) < self.water_level() + POND_SHORE
         )
 
+    def drowned(self, x: Float32, z: Float32) -> Bool:
+        """Return whether a point of the ground lies below the pond's water.
+
+        Args:
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+
+        Returns:
+            True in a pond's basin below its water, and False everywhere
+            else and for ground with no pond.
+        """
+        return self._in_basin(x, z) and (
+            self.height_at(x, z) < self.water_level()
+        )
+
     def _in_basin(self, x: Float32, z: Float32) -> Bool:
         """Return whether a point is within the pond's basin."""
         var dx = x - self.pond.x.to(METER)
@@ -647,7 +666,27 @@ struct Ground(ImplicitlyCopyable):
         ) + 0.3 * value_noise(x / 0.35, z / 0.35, self.seed + 63)
         var dirt = DIRT + (DIRT_DARK - DIRT) * mottle
         var ground = SOIL + (dirt - SOIL) * self.bare(x, z)
+        ground = ground + (DAMP - ground) * self.damp(x, z)
         return ground + (green - ground) * self.cover(x, z)
+
+    def damp(self, x: Float32, z: Float32) -> Float32:
+        """Return how wet the pond's shore is at a point, from zero to one.
+
+        The mud is darkest at the water's edge, and it dries over the
+        `POND_DAMP` above it.
+
+        Args:
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+
+        Returns:
+            One at the water and below it, zero `POND_DAMP` above it and
+            outside the basin.
+        """
+        if not self._in_basin(x, z):
+            return 0
+        var level = self.water_level()
+        return _ramp(level + POND_DAMP, level, self.height_at(x, z))
 
     def mesh(
         self, span: Length, cells: Int, center_x: Float32, center_z: Float32

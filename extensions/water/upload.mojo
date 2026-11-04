@@ -172,7 +172,7 @@ def convolve_glare(
     return glare_convolve(samples, sw, sh, scene._glare.value())
 
 
-comptime COMPOSE_WORDS = 256
+comptime COMPOSE_WORDS = 264
 """How many 32-bit words `ComposeUpload.words` holds."""
 comptime WORD_WIDTH = 24
 """The word that holds the frame's width."""
@@ -192,6 +192,10 @@ comptime WORD_CAUSTIC_TABLE = 96
 """The first word of the caustic level table."""
 comptime WORD_PEBBLE_TABLE = 160
 """The first word of the pebble level table."""
+comptime WORD_BASIN = 256
+"""The first of six words that hold the water's basin as floats: its
+middle's x and z, its radius, its depth, its level share and its rim. A
+radius of zero is no basin."""
 
 
 def grid_samples(size: Int, step: Int) -> Int:
@@ -334,4 +338,11 @@ struct ComposeUpload(Movable):
         _words(words, WORD_SURFACE_TABLE, 64, self._surface_table)
         _words(words, WORD_CAUSTIC_TABLE, 64, self._caustic_table)
         _words(words, WORD_PEBBLE_TABLE, 96, self._pebble_table)
+        ref basin = scene.basin
+        words[WORD_BASIN] = bitcast[DType.uint32](basin.x)
+        words[WORD_BASIN + 1] = bitcast[DType.uint32](basin.z)
+        words[WORD_BASIN + 2] = bitcast[DType.uint32](basin.radius)
+        words[WORD_BASIN + 3] = bitcast[DType.uint32](basin.depth)
+        words[WORD_BASIN + 4] = bitcast[DType.uint32](basin.flat)
+        words[WORD_BASIN + 5] = bitcast[DType.uint32](basin.rim)
         self.words = words^

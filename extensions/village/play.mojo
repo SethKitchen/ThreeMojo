@@ -87,6 +87,8 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.field import FieldStats
 from extensions.vegetation.ground import Lot, lot_openness
 from extensions.vegetation.meadow import EXPOSURE, FARTHEST
+from extensions.vegetation.noise import hash01
+from core.fog import FogView
 from extensions.village.character import (
     Character,
     CharacterParameters,
@@ -186,7 +188,7 @@ from render.game_smooth import smooth_edges
 from render.game_upscale import upscale_into
 from renderers.game_renderer import FULL_SHADOWS, GameRenderer
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, exp, sin
+from std.math import cos, exp, sin, sqrt
 from std.time import perf_counter_ns
 from units.si import (
     DEGREE,
@@ -207,6 +209,10 @@ comptime TRUNK = Float32(0.35)
 """A tree's trunk radius for a planting of size 1, in meters."""
 comptime CALM = Float32(0.1)
 """A look stick that leans less than this lets the camera trail."""
+comptime RAIN_RINGS = Float32(40)
+"""How many drops a second ring the pond in a downpour."""
+comptime WAKE_EVERY = Float32(0.18)
+"""The seconds between two taps of a wading player's wake."""
 comptime SIGHT_POINTS = 4
 """How many points along the camera's sight hold a door open."""
 comptime INSIDE_REACH = Float32(18)
@@ -504,6 +510,12 @@ struct VillageGame(Movable):
     var reach: Float32
     # The game's clock, in seconds.
     var clock: Float32
+    # The rain's drops on the pond that are owed to the next frame, how
+    # many drops have fallen, and the seconds until a wading player's
+    # next wake.
+    var rain_rings: Float32
+    var splashes: Int
+    var wake: Float32
     # How finely each part of a frame is drawn, the window's size, and the
     # renderer that draws the frame at its smaller size.
     var quality: GameQuality
@@ -713,6 +725,9 @@ struct VillageGame(Movable):
         self.day = parameters.day
         self.weather_ms = 0
         self.clock = 0
+        self.rain_rings = 0
+        self.splashes = 0
+        self.wake = 0
         self.village.meadow.register_shadings(self.fast, assets)
         self.fast.set_shadows(self.quality.shadows, self.quality.shadow_size)
         var movers = List[NodeId]()
@@ -962,6 +977,7 @@ struct VillageGame(Movable):
             scene.node(house.inside).visible = dx * dx + dz * dz < near * near
         scene.update()
         self.clock += delta.to(SECOND)
+        self.ripple_pond(scene, delta)
         var stats = self.village.update(
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
@@ -977,6 +993,51 @@ struct VillageGame(Movable):
         )
         self.day.light(scene, roofed)
         return stats
+
+    def ripple_pond(mut self, scene: Scene, delta: Duration) raises:
+        """Tap the pond where something stirs it this frame: the rain, a
+        wading player, and a fish that bites at a float.
+
+        Args:
+            scene: The scene, with current world matrices.
+            delta: The frame's time.
+
+        Raises:
+            Error: If a float's node is not in the scene.
+        """
+        ref ground = self.village.meadow.field.ground
+        ref pond = ground.pond
+        var radius = pond.radius.to(METER)
+        var seconds = delta.to(SECOND)
+        var level = self.village.level.to(METER)
+        # Rain rings: about `RAIN_RINGS` drops a second in a downpour.
+        self.rain_rings += self.weather.look.rain * RAIN_RINGS * seconds
+        var falling = min(Int(self.rain_rings), 32)
+        self.rain_rings -= Float32(Int(self.rain_rings))
+        for _ in range(falling):
+            self.splashes += 1
+            var a = hash01(self.splashes, 1, 71) * 6.2831855
+            var r = radius * sqrt(hash01(self.splashes, 2, 71))
+            self.village.splash(
+                pond.x.to(METER) + r * cos(a),
+                pond.z.to(METER) + r * sin(a),
+                Length(0.12, METER),
+                0.02 + 0.03 * hash01(self.splashes, 3, 71),
+            )
+        # A wading player leaves a wake, a few taps a second.
+        ref feet = self.player.position
+        self.wake -= seconds
+        if (
+            ground.drowned(feet.x, feet.z)
+            and feet.y < level + 0.05
+            and self.player.speed().to(METER_PER_SECOND) > 0.3
+            and self.wake <= 0
+        ):
+            self.wake = WAKE_EVERY
+            self.village.splash(feet.x, feet.z, Length(0.35, METER), 0.05)
+        # A fish that bites jerks its float.
+        for at in self.gathering.biting(scene):
+            self.village.splash(at.x, at.z, Length(0.15, METER), 0.03)
 
     def render(mut self, scene: Scene, assets: Assets) raises:
         """Draw the frame that `tick` prepared into `window`.
@@ -1097,8 +1158,7 @@ struct VillageGame(Movable):
             if self.village.pond_seen(self.camera):
                 # The water is lit by its own sky: it darkens with the night.
                 var share = self.day.water_light()
-                var dark = share < 1
-                var before = image.depth.copy() if dark else List[Float32]()
+                var before = image.depth.copy()
                 _ = self.village.water.compose(
                     image,
                     scene,
@@ -1106,8 +1166,21 @@ struct VillageGame(Movable):
                     self.village.level,
                     self.village.bed,
                 )
-                if dark:
+                if share < 1:
                     dim_water(image, before, share)
+                # The pond mirrors the village and the stars, and fades into
+                # the fog.
+                var clear = 1 - self.weather.look.clouds
+                var stars = self.day.night_look(self.camera, clear).stars
+                self.village.look.clock = self.clock
+                _ = self.village.look.apply(
+                    image,
+                    before,
+                    self.camera,
+                    self.village.level,
+                    FogView(scene.fog),
+                    stars,
+                )
             watered = perf_counter_ns()
             self.weather.cover(image, self.camera)
             self.day.night_sky(image, self.camera, 1 - self.weather.look.clouds)

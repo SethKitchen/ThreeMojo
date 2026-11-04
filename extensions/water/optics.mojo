@@ -18,7 +18,7 @@ from math.utils import mix_bilinear, mix_delta
 from math.norm import squared_length2, squared_length3
 from math.vector3 import Vector3, mix_delta3
 from std.math import cos, exp, floor, fma, max, pow, sin, sqrt
-from units.si import DEGREE, Angle
+from units.si import DEGREE, METER, Angle, Length
 
 
 def water_ior() -> Float32:
@@ -453,6 +453,137 @@ def floor_depth(x: Float32, z: Float32) -> Float32:
         + 0.30 * (value_noise(x * 0.22, z * 0.22) - 0.5)
         + 0.10 * (value_noise(x * 0.9 + 7.0, z * 0.9 + 7.0) - 0.5)
     )
+
+
+comptime BASIN_MUD = Vector3(0.075, 0.058, 0.040)
+"""The linear albedo of the mud at a basin's shallow edge."""
+comptime BASIN_MUD_DEPTH = Float32(0.35)
+"""How shallow a basin's water is, in meters, where its bed starts to turn
+to mud."""
+
+
+struct Basin(ImplicitlyCopyable):
+    """A round basin that the water fills, in place of the shelving bed.
+
+    The basin's floor lies `depth` below the still water. Its inner `flat`
+    share of the radius is level, and the floor rises smoothly to `rim`
+    above the water at `radius`, as a meadow's pond does. A basin with no
+    radius is no basin: the water keeps Clearwater's shelving bed.
+
+    The lengths are kept in meters, as the shaders read them.
+    """
+
+    var x: Float32
+    """The basin's middle x, in meters."""
+    var z: Float32
+    """The basin's middle z, in meters."""
+    var radius: Float32
+    """How far out the basin reaches, in meters. Zero is no basin."""
+    var depth: Float32
+    """How far below the water the floor lies, in meters."""
+    var flat: Float32
+    """The share of the radius that is level floor, from 0 to 1."""
+    var rim: Float32
+    """How far above the water the ground stands at the radius, in
+    meters."""
+
+    def __init__(out self):
+        """Make no basin: the water keeps its shelving bed."""
+        self.x = 0
+        self.z = 0
+        self.radius = 0
+        self.depth = 0
+        self.flat = 0
+        self.rim = 0
+
+    def __init__(
+        out self,
+        x: Length,
+        z: Length,
+        radius: Length,
+        depth: Length,
+        flat: Float32,
+        rim: Length,
+    ) raises:
+        """Make a basin round a middle.
+
+        Args:
+            x: The middle's x.
+            z: The middle's z.
+            radius: How far out the basin reaches. It must be from 0 to 1
+                kilometer.
+            depth: How far below the water the floor lies. It must be from
+                0 to 50 meters.
+            flat: The share of the radius that is level floor, from 0 to
+                below 1.
+            rim: How far above the water the ground stands at the edge,
+                from 0 to 10 meters.
+
+        Raises:
+            Error: If a value is out of its range or not finite.
+        """
+        var r = radius.to(METER)
+        var d = depth.to(METER)
+        var h = rim.to(METER)
+        if not (r >= 0 and r <= 1000):
+            raise Error("A basin must be from 0 to 1 kilometer across")
+        if not (d >= 0 and d <= 50):
+            raise Error("A basin must be from 0 to 50 meters deep")
+        if not (flat >= 0 and flat < 1):
+            raise Error("A basin's level floor must be from 0 to below 1")
+        if not (h >= 0 and h <= 10):
+            raise Error("A basin's rim must stand from 0 to 10 meters up")
+        var cx = x.to(METER)
+        var cz = z.to(METER)
+        if not (abs(cx) <= 1.0e4 and abs(cz) <= 1.0e4):
+            raise Error("A basin must lie within 10 kilometers")
+        self.x = cx
+        self.z = cz
+        self.radius = r
+        self.depth = d
+        self.flat = flat
+        self.rim = h
+
+
+def basin_depth(basin: Basin, x: Float32, z: Float32) -> Float32:
+    """Return how deep the bed is under a point of the water, in meters.
+
+    Args:
+        basin: The basin. With no radius, the water keeps the shelving bed
+            of `floor_depth`.
+        x: World x.
+        z: World z.
+
+    Returns:
+        The depth. It is negative where the bed stands above the water,
+        on a basin's rim and outside it.
+    """
+    if basin.radius <= 0:
+        return floor_depth(x, z)
+    var dx = x - basin.x
+    var dz = z - basin.z
+    var r = sqrt(dx * dx + dz * dz)
+    var inner = basin.radius * basin.flat
+    var t = (r - basin.radius) / (inner - basin.radius)
+    t = clamp01(t)
+    var fall = t * t * (3.0 - 2.0 * t)
+    return fall * (basin.depth + basin.rim) - basin.rim
+
+
+def basin_mud(basin: Basin, depth: Float32) -> Float32:
+    """Return how much of a basin's bed is mud at a depth, from 0 to 1.
+
+    Args:
+        basin: The basin. With no radius, no bed is mud.
+        depth: How deep the bed lies, in meters.
+
+    Returns:
+        Zero at `BASIN_MUD_DEPTH` and deeper, and 0.85 at the edge of the
+        water and above it.
+    """
+    if basin.radius <= 0:
+        return 0
+    return 0.85 * clamp01(1.0 - depth / BASIN_MUD_DEPTH)
 
 
 @fieldwise_init

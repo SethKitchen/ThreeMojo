@@ -648,6 +648,10 @@ struct GrassField(Movable):
         )
         var x = tx + cos(spread) * reach
         var z = tz + sin(spread) * reach
+        # A blade is set round its tuft, so a tuft on the shore can put a
+        # blade below the pond's water. No blade roots under the water.
+        if self.ground.drowned(x, z):
+            return None
         # Each tuft is a plant of its own: its height, the width of its
         # blades, how far they droop, their color and their sway are its
         # own. Its blades vary round them.
@@ -705,7 +709,9 @@ struct GrassField(Movable):
             curl *= 0.3
         elif pick > 1 - p.dry_share * (0.3 + 1.4 * self.ground.dryness(x, z)):
             kind = DRY_GRASS
-        elif hash01(index, key + 9, seed + 5) < p.seed_share:
+        elif hash01(
+            index, key + 9, seed + 5
+        ) < p.seed_share and not self.ground.wet(x, z):
             kind = SEED_HEAD
             height = (
                 height / (TRODDEN + (1 - TRODDEN) * cover) * SEED_LIFT / tall
