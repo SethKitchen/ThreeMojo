@@ -107,6 +107,7 @@ from extensions.water.frame import WaterScene
 from render.antialias import SUPERSAMPLE, downsample
 from core.fog import FogView
 from extensions.village.pond import PondLook
+from extensions.village.puffs import Puff, chimney_smoke, draw_puffs
 from extensions.village.shore import (
     ShoreParameters,
     StandingShore,
@@ -136,6 +137,8 @@ from units.si import (
 
 # The water's clock at the start, in seconds: the Clearwater page's.
 comptime WATER_START = Float32(5)
+comptime SMOKE_DRIFT = Float32(0.6)
+"""How fast the wind carries the chimneys' smoke, in meters a second."""
 # The texels on a side of each texture of the houses.
 comptime SURFACE_TEXELS = 128
 comptime PATH_WIDTH = Float32(0.8)
@@ -595,6 +598,11 @@ struct Village(Movable):
     # What finishes the pond's water: the mirrored village, the fog and
     # the stars.
     var look: PondLook
+    var chimneys: List[Vector3]
+    """The top of each chimney's pot, in the world, in the order of the
+    houses that have one."""
+    var wind: Vector3
+    """The wind that carries the chimneys' smoke, in meters a second."""
 
     def __init__(
         out self,
@@ -674,6 +682,15 @@ struct Village(Movable):
                 ground,
             )
         scene.update()
+        self.chimneys = List[Vector3]()
+        for index in range(len(self.houses)):
+            ref house = self.houses[index]
+            if house.chimney:
+                self.chimneys.append(
+                    scene.local_to_world(house.root, house.chimney.value())
+                )
+        var heading = meadow.wind.heading.to(RADIAN)
+        self.wind = Vector3(cos(heading), 0, sin(heading)) * SMOKE_DRIFT
         self.water = WaterScene(
             parameters.ocean,
             parameters.caustic_grid,
@@ -772,6 +789,22 @@ struct Village(Movable):
         self.water.advance(Duration(max(Float32(0), later), SECOND), False)
         return self.meadow.update(scene, assets, camera, time)
 
+    def smoke(self, seconds: Float32) -> List[Puff]:
+        """Return the puffs of smoke over every chimney at a time.
+
+        Args:
+            seconds: The time, in seconds.
+
+        Returns:
+            `SMOKE_PUFFS` puffs for each chimney.
+        """
+        var puffs = List[Puff]()
+        for index in range(len(self.chimneys)):
+            puffs.extend(
+                chimney_smoke(self.chimneys[index], seconds, self.wind, index)
+            )
+        return puffs^
+
     def splash(
         mut self, x: Float32, z: Float32, radius: Length, strength: Float32
     ) raises:
@@ -823,6 +856,9 @@ struct Village(Movable):
         self.look.clock = self.water.clock.to(SECOND)
         _ = self.look.apply(
             image, before, camera, self.level, FogView(scene.fog), 0
+        )
+        _ = draw_puffs(
+            image, self.smoke(self.water.clock.to(SECOND)), camera, 1
         )
         if renderer.antialias:
             return downsample(image, SUPERSAMPLE)

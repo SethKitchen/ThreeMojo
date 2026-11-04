@@ -2074,8 +2074,9 @@ def _roof(
     parameters: HouseParameters,
     half_t: Float32,
     breast: Optional[Breast],
-) raises:
-    """Add the gable roof, its gables, and the chimney over a breast."""
+) raises -> Optional[Vector3]:
+    """Add the gable roof, its gables, and the chimney over a breast, and
+    return the top of the chimney's pot, in the house's own frame."""
     var half_w = parameters.width.to(METER) / 2
     var half_d = parameters.depth.to(METER) / 2
     var base = parameters.story_height.to(METER) * Float32(parameters.stories)
@@ -2220,7 +2221,7 @@ def _roof(
                 OAK,
             )
     if not breast:
-        return
+        return None
     # A chimney through the roof, over the breast.
     ref over = breast.value()
     var cx = Float32((over.x0 + over.x1) / 2)
@@ -2249,6 +2250,7 @@ def _roof(
         Vector3(0, 0, 0.09),
         Vector3(0.75, 0.42, 0.3),
     )
+    return Vector3(cx, stack_top + 0.34, cz)
 
 
 def _end_sign(end: Int) -> Float32:
@@ -2949,6 +2951,9 @@ struct StandingHouse(Movable):
     # The hinge of each door leaf of the ground story, in the order of
     # `interior.doorways`.
     var hinges: List[Hinge]
+    var chimney: Optional[Vector3]
+    """The top of the house's chimney pot, in the house's own frame, or
+    None for a house with no chimney."""
 
     def __init__(
         out self,
@@ -2961,6 +2966,7 @@ struct StandingHouse(Movable):
         triangles: Int,
         var interior: HouseInterior,
         var hinges: List[Hinge],
+        chimney: Optional[Vector3] = None,
     ):
         """Hold a house in a scene.
 
@@ -2975,6 +2981,8 @@ struct StandingHouse(Movable):
             triangles: How many triangles they hold.
             interior: Where a character can walk in it.
             hinges: The hinge of each door leaf of the ground story.
+            chimney: The top of its chimney's pot, in its own frame, or
+                None for a house with no chimney.
         """
         self.root = root
         self.inside = inside
@@ -2985,6 +2993,7 @@ struct StandingHouse(Movable):
         self.triangles = triangles
         self.interior = interior^
         self.hinges = hinges^
+        self.chimney = chimney
 
 
 def _add(
@@ -3149,8 +3158,9 @@ def stand_house(
     if breast:
         _breast_view(inside, building, breast.value(), glows)
     var half_t = Float32(building.constructions[0].thickness().value) / 2
+    var chimney = Optional[Vector3](None)
     if parameters.pitch.to(RADIAN) > 0:
-        _roof(sheets, parameters, half_t, breast)
+        chimney = _roof(sheets, parameters, half_t, breast)
         _gutters(sheets, parameters, half_t, feet[0] - floor)
     _plinth(sheets, half_x, half_z, feet[0] - floor)
     _steps(sheets, interior, lot, ground)
@@ -3263,4 +3273,5 @@ def stand_house(
         triangles,
         interior^,
         hinges^,
+        chimney,
     )

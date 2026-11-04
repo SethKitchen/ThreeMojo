@@ -87,6 +87,7 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | `surfaces.mojo` | The textures, `HouseLooks` and `house_looks`. |
 | `scanned.mojo` | `CutBuilding`, `cut_building`, `grid_voxel`, `linear_splats`, `scan_lot` and `stand_scan`. |
 | `pond.mojo` | `PondLook` and `water_mask`. |
+| `puffs.mojo` | `Puff`, `chimney_smoke`, `dust_puffs` and `draw_puffs`. |
 | `shore.mojo` | `ShoreParameters`, `StandingShore` and `stand_shore`. |
 | `village.mojo` | `HousePlacement`, `VillageParameters`, `pond_basin` and `Village`. |
 
@@ -150,6 +151,22 @@ The default village has the green's props, and barrels, crates and hay before th
 Each fence and each hedge is a wall span of the terrain. Crops stop nobody. Each other prop is a solid lot. The residents' routes keep off the props. A lamp post's glowing glass hangs from `StandingProps.lit`, and its cold glass from `StandingProps.daylit`. The game shows one of them with the houses' lamps.
 
 The ground at the foot of each building is dark with grime, out to `GRIME_REACH`, 0.9 meters, from its lot. See `lot_grime` in [Vegetation](Vegetation#ponds-and-lots).
+
+## Chimney smoke
+
+Smoke rises from the pot of each house with a hearth. `StandingHouse.chimney` holds the top of the pot, and `Village.chimneys` holds each pot in the world. `Village.smoke` gives the puffs over every chimney at a time.
+
+| Part | Value |
+|---|---|
+| Puffs over a chimney at once | `SMOKE_PUFFS`, 14 |
+| A puff's life | `SMOKE_LIFE`, 8 seconds |
+| How fast a puff rises | `SMOKE_RISE`, 0.55 meters a second, slowing as it rises |
+| How fast the wind carries it | `SMOKE_DRIFT`, 0.6 meters a second, along the meadow's wind |
+| How large it grows | From 0.22 meters across its middle to 1.42 meters |
+
+A puff has no state of its own. `chimney_smoke` finds it from the time alone, so the same time gives the same smoke.
+
+The renderers draw opaque triangles only. So `draw_puffs` blends each puff into the finished frame as a soft disc that faces the camera. A pixel nearer than the puff's middle keeps its color, so smoke behind a wall does not show through it. The puffs are drawn far to near. `render` draws the smoke into the still, and the game draws it after the night's sky, dimmer at night. `dust_puffs` gives the dust that a foot kicks up.
 
 ## Lots
 
@@ -222,7 +239,8 @@ Nothing of the shore stands on a lot or its apron, and nothing of it stops a cha
 ## Limits
 
 - The water mirrors only what the frame shows. A house out of the frame, or behind another one, is not in the water. The water's own sky is the Clearwater sky, not the sky cube.
-- On a GPU that composes the water, the water does not mirror the village, the fog or the stars.
+- On a GPU that composes the water, the water does not mirror the village, the fog or the stars. The chimneys do not smoke there.
+- A puff of smoke is lit by the hour, not by the sun. It casts no shadow, and the fog does not fade it.
 - A house is a box of stories under one gable roof. It has no porch and no wing. Its upper stories have no stairs.
 - A scanned building's splats are lit by the scan's own light, not by the meadow's sun. They cast no shadow.
 - A lot keeps plants off the ground, but it does not level the ground. The plinth and the sunk foot fill the slope.

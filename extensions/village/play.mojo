@@ -140,6 +140,7 @@ from extensions.village.combat import (
 from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.faces import FaceLife, face_reach
 from extensions.village.day import DayCycle, dim_water
+from extensions.village.puffs import draw_puffs
 from extensions.village.gpu_post import GpuPost
 from extensions.village.talk import (
     DONE,
@@ -1186,6 +1187,11 @@ struct VillageGame(Movable):
             watered = perf_counter_ns()
             self.weather.cover(image, self.camera)
             self.day.night_sky(image, self.camera, 1 - self.weather.look.clouds)
+            # The chimneys smoke over the finished frame, dim at night.
+            var light = 0.2 + 0.8 * self.day.daylight()
+            _ = draw_puffs(
+                image, self.village.smoke(self.clock), self.camera, light
+            )
             covered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
         self.water_ms = Float64(watered - drawn) / 1.0e6
