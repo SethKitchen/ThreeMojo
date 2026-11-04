@@ -11,6 +11,7 @@ from extensions.village.gathering import KINDS
 from extensions.village.progress import (
     MAGIC_BYTES,
     MOST_KEPT,
+    PLACE_SHIFT,
     PROGRESS_VERSION,
     Progress,
     pack_progress,
@@ -52,7 +53,7 @@ def test_a_progress_packs_and_comes_back() raises:
     var p = _gained()
     var bytes = pack_progress(p)
     var groups = SKILLS + KINDS + len(default_combos())
-    assert_equal(len(bytes), MAGIC_BYTES + 3 + 3 + 4 * groups)
+    assert_equal(len(bytes), MAGIC_BYTES + 3 + 3 + 4 * groups + 4)
     assert_equal(Int(bytes[0]), 84)
     assert_equal(Int(bytes[MAGIC_BYTES]), PROGRESS_VERSION)
     var back = unpack_progress(bytes)
@@ -62,6 +63,28 @@ def test_a_progress_packs_and_comes_back() raises:
     assert_equal(back.mastery[3], 400)
     assert_true(back.specialty == MAGIC)
     assert_true(back.style == ARCHERY)
+    assert_equal(len(back.place), 0)
+    # The world's part packs and comes back.
+    p.errands = [1, 2]
+    p.rounds = [0, 3]
+    p.spent = [12]
+    p.place = [PLACE_SHIFT + 5, PLACE_SHIFT - 7, PLACE_SHIFT + 14000, 2]
+    var world = unpack_progress(pack_progress(p))
+    assert_equal(world.errands[1], 2)
+    assert_equal(world.rounds[1], 3)
+    assert_equal(world.spent[0], 12)
+    assert_equal(world.place[1], PLACE_SHIFT - 7)
+    # A place is four numbers or none, and each list holds at most 255.
+    p.place = [1, 2, 3]
+    with assert_raises(contains="four numbers"):
+        p.check()
+    p.place = List[Int]()
+    p.spent = List[Int](length=256, fill=0)
+    with assert_raises(contains="255"):
+        p.check()
+    p.spent = [-1]
+    with assert_raises(contains="2,147,483,647"):
+        p.check()
 
 
 def test_an_older_record_reads_with_zero_for_the_rest() raises:
@@ -73,6 +96,8 @@ def test_an_older_record_reads_with_zero_for_the_rest() raises:
     for k in range(at):
         older.append(bytes[k])
     older.append(0)
+    # A record of version 1 has no world's part.
+    older[MAGIC_BYTES] = 1
     var back = unpack_progress(older)
     assert_equal(back.experience[0], 120)
     assert_equal(back.mastery[3], 0)
@@ -127,9 +152,23 @@ def test_a_packed_progress_refuses_bad_bytes() raises:
             _ = unpack_progress(later)
     # It ends in the middle of a group, or before one.
     var cut = good.copy()
-    _ = cut.pop()
+    for _ in range(5):
+        _ = cut.pop()
     with assert_raises(contains="ends before its combos"):
         _ = unpack_progress(cut)
+    for lost in [1, 2, 3, 4]:
+        var ended = good.copy()
+        for _ in range(lost):
+            _ = ended.pop()
+        with assert_raises(contains="ends before"):
+            _ = unpack_progress(ended)
+    var listed = _gained()
+    listed.spent = [1, 2]
+    var spots = pack_progress(listed)
+    for _ in range(2):
+        _ = spots.pop()
+    with assert_raises(contains="ends before its spots"):
+        _ = unpack_progress(spots)
     var header = List[UInt8]()
     for k in range(MAGIC_BYTES + 3):
         header.append(good[k])

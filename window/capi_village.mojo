@@ -128,12 +128,19 @@ def tm_create(
 
 @export("tm_destroy")
 def tm_destroy(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> None:
-    """Free an app. The handle must not be used again.
+    """Keep the game's progress, if it keeps it, and free an app. The handle
+    must not be used again.
 
     Args:
         handle: A handle from `tm_create`.
     """
     var app = _app(handle)
+    # The game keeps its progress as it ends, if it keeps it anywhere. A
+    # file that cannot be written loses only this game's progress.
+    try:
+        app[].keep()
+    except:
+        print("The village's progress could not be kept", file=stderr)
     _ = app.unsafe_take_pointee()
     app.unsafe_free()
 

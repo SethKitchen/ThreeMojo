@@ -100,12 +100,12 @@ struct GatherKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the seven kinds there are.
+        """Return True if this is one of the eight kinds there are.
 
         Returns:
             Whether the value names a kind.
         """
-        return ordinal_valid(self.value, 6)
+        return ordinal_valid(self.value, 7)
 
 
 comptime HERBS = GatherKind(0)
@@ -115,8 +115,13 @@ comptime ORE = GatherKind(3)
 comptime CHEST = GatherKind(4)
 comptime TRINKET = GatherKind(5)
 comptime FISH = GatherKind(6)
-comptime KINDS = 7
-"""How many kinds of spot there are."""
+comptime SEAL = GatherKind(7)
+"""A bandit's seal, which a fallen bandit gives. No spot gives one."""
+comptime KINDS = 8
+"""How many kinds of thing a satchel holds."""
+comptime SPOT_KINDS = 7
+"""How many kinds of spot there are: every kind but the seal, which comes
+from bandits."""
 
 
 def kind_name(kind: GatherKind) raises -> String:
@@ -126,14 +131,14 @@ def kind_name(kind: GatherKind) raises -> String:
         kind: The kind.
 
     Returns:
-        "herbs", "mushrooms", "berries", "ore", "coins", "trinkets" or
-        "fish".
+        "herbs", "mushrooms", "berries", "ore", "coins", "trinkets",
+        "fish" or "seals".
 
     Raises:
         Error: If the kind is not one.
     """
     if not kind.is_valid():
-        raise Error("A gathering kind must be one of the seven")
+        raise Error("A gathering kind must be one of the eight")
     var names: List[String] = [
         "herbs",
         "mushrooms",
@@ -142,6 +147,7 @@ def kind_name(kind: GatherKind) raises -> String:
         "coins",
         "trinkets",
         "fish",
+        "seals",
     ]
     return names[kind.value]
 
@@ -193,11 +199,13 @@ struct Spot(ImplicitlyCopyable):
         """Refuse a spot that cannot be drawn.
 
         Raises:
-            Error: If the kind is not one, or the spot stands further than
-                10 kilometers away.
+            Error: If the kind is not one, or is a seal, or the spot stands
+                further than 10 kilometers away.
         """
         if not self.kind.is_valid():
-            raise Error("A gathering kind must be one of the seven")
+            raise Error("A gathering kind must be one of the eight")
+        if self.kind == SEAL:
+            raise Error("A seal comes from a bandit, not from a spot")
         require_between(
             self.x, -1.0e4, 1.0e4, "A spot must stand within 10 kilometers"
         )
@@ -278,7 +286,7 @@ struct Satchel(Copyable, Movable):
             Error: If the kind is not one.
         """
         if not kind.is_valid():
-            raise Error("A gathering kind must be one of the seven")
+            raise Error("A gathering kind must be one of the eight")
         return self.counts[kind.value]
 
     def total(self) -> Int:
@@ -980,6 +988,41 @@ struct Gathering(Movable):
             scene, assets, _marker(), looks.daylight, self.marker, False
         )
         self.meshes = len(scene.meshes) - before
+
+    def spent(self) -> List[Int]:
+        """Return the place of each spot that is used up for good.
+
+        Returns:
+            Each chest opened and each trinket taken, by its place in
+            `spots`.
+        """
+        var out = List[Int]()
+        for index in range(len(self.spots)):
+            ref g = self.spots[index]
+            if not g.ready and not respawns(g.spot.kind):
+                out.append(index)
+        return out^
+
+    def spend(mut self, mut scene: Scene, index: Int) raises:
+        """Use a spot up, as a game before used it: a chest stays open and
+        empty, and a trinket stays taken.
+
+        Args:
+            scene: The scene: the spot's things hide.
+            index: The spot's place in `spots`. A place that is not one is
+                let go.
+
+        Raises:
+            Error: If the spot's nodes are not in the scene.
+        """
+        if index < 0 or index >= len(self.spots):
+            return
+        ref g = self.spots[index]
+        g.ready = False
+        g.strikes = 0
+        g.wait = self.respawn
+        scene.node(g.node).visible = False
+        scene.node(g.glint).visible = False
 
     def biting(self, scene: Scene) raises -> List[Vector3]:
         """Return where a fish bites at a float, one point for each.

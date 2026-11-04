@@ -467,6 +467,12 @@ comptime KNIFE_LIFE = Float32(1.2)
 """How long a knife flies before it falls, in seconds."""
 comptime BOLT_SPEED = Float32(16)
 """How fast a companion's bolt flies, in meters a second."""
+comptime COMPANION_QUARRY = -2
+"""What a foe's quarry is while it goes for the companion: the player is
+-1, and a raider their place."""
+comptime ALLY_SHY = Float32(1.5)
+"""How much nearer than the player, in meters, the companion must be for a
+foe to go for her."""
 comptime BOLT_REACH = Float32(0.5)
 """How near its foe's chest a bolt strikes, in meters."""
 comptime BOLT_LIFE = Float32(1.5)
@@ -921,6 +927,8 @@ struct Ally(Movable):
     # attack.
     var aim: Int
     var assisting: Bool
+    var down: Float32
+    """How long she has lain fallen, in seconds, or -1 while she stands."""
 
 
 @fieldwise_init
@@ -1043,6 +1051,12 @@ struct Battle(Movable):
     var start: Vector3
     # Coins won and not yet taken, and lines for the game's note.
     var loot: Int
+    var seals: Int
+    """How many bandits' seals the player has taken and the satchel has not
+    yet."""
+    var fell: Bool
+    """Whether the player fell since the game last looked: a fall costs
+    coins."""
     var notes: List[String]
     # How many herbs the satchel holds, as the game says before each
     # frame; how many the player ate, for the game to take; and how many
@@ -1214,6 +1228,7 @@ struct Battle(Movable):
                     len(self.people) - 1,
                     -1,
                     False,
+                    -1,
                 )
             )
         var paints = animal_paints(assets)
@@ -1322,6 +1337,8 @@ struct Battle(Movable):
         self.shake = 0
         self.start = start
         self.loot = 0
+        self.seals = 0
+        self.fell = False
         self.notes = List[String]()
         self.herbs = 0
         self.eaten = 0
@@ -2155,13 +2172,25 @@ struct Battle(Movable):
                 and fighter.clock >= fighter.active_end()
                 and fighter.queued == FREE
             )
-            # It goes for the nearest of the player and the raiders who
-            # stand with them. The attack token is for the player alone.
+            # It goes for the nearest of the player, the companion and the
+            # raiders who stand with them. The attack token is for the
+            # player alone.
             var quarry = -1
             var goal = feet
             var near = Float32(1.0e9)
             if not self.fighter.defeated():
                 near = _flat(foe.character.position, feet)
+            for k in range(len(self.allies)):
+                ref ally = self.allies[k]
+                if ally.down >= 0:
+                    continue
+                var there = ally.character.position
+                # She is a quarry only once she is clearly the nearer.
+                var gap = _flat(foe.character.position, there) + ALLY_SHY
+                if gap < near:
+                    near = gap
+                    quarry = COMPANION_QUARRY
+                    goal = there
             for k in range(len(self.members)):
                 ref member = self.members[k]
                 if not member.joined or member.down >= 0:
@@ -2173,7 +2202,7 @@ struct Battle(Movable):
                     quarry = k
                     goal = there
             self.quarries[index] = quarry
-            var player_quarry = quarry < 0
+            var player_quarry = quarry == -1
             var sight = Sight(
                 foe.character.position,
                 foe.home,
@@ -2362,7 +2391,8 @@ struct Battle(Movable):
                 self.trained[self.fighter.style.value] += DEFEAT_EXPERIENCE
             if (fell or struck.outcome == FINISHED) and not foe.beast:
                 self.loot += LOOT
-                var note = String("+", LOOT, " COINS")
+                self.seals += 1
+                var note = String("+", LOOT, " COINS +1 SEAL")
                 if foe.brain.roll(6) < HERB_CHANCE:
                     self.found += 1
                     note += " +1 HERB"
@@ -2756,6 +2786,9 @@ struct Battle(Movable):
         var assisted = False
         for k in range(len(self.allies)):
             ref ally = self.allies[k]
+            # A fallen companion lies still.
+            if ally.down >= 0:
+                continue
             var sight = AllySight(
                 ally.character.position,
                 player.position,
@@ -2819,6 +2852,9 @@ struct Battle(Movable):
         if quarry >= 0:
             self._strike_raider(scene, index, quarry)
             return
+        if quarry == COMPANION_QUARRY:
+            self._strike_ally(scene, index)
+            return
         ref feet = player.position
         var at = self.foes[index].character.position
         if not reaches(
@@ -2834,6 +2870,34 @@ struct Battle(Movable):
         if not blow:
             return
         self._hurt(scene, index, blow.value(), at, player)
+
+    def _strike_ally(mut self, mut scene: Scene, index: Int) raises:
+        """Give a foe's swing to the companion, if it reaches her."""
+        ref foe = self.foes[index]
+        var swing = foe.fighter.swing().value()
+        for k in range(len(self.allies)):
+            ref ally = self.allies[k]
+            if ally.down >= 0:
+                continue
+            var at = foe.character.position
+            var there = ally.character.position
+            var radius = ally.character.parameters.radius
+            if not reaches(
+                at, foe.character.heading, swing.reach, swing.arc, there, radius
+            ):
+                continue
+            var blow = foe.fighter.connect(len(self.members) + 1 + k)
+            if not blow:
+                return
+            var front = faces(
+                there,
+                ally.character.heading,
+                ally.fighter.parameters.guard_arc,
+                at,
+            )
+            var struck = ally.fighter.receive(blow.value(), front)
+            self._show(scene, struck, there, False)
+            return
 
     def _strike_raider(mut self, mut scene: Scene, index: Int, k: Int) raises:
         """Give a foe's swing to the raider `k`, if it reaches them."""
@@ -3014,6 +3078,18 @@ struct Battle(Movable):
                 warden.character.heading = warden.heading
                 warden.boss = Boss(len(warden.boss.threat), warden.boss.seed)
                 warden.down = -1
+        # A fallen companion rises once the fight round her is over.
+        for k in range(len(self.allies)):
+            ref ally = self.allies[k]
+            if ally.fighter.defeated() and ally.down < 0:
+                ally.down = 0
+                self.notes.append("YOUR COMPANION FALLS")
+            if ally.down < 0:
+                continue
+            ally.down += seconds
+            if not fighting and ally.down > RISE_SECONDS:
+                ally.fighter.revive()
+                ally.down = -1
         for k in range(len(self.members)):
             ref member = self.members[k]
             member.shove = member.shove * exp(-SHOVE_FADE * seconds)
@@ -3066,6 +3142,7 @@ struct Battle(Movable):
             if self.down < 0:
                 self.down = 0
                 self.lock = -1
+                self.fell = True
                 self.notes.append("YOU FALL")
             self.down += seconds
             if self.down > p.revive.to(SECOND):

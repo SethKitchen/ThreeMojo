@@ -101,6 +101,7 @@ from extensions.village.battle_hud import draw_battle
 from extensions.village.gathering import (
     CHEST,
     HERBS,
+    SEAL,
     GatherParameters,
     Gathering,
 )
@@ -126,7 +127,7 @@ from extensions.village.skills import (
     skill_name,
     style_skill,
 )
-from extensions.village.progress import Progress
+from extensions.village.progress import PLACE_SHIFT, Progress
 from extensions.village.styles import STYLES, FightingStyle
 from extensions.village.combat import (
     FALL,
@@ -150,6 +151,7 @@ from extensions.village.talk import (
     WET,
     Mood,
     DONE,
+    ErrandState,
     OFFERED,
     SPEECH_SECONDS,
     Speaker,
@@ -162,6 +164,7 @@ from extensions.village.weather import (
     Weather,
     WeatherKind,
     weather_label,
+    weather_look,
 )
 from extensions.village.residents import (
     SIT,
@@ -235,6 +238,8 @@ comptime RAIN_RINGS = Float32(40)
 """How many drops a second ring the pond in a downpour."""
 comptime WAKE_EVERY = Float32(0.18)
 """The seconds between two taps of a wading player's wake."""
+comptime FALL_COST = 25
+"""The share, in percent, of the coins a player loses when they fall."""
 comptime DAWN_MIST = Float32(6.5)
 """The hour that the dawn's ground mist lies thickest."""
 comptime SUN_STEP = Float32(1)
@@ -849,20 +854,56 @@ struct VillageGame(Movable):
         out.mastery = self.battle.book.mastery.copy()
         out.specialty = self.battle.book.specialty
         out.style = self.battle.fighter.style
+        for index in range(len(self.talk.states)):
+            out.errands.append(self.talk.states[index].value)
+            out.rounds.append(self.talk.rounds[index])
+        out.spent = self.gathering.spent()
+        ref at = self.player.position
+        out.place = [
+            Int(at.x * 100) + PLACE_SHIFT,
+            Int(at.z * 100) + PLACE_SHIFT,
+            Int(self.day.hour * 1000) + PLACE_SHIFT,
+            self.weather.kind.value,
+        ]
         return out^
 
-    def restore(mut self, progress: Progress) raises:
+    def restore(mut self, mut scene: Scene, progress: Progress) raises:
         """Take up what the player kept from a game before: the levels
         that the experience gives teach their combos again. The style in
         hand is taken up if the player carries it.
 
         Args:
+            scene: The scene: the spots used up hide.
             progress: The kept progress.
 
         Raises:
             Error: If `Progress.check` refuses it.
         """
         progress.check()
+        # The world as the game before left it: its errands, its spots
+        # used up, where the player stood, the hour and the weather.
+        if len(progress.errands) == len(self.talk.states):
+            for index in range(len(progress.errands)):
+                var state = ErrandState(progress.errands[index])
+                if state.is_valid():
+                    self.talk.states[index] = state
+                self.talk.rounds[index] = progress.rounds[index]
+        for index in progress.spent:
+            self.gathering.spend(scene, index)
+        if len(progress.place) == 4:
+            var x = Float32(progress.place[0] - PLACE_SHIFT) / 100
+            var z = Float32(progress.place[1] - PLACE_SHIFT) / 100
+            var hour = Float32(progress.place[2] - PLACE_SHIFT) / 1000
+            if hour >= 0 and hour < 24:
+                self.day.hour = hour
+            var weather = WeatherKind(progress.place[3])
+            if weather.is_valid():
+                self.weather.set(weather)
+                self.weather.look = weather_look(weather)
+            if abs(x) < 1.0e4 and abs(z) < 1.0e4:
+                var ground = self.terrain.height_at(x, z, 1.0e4)
+                self.player.position = Vector3(x, ground, z)
+                self.player.velocity = Vector3(0, 0, 0)
         self.skills.experience = progress.experience.copy()
         self.gathering.satchel.counts = progress.satchel.copy()
         self.battle.book.mastery = progress.mastery.copy()
@@ -930,6 +971,16 @@ struct VillageGame(Movable):
         # last word is the note.
         self.gathering.satchel.counts[CHEST.value] += self.battle.loot
         self.battle.loot = 0
+        self.gathering.satchel.counts[SEAL.value] += self.battle.seals
+        self.battle.seals = 0
+        # A fall costs a share of the coins the player carries.
+        if self.battle.fell:
+            self.battle.fell = False
+            var coins = self.gathering.satchel.count(CHEST)
+            var lost = coins * FALL_COST // 100
+            if lost > 0:
+                self.gathering.satchel.counts[CHEST.value] -= lost
+                self.battle.notes.append(String("YOU LOSE ", lost, " COINS"))
         self.gathering.satchel.counts[HERBS.value] += (
             self.battle.found - self.battle.eaten
         )

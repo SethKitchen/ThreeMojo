@@ -18,7 +18,7 @@ from tests._village_arena import (
     light_cut,
     stand_facing,
 )
-from extensions.village.battle import CHEST, Bolt, Knife
+from extensions.village.battle import COMPANION_QUARRY, CHEST, Bolt, Knife
 from extensions.village.character import no_input
 from extensions.village.combat import (
     BLOCKED,
@@ -194,6 +194,37 @@ def test_over_limit_spends_itself_on_a_ultimate() raises:
     arena.battle.fighter.clock = 0
     arena.press(both)
     assert_false(holds_text(arena.battle.notes, "ULTIMATE!"))
+
+
+def test_a_foe_goes_for_the_companion_who_falls_and_rises() raises:
+    var arena = Arena(arena_parameters(1, 0, 6, ally=True))
+    # The companion stands before the bandit, much nearer it than the
+    # player: it goes for her, and strikes her.
+    var full = arena.battle.allies[0].fighter.parameters.health
+    var waited = 0
+    while arena.battle.allies[0].fighter.health >= full and waited < 160:
+        arena.player.position = Vector3(0, 0, 3)
+        arena.battle.allies[0].character.position = Vector3(0, 0, -4.8)
+        arena.tick(no_input())
+        waited += 1
+    assert_equal(arena.battle.quarries[0], COMPANION_QUARRY)
+    assert_true(arena.battle.allies[0].fighter.health < full)
+    # Struck down, she falls, lies still while the fight goes on, and
+    # rises once it is over.
+    arena.battle.allies[0].fighter.health = 0
+    arena.battle.allies[0].fighter.move = FALL
+    arena.run(0.2)
+    assert_true(arena.battle.allies[0].down >= 0)
+    assert_true(holds_text(arena.battle.notes, "YOUR COMPANION FALLS"))
+    arena.battle.foes[0].fighter.health = 0
+    arena.battle.foes[0].down = 0
+    arena.run(10.5)
+    assert_true(arena.battle.allies[0].down < 0)
+    # A fall of the player is marked for the game, which takes its coins.
+    arena.battle.fighter.health = 0
+    arena.battle.fighter.move = FALL
+    arena.run(0.1)
+    assert_true(arena.battle.fell)
 
 
 def test_a_companion_casts_heals_and_makes_a_assist_attack() raises:

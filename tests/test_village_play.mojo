@@ -71,6 +71,7 @@ from extensions.village.combat import (
     FighterParameters,
 )
 from extensions.village.progress import (
+    PLACE_SHIFT,
     Progress,
     pack_progress,
     unpack_progress,
@@ -701,7 +702,7 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     before.specialty = MAGIC
     before.style = MAGIC
     game.battle.parameters.styles = [SWORD, MAGIC]
-    game.restore(unpack_progress(pack_progress(before)))
+    game.restore(scene, unpack_progress(pack_progress(before)))
     assert_true(game.battle.fighter.style == MAGIC)
     assert_equal(game.battle.style_at, 1)
     assert_true(game.battle.book.specialty == MAGIC)
@@ -714,15 +715,34 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     # A style the player does not carry is not taken up; nor one while
     # the player makes a move.
     before.style = ARCHERY
-    game.restore(before)
+    game.restore(scene, before)
     assert_true(game.battle.fighter.style == MAGIC)
     before.style = SWORD
     game.battle.fighter.move = LIGHT_ONE
-    game.restore(before)
+    game.restore(scene, before)
     assert_true(game.battle.fighter.style == MAGIC)
+    # The world as the game left it comes back too: where the player
+    # stood, the hour, the weather, the errands and the spots used up.
+    var world = game.progress()
+    assert_equal(len(world.place), 4)
+    world.place[0] = PLACE_SHIFT + 150
+    world.place[1] = PLACE_SHIFT - 220
+    world.place[2] = PLACE_SHIFT + 20500
+    world.place[3] = 2
+    world.spent = [0, 99]
+    game.restore(scene, unpack_progress(pack_progress(world)))
+    assert_almost_equal(game.player.position.x, 1.5, atol=1e-4)
+    assert_almost_equal(game.player.position.z, -2.2, atol=1e-4)
+    assert_almost_equal(game.day.hour, 20.5, atol=1e-4)
+    assert_equal(game.weather.kind.value, 2)
+    # A place far away, an hour or a weather that is not one keeps the
+    # game's own.
+    world.place = [0, 0, PLACE_SHIFT + 30000, 9]
+    game.restore(scene, world)
+    assert_almost_equal(game.day.hour, 20.5, atol=1e-4)
     _ = before.mastery.pop()
     with assert_raises(contains="mastery"):
-        game.restore(before)
+        game.restore(scene, before)
 
 
 def test_a_game_builds_its_animals_no_finer_than_its_quality() raises:
@@ -782,6 +802,18 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     game.player.velocity = Vector3(0, 0, 0)
     game.ripple_pond(scene, step)
     assert_true(len(game.village.water._drops) >= rained + 1)
+    # A fall costs a quarter of the coins the player carries.
+    game.gathering.satchel.counts[CHEST.value] = 100
+    game.battle.fell = True
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.gathering.satchel.count(CHEST), 75)
+    assert_false(game.battle.fell)
+    assert_equal(game.note, "YOU LOSE 25 COINS")
+    # With no coins, a fall costs nothing.
+    game.gathering.satchel.counts[CHEST.value] = 0
+    game.battle.fell = True
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.gathering.satchel.count(CHEST), 0)
 
 
 def test_the_village_s_mood_and_its_props_stops() raises:

@@ -24,6 +24,8 @@ A held button gathers once. Let it go and press it again to gather again.
 | `TRINKET` | A gold ring hung with a gem, which bobs and turns 90 centimeters up | 1 trinket | Never |
 | `FISH` | An oak stake and a creel on the pond's shore | 1 fish, when hooked | It is never used up |
 
+The satchel holds one more kind, `SEAL`: a bandit's seal. No spot gives one. Each bandit that the player fells gives a seal. `SPOT_KINDS`, seven, counts the kinds a spot can be, and `KINDS`, eight, the kinds the satchel holds.
+
 A boulder, a chest and a berry bush stop a character. `Gathering.obstacles` gives each as round: 0.6, 0.45 and 0.4 meters across. A character walks through herbs, mushrooms and trinkets.
 
 ## Fishing
@@ -103,4 +105,4 @@ Set `PlayParameters.hud` to False for a frame with no display.
 - A spot does not stop the camera.
 - The satchel counts things. It does not hold items with their own state. An errand takes things out of it: see [Village errands](Village-errands).
 - The note shows the last thing gathered only.
-- Coins are spent nowhere yet.
+- Coins buy herbs only, from Edith: see [Village errands](Village-errands#trade).

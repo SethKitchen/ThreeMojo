@@ -29,11 +29,14 @@ from core.scene import Scene
 from extensions.village.gathering import (
     BERRIES,
     CHEST,
+    FISH,
     GatherKind,
     HERBS,
     MUSHROOMS,
     ORE,
+    SEAL,
     Satchel,
+    TRINKET,
     kind_name,
 )
 from extensions.humanoid.skeleton.head.expression import (
@@ -51,6 +54,15 @@ from units.si import RADIAN, SECOND, Angle, Duration
 
 comptime SPEECH_SECONDS = Float32(5)
 """How long a speaker's words show, in seconds."""
+comptime ERRAND_AGAIN = Float32(180)
+"""How long after an errand is done, in seconds, its speaker offers one
+again."""
+comptime FISH_PRICE = 6
+"""The coins a trader pays for a fish."""
+comptime TRINKET_PRICE = 25
+"""The coins a trader pays for a trinket."""
+comptime HERB_PRICE = 5
+"""The coins a trader asks for an herb."""
 comptime ASKING = Float32(0.3)
 """How strongly a speaker smiles as they ask for an errand."""
 comptime THANKFUL = Float32(0.8)
@@ -210,9 +222,9 @@ def mood_line(mood: Mood, speaker: Int) -> String:
     return night[at]
 
 
-@fieldwise_init
 struct Speaker(Copyable, Movable):
-    """A villager who talks, and the errand they give, if any."""
+    """A villager who talks, the errands they give, if any, and whether
+    they trade."""
 
     # The villager's place among the residents' people.
     var villager: Int
@@ -220,6 +232,37 @@ struct Speaker(Copyable, Movable):
     # What they say, one line a word with them.
     var lines: List[String]
     var errand: Optional[Errand]
+    var again: Optional[Errand]
+    """The errand they give every other time, once the first is done, or
+    None to give the first again."""
+    var trades: Bool
+    """Whether they buy fish and trinkets, and sell herbs."""
+
+    def __init__(
+        out self,
+        villager: Int,
+        var name: String,
+        var lines: List[String],
+        var errand: Optional[Errand],
+        var again: Optional[Errand] = None,
+        trades: Bool = False,
+    ):
+        """Hold a speaker.
+
+        Args:
+            villager: The villager's place among the residents' people.
+            name: Their name.
+            lines: What they say, one line a word with them.
+            errand: The errand they give, or None.
+            again: The errand they give every other time, or None.
+            trades: Whether they trade.
+        """
+        self.villager = villager
+        self.name = name^
+        self.lines = lines^
+        self.errand = errand^
+        self.again = again^
+        self.trades = trades
 
 
 def default_speakers() -> List[Speaker]:
@@ -227,10 +270,11 @@ def default_speakers() -> List[Speaker]:
 
     Returns:
         The woman by the brick house, a herbalist who wants five herbs;
-        the man on the trail, a smith who wants three ore; the child by
-        the pond, who wants six berries; the old man by the framed
-        cottage, a forager who wants four mushrooms; and the woman by the
-        framed house, who has no errand.
+        the man on the trail, who wants three ore, and then three bandits'
+        seals; the child by the pond, who wants six berries, and then two
+        fish; the old man by the framed cottage, a forager who wants four
+        mushrooms, and then a trinket; and the woman by the framed house,
+        who has no errand, and trades.
     """
     return [
         Speaker(
@@ -262,6 +306,16 @@ def default_speakers() -> List[Speaker]:
                 "Three ore from the boulders, and I will pay.",
                 "Good ore. Take these coins.",
             ),
+            Errand(
+                SEAL,
+                3,
+                45,
+                (
+                    "Bandits robbed the smith's cart. Bring me three of their"
+                    " seals."
+                ),
+                "Their seals! The smith will sleep tonight. Your coins.",
+            ),
         ),
         Speaker(
             2,
@@ -273,6 +327,13 @@ def default_speakers() -> List[Speaker]:
                 8,
                 "Will you pick me six berries? I can pay!",
                 "Berries! Thank you, here.",
+            ),
+            Errand(
+                FISH,
+                2,
+                12,
+                "Can you catch two fish for supper?",
+                "Fish! Mother will be glad. Here.",
             ),
         ),
         Speaker(
@@ -289,6 +350,13 @@ def default_speakers() -> List[Speaker]:
                 "Four red mushrooms for my stew, if you please.",
                 "A fine stew tonight. Your coins.",
             ),
+            Errand(
+                TRINKET,
+                1,
+                30,
+                "A trinket was lost in the grass. Find it for me?",
+                "My mother's trinket! Bless you.",
+            ),
         ),
         Speaker(
             4,
@@ -299,6 +367,8 @@ def default_speakers() -> List[Speaker]:
                 "Lost trinkets glint in the grass.",
             ],
             None,
+            None,
+            True,
         ),
     ]
 
@@ -352,6 +422,11 @@ struct Talk(Movable):
     var takens: List[NodeId]
     var mood: Mood
     """What the village is like now. The game sets it each frame."""
+    var rounds: List[Int]
+    """How many of each speaker's errands are done."""
+    var waits: List[Float32]
+    """How long, in seconds, until each speaker's done errand is offered
+    again."""
     var remarked: List[Mood]
     """The mood each speaker last remarked on."""
 
@@ -395,6 +470,8 @@ struct Talk(Movable):
             if taken[speaker.villager]:
                 raise Error("Two speakers must not be one villager")
             taken[speaker.villager] = True
+            if speaker.again:
+                speaker.again.value().check()
             if speaker.errand:
                 speaker.errand.value().check()
                 self.states.append(OFFERED)
@@ -426,6 +503,8 @@ struct Talk(Movable):
         self.clock = 0
         self.mood = FAIR
         self.remarked = List[Mood](length=len(self.speakers), fill=FAIR)
+        self.rounds = List[Int](length=len(self.speakers), fill=0)
+        self.waits = List[Float32](length=len(self.speakers), fill=0)
 
     def nearest(self, feet: Vector3, places: List[Vector3]) -> Int:
         """Return the speaker nearest a player's feet, within reach.
@@ -452,6 +531,47 @@ struct Talk(Movable):
                 best = index
         return best
 
+    def errand_of(self, index: Int) -> Optional[Errand]:
+        """Return the errand a speaker gives now.
+
+        Args:
+            index: The speaker's place in `speakers`.
+
+        Returns:
+            Their first errand, or on every other round their second, if
+            they have one; or None for a speaker with no errand.
+        """
+        ref speaker = self.speakers[index]
+        if self.rounds[index] % 2 == 1 and speaker.again:
+            return speaker.again.copy()
+        return speaker.errand.copy()
+
+    def trade(self, mut satchel: Satchel) raises -> String:
+        """Trade with the player: buy their fish and trinkets, or sell them
+        an herb.
+
+        Args:
+            satchel: What the player holds. Its things and coins change.
+
+        Returns:
+            What the trader says, or an empty string when there is nothing
+            to trade: no fish or trinket to sell, and no coins for an herb,
+            or herbs enough.
+        """
+        var fish = satchel.count(FISH)
+        var trinkets = satchel.count(TRINKET)
+        if fish + trinkets > 0:
+            var paid = fish * FISH_PRICE + trinkets * TRINKET_PRICE
+            satchel.counts[FISH.value] = 0
+            satchel.counts[TRINKET.value] = 0
+            satchel.counts[CHEST.value] += paid
+            return String("Fine wares! ", paid, " coins for them.")
+        if satchel.count(CHEST) >= HERB_PRICE and satchel.count(HERBS) < 3:
+            satchel.counts[CHEST.value] -= HERB_PRICE
+            satchel.counts[HERBS.value] += 1
+            return String("An herb to heal you, for ", HERB_PRICE, " coins.")
+        return String()
+
     def speak(mut self, index: Int, mut satchel: Satchel) raises -> String:
         """Have a speaker say their next words to the player, and move
         their errand on.
@@ -471,18 +591,21 @@ struct Talk(Movable):
             raise Error("A speaker must be one of the village's")
         ref speaker = self.speakers[index]
         var state = self.states[index]
+        var current = self.errand_of(index)
         if state == OFFERED:
             self.states[index] = TAKEN
             self.feeling = SMILE
             self.strength = ASKING
-            return speaker.errand.value().ask.copy()
+            return current.value().ask.copy()
         if state == TAKEN:
-            ref errand = speaker.errand.value()
+            ref errand = current.value()
             var held = satchel.count(errand.wants)
             if held >= errand.count:
                 satchel.counts[errand.wants.value] -= errand.count
                 satchel.counts[CHEST.value] += errand.reward
                 self.states[index] = DONE
+                self.rounds[index] += 1
+                self.waits[index] = ERRAND_AGAIN
                 self.feeling = SMILE
                 self.strength = THANKFUL
                 return errand.thanks.copy()
@@ -495,6 +618,12 @@ struct Talk(Movable):
                 kind_name(errand.wants),
                 ".",
             )
+        if speaker.trades:
+            var traded = self.trade(satchel)
+            if traded:
+                self.feeling = SMILE
+                self.strength = THANKFUL
+                return traded
         # A speaker remarks once on each change of the village's mood.
         if self.mood != self.remarked[index]:
             self.remarked[index] = self.mood
@@ -544,6 +673,12 @@ struct Talk(Movable):
             raise Error("A frame's time must not be negative")
         self.clock += seconds
         self.age += seconds
+        # A done errand is offered again after a while.
+        for index in range(len(self.speakers)):
+            if self.states[index] == DONE and self.speakers[index].errand:
+                self.waits[index] -= seconds
+                if self.waits[index] <= 0:
+                    self.states[index] = OFFERED
         var pressed = use and not self.held
         self.held = use
         self.focus = self.nearest(feet, places)
@@ -598,7 +733,7 @@ struct Talk(Movable):
         for index in range(len(self.speakers)):
             if self.states[index] != TAKEN:
                 continue
-            ref errand = self.speakers[index].errand.value()
+            var errand = self.errand_of(index).value().copy()
             var held = min(satchel.count(errand.wants), errand.count)
             lines.append(
                 String(

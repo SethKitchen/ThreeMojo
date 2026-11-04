@@ -58,16 +58,28 @@ The heads-up display lists each errand that is taken and not done in the top rig
 
 `default_speakers` gives these speakers:
 
-| Speaker | Villager | Errand | Reward |
-|---|---|---|---|
-| Maud | The woman by the brick house | Five herbs | 20 coins |
-| Osric | The man on the trail | Three ore | 30 coins |
-| Wren | The child by the pond | Six berries | 8 coins |
-| Aldous | The old man by the framed cottage | Four mushrooms | 15 coins |
-| Edith | The woman by the framed house | None | None |
+| Speaker | Villager | Errand | Reward | The errand after it | Reward |
+|---|---|---|---|---|---|
+| Maud | The woman by the brick house | Five herbs | 20 coins | Five herbs again | 20 coins |
+| Osric | The man on the trail | Three ore | 30 coins | Three bandits' seals | 45 coins |
+| Wren | The child by the pond | Six berries | 8 coins | Two fish | 12 coins |
+| Aldous | The old man by the framed cottage | Four mushrooms | 15 coins | A trinket | 30 coins |
+| Edith | The woman by the framed house | None, she trades | None | None | None |
+
+### Errands come back
+
+`ERRAND_AGAIN`, 180 seconds, after an errand is done, its speaker offers one again. `Speaker.again` is the errand that they give every other time. With none, they give the first again. `Talk.rounds` counts each speaker's errands done, and `Talk.errand_of` gives the errand that they give now.
+
+### Trade
+
+A speaker whose `trades` is true trades with each word:
+
+1. They buy each fish the player carries for `FISH_PRICE`, 6 coins, and each trinket for `TRINKET_PRICE`, 25.
+2. With nothing to sell, a player who carries fewer than three herbs buys one for `HERB_PRICE`, 5 coins.
+3. With nothing to trade, the speaker says their line.
 
 A speaker whose villager is not in the village is left out. Two speakers of one villager are refused. An errand must want one thing or more, and not coins. Its reward must not be negative.
 
 ## Limits
 
-- An errand is given once. The speaker does not give another after it is done.
+- A speaker has two errands at most. Each comes back the same: its count and its reward do not grow.

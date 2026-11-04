@@ -250,7 +250,7 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
     var kept = Path(PROGRESS_FILE)
     if kept.exists():
         try:
-            game.restore(unpack_progress(kept.read_bytes()))
+            game.restore(scene, unpack_progress(kept.read_bytes()))
             print("Took up the progress in", PROGRESS_FILE, file=stderr)
         except error:
             print("Could not take up the progress:", error, file=stderr)

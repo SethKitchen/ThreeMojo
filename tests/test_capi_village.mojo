@@ -28,7 +28,14 @@ from extensions.village.quality import (
     ULTRA,
     game_quality,
 )
-from extensions.village.weather import CLEAR, FOG, OVERCAST, RAIN, WeatherKind
+from extensions.village.weather import (
+    CLEAR,
+    FOG,
+    OVERCAST,
+    RAIN,
+    SNOW,
+    WeatherKind,
+)
 from extensions.water.pebbles import pebble_bed
 from extensions.water.upload import (
     COMPOSE_WORDS,
@@ -77,7 +84,9 @@ from renderers.game_gpu import (
     POINTER_WATER_WORDS,
 )
 from std.math import inf
-from std.os import setenv, unsetenv
+from std.os import getenv, remove, setenv, unsetenv
+from std.pathlib import Path
+from extensions.village.gathering import HERBS
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -865,8 +874,32 @@ def test_a_weather_is_named() raises:
     assert_equal(weather_named("overcast"), OVERCAST)
     assert_equal(weather_named("rain"), RAIN)
     assert_equal(weather_named("fog"), FOG)
-    with assert_raises(contains="clear, overcast, rain or fog, not storm"):
+    assert_equal(weather_named("snow"), SNOW)
+    with assert_raises(contains="rain, fog or snow, not storm"):
         _ = weather_named("storm")
+
+
+def test_an_app_keeps_its_progress_in_a_file() raises:
+    var path = String(getenv("TMPDIR", "/tmp"), "/village_progress_kept.bin")
+    if Path(path).exists():
+        remove(path)
+    var app = _make()
+    # No file yet: the game begins as it is, and keeps nothing until told.
+    _state(app)[].keep()
+    _state(app)[].resume(path)
+    assert_false(Path(path).exists())
+    _state(app)[].game.gathering.satchel.counts[HERBS.value] = 4
+    _state(app)[].game.day.hour = 21
+    tm_destroy(app)
+    assert_true(Path(path).exists())
+    # The next game takes up where this one ended.
+    var again = _make()
+    _state(again)[].resume(path)
+    assert_equal(_state(again)[].game.gathering.satchel.count(HERBS), 4)
+    assert_almost_equal(_state(again)[].game.day.hour, 21, atol=1e-3)
+    # A file that cannot be written loses only the progress.
+    _state(again)[].keeps = String(path, "/not/a/dir")
+    tm_destroy(again)
 
 
 def test_the_environment_sets_the_weather_and_the_hour() raises:

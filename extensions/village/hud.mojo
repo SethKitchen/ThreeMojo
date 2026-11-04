@@ -38,6 +38,7 @@ from extensions.village.gathering import (
     KINDS,
     MUSHROOMS,
     ORE,
+    SEAL,
     STRIKES,
     WAITING,
     Satchel,
@@ -213,7 +214,7 @@ def kind_color(kind: GatherKind) -> Rgb:
 
     Returns:
         Green herbs, red mushrooms, purple berries, copper ore, gold
-        coins, blue trinkets and silver fish.
+        coins, blue trinkets, silver fish and black seals.
     """
     if kind == HERBS:
         return Rgb(90, 160, 60)
@@ -227,6 +228,8 @@ def kind_color(kind: GatherKind) -> Rgb:
         return Rgb(250, 200, 70)
     if kind == FISH:
         return Rgb(150, 190, 210)
+    if kind == SEAL:
+        return Rgb(60, 50, 60)
     return Rgb(80, 140, 240)
 
 

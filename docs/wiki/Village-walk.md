@@ -105,8 +105,13 @@ The module is `extensions/village/progress.mojo`. `VillageGame.progress` gives a
 | `mastery` | Each combo's mastery, so its rank and its perks. |
 | `specialty` | The style the player specializes in. |
 | `style` | The style in hand. The game takes it up if the player carries it. |
+| `errands` and `rounds` | Each speaker's errand state, and how many of their errands are done. |
+| `spent` | Each spot used up for good: a chest opened, a trinket taken. |
+| `place` | Where the player stands, the hour and the weather. |
 
-The bytes begin with the letters `TMVP` and the version, 1. Each number takes 4 bytes. A record from an earlier game, of fewer skills, things or combos, reads with zero for the rest. A record of a later version, or of more than this game holds, is refused. Where the bytes are kept is the game's: a file, or anywhere it likes.
+So the world comes back as the player left it, and an errand or a chest cannot be done again by beginning a new game. The macOS host keeps the progress in the file that `--save FILE` names.
+
+The bytes begin with the letters `TMVP` and the version, 2. A record of version 1 has no errands, spots or place, and the game keeps its own. Each number takes 4 bytes. A record from an earlier game, of fewer skills, things or combos, reads with zero for the rest. A record of a later version, or of more than this game holds, is refused. Where the bytes are kept is the game's: a file, or anywhere it likes.
 
 ## Run the game loop in code
 
