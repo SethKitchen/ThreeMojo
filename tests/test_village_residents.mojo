@@ -734,14 +734,17 @@ def test_a_person_sits_works_shelters_and_flees() raises:
     )
     assert_true(residents.people[0].velocity.x < 0)
     # At night she goes home, and stays in.
-    for _ in range(80):
+    for _ in range(400):
         residents.update(
             scene, Duration(0.1, SECOND), ground, List[Obstacle](), None, True
         )
+        ref going = residents.homeward[0]
+        if going.at == len(going.points) - 1 and going.resting > 0:
+            break
     assert_true(residents.sheltering)
     assert_true(residents.doing(0) == IDLE)
     ref home = residents.homeward[0]
-    assert_true(home.next > 0 or home.at > 0)
+    assert_equal(home.at, len(home.points) - 1)
     # A long frame indoors keeps her in.
     residents.update(
         scene, Duration(1.0, SECOND), ground, List[Obstacle](), None, True

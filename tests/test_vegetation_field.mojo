@@ -355,6 +355,7 @@ def test_no_blade_roots_under_the_pond() raises:
     not grow."""
     var p = _small()
     p.density = 200
+    p.tuft_radius = Length(1.0, METER)
     var ground = Ground(
         pond=Pond(
             Length(0.0, METER),

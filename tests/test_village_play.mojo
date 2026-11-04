@@ -899,6 +899,8 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
             knocks += 1
     assert_equal(knocks, 1)
     assert_equal(game.hitstop, 0)
+    # The stop wears off as the world moves on.
+    game.hitstop = HITSTOP
     _ = game.tick(scene, assets, no_input(), step)
     assert_true(game.hitstop <= 0)
     # Near falling, and as a blow lands, the frame's edges redden.
