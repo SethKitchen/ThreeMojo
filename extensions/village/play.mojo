@@ -263,9 +263,9 @@ def default_residents() raises -> ResidentsParameters:
     residents.villagers = [
         Villager(
             HumanoidSpec(Length(65.0, INCH), FEMALE, UNTONED, random_genome(3)),
-            -18,
-            -32,
-            7,
+            -6,
+            -28,
+            6,
             41,
             False,
             dressed_as(GOODWIFE, FEMALE, 3),
@@ -323,7 +323,7 @@ def default_residents() raises -> ResidentsParameters:
         Herd(SHEEP, 4, 15, 4, 7, 51, flee=Length(3.0, METER)),
         Herd(GOAT, 1, 20, -6, 5, 52, flee=Length(2.0, METER)),
         Herd(COW, 2, -18, 6, 8, 53),
-        Herd(HORSE, 1, -14, -16, 7, 54),
+        Herd(HORSE, 1, -22, -10, 6, 54),
         Herd(PIG, 1, -12, -48, 4, 55),
         Herd(DOG, 1, 4, 22, 4, 56),
         Herd(RABBIT, 2, -6, 14, 3, 57, flee=Length(6.0, METER)),
@@ -966,6 +966,8 @@ struct VillageGame(Movable):
         var lamps = daylight < 0.5
         self.critters.update(scene, daylight, self.weather.look.rain, delta)
         ref eye_at = self.camera.position
+        scene.node(self.village.props.lit).visible = lamps
+        scene.node(self.village.props.daylit).visible = not lamps
         for index in range(len(self.village.houses)):
             ref house = self.village.houses[index]
             scene.node(house.lit).visible = lamps

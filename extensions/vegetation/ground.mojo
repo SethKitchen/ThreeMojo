@@ -92,6 +92,11 @@ comptime POND_FLAT = Float32(0.3)
 comptime POND_DROP = Float32(0.3)
 comptime POND_FREEBOARD = Float32(0.05)
 comptime POND_SHORE = Float32(0.3)
+comptime GRIME_REACH = Float32(0.9)
+"""How far from a building's lot the grime at its foot reaches, in
+meters."""
+comptime GRIME = Float32(0.55)
+"""How much of the ground's light the grime at a building's foot takes."""
 comptime POND_DAMP = Float32(0.12)
 """How far above the pond's water its shore is damp and dark, in meters."""
 # How far out from a pond's middle the grass is short, as a multiple of
@@ -965,8 +970,34 @@ def footpath(
     )
 
 
+def lot_grime(lots: List[Lot], x: Float32, z: Float32) -> Float32:
+    """Return how dark the ground is with grime at the foot of a building.
+
+    Rain splashes mud on the ground at a wall's foot, and the eaves keep
+    the light off it. The ground is darkest at a building's lot, and
+    clean `GRIME_REACH` from it. A footpath has no grime: its apron is
+    narrower than a building's.
+
+    Args:
+        lots: The lots.
+        x: The point's x, in meters.
+        z: The point's z, in meters.
+
+    Returns:
+        From zero, clean, to `GRIME`, at a building's lot.
+    """
+    var grime = Float32(0)
+    for index in range(len(lots)):
+        if lots[index].apron < APRON:
+            continue
+        var near = 1 - _ramp(0, GRIME_REACH, lots[index].reach(x, z))
+        grime = max(grime, near * GRIME)
+    return grime
+
+
 def lot_shade(mut geometry: BufferGeometry, lots: List[Lot], seed: Int) raises:
-    """Bare a ground mesh's colors round its lots, toward mottled dirt.
+    """Bare a ground mesh's colors round its lots, toward mottled dirt,
+    and darken it with grime at the foot of each building.
 
     Args:
         geometry: A ground mesh, with `position` and `color`.
@@ -988,6 +1019,7 @@ def lot_shade(mut geometry: BufferGeometry, lots: List[Lot], seed: Int) raises:
             p.x / 0.7, p.z / 0.7, seed
         )
         c = c + (dirt - c) * bare
+        c = c * (1 - lot_grime(lots, p.x, p.z))
         bared.append(c.x)
         bared.append(c.y)
         bared.append(c.z)

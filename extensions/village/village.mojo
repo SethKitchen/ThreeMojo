@@ -65,6 +65,7 @@ from extensions.village.house import (
     BRICK_FACADE,
     HouseParameters,
     STONE_FACADE,
+    THATCH,
     TIMBER_FRAMED,
     fieldstone,
     footing,
@@ -81,11 +82,19 @@ from extensions.village.house_view import StandingHouse, stand_house
 from extensions.village.props import (
     BARREL,
     BENCH,
+    CART,
     CRATE,
+    CROPS,
     FENCE,
     HAY_BALE,
+    HEDGE,
+    LAMP_POST,
     Prop,
+    SCARECROW,
+    SIGNPOST,
     StandingProps,
+    TROUGH,
+    WASHING_LINE,
     WELL,
     WOODPILE,
     WOODPILE_DEPTH,
@@ -250,11 +259,12 @@ struct VillageParameters(Copyable, Movable):
 
         A pond lies right of the trail, 11 meters ahead of the camera. A
         stone cottage stands on the left of the trail, about 25 meters
-        away, and a framed cottage and a framed house stand on each side
-        of it, about 60 meters away. A brick house stands on the left,
-        about 75 meters away, and a timber barn about 90 meters away. A
-        scanned building stands on the right, about 110 meters away. The
-        meadow's open and round trees grow as oaks: see `oak`.
+        away. Past it, three houses face a green round the well, 50 to 60
+        meters away: a brick house from the west, a thatched framed
+        cottage from the south, and a framed house from across the trail.
+        A timber barn stands about 90 meters away, and a scanned building
+        on the right, about 110 meters away. The meadow's open and round
+        trees grow as oaks: see `oak`.
 
         Raises:
             Error: Never; the defaults are in range.
@@ -278,11 +288,12 @@ struct VillageParameters(Copyable, Movable):
                     2,
                     brick(),
                     BRICK_FACADE,
+                    roof=Vector3(0.78, 0.66, 0.62),
                     seed=3,
                 ),
-                -24,
-                -42,
-                Angle(20.0, DEGREE),
+                -9,
+                -22,
+                Angle(90.0, DEGREE),
             ),
             HousePlacement(
                 HouseParameters(
@@ -294,6 +305,7 @@ struct VillageParameters(Copyable, Movable):
                     BOARDED,
                     Length(4.2, METER),
                     Angle(35.0, DEGREE),
+                    roof=Vector3(0.72, 0.70, 0.68),
                     trim=Vector3(0.3, 0.045, 0.03),
                     seed=5,
                     use=BARN,
@@ -329,6 +341,7 @@ struct VillageParameters(Copyable, Movable):
                     TIMBER_FRAMED,
                     Length(2.6, METER),
                     Angle(48.0, DEGREE),
+                    roof=Vector3(1.0, 0.9, 0.78),
                     trim=Vector3(0.02, 0.04, 0.09),
                     seed=11,
                 ),
@@ -348,10 +361,11 @@ struct VillageParameters(Copyable, Movable):
                     Angle(45.0, DEGREE),
                     trim=Vector3(0.09, 0.05, 0.015),
                     seed=13,
+                    covering=THATCH,
                 ),
                 2,
                 -32,
-                Angle(70.0, DEGREE),
+                Angle(0.0, DEGREE),
             ),
         ]
         self.props = default_props()
@@ -414,17 +428,27 @@ struct VillageParameters(Copyable, Movable):
         )
 
 
-def default_props() -> List[Prop]:
+def default_props() raises -> List[Prop]:
     """Return the props of the default village.
 
     Returns:
-        A well by the trail with a bench beside it; barrels, crates and
-        hay bales before the barn; a fenced garden behind the stone
-        cottage; and a bench before the framed house.
+        A green round the well, with a bench, a trough, a handcart, a
+        signpost where the paths meet the trail, and three lamp posts;
+        barrels, crates and hay bales before the barn, and a hedge
+        between the barn's yard and the green; a fenced garden behind the
+        stone cottage, with a gate, three beds of cabbages and a
+        scarecrow, and a washing line beside it; and a bench before the
+        framed house.
     """
     return [
         Prop(WELL, 4, -18, Angle(20.0, DEGREE), 0.8),
         Prop(BENCH, 4.5, -15.6, Angle(10.0, DEGREE), 1.6),
+        Prop(TROUGH, 6.2, -20.4, Angle(20.0, DEGREE), 1.6),
+        Prop(CART, -1.5, -14.5, Angle(35.0, DEGREE), 1.4),
+        Prop(SIGNPOST, 5.5, -11, Angle(-60.0, DEGREE), 2.2),
+        Prop(LAMP_POST, -3.5, -20, Angle(0.0, DEGREE), 2.6),
+        Prop(LAMP_POST, 4.5, -26.5, Angle(90.0, DEGREE), 2.6),
+        Prop(LAMP_POST, 13.8, -20.5, Angle(180.0, DEGREE), 2.6),
         Prop(BARREL, -11, -52.2, Angle(0.0, DEGREE), 0.3),
         Prop(BARREL, -11.7, -52.6, Angle(30.0, DEGREE), 0.3),
         Prop(BARREL, -11.2, -51.5, Angle(60.0, DEGREE), 0.3),
@@ -432,9 +456,15 @@ def default_props() -> List[Prop]:
         Prop(CRATE, -2.6, -52.6, Angle(-15.0, DEGREE), 0.6),
         Prop(HAY_BALE, 2.5, -55, Angle(30.0, DEGREE), 1.1),
         Prop(HAY_BALE, 2.9, -53.9, Angle(25.0, DEGREE), 1.1),
+        Prop(HEDGE, -13, -41, Angle(0.0, DEGREE), 14),
         Prop(FENCE, -12, 15, Angle(0.0, DEGREE), 6),
         Prop(FENCE, -15, 13, Angle(90.0, DEGREE), 4),
         Prop(FENCE, -9, 13, Angle(90.0, DEGREE), 4),
+        Prop(FENCE, -13.75, 11, Angle(0.0, DEGREE), 2.5),
+        Prop(FENCE, -9.75, 11, Angle(0.0, DEGREE), 1.5),
+        Prop(CROPS, -12, 13.6, Angle(0.0, DEGREE), 4.6),
+        Prop(SCARECROW, -10, 12, Angle(15.0, DEGREE), 1.8),
+        Prop(WASHING_LINE, -17, 7, Angle(90.0, DEGREE), 4),
         Prop(BENCH, 16.3, -21.5, Angle(-80.0, DEGREE), 1.6),
     ]
 

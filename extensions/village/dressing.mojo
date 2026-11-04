@@ -584,9 +584,30 @@ def lantern(
             WROUGHT,
         )
     # The glowing glass, brightest low where the flame burns.
+    return lantern_glass(flame, ceiling, drop, FLAME * 0.8)
+
+
+def lantern_glass(
+    mut sheet: Sheet, ceiling: Vector3, drop: Float32, color: Vector3
+) -> Vector3:
+    """Add the glass of a lantern that `lantern` hangs, in one color.
+
+    A lantern that is lit only at night has its glowing glass in one sheet
+    and its cold glass in another, and shows one of them.
+
+    Args:
+        sheet: The sheet of the glass.
+        ceiling: Where the lantern's chain meets the ceiling.
+        drop: How far below the ceiling the lantern's foot hangs.
+        color: The glass's color.
+
+    Returns:
+        Where the lantern's flame is.
+    """
+    var foot = ceiling - Vector3(0, drop, 0)
     var core = foot + Vector3(0, 0.03, 0)
-    var glass_height = height - 0.1
-    prism(flame, core, half, half, glass_height, 4, FLAME * 0.8)
+    var glass_height = Float32(0.26) - 0.1
+    prism(sheet, core, 0.08, 0.08, glass_height, 4, color)
     return core + Vector3(0, glass_height * 0.4, 0)
 
 

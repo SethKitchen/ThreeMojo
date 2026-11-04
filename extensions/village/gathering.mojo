@@ -230,7 +230,7 @@ def default_spots() -> List[Spot]:
         Spot(ORE, -30, -52, Angle(1.2, RADIAN)),
         Spot(CHEST, -9, -67, Angle(-0.2, RADIAN)),
         Spot(TRINKET, 2, 14, Angle(0.0, RADIAN)),
-        Spot(TRINKET, -12, -28, Angle(0.0, RADIAN)),
+        Spot(TRINKET, -17, -31, Angle(0.0, RADIAN)),
         Spot(TRINKET, 18, -47, Angle(0.0, RADIAN)),
         Spot(FISH, 1.5, 19.5, Angle(0.0, RADIAN)),
     ]
