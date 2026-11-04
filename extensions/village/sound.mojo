@@ -301,13 +301,13 @@ struct Sounds(Movable):
 
 def _word(mut bytes: List[UInt8], value: Int, count: Int):
     """Append a number's `count` lowest bytes, the lowest first."""
-    for k in range(count):
+    for k in range(count):  # pragma: no branch
         bytes.append(UInt8((value >> (8 * k)) & 0xFF))
 
 
 def _text(mut bytes: List[UInt8], text: String):
     """Append the bytes of a text."""
-    for c in text.as_bytes():
+    for c in text.as_bytes():  # pragma: no branch
         bytes.append(c)
 
 

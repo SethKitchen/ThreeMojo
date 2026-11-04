@@ -79,12 +79,21 @@ def test_a_sound_plays_and_ends() raises:
         sounds.play(SoundKind(8), 0.5, 0)
     with assert_raises(contains="gain"):
         sounds.play(STEP, 2, 0)
+    with assert_raises(contains="gain"):
+        sounds.play(STEP, -1, 0)
     with assert_raises(contains="pan"):
         sounds.play(STEP, 0.5, 3)
+    with assert_raises(contains="pan"):
+        sounds.play(STEP, 0.5, -3)
     with assert_raises(contains="44,100"):
         _ = sounds.mix(-1)
+    with assert_raises(contains="44,100"):
+        _ = sounds.mix(SAMPLE_RATE + 1)
+    assert_equal(len(sounds.mix(0)), 0)
     with assert_raises(contains="from 0 to 1"):
         sounds.set_air(2, 0, 0)
+    with assert_raises(contains="from 0 to 1"):
+        sounds.set_air(0, -1, 0)
 
 
 def test_the_air_holds_wind_rain_birds_and_crickets() raises:
@@ -107,6 +116,7 @@ def test_the_air_holds_wind_rain_birds_and_crickets() raises:
 
 
 def test_the_sound_is_kept_as_a_wav_file() raises:
+    assert_equal(len(wav_bytes(List[Float32]())), 44)
     var samples: List[Float32] = [0, 1, -1, 2]
     var bytes = wav_bytes(samples)
     assert_equal(len(bytes), 44 + 8)

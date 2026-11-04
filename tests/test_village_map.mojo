@@ -48,6 +48,9 @@ def test_the_map_shows_the_houses_the_pond_and_the_people() raises:
         8 + Int((10 + MAP_REACH) / meters), 8 + Int((-10 + MAP_REACH) / meters)
     )
     assert_true(foe.r > 200 and foe.g < 100)
+    # A map with nothing on it shows the ground and the player alone.
+    var bare = Framebuffer(60, 60, Color(0, 0, 0, 255))
+    assert_equal(draw_map(bare, ground, MapMarks(), Vector3(0, 0, 0), 0), 21)
 
 
 def main() raises:

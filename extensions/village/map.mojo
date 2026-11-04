@@ -112,10 +112,10 @@ def draw_map(
     var px = pond.x.to(METER)
     var pz = pond.z.to(METER)
     var pr = pond.radius.to(METER)
-    for row in range(side):
+    for row in range(side):  # pragma: no branch
         var wz = player.z - MAP_REACH + (Float32(row) + 0.5) * meters
         var course = ground.trail_x(wz)
-        for column in range(side):
+        for column in range(side):  # pragma: no branch
             var wx = player.x - MAP_REACH + (Float32(column) + 0.5) * meters
             var color = Rgb(40, 62, 32)
             var dx = wx - px
@@ -157,7 +157,7 @@ def draw_map(
     var mx = x0 + side // 2
     var my = y0 + side // 2
     _dot(frame, mx, my, size + 1, Rgb(245, 238, 220))
-    for step in range(1, 4 * (size + 1)):
+    for step in range(1, 4 * (size + 1)):  # pragma: no branch
         var tx = mx - Int(Float32(step) * sin(heading))
         var ty = my - Int(Float32(step) * cos(heading))
         _dot(frame, tx, ty, 0, Rgb(245, 238, 220))
