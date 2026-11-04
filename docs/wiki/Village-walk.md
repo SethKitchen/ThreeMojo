@@ -101,7 +101,7 @@ The village has sound. `extensions/village/sound.mojo` makes every sound from no
 | A footfall | Each stride of the player on the ground: quicker and louder at a run |
 | A splash | A footfall in the pond |
 | A swing | As an attack of the player begins |
-| A knock | When a blow takes a foe's health |
+| A knock | When a blow lands: it takes a bandit's, a wolf's or a warden's health, or adds to the combo, as on a dummy |
 | A chime | When coins come into the satchel |
 | A bird's chirp | Now and then by day |
 

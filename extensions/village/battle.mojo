@@ -1556,14 +1556,18 @@ struct Battle(Movable):
         return not self.wardens[index - self.first_warden()].boss.defeated()
 
     def foes_health(self) -> Float32:
-        """Return the health the bandits and wolves have left, all told.
+        """Return the health the bandits, the wolves and the wardens have
+        left, all told. A blow on any of them takes some of it.
 
         Returns:
-            The sum of each foe's health, or 0 with no foe.
+            The sum of each foe's and each warden's health, or 0 with
+            none.
         """
         var health = Float32(0)
         for index in range(len(self.foes)):
             health += self.foes[index].fighter.health
+        for index in range(len(self.wardens)):
+            health += self.wardens[index].boss.health
         return health
 
     def dangers(self) -> List[Vector3]:

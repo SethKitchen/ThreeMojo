@@ -887,6 +887,18 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     game.foes_health = 1
     game.hear(step)
     assert_equal(game.hitstop, 0)
+    # A blow on a dummy takes no foe's health, and it is heard too.
+    game.sounds.voices.clear()
+    game.foes_health = 0
+    game.combo_was = 0
+    game.battle.fighter.combo = 1
+    game.hear(step)
+    var knocks = 0
+    for voice in game.sounds.voices:
+        if voice.kind == HIT:
+            knocks += 1
+    assert_equal(knocks, 1)
+    assert_equal(game.hitstop, 0)
     _ = game.tick(scene, assets, no_input(), step)
     assert_true(game.hitstop <= 0)
     # Near falling, and as a blow lands, the frame's edges redden.

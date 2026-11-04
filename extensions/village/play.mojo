@@ -691,6 +691,8 @@ struct VillageGame(Movable):
     var foes_health: Float32
     """The health of every foe last frame, so a blow that lands is
     heard."""
+    var combo_was: Int
+    """The player's combo last frame, so a blow on a dummy is heard too."""
     var coins_were: Int
     """The coins the satchel held last frame."""
     # How finely each part of a frame is drawn, the window's size, and the
@@ -916,6 +918,7 @@ struct VillageGame(Movable):
         self.stride = 0
         self.swinging = False
         self.foes_health = 0
+        self.combo_was = 0
         self.coins_were = 0
         self.sun_was = sun_direction(
             parameters.village.meadow.sun_elevation,
@@ -1306,7 +1309,9 @@ struct VillageGame(Movable):
             self.sounds.play(SWING, 0.6, 0)
         self.swinging = attacking
         var health = self.battle.foes_health()
-        if health < self.foes_health - 0.5:
+        var landed = self.battle.fighter.combo > self.combo_was
+        self.combo_was = self.battle.fighter.combo
+        if health < self.foes_health - 0.5 or landed:
             self.sounds.play(HIT, 0.8, 0)
             # A hard blow stops the world a moment, so it is felt.
             if health < self.foes_health - HITSTOP_BLOW:

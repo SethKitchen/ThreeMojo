@@ -669,6 +669,10 @@ def test_a_fallen_companion_lies_still_while_a_warden_fights() raises:
     arena.tick(no_input())
     # A warden is a danger, and the village's people run from it.
     assert_equal(len(arena.battle.dangers()), 1)
+    # A blow on the warden is a blow on a foe: the game hears it.
+    assert_equal(
+        arena.battle.foes_health(), arena.battle.wardens[0].boss.health
+    )
     arena.battle.allies[0].fighter.health = 0
     arena.battle.allies[0].fighter.move = FALL
     for _ in range(Int(RISE_SECONDS * 20) + 20):
