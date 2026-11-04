@@ -75,7 +75,7 @@ from controls.third_person_controls import yaw_of
 from core.geometry_store import GeometryId
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from std.math import cos, pi
+from std.math import cos, nan, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -261,6 +261,10 @@ def test_a_flipbook_shows_the_pose_of_the_stride() raises:
     assert_equal(still.frame(walker).value, 9)
     var legless = Flipbook(GeometryId(9), [GeometryId(1)], 0)
     assert_equal(legless.frame(walker).value, 9)
+    # An animal that turns on the spot steps as it turns: its feet move
+    # though it stands; still, it shows its standing mesh.
+    assert_equal(book.frame_at(0.6, True).value, 2)
+    assert_equal(book.frame_at(0.6, False).value, 9)
 
 
 def test_residents_that_cannot_be_built_are_refused() raises:
@@ -782,6 +786,26 @@ def test_a_dog_follows_and_a_shy_animal_runs_from_a_foe() raises:
     )
     assert_true(residents.beasts[0].character.speed().to(METER_PER_SECOND) < 1)
     _ = PANIC
+
+
+def test_an_animal_that_turns_on_the_spot_steps_round() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.rest = Duration(0.0, SECOND)
+    p.herds.append(Herd(RABBIT, 1, 0, 0, 0, 8))
+    var residents = Residents(scene, assets, p, ground, List[Lot](), _homes())
+    # It faces away from the point it walks to, and turns to it.
+    ref beast = residents.beasts[0]
+    beast.route.points = [Vector3(0, 0, 5)]
+    beast.route.activities = [IDLE]
+    beast.route.facings = [nan[DType.float32]()]
+    beast.route.next = 0
+    beast.route.resting = 0
+    beast.character.heading = Angle(3.0, RADIAN)
+    residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_true(residents.beasts[0].paced > 0)
 
 
 def test_an_empty_village_has_no_residents() raises:

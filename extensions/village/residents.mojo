@@ -89,7 +89,7 @@ from controls.third_person_controls import turn_toward, yaw_of
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from std.math import cos, isnan, nan, pi, sin, sqrt
+from std.math import cos, floor, isnan, nan, pi, sin, sqrt
 from units.measure import length_meters
 from units.si import (
     METER,
@@ -138,6 +138,12 @@ comptime DETOUR = Float32(1.2)
 """How long a stuck resident walks aside, in seconds."""
 comptime ACTIVITY_REST = Float32(4)
 """How many rests long a person sits or works at a stop."""
+comptime TURN_STEP = Float32(0.35)
+"""How far an animal's feet step, in meters, for each radian it turns on
+the spot."""
+comptime TURNING = Float32(0.5)
+"""How fast an animal must turn, in radians a second, for its feet to step
+as it turns on the spot."""
 comptime STOP_REACH = Float32(14)
 """How far from the middle of where a person wanders a stop can be, in
 meters, for them to stop at it."""
@@ -1044,11 +1050,26 @@ struct Flipbook(Copyable, Movable):
             The standing mesh while it stands or has no stride, and the
             walk's pose at how far it has walked otherwise.
         """
-        if character.stance == STANDING or self.stride <= 0:
+        return self.frame_at(character.traveled, character.stance != STANDING)
+
+    def frame_at(self, paced: Float32, moving: Bool) -> GeometryId:
+        """Return the mesh of an animal that has paced a distance.
+
+        Args:
+            paced: How far its feet have stepped, in meters: its walk, and
+                the steps it took to turn.
+            moving: Whether its feet step now: it walks, or turns on the
+                spot.
+
+        Returns:
+            The standing mesh while its feet are still or it has no
+            stride, and the walk's pose at `paced` otherwise.
+        """
+        if not moving or self.stride <= 0:
             return self.stand
         if len(self.frames) == 0:
             return self.stand
-        var strides = character.traveled / self.stride
+        var strides = paced / self.stride
         var phase = strides - Float32(Int(strides))
         var index = Int(phase * Float32(len(self.frames)))
         return self.frames[min(index, len(self.frames) - 1)]
@@ -1232,6 +1253,9 @@ struct Beast(Copyable, Movable):
     var flee: Float32
     # Whether it follows the player.
     var follows: Bool
+    var paced: Float32
+    """How far its feet have stepped, in meters, its turns on the spot
+    included."""
 
 
 def _flight(
@@ -1422,6 +1446,7 @@ struct Residents(Movable):
                         book,
                         herd.flee.to(METER),
                         herd.follows,
+                        0,
                     )
                 )
 
@@ -1546,7 +1571,15 @@ struct Residents(Movable):
                 if fled:
                     steer = fled.value()
             var own = first + people + index
+            var was = beast.character.heading.to(RADIAN)
+            var walked = beast.character.traveled
             beast.character.step(steer[0], steer[1], delta, terrain, crowd, own)
+            # An animal that turns on the spot steps round as it turns.
+            var turn = beast.character.heading.to(RADIAN) - was
+            turn = turn - Float32(2 * pi) * floor(turn / Float32(2 * pi) + 0.5)
+            var stepped = beast.character.traveled - walked
+            beast.paced += stepped + abs(turn) * TURN_STEP
+            var turning = abs(turn) > TURNING * delta.to(SECOND)
             crowd[own].x = beast.character.position.x
             crowd[own].z = beast.character.position.z
             var at = beast.character.position
@@ -1555,8 +1588,9 @@ struct Residents(Movable):
             node.set_rotation_from_axis_angle(
                 Vector3(0, 1, 0), facing_turn(beast.character.heading)
             )
-            scene.meshes[beast.mesh].geometry = self.books[beast.book].frame(
-                beast.character
+            scene.meshes[beast.mesh].geometry = self.books[beast.book].frame_at(
+                beast.paced,
+                beast.character.stance != STANDING or turning,
             )
 
     def doing(self, index: Int) -> Activity:

@@ -332,7 +332,7 @@ Each resident bumps into the trees, the player and every other resident. A resid
 
 A person's skin, hair and beard are meshed on every core.
 
-**An animal** is a flipbook: its mesh in six poses of its walk, and one mesh standing. The mesh shows the pose of how far the animal has walked, so one stride covers one stride of ground. An animal walks at its stride times its stride frequency at a Froude number of 0.25. An animal that does not walk on four legs keeps its standing mesh.
+**An animal** is a flipbook: its mesh in six poses of its walk, and one mesh standing. The mesh shows the pose of how far the animal has walked, so one stride covers one stride of ground. An animal that turns on the spot faster than `TURNING`, half a radian a second, steps round: each radian it turns counts as `TURN_STEP`, 35 centimeters, of its walk. An animal walks at its stride times its stride frequency at a Froude number of 0.25. An animal that does not walk on four legs keeps its standing mesh.
 
 **A shy animal** runs from the player. `Herd.flee` is how near the player can come before the herd runs, a `Length`. Zero, the default, is tame. An animal nearer than that runs straight away from the player, at three times its walk, and its flipbook plays faster. It walks back to its route once the player is further away. The deer run from 12 meters, the rabbits from 6, the sheep from 3 and the goat from 2.
 
@@ -397,7 +397,6 @@ The clothes follow the skin, and the skin follows the bones, so they move togeth
 - A garment bends with the skin. It does not swing as cloth does.
 - The characters do not swim. Deep water stops them.
 - A resident walks straight to its next point. Round a house, it walks aside and tries again, but it does not plan a way. It can give up on a point it cannot reach.
-- An animal slides across the ground while it turns on the spot.
 - The camera comes in before a wall and a trunk, but not before a crown of leaves or a roof.
 - The X11 window and the macOS window do not play the sound: `--wav` keeps it, and a host can take it with `tm_village_audio`.
 - The macOS window reads no gamepad. A key cannot be bound to another action, and the game has no menu of settings: its options are its command line.
