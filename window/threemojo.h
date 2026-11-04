@@ -329,7 +329,9 @@ enum {
   TM_VILLAGE_FLOAT_NIGHT_SKY = 55,    /* 3 floats: bytes */
   TM_VILLAGE_FLOAT_NIGHT_STAR_GRID = 58,
   TM_VILLAGE_FLOAT_NIGHT_STAR_RATE = 59,
-  TM_VILLAGE_FLOAT_COUNT = 60
+  TM_VILLAGE_FLOAT_NIGHT_MOON = 60,   /* 3 floats */
+  TM_VILLAGE_FLOAT_NIGHT_MOONLIT = 63,
+  TM_VILLAGE_FLOAT_COUNT = 64
 };
 
 /* tm_village_pointers: addresses, 64-bit integers. */

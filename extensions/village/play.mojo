@@ -86,7 +86,7 @@ from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.field import FieldStats
 from extensions.vegetation.ground import Lot, lot_openness
-from extensions.vegetation.meadow import EXPOSURE, FARTHEST
+from extensions.vegetation.meadow import EXPOSURE, FARTHEST, sun_direction
 from extensions.vegetation.noise import hash01
 from core.fog import FogView
 from extensions.village.character import (
@@ -214,6 +214,8 @@ comptime RAIN_RINGS = Float32(40)
 """How many drops a second ring the pond in a downpour."""
 comptime WAKE_EVERY = Float32(0.18)
 """The seconds between two taps of a wading player's wake."""
+comptime SUN_STEP = Float32(1)
+"""How far the sun turns, in degrees, before its shadows are drawn again."""
 comptime SIGHT_POINTS = 4
 """How many points along the camera's sight hold a door open."""
 comptime INSIDE_REACH = Float32(18)
@@ -517,6 +519,8 @@ struct VillageGame(Movable):
     var rain_rings: Float32
     var splashes: Int
     var wake: Float32
+    # The direction toward the sun, or the moon, as the scene last set it.
+    var sun_was: Vector3
     # How finely each part of a frame is drawn, the window's size, and the
     # renderer that draws the frame at its smaller size.
     var quality: GameQuality
@@ -729,6 +733,10 @@ struct VillageGame(Movable):
         self.rain_rings = 0
         self.splashes = 0
         self.wake = 0
+        self.sun_was = sun_direction(
+            parameters.village.meadow.sun_elevation,
+            parameters.village.meadow.sun_azimuth,
+        )
         self.village.meadow.register_shadings(self.fast, assets)
         self.fast.set_shadows(self.quality.shadows, self.quality.shadow_size)
         var movers = List[NodeId]()
@@ -968,6 +976,7 @@ struct VillageGame(Movable):
         self.critters.update(scene, daylight, self.weather.look.rain, delta)
         ref eye_at = self.camera.position
         scene.node(self.village.props.lit).visible = lamps
+        scene.node(self.village.lamps).visible = lamps
         scene.node(self.village.props.daylit).visible = not lamps
         for index in range(len(self.village.houses)):
             ref house = self.village.houses[index]
@@ -989,6 +998,7 @@ struct VillageGame(Movable):
         self.weather.update(scene, delta, self.view.yaw)
         # The day dims and tints what the weather set.
         self.day.advance(delta)
+        self.follow_sun(scene)
         ref seen_from = self.camera.position
         var roofed = (
             self.terrain.ceiling_over(seen_from.x, seen_from.z, feet.y)
@@ -996,6 +1006,31 @@ struct VillageGame(Movable):
         )
         self.day.light(scene, roofed)
         return stats
+
+    def follow_sun(mut self, mut scene: Scene) raises:
+        """Turn the sun, or the moon, to the hour, once it has moved
+        `SUN_STEP` degrees: its light, its shadows and the water's glints.
+
+        Args:
+            scene: The scene: the sun's node is moved.
+
+        Raises:
+            Error: If the sun's node is not in the scene.
+        """
+        var toward = self.day.sun_toward()
+        var turned = (
+            toward.x * self.sun_was.x
+            + toward.y * self.sun_was.y
+            + toward.z * self.sun_was.z
+        )
+        if turned > cos(SUN_STEP * 0.017453292):
+            return
+        self.sun_was = toward
+        scene.node(self.village.meadow.sun.node).set_position(
+            toward.x * 100, toward.y * 100, toward.z * 100
+        )
+        self.fast.refresh_shadows()
+        self.village.water.set_sun(toward)
 
     def ripple_pond(mut self, scene: Scene, delta: Duration) raises:
         """Tap the pond where something stirs it this frame: the rain, a

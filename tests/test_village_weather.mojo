@@ -25,7 +25,7 @@ from extensions.village.weather import (
     weather_label,
     weather_look,
 )
-from lights.light import ambient_light, directional_light
+from lights.light import ambient_light, directional_light, point_light
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from std.math import inf
@@ -149,6 +149,18 @@ def test_the_weather_sets_the_lights_and_the_fog() raises:
     assert_equal(len(dark.bases), 0)
     with assert_raises(contains="one of the four"):
         _ = Weather(bare, WeatherKind(5))
+
+
+def test_a_lamp_burns_as_bright_in_the_rain() raises:
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_light(point_light(Color(255, 180, 100), node, 6))
+    scene.update()
+    var weather = Weather(scene, RAIN)
+    for _ in range(10):
+        weather.update(scene, Duration(0.2, SECOND), Angle(0.0, DEGREE))
+    assert_almost_equal(scene.lights[0].intensity, 6, atol=1e-5)
+    assert_equal(Int(scene.lights[0].color.b), 100)
 
 
 def test_the_weather_cycles_by_itself() raises:

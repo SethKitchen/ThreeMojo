@@ -47,6 +47,8 @@ from renderers.game_gpu import (
     FLOAT_NIGHT_SKY,
     FLOAT_NIGHT_STAR_GRID,
     FLOAT_NIGHT_STAR_RATE,
+    FLOAT_NIGHT_MOON,
+    FLOAT_NIGHT_MOONLIT,
     FLOAT_NIGHT_STARS,
     FLOAT_STILL_PER_METER,
     FLOAT_WATER_CLIP,
@@ -528,6 +530,8 @@ def test_the_numbers_are_the_headers() raises:
         ("NIGHT_SKY", FLOAT_NIGHT_SKY),
         ("NIGHT_STAR_GRID", FLOAT_NIGHT_STAR_GRID),
         ("NIGHT_STAR_RATE", FLOAT_NIGHT_STAR_RATE),
+        ("NIGHT_MOON", FLOAT_NIGHT_MOON),
+        ("NIGHT_MOONLIT", FLOAT_NIGHT_MOONLIT),
         ("COUNT", FLOAT_COUNT),
     ]
     for entry in floats:

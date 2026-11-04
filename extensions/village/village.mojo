@@ -35,6 +35,7 @@ house at its door: see `extensions.village.terrain`.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.building.material import brick, timber
 from extensions.building.model import Building
@@ -116,7 +117,9 @@ from extensions.village.shore import (
 from extensions.water.optics import Basin
 from extensions.water.pebbles import PebbleBed
 from extensions.water.resolution import SpectrumResolution
-from render.framebuffer import Framebuffer
+from render.framebuffer import Color, Framebuffer
+from lights.light import PHYSICAL_DECAY, point_light
+from renderers.game_renderer import GAME_LAMPS
 from renderers.renderer import Renderer
 from math.vector3 import Vector3
 from std.math import atan2, cos, sin
@@ -137,6 +140,12 @@ from units.si import (
 
 # The water's clock at the start, in seconds: the Clearwater page's.
 comptime WATER_START = Float32(5)
+comptime LAMP_COLOR = Color(255, 186, 110)
+"""The color of a lamp's flame, in sRGB bytes."""
+comptime LAMP_INTENSITY = Float32(6)
+"""How bright a lamp burns, as a point light's intensity."""
+comptime LAMP_REACH = Float32(9)
+"""How far a lamp's light reaches, in meters."""
 comptime SMOKE_DRIFT = Float32(0.6)
 """How fast the wind carries the chimneys' smoke, in meters a second."""
 # The texels on a side of each texture of the houses.
@@ -564,6 +573,82 @@ def pond_basin(ground: Ground) raises -> Basin:
     )
 
 
+def lamp_places(
+    parameters: VillageParameters,
+    houses: List[StandingHouse],
+    ground: Ground,
+) raises -> List[Vector3]:
+    """Return where the village's lamps burn: by the front door of each
+    dwelling, and in each lamp post's lantern.
+
+    Args:
+        parameters: The village's houses and props.
+        houses: The houses as they stand, in the order of `parameters`.
+        ground: The ground.
+
+    Returns:
+        The lamps, the doors' first, at most `GAME_LAMPS`.
+
+    Raises:
+        Error: If a dwelling has no door that leads outside.
+    """
+    var places = List[Vector3]()
+    for index in range(len(houses)):
+        if parameters.houses[index].house.use == BARN:
+            continue
+        var door = houses[index].interior.front_door()
+        var middle = Vector3(
+            door.hinge_x + door.along_x * door.width / 2,
+            door.bottom + door.height - 0.15,
+            door.hinge_z + door.along_z * door.width / 2,
+        )
+        # The lantern hangs beside the door, out from the wall: the door
+        # swings in.
+        places.append(
+            middle
+            + Vector3(door.along_x, 0, door.along_z) * (door.width / 2 + 0.25)
+            - Vector3(door.swing_x, 0, door.swing_z) * 0.35
+        )
+    for prop in parameters.props:
+        if prop.kind != LAMP_POST:
+            continue
+        var turn = prop.turn.to(RADIAN)
+        places.append(
+            Vector3(
+                prop.x + 0.38 * cos(turn),
+                ground.height_at(prop.x, prop.z) + prop.length - 0.25,
+                prop.z - 0.38 * sin(turn),
+            )
+        )
+    while len(places) > GAME_LAMPS:
+        _ = places.pop()
+    return places^
+
+
+def _hang_lamps(
+    mut scene: Scene,
+    parameters: VillageParameters,
+    houses: List[StandingHouse],
+    ground: Ground,
+) raises -> NodeId:
+    """Add a warm point light at each lamp, under one node hidden by day,
+    and return the node."""
+    var root = Object3D()
+    root.visible = False
+    var lamps = scene.add(root^)
+    for at in lamp_places(parameters, houses, ground):
+        var node = Object3D()
+        node.set_position(at.x, at.y, at.z)
+        node.parent = lamps
+        var bulb = scene.add(node^)
+        scene.add_light(
+            point_light(
+                LAMP_COLOR, bulb, LAMP_INTENSITY, PHYSICAL_DECAY, LAMP_REACH
+            )
+        )
+    return lamps
+
+
 def _fill_pond(mut water: WaterScene, ground: Ground) raises:
     """Give the water its pond's basin, and lay its ripple window over the
     pond."""
@@ -603,6 +688,10 @@ struct Village(Movable):
     houses that have one."""
     var wind: Vector3
     """The wind that carries the chimneys' smoke, in meters a second."""
+    var lamps: NodeId
+    """The node of the lamps' lights: a light at each dwelling's door
+    lantern and at each lamp post, at most `GAME_LAMPS`. It is hidden by
+    day."""
 
     def __init__(
         out self,
@@ -681,6 +770,7 @@ struct Village(Movable):
                 parameters.scan_turn,
                 ground,
             )
+        self.lamps = _hang_lamps(scene, parameters, self.houses, ground)
         scene.update()
         self.chimneys = List[Vector3]()
         for index in range(len(self.houses)):

@@ -116,6 +116,7 @@ struct Post {
   float4 night_down;
   float4 night_glow;    /* xyz: the dusk's gain on the low sky */
   float4 night_sky;     /* xyz: the night sky, in bytes */
+  float4 night_moon;    /* xyz: toward the moon; w: how much it shows */
   int4 cover_ints;      /* the clouds' grid columns, rows and step, and 1 if it is night */
   int4 water_ints;      /* 1 if there is water, the step, the grid's width and height */
   int4 flags;           /* x: 1 if the passes are the GPU's; y: 1 if it smooths the edges */
@@ -192,6 +193,18 @@ static float3 night_sky(constant Post &post, int width, int height, uint2 pixel,
     float bright = 120.0 + 135.0 * hash01(int(cell * 1.0e7), 1, 84);
     float seen = stars * hermite(0.03, 0.12, d.y);
     c = c + (float3(bright, bright, bright * 0.95) - c) * seen;
+  }
+  /* DayCycle's moon_sky: the moon's glow and its disk with a soft rim. */
+  float moonlit = post.night_moon.w;
+  if (moonlit > 0.0) {
+    float3 m = post.night_moon.xyz;
+    float near = d.x * m.x + d.y * m.y + d.z * m.z;
+    if (near >= 0.995) {
+      float glow = hermite(0.995, 1.0, near) * 0.35;
+      float disk = hermite(0.99955, 0.99975, near);
+      float seen = min(1.0, (glow + disk) * moonlit);
+      c = c + (float3(238.0, 234.0, 214.0) - c) * seen;
+    }
   }
   return floor(min(float3(255.0), c));
 }

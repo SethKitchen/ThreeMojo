@@ -47,7 +47,7 @@ from core.fog import exp2_fog
 from core.ordinal import ordinal_valid
 from core.scene import Scene
 from extensions.vegetation.noise import hash01, value_noise
-from lights.light import DIRECTIONAL
+from lights.light import DIRECTIONAL, POINT
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
@@ -394,6 +394,10 @@ struct Weather(Movable):
             var tint = neutral
             if light.kind == DIRECTIONAL:
                 share = self.look.sun
+                tint = 0
+            elif light.kind == POINT:
+                # A lamp burns as bright in any weather.
+                share = 1
                 tint = 0
             light.intensity = self.bases[index] * share
             var base = self.colors[index]

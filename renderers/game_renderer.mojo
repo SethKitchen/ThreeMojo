@@ -69,7 +69,7 @@ from core.morph import MorphInfluences
 from core.object3d import NodeId
 from core.ordinal import ordinal_valid
 from core.scene import Scene
-from lights.lighting import Lighting
+from lights.lighting import FALLOFF_FLOOR, Lighting
 from materials.material import (
     BASIC,
     DOUBLE_SIDE,
@@ -168,6 +168,8 @@ stage takes."""
 comptime NO_TRIANGLE = Int32(-1)
 """The visibility buffer's mark for a pixel no triangle covers."""
 comptime F = SIMD[DType.float32, GAME_LANES]
+comptime GAME_LAMPS = 8
+"""The most point lights the game renderer draws."""
 comptime I = SIMD[DType.int32, GAME_LANES]
 comptime _FRESNEL_SLOPE = Float32(-5.55473)
 comptime _FRESNEL_OFFSET = Float32(-6.98316)
@@ -911,6 +913,18 @@ struct _Frame(ImplicitlyCopyable):
     # it culls faces by their facing.
     var depth_only: Bool
     var cull: Bool
+    # The point lights, at most `GAME_LAMPS`: how many, where each is,
+    # what it carries, scaled as the other lights are, how it falls off,
+    # and where it stops.
+    var lamps: Int
+    var lamp_x: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_y: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_z: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_r: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_g: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_b: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_decay: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_cutoff: SIMD[DType.float32, GAME_LAMPS]
 
 
 @fieldwise_init
@@ -1656,8 +1670,29 @@ struct GameRenderer(Movable):
             toward = SIMD[DType.float32, 4](d.x, d.y, d.z, 0)
             sun = _rgb(lights.radiances[index])
             has_sun = True
-        if len(lights.positions) > 0 or len(lights.spot_positions) > 0:
-            raise Error("The game renderer draws no point or spot light")
+        if len(lights.spot_positions) > 0:
+            raise Error("The game renderer draws no spot light")
+        if len(lights.positions) > GAME_LAMPS:
+            raise Error("The game renderer draws at most 8 point lights")
+        var lamp_x = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_y = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_z = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_r = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_g = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_b = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_decay = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_cutoff = SIMD[DType.float32, GAME_LAMPS](0)
+        for index in range(len(lights.positions)):
+            ref at = lights.positions[index]
+            var carries = _rgb(lights.point_radiances[index]) * lights.scale
+            lamp_x[index] = at.x
+            lamp_y[index] = at.y
+            lamp_z[index] = at.z
+            lamp_r[index] = carries[0]
+            lamp_g[index] = carries[1]
+            lamp_b[index] = carries[2]
+            lamp_decay[index] = lights.decays[index]
+            lamp_cutoff[index] = lights.cutoffs[index]
         var fog = scene.fog.kind == EXP2_FOG
         if not fog and scene.fog.kind != NO_FOG:
             raise Error("The game renderer draws only exponential fog")
@@ -1686,6 +1721,15 @@ struct GameRenderer(Movable):
             time.to(SECOND),
             False,
             True,
+            len(lights.positions),
+            lamp_x,
+            lamp_y,
+            lamp_z,
+            lamp_r,
+            lamp_g,
+            lamp_b,
+            lamp_decay,
+            lamp_cutoff,
         )
 
     def _shape(mut self, assets: Assets, id: GeometryId) raises -> Int:
@@ -2859,6 +2903,24 @@ def _light_range(
                     ib = ib + (
                         fr.ground[2] + (fr.sky[2] - fr.ground[2]) * share
                     )
+                # Each lamp lights what faces it, as three.js's point light
+                # does, with no shadow.
+                for lamp in range(fr.lamps):
+                    var lx = F(fr.lamp_x[lamp]) - wx
+                    var ly = F(fr.lamp_y[lamp]) - wy
+                    var lz = F(fr.lamp_z[lamp]) - wz
+                    var d2 = lx * lx + ly * ly + lz * lz
+                    var reach = fr.lamp_cutoff[lamp]
+                    if reach > 0 and not d2.lt(reach * reach).reduce_or():
+                        continue
+                    var d = sqrt(max(d2, F(1.0e-8)))
+                    var facing = max(F(0), (fx * lx + fy * ly + fz * lz) / d)
+                    var reaching = (
+                        _lamp_falloff(d, fr.lamp_decay[lamp], reach) * facing
+                    )
+                    ir = ir + reaching * fr.lamp_r[lamp]
+                    ig = ig + reaching * fr.lamp_g[lamp]
+                    ib = ib + reaching * fr.lamp_b[lamp]
                 ar = albedo_r * ir * skylit + look.emissive[0]
                 ag = albedo_g * ig * skylit + look.emissive[1]
                 ab = albedo_b * ib * skylit + look.emissive[2]
@@ -2930,6 +2992,22 @@ def _light_range(
                     row[unsafe_offset=lane]
                 )
         k += lanes
+
+
+@always_inline
+def _lamp_falloff(distance: F, decay: Float32, cutoff: Float32) -> F:
+    """Return how much of a lamp's light survives each distance, as
+    `lights.lighting.falloff` finds it, for a run of lanes."""
+    var power = F(1)
+    if decay != 0:
+        power = exp2(decay * log2(distance))
+    var kept = 1 / max(power, F(FALLOFF_FLOOR))
+    if cutoff > 0:
+        var ratio = distance / cutoff
+        var quartic = ratio * ratio * ratio * ratio
+        var edge = min(F(1), max(F(0), 1 - quartic))
+        kept = kept * edge * edge
+    return kept
 
 
 @always_inline

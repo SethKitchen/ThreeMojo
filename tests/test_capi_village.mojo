@@ -39,7 +39,7 @@ from extensions.water.upload import (
     WORD_WIDTH,
     grid_samples,
 )
-from lights.light import point_light
+from lights.light import spot_light
 from render.framebuffer import Color
 from renderers.game_gpu import (
     FLOAT_COVER_BRIGHT,
@@ -451,8 +451,8 @@ def test_a_frame_that_cannot_be_drawn_is_the_last_one() raises:
     _step(app, 4)
     var before = _hash(app)
     _step(app, 4)
-    # The game draws no point light.
-    _state(app)[].scene.add_light(point_light(Color(255, 255, 255), NodeId(0)))
+    # The game draws no spot light.
+    _state(app)[].scene.add_light(spot_light(Color(255, 255, 255), NodeId(0)))
     assert_equal(before, _hash(app))
     tm_destroy(app)
 
@@ -624,8 +624,8 @@ def test_the_same_painted_frames_finish_the_same() raises:
 def test_a_frame_that_cannot_be_prepared_for_a_gpu_is_refused() raises:
     var app = _make_gpu()
     _step(app, 2)
-    # The game draws no point light.
-    _state(app)[].scene.add_light(point_light(Color(255, 255, 255), NodeId(0)))
+    # The game draws no spot light.
+    _state(app)[].scene.add_light(spot_light(Color(255, 255, 255), NodeId(0)))
     assert_equal(tm_village_prepare(app), Int32(0))
     tm_destroy(app)
 

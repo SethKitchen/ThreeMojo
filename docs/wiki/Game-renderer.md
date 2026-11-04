@@ -165,10 +165,11 @@ The still map keeps the casters as they were when it was drawn. So in the villag
 - Morph targets on a mesh, relative or absolute, with or without normals. The renderer reads only the vertices each target moves. It moves the shape again only when the mesh's weights change. A geometry that two meshes wear at once, in different weights, shows the weights of the mesh drawn last. A skinned mesh's morph targets are not drawn.
 - A node program, only as a `GameShading` registered for it says. It can light a back face as its front, read a baked sun and sky, and sway in the wind.
 - Ambient, hemisphere and directional lights. The cascades of one sun count once.
+- At most `GAME_LAMPS`, eight, point lights. A point light falls off as `lights.lighting.falloff` has it, and lights each vertex that faces it. It casts no shadow.
 - Exponential squared fog, or no fog.
 - A color or a cube background.
 
-The renderer refuses other materials, a second hemisphere light, a second sun, and point and spot lights.
+The renderer refuses other materials, a second hemisphere light, a second sun, a ninth point light, and spot lights.
 
 ## Why it agrees with `Renderer`
 
