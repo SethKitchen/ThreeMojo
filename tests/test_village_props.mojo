@@ -12,12 +12,22 @@ from extensions.vegetation.ground import Ground
 from extensions.village.props import (
     BARREL,
     BENCH,
+    CART,
     CRATE,
+    CROPS,
     FENCE,
     FENCE_HEIGHT,
     HAY_BALE,
+    HEDGE,
+    HEDGE_DEPTH,
+    HEDGE_HEIGHT,
+    LAMP_POST,
     Prop,
     PropKind,
+    SCARECROW,
+    SIGNPOST,
+    TROUGH,
+    WASHING_LINE,
     WELL,
     WOODPILE,
     WOODPILE_DEPTH,
@@ -40,10 +50,26 @@ def _flat() raises -> Ground:
     return Ground(hill_height=Length(0.0, METER))
 
 
-def test_a_prop_kind_is_one_of_seven() raises:
-    for kind in [WELL, BARREL, CRATE, HAY_BALE, FENCE, BENCH, WOODPILE]:
+def test_a_prop_kind_is_one_of_fifteen() raises:
+    for kind in [
+        WELL,
+        BARREL,
+        CRATE,
+        HAY_BALE,
+        FENCE,
+        BENCH,
+        WOODPILE,
+        CART,
+        SIGNPOST,
+        WASHING_LINE,
+        TROUGH,
+        SCARECROW,
+        CROPS,
+        LAMP_POST,
+        HEDGE,
+    ]:
         assert_true(kind.is_valid())
-    assert_false(PropKind(7).is_valid())
+    assert_false(PropKind(15).is_valid())
     assert_false(PropKind(-1).is_valid())
 
 
@@ -51,7 +77,7 @@ def test_a_prop_that_cannot_be_drawn_is_refused() raises:
     var turn = Angle(0.0, DEGREE)
     Prop(WELL, 0, 0, turn, 0.8).check()
     with assert_raises(contains="kind"):
-        Prop(PropKind(9), 0, 0, turn, 1).check()
+        Prop(PropKind(19), 0, 0, turn, 1).check()
     with assert_raises(contains="10 kilometers"):
         Prop(CRATE, 2.0e4, 0, turn, 1).check()
     with assert_raises(contains="10 kilometers"):
@@ -65,7 +91,7 @@ def test_a_prop_that_cannot_be_drawn_is_refused() raises:
     var scene = Scene()
     with assert_raises(contains="kind"):
         _ = stand_props(
-            scene, assets, looks, [Prop(PropKind(7), 0, 0, turn, 1)], _flat()
+            scene, assets, looks, [Prop(PropKind(15), 0, 0, turn, 1)], _flat()
         )
 
 
@@ -151,6 +177,48 @@ def test_a_lone_barrel_draws_one_mesh_and_none_draws_none() raises:
     assert_equal(none.meshes, 0)
     assert_equal(none.triangles, 0)
     assert_equal(len(bare.meshes), 0)
+
+
+def test_the_new_props_stand_and_the_lamps_light_at_night() raises:
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    var scene = Scene()
+    var turn = Angle(30.0, DEGREE)
+    var props = stand_props(
+        scene,
+        assets,
+        looks,
+        [
+            Prop(CART, 0, 0, turn, 1.4),
+            Prop(SIGNPOST, 4, 0, turn, 2.2),
+            Prop(WASHING_LINE, 8, 0, turn, 4),
+            Prop(TROUGH, 12, 0, turn, 1.6),
+            Prop(SCARECROW, 16, 0, turn, 1.8),
+            Prop(CROPS, 20, 0, turn, 3),
+            Prop(LAMP_POST, 24, 0, turn, 2.6),
+            Prop(HEDGE, 28, 0, turn, 6),
+        ],
+        _flat(),
+    )
+    # Every prop but the crops and the hedge is a solid lot; the hedge is
+    # a wall as tall as itself.
+    assert_equal(len(props.lots), 6)
+    assert_equal(len(props.walls), 1)
+    assert_almost_equal(
+        props.walls[0].half_thickness, HEDGE_DEPTH / 2, atol=1e-6
+    )
+    assert_almost_equal(props.walls[0].top, HEDGE_HEIGHT, atol=1e-6)
+    # Wood, stone, plaster, cloth, the troughs' water, and the lamps'
+    # glowing and cold glass.
+    assert_equal(props.meshes, 7)
+    # The glowing glass hides by day, and the cold glass shows.
+    assert_false(scene.node(props.lit).visible)
+    assert_true(scene.node(props.daylit).visible)
+    var lamp = 0
+    for mesh in scene.meshes:
+        if mesh.node == props.lit:
+            lamp += 1
+    assert_equal(lamp, 1)
 
 
 def main() raises:

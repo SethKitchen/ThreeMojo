@@ -98,11 +98,13 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 |---|---|
 | A pond 12 meters across and 1.2 meters deep | Right of the trail, 11 meters ahead of the camera. |
 | A stone cottage of one story, 7 by 5.5 meters, under slates | Left of the trail, about 25 meters away, turned 80 degrees. |
-| A framed cottage of one story, 6.5 by 5 meters | Left of the trail, about 60 meters away, turned 70 degrees. |
-| A framed house of two stories, 8 by 6 meters | Right of the trail, about 55 meters away, turned -80 degrees. |
-| A brick house of two stories, 9 by 7 meters | On the left, about 75 meters away, turned 20 degrees. |
-| A boarded barn of one story 4.2 meters tall, 13 by 8 meters | Ahead, about 90 meters away, turned -12 degrees. |
+| A brick house of two stories, 9 by 7 meters, under weathered tiles | West of the green, about 55 meters away, turned 90 degrees to face it. |
+| A framed cottage of one story, 6.5 by 5 meters, under thatch | South of the green, about 60 meters away, facing it. |
+| A framed house of two stories, 8 by 6 meters, under warm tiles | Right of the trail, across it from the green, about 55 meters away, turned -80 degrees. |
+| A boarded barn of one story 4.2 meters tall, 13 by 8 meters, under gray tiles | Ahead, about 90 meters away, turned -12 degrees. |
 | The scanned building, if there is one | On the right, about 110 meters away, turned 28 degrees. |
+
+Three houses face the green round the well. The green holds a bench, a trough, a handcart, a signpost where the paths meet the trail, and three lamp posts.
 
 The houses' textures are 128 texels on a side.
 
@@ -134,8 +136,20 @@ The water's ocean spectrum is 256 texels on a side, and its glare is 128 texels.
 | `FENCE` | Posts at most 2 meters apart, and two rails, a meter tall | Its length |
 | `BENCH` | A plank on two trestles | Its length |
 | `WOODPILE` | Split logs stacked under a board lid, their ends out, 0.6 meters deep and 1.15 meters tall | Its length |
+| `CART` | A handcart: a bed of boards on two spoked wheels, with two shafts | Its bed's length |
+| `SIGNPOST` | A post with two pointing arms | Its height |
+| `WASHING_LINE` | Two posts, a line between them, and cloths of three colors | Its length |
+| `TROUGH` | A trough of boards on legs, full of water | Its length |
+| `SCARECROW` | A post and a cross arm in a coat, a straw head and a hat | Its height |
+| `CROPS` | A garden bed of three rows of cabbages | Its length |
+| `LAMP_POST` | An iron post on a stone foot, with a lantern that glows from dusk to dawn | Its height |
+| `HEDGE` | A clipped hedge of leaves, 1.4 meters tall and 0.9 meters deep | Its length |
 
-The default village has a well and a bench by the trail, and barrels, crates and hay before the barn. A fence closes a garden behind the stone cottage, and a bench stands before the framed house. A woodpile stands outside the hearth's gable of each house with a hearth: `woodpile_by` places it, and `hearthed` says which houses have one. Each prop but a fence is a solid lot of the terrain, and each fence is a wall span. The residents' routes keep off the props.
+The default village has the green's props, and barrels, crates and hay before the barn. A hedge runs between the barn's yard and the green. Fences close a garden behind the stone cottage, with a gate on its south side. Three beds of cabbages and a scarecrow stand in it, and a washing line stands beside it. A bench stands before the framed house. A woodpile stands outside the hearth's gable of each house with a hearth: `woodpile_by` places it, and `hearthed` says which houses have one.
+
+Each fence and each hedge is a wall span of the terrain. Crops stop nobody. Each other prop is a solid lot. The residents' routes keep off the props. A lamp post's glowing glass hangs from `StandingProps.lit`, and its cold glass from `StandingProps.daylit`. The game shows one of them with the houses' lamps.
+
+The ground at the foot of each building is dark with grime, out to `GRIME_REACH`, 0.9 meters, from its lot. See `lot_grime` in [Vegetation](Vegetation#ponds-and-lots).
 
 ## Lots
 
