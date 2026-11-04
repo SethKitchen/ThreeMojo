@@ -141,6 +141,7 @@ from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.faces import FaceLife, face_reach
 from extensions.village.day import DayCycle, dim_water
 from extensions.village.puffs import draw_puffs
+from extensions.village.air import bloom, ground_mist
 from extensions.village.gpu_post import GpuPost
 from extensions.village.talk import (
     DONE,
@@ -189,7 +190,7 @@ from render.game_smooth import smooth_edges
 from render.game_upscale import upscale_into
 from renderers.game_renderer import FULL_SHADOWS, GameRenderer
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, exp, sin, sqrt
+from std.math import cos, exp, isinf, sin, sqrt
 from std.time import perf_counter_ns
 from units.si import (
     DEGREE,
@@ -214,6 +215,8 @@ comptime RAIN_RINGS = Float32(40)
 """How many drops a second ring the pond in a downpour."""
 comptime WAKE_EVERY = Float32(0.18)
 """The seconds between two taps of a wading player's wake."""
+comptime DAWN_MIST = Float32(6.5)
+"""The hour that the dawn's ground mist lies thickest."""
 comptime SUN_STEP = Float32(1)
 """How far the sun turns, in degrees, before its shadows are drawn again."""
 comptime SIGHT_POINTS = 4
@@ -999,6 +1002,15 @@ struct VillageGame(Movable):
         # The day dims and tints what the weather set.
         self.day.advance(delta)
         self.follow_sun(scene)
+        # The rain soaks the village, and the snow whitens it in the day's
+        # light.
+        self.village.weather_surfaces(
+            assets,
+            self.weather.wet,
+            self.weather.snowed,
+            self.day.daylight()
+            * (0.5 + 0.5 * min(Float32(1), self.weather.look.sky / 2.6)),
+        )
         ref seen_from = self.camera.position
         var roofed = (
             self.terrain.ceiling_over(seen_from.x, seen_from.z, feet.y)
@@ -1031,6 +1043,67 @@ struct VillageGame(Movable):
         )
         self.fast.refresh_shadows()
         self.village.water.set_sun(toward)
+
+    def sheltered(self, image: Framebuffer) raises -> List[Bool]:
+        """Return which pixels of a frame show a point under a roof.
+
+        Args:
+            image: The frame, with its depths.
+
+        Returns:
+            True for each pixel whose point stands under the ceiling of a
+            floor of a house.
+
+        Raises:
+            Error: If the frame has no depth for each pixel, or the
+                camera's matrices cannot be inverted.
+        """
+        var w = image.width
+        var h = image.height
+        if len(image.depth) != w * h:
+            raise Error("A frame needs a depth for each pixel")
+        var inverse = self.camera.projection_matrix()
+        inverse.multiply(self.camera.view_matrix())
+        inverse.invert()
+        var under = List[Bool](length=w * h, fill=False)
+        for y in range(h):
+            var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
+            for x in range(w):
+                var z = image.depth[y * w + x]
+                if isinf(z):
+                    continue
+                var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
+                var at = inverse.transform_point(Vector3(nx, ny, z))
+                var ceiling = self.terrain.ceiling_over(at.x, at.z, at.y)
+                under[y * w + x] = at.y < ceiling
+        return under^
+
+    def veil(self, mut image: Framebuffer, scene: Scene, day: Float32) raises:
+        """Lay the ground mist of the hour and the weather over a frame,
+        and make its bright light glow.
+
+        The mist rises in fog, and at dawn. The light glows most at night,
+        when the lamps and the windows are the brightest things there are.
+
+        Args:
+            image: The frame, with its depths.
+            scene: The scene: the mist takes its fog's color.
+            day: The share of the day's light, from 0 to 1.
+
+        Raises:
+            Error: If the frame has no depth for each pixel.
+        """
+        var hour = self.day.hour
+        var dawn = max(Float32(0), 1 - abs(hour - DAWN_MIST) / 1.5)
+        var thick = min(Float32(0.7), self.weather.look.fog * 30 + dawn * 0.3)
+        _ = ground_mist(
+            image,
+            self.camera,
+            self.village.level.to(METER),
+            thick,
+            scene.fog.color,
+        )
+        _ = bloom(image, 0.92 - 0.2 * (1 - day), 0.25 + 0.5 * (1 - day))
 
     def ripple_pond(mut self, scene: Scene, delta: Duration) raises:
         """Tap the pond where something stirs it this frame: the rain, a
@@ -1223,10 +1296,12 @@ struct VillageGame(Movable):
             self.weather.cover(image, self.camera)
             self.day.night_sky(image, self.camera, 1 - self.weather.look.clouds)
             # The chimneys smoke over the finished frame, dim at night.
-            var light = 0.2 + 0.8 * self.day.daylight()
+            var day = self.day.daylight()
+            var light = 0.2 + 0.8 * day
             _ = draw_puffs(
                 image, self.village.smoke(self.clock), self.camera, light
             )
+            self.veil(image, scene, day)
             covered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
         self.water_ms = Float64(watered - drawn) / 1.0e6
@@ -1235,6 +1310,14 @@ struct VillageGame(Movable):
             smooth_edges(image, available_workers())
             self.smooth_ms = Float64(perf_counter_ns() - covered) / 1.0e6
         self.upscale_ms = 0
+        # What a house's roof keeps the rain and the snow off, on the
+        # frame's own grid: a door open onto a room shows no rain.
+        var falling = self.weather.look.rain + self.weather.look.snow > 0.01
+        var sheltered = List[Bool]()
+        var mask_width = image.width
+        var mask_height = image.height
+        if falling and not passes:
+            sheltered = self.sheltered(image)
         if image.width == self.width and image.height == self.height:
             swap(self.window, image)
         else:
@@ -1246,7 +1329,7 @@ struct VillageGame(Movable):
         ref eye = self.camera.position
         var feet = self.player.position.y
         if self.terrain.ceiling_over(eye.x, eye.z, feet) >= OPEN_SKY:
-            self.weather.rain(self.window)
+            self.weather.rain(self.window, sheltered, mask_width, mask_height)
         self.weather_ms = (
             Float64(perf_counter_ns() - raining + covered - watered) / 1.0e6
         )

@@ -41,6 +41,22 @@ var image = village.render(renderer, scene, assets, camera)
 
 `render` draws the scene, and then composes the pond's water into the picture. Do not draw the scene with `renderer.render` alone: that picture has no water.
 
+## Draw an hour
+
+`keep_hour` sets the village for the hour of a `DayCycle`. It puts the sun or the moon where the hour does. From dusk to dawn it lights the lamps and the windows. Give the same hour to `render`, so it darkens the water and draws the night sky, the stars and the moon:
+
+```mojo
+from extensions.village.day import DayCycle
+
+var night = DayCycle(21.5)
+village.keep_hour(scene, night)
+_ = village.update(scene, assets, camera, Duration(2.0, SECOND))
+night.light(scene)
+var image = village.render(renderer, scene, assets, camera, night)
+```
+
+Call `DayCycle.light` after `update`, because the meadow's sun sets its lights again there. `examples/village.mojo --hour=21.5` draws the village at that hour.
+
 ## Add a scanned building
 
 Fetch a scan first. Then give its id to the example:
@@ -86,6 +102,7 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | `weather.mojo` | `WeatherKind`, `WeatherLook`, `weather_look`, `cloud_cover` and `Weather`. See [Village weather](Village-weather). |
 | `surfaces.mojo` | The textures, `HouseLooks` and `house_looks`. |
 | `scanned.mojo` | `CutBuilding`, `cut_building`, `grid_voxel`, `linear_splats`, `scan_lot` and `stand_scan`. |
+| `air.mojo` | `bloom` and `ground_mist`. See [Village weather](Village-weather#the-air). |
 | `pond.mojo` | `PondLook` and `water_mask`. |
 | `puffs.mojo` | `Puff`, `chimney_smoke`, `dust_puffs` and `draw_puffs`. |
 | `shore.mojo` | `ShoreParameters`, `StandingShore` and `stand_shore`. |

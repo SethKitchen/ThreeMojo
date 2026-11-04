@@ -36,6 +36,7 @@ house at its door: see `extensions.village.terrain`.
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
+from materials.material import MaterialId
 from core.scene import Scene
 from extensions.building.material import brick, timber
 from extensions.building.model import Building
@@ -107,6 +108,7 @@ from extensions.village.scanned import CutBuilding, scan_lot, stand_scan
 from extensions.water.frame import WaterScene
 from render.antialias import SUPERSAMPLE, downsample
 from core.fog import FogView
+from extensions.village.day import DayCycle, dim_water
 from extensions.village.pond import PondLook
 from extensions.village.puffs import Puff, chimney_smoke, draw_puffs
 from extensions.village.shore import (
@@ -140,6 +142,13 @@ from units.si import (
 
 # The water's clock at the start, in seconds: the Clearwater page's.
 comptime WATER_START = Float32(5)
+comptime SOAKED = Float32(0.3)
+"""The share of a surface's light that the rain takes when it is soaked."""
+comptime SNOW_WHITE = Color(236, 240, 248)
+"""The color that snow shines, in sRGB bytes."""
+comptime SNOW_SHINE = Float32(0.4)
+"""How bright a full cover of snow shines in full daylight, as a
+material's emissive intensity."""
 comptime LAMP_COLOR = Color(255, 186, 110)
 """The color of a lamp's flame, in sRGB bytes."""
 comptime LAMP_INTENSITY = Float32(6)
@@ -688,6 +697,13 @@ struct Village(Movable):
     houses that have one."""
     var wind: Vector3
     """The wind that carries the chimneys' smoke, in meters a second."""
+    var weathered: List[MaterialId]
+    """The materials that the weather wets and the snow covers: the
+    walls', the wood's and the stone's, the roofs', the grass's and the
+    ground's."""
+    var roofs: Int
+    """How many of `weathered`, from its start, are walls and wood, which
+    the rain darkens but no snow covers."""
     var lamps: NodeId
     """The node of the lamps' lights: a light at each dwelling's door
     lantern and at each lamp post, at most `GAME_LAMPS`. It is hidden by
@@ -771,6 +787,20 @@ struct Village(Movable):
                 ground,
             )
         self.lamps = _hang_lamps(scene, parameters, self.houses, ground)
+        self.weathered = [
+            looks.brick,
+            looks.fieldstone,
+            looks.plaster,
+            looks.boards,
+            looks.wood,
+            looks.ashlar,
+            looks.tiles,
+            looks.slates,
+            looks.thatch,
+            self.meadow.grass,
+            self.meadow.wood_still,
+        ]
+        self.roofs = 6
         scene.update()
         self.chimneys = List[Vector3]()
         for index in range(len(self.houses)):
@@ -895,6 +925,70 @@ struct Village(Movable):
             )
         return puffs^
 
+    def keep_hour(mut self, mut scene: Scene, day: DayCycle) raises:
+        """Set the village for an hour, for a still: the sun or the moon,
+        the lamps and the windows.
+
+        Call it before `update`. The meadow's sun sets its lights again in
+        `update`, so scale the lights for the hour after it, with
+        `DayCycle.light`.
+
+        Args:
+            scene: The scene.
+            day: The hour.
+
+        Raises:
+            Error: If a node is missing, or the sun is not above the
+                horizon.
+        """
+        var toward = day.sun_toward()
+        scene.node(self.meadow.sun.node).set_position(
+            toward.x * 100, toward.y * 100, toward.z * 100
+        )
+        self.water.set_sun(toward)
+        var lamps = day.daylight() < 0.5
+        for index in range(len(self.houses)):
+            ref house = self.houses[index]
+            scene.node(house.lit).visible = lamps
+            scene.node(house.daylit).visible = not lamps
+        scene.node(self.props.lit).visible = lamps
+        scene.node(self.props.daylit).visible = not lamps
+        scene.node(self.lamps).visible = lamps
+        scene.update()
+
+    def weather_surfaces(
+        self, mut assets: Assets, wet: Float32, snowed: Float32, light: Float32
+    ) raises:
+        """Darken the village's surfaces as the rain soaks them, and
+        whiten its roofs, its grass and its ground under snow.
+
+        A soaked surface keeps `1 - SOAKED` of its light. Snow shines with
+        the light of the day: its white is the material's emissive color,
+        at `light` of its strength, so it dims at night.
+
+        Args:
+            assets: The stores: the materials' colors and emissive light
+                are set.
+            wet: How wet the village is, from 0 to 1.
+            snowed: How much snow lies on it, from 0 to 1.
+            light: How much of the day's light the snow catches, from 0 to
+                1.
+
+        Raises:
+            Error: If a value is not from 0 to 1.
+        """
+        for value in [wet, snowed, light]:
+            if not (value >= 0 and value <= 1):
+                raise Error("A surface's weather must be from 0 to 1")
+        var gray = UInt8(Int(255 * (1 - SOAKED * wet) + 0.5))
+        for index in range(len(self.weathered)):
+            ref m = assets.materials.materials[self.weathered[index].value]
+            m.color = Color(gray, gray, gray)
+            if index < self.roofs:
+                continue
+            m.emissive = SNOW_WHITE
+            m.emissive_intensity = SNOW_SHINE * snowed * light
+
     def splash(
         mut self, x: Float32, z: Float32, radius: Length, strength: Float32
     ) raises:
@@ -919,14 +1013,19 @@ struct Village(Movable):
         scene: Scene,
         assets: Assets,
         camera: PerspectiveCamera,
+        day: Optional[DayCycle] = None,
     ) raises -> Framebuffer:
-        """Draw the scene and compose the pond's water into it.
+        """Draw the scene and compose the pond's water into it, mirror the
+        village and the stars in the water, and smoke the chimneys.
 
         Args:
             renderer: The renderer.
             scene: The scene, updated for the frame.
             assets: The stores.
             camera: The camera of the frame.
+            day: The hour, for its night sky, its stars and its darker
+                water. None draws the meadow's afternoon. Set the hour's
+                light first with `keep_hour`.
 
         Returns:
             The picture.
@@ -943,12 +1042,23 @@ struct Village(Movable):
         ) if renderer.antialias else renderer.render(scene, assets, camera)
         var before = image.depth.copy()
         _ = self.water.compose(image, scene, camera, self.level, self.bed)
+        var stars = Float32(0)
+        var light = Float32(1)
+        if day:
+            ref hour = day.value()
+            var share = hour.water_light()
+            if share < 1:
+                dim_water(image, before, share)
+            stars = hour.night_look(camera, 1).stars
+            light = 0.2 + 0.8 * hour.daylight()
         self.look.clock = self.water.clock.to(SECOND)
         _ = self.look.apply(
-            image, before, camera, self.level, FogView(scene.fog), 0
+            image, before, camera, self.level, FogView(scene.fog), stars
         )
+        if day:
+            day.value().night_sky(image, camera, 1)
         _ = draw_puffs(
-            image, self.smoke(self.water.clock.to(SECOND)), camera, 1
+            image, self.smoke(self.water.clock.to(SECOND)), camera, light
         )
         if renderer.antialias:
             return downsample(image, SUPERSAMPLE)

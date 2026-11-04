@@ -759,6 +759,10 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     game.ripple_pond(scene, step)
     var rained = len(game.village.water._drops)
     assert_true(rained > 0)
+    # It rains on the frame, and not under the house's roof.
+    game.render(scene, assets)
+    assert_equal(game.window.width, 32)
+    rained = len(game.village.water._drops)
     # A player who wades in the pond leaves a wake, a few taps a second.
     game.player.position = Vector3(0, game.village.level.to(METER) - 0.3, 4)
     game.player.velocity = Vector3(1, 0, 0)

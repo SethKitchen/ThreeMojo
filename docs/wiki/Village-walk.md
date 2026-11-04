@@ -82,7 +82,7 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Change the fighting style | Hold the left trigger, and press the south button | `Y` |
 | Taunt the Stone Warden | Hold the left trigger, and press the east button | `U` |
 | Show the combo book | Hold the left trigger, and press the back button | `K` |
-| Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
+| Weather | | `1` clear, `2` overcast, `3` rain, `4` fog, `6` snow |
 | Time | | `5` moves the day on three hours |
 | Quit | The start button | Escape. Command+Q in the macOS window. |
 

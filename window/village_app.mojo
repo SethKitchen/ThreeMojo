@@ -46,6 +46,7 @@ from extensions.village.quality import (
     game_quality,
 )
 from extensions.village.weather import (
+    SNOW,
     CLEAR,
     FOG,
     OVERCAST,
@@ -96,6 +97,8 @@ comptime TIME_KEY = 4
 """The number key, counted from `1` as zero, that moves the day on."""
 comptime TIME_HOURS = 3
 """The hours that the time key moves the day on."""
+comptime SNOW_KEY = 5
+"""The number key, counted from `1` as zero, that sets the snow."""
 comptime KEY_HOLD = Duration(10.0, SECOND)
 """How long a key counts as held with no repeat. The host says when each key
 goes up, so this only catches a key let go while the window was not
@@ -401,6 +404,8 @@ struct VillageApp(Movable):
             self.game.weather.set(WeatherKind(number))
         if number == TIME_KEY:
             self.game.day.hour = (self.game.day.hour + TIME_HOURS) % 24
+        if number == SNOW_KEY:
+            self.game.weather.set(SNOW)
 
     def advance(mut self, microseconds: Int):
         """Move the game on by a time delta.

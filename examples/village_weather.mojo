@@ -3,16 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The village in four weathers, as the game draws them: clear, overcast,
-rain and fog.
+"""The village in five weathers, as the game draws them: clear, overcast,
+rain, fog and snow, and a clear dawn with its mist.
 
     mojo run -I . examples/village_weather.mojo [path.png]
 
 The page is Village weather. The program builds the village game at the
 `high` quality, in a window of 640 by 360 pixels. It stands the player on
 the trail before the pond, and draws one view for each weather into one
-tile of a picture of 1280 by 720 pixels. Each weather is set at once,
-and the game runs a second in it before the view is drawn. The program
+tile of a picture of 1920 by 720 pixels. Each weather is set at once,
+the rain has soaked the village and the snow has covered it, and the game
+runs a second in it before the view is drawn. The program
 prints, as JSON, how long the build and the views took.
 """
 
@@ -29,6 +30,7 @@ from extensions.village.weather import (
     FOG,
     OVERCAST,
     RAIN,
+    SNOW,
     WeatherKind,
     weather_look,
 )
@@ -56,6 +58,9 @@ def _view(
     """Set a weather at once, run the game a second in it, and draw."""
     game.weather.set(kind)
     game.weather.look = weather_look(kind)
+    # The rain has soaked the village, and the snow has covered it.
+    game.weather.wet = 1 if kind == RAIN else 0
+    game.weather.snowed = 1 if kind == SNOW else 0
     for _ in range(10):
         _ = game.tick(scene, assets, no_input(), Duration(0.1, SECOND))
     # No flash of lightning in the picture.
@@ -84,17 +89,20 @@ def main() raises:
     )
     var built = clock.elapsed().to(MILLISECOND)
     var sheet = Framebuffer(
-        TILE_WIDTH * 2,
+        TILE_WIDTH * 3,
         TILE_HEIGHT * 2,
-        List[UInt8](length=TILE_WIDTH * TILE_HEIGHT * 16, fill=255),
+        List[UInt8](length=TILE_WIDTH * TILE_HEIGHT * 24, fill=255),
     )
-    var kinds: List[WeatherKind] = [CLEAR, OVERCAST, RAIN, FOG]
-    for k in range(4):
+    var kinds: List[WeatherKind] = [CLEAR, OVERCAST, RAIN, FOG, SNOW, CLEAR]
+    for k in range(6):
+        # The last is a clear dawn, with its mist on the ground.
+        if k == 5:
+            game.day.hour = 6.5
         blit(
             sheet,
             _view(game, scene, assets, kinds[k]),
-            (k % 2) * TILE_WIDTH,
-            (k // 2) * TILE_HEIGHT,
+            (k % 3) * TILE_WIDTH,
+            (k // 3) * TILE_HEIGHT,
         )
     var drawn = clock.elapsed().to(MILLISECOND) - built
     Path(destination).write_bytes(encode(sheet))

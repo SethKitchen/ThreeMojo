@@ -77,7 +77,7 @@ from extensions.village.pad_input import (
 from extensions.village.play import PlayParameters, VillageGame
 from extensions.village.progress import pack_progress, unpack_progress
 from extensions.village.day import DayCycle
-from extensions.village.weather import WeatherKind
+from extensions.village.weather import SNOW, WeatherKind
 from extensions.village.quality import (
     HIGH,
     LOW,
@@ -280,6 +280,8 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
                         game.weather.set(WeatherKind(number))
                     if number == 4:
                         game.day.hour = (game.day.hour + 3) % 24
+                    if number == 5:
+                        game.weather.set(SNOW)
                     keys.press(event.key)
                     shift = event.shift
                 elif event.kind == KEY_UP:

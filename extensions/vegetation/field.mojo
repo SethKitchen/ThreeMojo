@@ -157,6 +157,10 @@ struct LodBand(ImplicitlyCopyable):
         return pow(self.keep, -COVER_EXPONENT)
 
 
+comptime FLOWER_WIDEN = Float32(3)
+"""The widening of a level past which its flowers grow as grass."""
+
+
 def default_bands() -> List[LodBand]:
     """Return the four levels of a meadow seen from head height.
 
@@ -777,7 +781,16 @@ struct GrassField(Movable):
             var grown = self.grow(index, blade)
             if not grown:
                 continue
-            ref placed = grown.value()
+            var placed = grown.value()
+            # A flower far away is smaller than a pixel. Widened as the
+            # level widens its blades, it would speckle the far field, so
+            # it grows there as a blade of grass. The ground's far color
+            # keeps the flowers' tint.
+            if widen > FLOWER_WIDEN and (
+                placed.kind == POPPY or placed.kind == BUTTERCUP
+            ):
+                placed.kind = GRASS
+                placed.width = self.parameters.width
             var gust = wind.gust(placed.root.x, placed.root.z, time)
             var bend = wind.tip_bend(
                 placed.root.x, placed.root.z, gust, placed.phase, time

@@ -141,6 +141,8 @@ The blades of a tuft curl out from its middle. A tuft has `tuft_blades` blades a
 
 A cluster takes the first level whose reach holds its nearest point. A level that keeps fewer blades widens each by `keep ** -0.7`. A level must reach further than the one before, and it must keep no more.
 
+A level that widens its blades past `FLOWER_WIDEN`, three times, grows its poppies and buttercups as blades of grass. A flower that far away is smaller than a pixel, and widened, it would speckle the field. The ground's far color keeps the flowers' tint.
+
 ## Wind
 
 `Wind` has a heading, a lean, a calm, gusts, a sway and a flutter. The default wind blows across the view, from left to right.
