@@ -141,6 +141,76 @@ struct Errand(Copyable, Movable):
 
 
 @fieldwise_init
+struct Mood(Equatable, ImplicitlyCopyable, Writable):
+    """What the village is like now, which the speakers remark on, as a
+    type rather than a bare int."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the four moods there are.
+
+        Returns:
+            Whether the value names a mood.
+        """
+        return ordinal_valid(self.value, 3)
+
+
+# A fair day.
+comptime FAIR = Mood(0)
+# Rain, or the wet after it.
+comptime WET = Mood(1)
+# Snow on the ground.
+comptime SNOWY = Mood(2)
+# Dusk, night or dawn.
+comptime NIGHT = Mood(3)
+
+
+def mood_line(mood: Mood, speaker: Int) -> String:
+    """Return what a speaker says of the village's mood, once each time it
+    changes.
+
+    Args:
+        mood: The village's mood.
+        speaker: The speaker's place among the speakers: each says it in
+            their own words.
+
+    Returns:
+        A line, or an empty string on a fair day: then they say their own
+        lines.
+    """
+    if mood == FAIR:
+        return String()
+    var wet: List[String] = [
+        "Wet through! The herbs will grow well.",
+        "No ore in this rain. The rock is slick.",
+        "I jumped in every puddle!",
+        "I said the rain was coming.",
+        "You will catch a chill out there.",
+    ]
+    var snowy: List[String] = [
+        "Snow! Mind the frost on the herbs.",
+        "Cold hands make for slow mining.",
+        "Look, my tracks in the snow!",
+        "The pond will freeze if this keeps up.",
+        "The fire is the only friend in snow.",
+    ]
+    var night: List[String] = [
+        "It is late. I should be home.",
+        "Bandits walk at night. Keep to the lamps.",
+        "I can see the moon from my window!",
+        "The stars are bright over the village.",
+        "Good night to you, traveler.",
+    ]
+    var at = speaker % 5
+    if mood == WET:
+        return wet[at]
+    if mood == SNOWY:
+        return snowy[at]
+    return night[at]
+
+
+@fieldwise_init
 struct Speaker(Copyable, Movable):
     """A villager who talks, and the errand they give, if any."""
 
@@ -181,7 +251,10 @@ def default_speakers() -> List[Speaker]:
         Speaker(
             1,
             "Osric",
-            ["My forge is cold today.", "Copper shows green in the rock."],
+            [
+                "The smith in town buys all the ore I bring.",
+                "Copper shows green in the rock.",
+            ],
             Errand(
                 ORE,
                 3,
@@ -207,7 +280,7 @@ def default_speakers() -> List[Speaker]:
             "Aldous",
             [
                 "The old chest by the barn is not mine.",
-                "Rain is coming, I feel it.",
+                "My knees ache before the rain.",
             ],
             Errand(
                 MUSHROOMS,
@@ -277,6 +350,10 @@ struct Talk(Movable):
     # Each speaker's two markers, offered and taken.
     var offers: List[NodeId]
     var takens: List[NodeId]
+    var mood: Mood
+    """What the village is like now. The game sets it each frame."""
+    var remarked: List[Mood]
+    """The mood each speaker last remarked on."""
 
     def __init__(
         out self,
@@ -347,6 +424,8 @@ struct Talk(Movable):
         self.strength = 0
         self.held = False
         self.clock = 0
+        self.mood = FAIR
+        self.remarked = List[Mood](length=len(self.speakers), fill=FAIR)
 
     def nearest(self, feet: Vector3, places: List[Vector3]) -> Int:
         """Return the speaker nearest a player's feet, within reach.
@@ -416,6 +495,14 @@ struct Talk(Movable):
                 kind_name(errand.wants),
                 ".",
             )
+        # A speaker remarks once on each change of the village's mood.
+        if self.mood != self.remarked[index]:
+            self.remarked[index] = self.mood
+            var remark = mood_line(self.mood, index)
+            if remark:
+                self.feeling = SMILE
+                self.strength = CHATTING
+                return remark
         var line = speaker.lines[self.next_line[index] % len(speaker.lines)]
         self.next_line[index] += 1
         self.feeling = SMILE

@@ -2595,6 +2595,18 @@
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'MissileKind'"
     ]
   },
+  "tests/compile_fail/a_mood_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'mood_line': value passed to 'mood' cannot be converted from 'IntLiteral[1]' to 'Mood'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_motion_vector_space_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -5244,6 +5256,20 @@
     ],
     "notes": [
       "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_activity_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 20,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'activity' cannot be converted from 'IntLiteral[1]' to 'Activity'"
     ]
   },
   "tests/compile_fail/an_actor_attribute_type_is_not_a_bare_int.mojo": {

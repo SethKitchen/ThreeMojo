@@ -40,13 +40,21 @@ from extensions.village.character import (
 from extensions.village.clothes import dyed_outfit
 from extensions.village.interior import Doorway
 from extensions.village.residents import (
+    HEEL,
+    IDLE,
+    PANIC,
+    SIT,
+    WORK,
+    Activity,
+    Stop,
+    home_route,
     APPROACH,
     INDOORS,
     THRESHOLD,
     Body,
     EYE_HEIGHT,
     Flipbook,
-    GIVE_UP,
+    DETOURS,
     Herd,
     HouseId,
     JUMP_PLAY,
@@ -164,23 +172,27 @@ def test_a_stuck_resident_gives_up_on_its_point() raises:
     var route = Route(
         [Vector3(0, 0, -5), Vector3(5, 0, 0)], Duration(1.0, SECOND)
     )
-    # Standing still on its way, it waits, then rests and moves on.
+    # Stuck on its way, it walks aside, to one side and then the other,
+    # and at last gives up on the point, rests, and moves on.
     var second = Duration(1.0, SECOND)
-    _ = route.steer(walker, second)
-    _ = route.steer(walker, second)
-    assert_equal(route.next, 0)
-    assert_true(route.stalled >= 2)
-    _ = route.steer(walker, second)
-    var steer = route.steer(walker, second)
+    var sides = List[Float32]()
+    var steps = 0
+    while route.next == 0 and steps < 50:
+        _ = route.steer(walker, second)
+        if route.detour > 0:
+            sides.append(route.side)
+        steps += 1
     assert_equal(route.next, 1)
+    assert_equal(route.detours, 0)
+    assert_true(steps > DETOURS)
+    assert_true(len(sides) >= 2 and sides[0] != sides[1])
+    var steer = route.steer(walker, second)
     assert_equal(steer[0].forward, 0)
-    assert_true(route.stalled == 0)
     # Moving on its way, it is not stuck.
     route.resting = 0
     walker.velocity = Vector3(1, 0, 0)
     _ = route.steer(walker, second)
     assert_true(route.stalled == 0)
-    assert_true(GIVE_UP > 2 and GIVE_UP < 3)
 
 
 def test_residents_bump_into_each_other() raises:
@@ -633,6 +645,143 @@ def test_a_villager_visits_their_home_through_its_door() raises:
     )
     with assert_raises(contains="home"):
         _ = Residents(scene, assets, p, ground, List[Lot](), _homes())
+
+
+def _villager(home: HouseId) -> Villager:
+    return Villager(
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        0,
+        0,
+        3,
+        4,
+        False,
+        Outfit(),
+        home,
+    )
+
+
+def test_a_person_sits_works_shelters_and_flees() raises:
+    assert_true(SIT.is_valid() and WORK.is_valid() and IDLE.is_valid())
+    assert_false(Activity(3).is_valid())
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.villagers.append(_villager(HouseId(0)))
+    var stops: List[Stop] = [
+        Stop(1, 1, Angle(0.5, RADIAN), SIT),
+        Stop(-1, -1, Angle(1.0, RADIAN), WORK),
+        Stop(50, 50, Angle(0.0, RADIAN), SIT),
+    ]
+    var residents = Residents(
+        scene, assets, p, ground, List[Lot](), _homes(), stops
+    )
+    # The two stops near where she wanders are on her route; the far one
+    # is not.
+    ref route = residents.walks[0]
+    var sits = 0
+    var works = 0
+    for activity in route.activities:
+        if activity == SIT:
+            sits += 1
+        elif activity == WORK:
+            works += 1
+    assert_equal(sits, 1)
+    assert_equal(works, 1)
+    # At a bench she sits, turned as the bench faces, for longer.
+    for k in range(len(route.points)):
+        if route.activities[k] == SIT:
+            route.next = k
+    residents.people[0].position = Vector3(
+        route.points[route.next].x, 0, route.points[route.next].z
+    )
+    residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_true(residents.doing(0) == SIT)
+    assert_true(residents.walks[0].resting > p.rest.to(SECOND))
+    for _ in range(5):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_equal(residents.bodies[0].clip, 4)
+    assert_true(residents.doing(5) == IDLE)
+    # A foe near her makes her run from it.
+    var at = residents.people[0].position
+    residents.update(
+        scene,
+        Duration(0.1, SECOND),
+        ground,
+        List[Obstacle](),
+        None,
+        False,
+        [at + Vector3(1, 0, 0)],
+    )
+    assert_true(residents.people[0].velocity.x < 0)
+    # At night she goes home, and stays in.
+    for _ in range(80):
+        residents.update(
+            scene, Duration(0.1, SECOND), ground, List[Obstacle](), None, True
+        )
+    assert_true(residents.sheltering)
+    assert_true(residents.doing(0) == IDLE)
+    ref home = residents.homeward[0]
+    assert_true(home.next > 0 or home.at > 0)
+    # Once the night is over, she walks her route again.
+    residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_false(residents.sheltering)
+
+
+def test_a_person_with_no_house_and_none_to_go_to_stays_out() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.villagers.append(_villager(NO_HOUSE))
+    var residents = Residents(
+        scene, assets, p, ground, List[Lot](), List[Doorway]()
+    )
+    assert_equal(len(residents.homeward), 1)
+    residents.update(
+        scene, Duration(0.1, SECOND), ground, List[Obstacle](), None, True
+    )
+    assert_true(residents.sheltering)
+    var home = home_route(_homes()[0])
+    assert_equal(len(home.points), 3)
+
+
+def test_a_dog_follows_and_a_shy_animal_runs_from_a_foe() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.rest = Duration(5.0, SECOND)
+    p.herds.append(Herd(RABBIT, 1, 0, 0, 0, 8, follows=True))
+    p.herds.append(Herd(RABBIT, 1, 20, 0, 0, 9, flee=Length(3.0, METER)))
+    var residents = Residents(scene, assets, p, ground, List[Lot](), _homes())
+    var start = residents.beasts[0].character.position.x
+    var shy = residents.beasts[1].character.position
+    for _ in range(10):
+        residents.update(
+            scene,
+            Duration(0.1, SECOND),
+            ground,
+            List[Obstacle](),
+            Vector3(10, 0, 0),
+            False,
+            [shy + Vector3(0, 0, 2)],
+        )
+    # The follower comes toward the player; the shy one runs from the foe.
+    assert_true(residents.beasts[0].character.position.x > start)
+    assert_true(residents.beasts[1].character.position.z < shy.z)
+    # At the player's heel, the follower stands.
+    residents.beasts[0].character.position = Vector3(10 - HEEL / 2, 0, 0)
+    residents.beasts[0].character.velocity = Vector3(0, 0, 0)
+    residents.update(
+        scene,
+        Duration(0.1, SECOND),
+        ground,
+        List[Obstacle](),
+        Vector3(10, 0, 0),
+    )
+    assert_true(residents.beasts[0].character.speed().to(METER_PER_SECOND) < 1)
+    _ = PANIC
 
 
 def test_an_empty_village_has_no_residents() raises:

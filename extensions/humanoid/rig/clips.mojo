@@ -3,7 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Animation clips for a game humanoid: idle, walk, run, jump and wave.
+"""Animation clips for a game humanoid: idle, walk, run, jump, wave, sit
+and work.
 
 Each clip is worked out from the motion itself, not captured, so it
 fits any rig a genome makes. A clip samples a pose many times a cycle:
@@ -26,6 +27,11 @@ and of a position track for the hips, so the clips play in an
 - `jump_clip`: a crouch, a spring with the arms swung up, a tuck in the
   air and a landing that gives at the knees. It plays once.
 - `wave_clip`: the right arm raised and the hand waving, two seconds a
+  loop.
+- `sit_clip`: seated on a bench 45 centimeters high, the hands on the
+  knees, breathing and looking about, four seconds a loop.
+- `work_clip`: a bent back and both arms swinging a tool down to the
+  ground and up again, as one hoes, chops or draws water, 1.6 seconds a
   loop.
 
 The angles follow the joint ranges of an ordinary gait: Winter, "The
@@ -509,3 +515,88 @@ def wave_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         pose.turn(SPINE, 0, 0, -2)
         poses.append(pose^)
     return clip_from_poses("wave", bones, rig, poses, seconds)
+
+
+def sit_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
+    """Return four seconds of sitting at ease on a bench, which loops.
+
+    The hips drop to a seat 45 centimeters high for a person 6 feet tall,
+    and move back over it. The thighs lie level, the shins hang, and the
+    hands rest on the knees.
+
+    Args:
+        bones: One node per joint, in the order of the joints.
+        rig: The rig the bones were placed from.
+
+    Returns:
+        The clip, named `"sit"`.
+
+    Raises:
+        Error: If there is not one bone per joint.
+    """
+    var seconds = Float32(4.0)
+    var scale = rig.stature / Float32(1.8288)
+    var poses = List[Pose]()
+    var count = _sampled(seconds)
+    for k in range(count):  # pragma: no branch
+        var phase = Float32(k) / Float32(count - 1)
+        var pose = Pose()
+        var breath = sin(Float32(4 * pi) * phase)
+        pose.lift = Vector3(0, -0.47 + 0.002 * breath, -0.28) * scale
+        for thigh in [RIGHT_THIGH, LEFT_THIGH]:  # pragma: no branch
+            pose.turn(thigh, -88)
+            pose.turn(Joint(thigh.value + 1), 88)
+            pose.turn(Joint(thigh.value + 2), -4)
+        pose.turn(SPINE, 6 - 1 * breath)
+        pose.turn(CHEST, 4 - 1.2 * breath)
+        pose.turn(HEAD, -4, 10 * sin(Float32(2 * pi) * phase + 0.5))
+        # The hands lie on the knees.
+        pose.turn(RIGHT_UPPER_ARM, -35, 0, -8)
+        pose.turn(LEFT_UPPER_ARM, -35, 0, 8)
+        pose.turn(RIGHT_FOREARM, -40)
+        pose.turn(LEFT_FOREARM, -40)
+        poses.append(pose^)
+    return clip_from_poses("sit", bones, rig, poses, seconds)
+
+
+def work_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
+    """Return a swing of a tool down to the ground and up again, 1.6 s,
+    which loops.
+
+    The back bends, the knees give, and both arms raise the tool over the
+    right shoulder and bring it down before the feet.
+
+    Args:
+        bones: One node per joint, in the order of the joints.
+        rig: The rig the bones were placed from.
+
+    Returns:
+        The clip, named `"work"`.
+
+    Raises:
+        Error: If there is not one bone per joint.
+    """
+    var seconds = Float32(1.6)
+    var scale = rig.stature / Float32(1.8288)
+    var poses = List[Pose]()
+    var count = _sampled(seconds)
+    for k in range(count):  # pragma: no branch
+        var phase = Float32(k) / Float32(count - 1)
+        var pose = Pose()
+        # Raised slowly, brought down fast: the stroke's share of the loop.
+        var raise_t = hermite_fade(clamp(phase / 0.65, 0, 1))
+        var strike = hermite_fade(clamp((phase - 0.65) / 0.2, 0, 1))
+        var up = raise_t * (1 - strike)
+        pose.lift = Vector3(0, -0.05 - 0.04 * (1 - up), 0) * scale
+        pose.turn(SPINE, 22 - 14 * up, -8 * up)
+        pose.turn(CHEST, 10 - 8 * up, -6 * up)
+        pose.turn(NECK, -10 + 6 * up)
+        for thigh in [RIGHT_THIGH, LEFT_THIGH]:  # pragma: no branch
+            pose.turn(thigh, -18 + 8 * up)
+            pose.turn(Joint(thigh.value + 1), 26 - 12 * up)
+        pose.turn(RIGHT_UPPER_ARM, -40 - 110 * up, 0, -10 - 15 * up)
+        pose.turn(LEFT_UPPER_ARM, -45 - 100 * up, 0, 12 + 10 * up)
+        pose.turn(RIGHT_FOREARM, -25 - 30 * up)
+        pose.turn(LEFT_FOREARM, -20 - 35 * up)
+        poses.append(pose^)
+    return clip_from_poses("work", bones, rig, poses, seconds)

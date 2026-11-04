@@ -22,6 +22,12 @@ from extensions.humanoid.skeleton.head.expression import (
     SMILE,
 )
 from extensions.village.talk import (
+    FAIR,
+    NIGHT,
+    SNOWY,
+    WET,
+    Mood,
+    mood_line,
     ASKING,
     CHATTING,
     DONE,
@@ -174,6 +180,29 @@ def test_an_errand_is_asked_taken_and_paid() raises:
         _ = talk.speak(2, satchel)
     with assert_raises(contains="one of the village's"):
         _ = talk.speak(-1, satchel)
+
+
+def test_a_speaker_remarks_once_on_the_village_s_mood() raises:
+    for mood in [FAIR, WET, SNOWY, NIGHT]:
+        assert_true(mood.is_valid())
+    assert_false(Mood(4).is_valid())
+    assert_equal(mood_line(FAIR, 0), "")
+    assert_true(mood_line(WET, 1) != mood_line(SNOWY, 1))
+    assert_true(mood_line(NIGHT, 6) == mood_line(NIGHT, 1))
+    var assets = Assets()
+    var scene = Scene()
+    var talk = _talk(scene, assets)
+    var satchel = Satchel()
+    talk.mood = WET
+    # The second speaker, who has no errand, remarks on the rain once,
+    # then says their lines.
+    assert_equal(talk.speak(1, satchel), mood_line(WET, 1))
+    assert_equal(talk.speak(1, satchel), "One.")
+    talk.mood = NIGHT
+    assert_equal(talk.speak(1, satchel), mood_line(NIGHT, 1))
+    # A fair day after it brings no remark.
+    talk.mood = FAIR
+    assert_equal(talk.speak(1, satchel), "Two.")
 
 
 def test_words_are_revealed_and_keep_their_width() raises:

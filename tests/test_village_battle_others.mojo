@@ -64,6 +64,12 @@ def test_wolves_close_in_bite_and_lie_down_when_felled() raises:
     arena.battle.trained[SWORD.value] = 0
     light_cut(arena)
     assert_true(arena.battle.foes[0].fighter.defeated())
+    # A felled wolf is no danger; the two that stand are.
+    arena.battle.foes[0].down = 1
+    assert_equal(len(arena.battle.dangers()), 2)
+    arena.battle.foes[0].down = -1
+    assert_equal(len(arena.battle.dangers()), 3)
+    arena.battle.foes[0].down = 1
     assert_equal(arena.battle.loot, 0)
     assert_true(arena.battle.trained[SWORD.value] >= DEFEAT_EXPERIENCE)
     var lying = arena.scene.node(arena.battle.pelts[0].node).quaternion

@@ -458,8 +458,9 @@ def default_props() raises -> List[Prop]:
         barrels, crates and hay bales before the barn, and a hedge
         between the barn's yard and the green; a fenced garden behind the
         stone cottage, with a gate, three beds of cabbages and a
-        scarecrow, and a washing line beside it; and a bench before the
-        framed house.
+        scarecrow, and a washing line beside it; a bench before the
+        framed house; and a pen for the sheep and the goat east of the
+        trail, with a gate toward it and a trough in it.
     """
     return [
         Prop(WELL, 4, -18, Angle(20.0, DEGREE), 0.8),
@@ -487,6 +488,13 @@ def default_props() raises -> List[Prop]:
         Prop(SCARECROW, -10, 12, Angle(15.0, DEGREE), 1.8),
         Prop(WASHING_LINE, -17, 7, Angle(90.0, DEGREE), 4),
         Prop(BENCH, 16.3, -21.5, Angle(-80.0, DEGREE), 1.6),
+        # The sheep's pen, with its gate toward the trail.
+        Prop(FENCE, 15, 11, Angle(0.0, DEGREE), 14),
+        Prop(FENCE, 15, -3, Angle(0.0, DEGREE), 14),
+        Prop(FENCE, 22, 4, Angle(90.0, DEGREE), 14),
+        Prop(FENCE, 8, 0.5, Angle(90.0, DEGREE), 7),
+        Prop(FENCE, 8, 9, Angle(90.0, DEGREE), 4),
+        Prop(TROUGH, 20.5, 8, Angle(90.0, DEGREE), 1.6),
     ]
 
 

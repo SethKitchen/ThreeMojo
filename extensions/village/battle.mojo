@@ -1538,6 +1538,22 @@ struct Battle(Movable):
             return True
         return not self.wardens[index - self.first_warden()].boss.defeated()
 
+    def dangers(self) -> List[Vector3]:
+        """Return where each standing foe is: each bandit and wolf that
+        has not fallen, and each warden not beaten. The village's people
+        and animals run from them.
+
+        Returns:
+            The feet of each standing foe. A dummy is no danger.
+        """
+        var out = List[Vector3]()
+        for index in range(self.targets()):
+            if index >= len(self.foes) and index < self.first_warden():
+                continue
+            if self.standing(index):
+                out.append(self.target_at(index))
+        return out^
+
     def obstacles(self) -> List[Obstacle]:
         """Return the circle each standing bandit, each dummy and the
         companion take up.

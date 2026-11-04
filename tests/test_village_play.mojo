@@ -38,7 +38,9 @@ from extensions.village.faces import FaceLife
 from extensions.village.battle_hud import DANGER
 from extensions.village.foes import bandit_fighter
 from extensions.village.hud import GOLD_TEXT
-from extensions.village.talk import DONE, TAKEN
+from extensions.village.talk import DONE, FAIR, NIGHT, SNOWY, TAKEN, WET
+from extensions.village.residents import SIT, WORK
+from extensions.village.props import BARREL, BENCH, CROPS, Prop, WELL, WOODPILE
 from extensions.village.play import (
     FOCUS_HEIGHT,
     FOE_SIGHT,
@@ -53,6 +55,8 @@ from extensions.village.play import (
     default_residents,
     game_residents,
     tree_obstacles,
+    prop_stops,
+    village_mood,
 )
 from extensions.village.combat import (
     DODGE,
@@ -778,6 +782,30 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     game.player.velocity = Vector3(0, 0, 0)
     game.ripple_pond(scene, step)
     assert_true(len(game.village.water._drops) >= rained + 1)
+
+
+def test_the_village_s_mood_and_its_props_stops() raises:
+    assert_true(village_mood(0.2, 0, 0) == NIGHT)
+    assert_true(village_mood(1, 0, 0.5) == SNOWY)
+    assert_true(village_mood(1, 0.6, 0) == WET)
+    assert_true(village_mood(1, 0, 0) == FAIR)
+    var turn = Angle(0.0, DEGREE)
+    var stops = prop_stops(
+        [
+            Prop(BENCH, 0, 0, turn, 1.6),
+            Prop(WOODPILE, 5, 0, turn, 2),
+            Prop(CROPS, 10, 0, turn, 3),
+            Prop(WELL, 15, 0, turn, 0.8),
+            Prop(BARREL, 20, 0, turn, 0.3),
+        ]
+    )
+    assert_equal(len(stops), 4)
+    assert_true(stops[0].activity == SIT)
+    assert_true(stops[1].activity == WORK)
+    assert_true(stops[3].activity == WORK)
+    # A seat is before the bench, and the well's place beside it.
+    assert_almost_equal(stops[0].z, 0.45, atol=1e-5)
+    assert_almost_equal(stops[3].x, 15 + 0.8 + 0.7, atol=1e-5)
 
 
 def main() raises:

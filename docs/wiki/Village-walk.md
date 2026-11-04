@@ -259,19 +259,42 @@ Under the open sky, a house's ceiling under the eye does not hold it. A sight li
 
 | Residents | Where they wander |
 |---|---|
-| A woman of 65 inches, dressed as a goodwife | By the brick house, which she visits. |
+| A woman of 65 inches, dressed as a goodwife | By the green, before the brick house, which she visits. |
 | A man of 70 inches, dressed as a peasant | Along the trail. He visits the stone cottage. |
 | A child of 50 inches, dressed as a farmer, who runs | Around the pond. |
 | A man of 67 inches, dressed as a monk | By the framed cottage, which he visits. |
 | A woman of 64 inches, dressed as a noblewoman | By the framed house, which she visits. |
-| Four sheep and a goat | Right of the trail. |
+| Four sheep and a goat | In their pen, right of the trail. Its gate faces the trail. |
 | Two cows and a horse | Left of the trail. |
 | A pig | By the barn. |
-| A dog | Near the start. |
+| A dog | Near the start. It follows the player who comes within 30 meters. |
 | Two rabbits | By the trail. |
 | Two deer | Past the pond. |
 
-Each resident walks a `Route`. It walks to a point, rests there for 3 seconds, and walks on to the next point. `wander_route` scatters the points around a middle. It does not put a point on or near a lot, or under the water. A resident that stays slower than 0.1 meters a second for 2.5 seconds gives up on its point, and rests as if it had arrived.
+Each resident walks a `Route`. It walks to a point, rests there for 3 seconds, and walks on to the next point. `wander_route` scatters the points around a middle. It does not put a point on or near a lot, or under the water.
+
+A resident that stays slower than 0.1 meters a second for `SIDESTEP`, 0.6 seconds, is stuck. It walks aside for `DETOUR`, 1.2 seconds, to one side, and then to the other side when it is stuck again. After `DETOURS`, four, it gives up on its point, and rests as if it had arrived.
+
+### Stops
+
+A `Stop` is a place where a person does something, as an `Activity`: `IDLE`, `SIT` or `WORK`. `prop_stops` gives the village's stops from its props:
+
+| Prop | Stop | Where the person stands |
+|---|---|---|
+| A bench | `SIT` | 45 centimeters before it, facing away from it |
+| A woodpile | `WORK` | 90 centimeters before its logs, facing them |
+| A bed of crops | `WORK` | 1.3 meters before it, facing it |
+| A well | `WORK` | 70 centimeters past its wall, facing it |
+
+A person stops at each stop within `STOP_REACH`, 14 meters, of the middle of where they wander. They turn to the stop's way, and rest there `ACTIVITY_REST`, four, times as long. On a bench they play `sit_clip`. At work they play `work_clip`: a bent back, and a tool swung down to the ground and up.
+
+### Home at night
+
+At night, while the daylight is below `SHELTER_LIGHT`, 0.2, the people go home. They also go home in hard rain or snow, above `SHELTER_FALL`, 0.6, of the heaviest. Each walks to their front door, over the threshold and in, and stays there. A person with no home of their own shelters in the first house. Once the night or the storm is over, they walk their routes again.
+
+### Danger
+
+A person, or an animal that is shy of the player, runs from each standing foe within `PANIC`, 9 meters. `Battle.dangers` gives where the foes stand. A dummy is no danger.
 
 A villager with a home visits it. `Villager.home` is a `HouseId`, the house's place among the village's houses, or `NO_HOUSE`. `visit` adds five points to the end of the route. They stand 3.2 meters before the home's front door, 1 meter before it, and 1.8 meters inside it, and then back out the same way. The door opens as the villager comes near.
 
@@ -345,6 +368,6 @@ The clothes follow the skin, and the skin follows the bones, so they move togeth
 - The game renderer lights each vertex, not each pixel. See [Game renderer](Game-renderer#why-it-agrees-with-renderer).
 - A garment bends with the skin. It does not swing as cloth does.
 - The characters do not swim. Deep water stops them.
-- A resident walks straight to its next point. It does not find a way around a house: it slides along the wall, or gives up.
+- A resident walks straight to its next point. Round a house, it walks aside and tries again, but it does not plan a way. It can give up on a point it cannot reach.
 - An animal slides across the ground while it turns on the spot.
 - The camera comes in before a wall, but not before a tree or a roof.

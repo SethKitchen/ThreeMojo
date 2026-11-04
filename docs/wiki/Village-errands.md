@@ -39,6 +39,19 @@ A `Speaker` is a villager, a name and lines. A speaker can also have an `Errand`
 
 A speaker with no errand says their lines, one after another. The markers are unlit, so they show in shade and in rain.
 
+### The village's mood
+
+`Talk.mood` is a `Mood`: what the village is like now. The game sets it each frame with `village_mood`:
+
+| Mood | When |
+|---|---|
+| `NIGHT` | The daylight is below a half |
+| `SNOWY` | Snow covers more than 30 percent of the village |
+| `WET` | The village is more than 40 percent soaked |
+| `FAIR` | Any other time |
+
+When the mood changes, each speaker remarks on it once, in their own words, before their next line. `mood_line` gives the remark. A fair day brings no remark.
+
 The heads-up display lists each errand that is taken and not done in the top right, such as `HERBS FOR MAUD 2/5`. See [Village gathering](Village-gathering#the-heads-up-display).
 
 ## The default speakers

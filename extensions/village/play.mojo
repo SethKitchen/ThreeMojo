@@ -52,7 +52,7 @@ window, and writes the heads-up display over it: see
 """
 
 from cameras.perspective_camera import PerspectiveCamera
-from controls.third_person_controls import ThirdPersonControls
+from controls.third_person_controls import ThirdPersonControls, yaw_of
 from core.assets import Assets
 from core.object3d import NodeId
 from core.scene import Scene
@@ -144,6 +144,11 @@ from extensions.village.puffs import draw_puffs
 from extensions.village.air import bloom, ground_mist
 from extensions.village.gpu_post import GpuPost
 from extensions.village.talk import (
+    FAIR,
+    NIGHT,
+    SNOWY,
+    WET,
+    Mood,
     DONE,
     OFFERED,
     SPEECH_SECONDS,
@@ -159,13 +164,24 @@ from extensions.village.weather import (
     weather_label,
 )
 from extensions.village.residents import (
+    SIT,
+    WORK,
     Body,
     Herd,
     HouseId,
     NO_HOUSE,
     Residents,
     ResidentsParameters,
+    Stop,
     Villager,
+)
+from extensions.village.props import (
+    BENCH,
+    CROPS,
+    WELL,
+    WOODPILE,
+    WOODPILE_DEPTH,
+    Prop,
 )
 from extensions.village.clothes import (
     CREAM_WOOL,
@@ -211,6 +227,10 @@ comptime TRUNK = Float32(0.35)
 """A tree's trunk radius for a planting of size 1, in meters."""
 comptime CALM = Float32(0.1)
 """A look stick that leans less than this lets the camera trail."""
+comptime SHELTER_LIGHT = Float32(0.2)
+"""Below this share of the day's light, the people stay home."""
+comptime SHELTER_FALL = Float32(0.6)
+"""Above this share of the heaviest rain or snow, the people stay home."""
 comptime RAIN_RINGS = Float32(40)
 """How many drops a second ring the pond in a downpour."""
 comptime WAKE_EVERY = Float32(0.18)
@@ -247,6 +267,66 @@ comptime ARM_EASE = Float32(3)
 closes all but `exp(-ARM_EASE)` of its gap."""
 
 
+def village_mood(day: Float32, wet: Float32, snowed: Float32) -> Mood:
+    """Return what the village is like, for its speakers to remark on.
+
+    Args:
+        day: The share of the day's light, from 0 to 1.
+        wet: How wet the village is, from 0 to 1.
+        snowed: How much snow lies on it, from 0 to 1.
+
+    Returns:
+        `NIGHT` in the dark, then `SNOWY` under snow, then `WET` when the
+        village is soaked, and `FAIR` else.
+    """
+    if day < 0.5:
+        return NIGHT
+    if snowed > 0.3:
+        return SNOWY
+    if wet > 0.4:
+        return WET
+    return FAIR
+
+
+def prop_stops(props: List[Prop]) -> List[Stop]:
+    """Return the stops that a village's props give its people: a seat on
+    each bench, and a place to work at each woodpile, bed of crops and
+    well.
+
+    Args:
+        props: The props.
+
+    Returns:
+        The stops, in the order of the props.
+    """
+    var stops = List[Stop]()
+    for prop in props:
+        var turn = prop.turn.to(RADIAN)
+        # The prop's own x and z on the ground.
+        var along = Vector3(cos(turn), 0, -sin(turn))
+        var front = Vector3(sin(turn), 0, cos(turn))
+        var at = Vector3(prop.x, 0, prop.z)
+        if prop.kind == BENCH:
+            var seat = at + front * 0.45
+            stops.append(Stop(seat.x, seat.z, yaw_of(front), SIT))
+        elif prop.kind == WOODPILE:
+            var block = at + front * (WOODPILE_DEPTH / 2 + 0.9)
+            stops.append(
+                Stop(block.x, block.z, yaw_of(Vector3(0, 0, 0) - front), WORK)
+            )
+        elif prop.kind == CROPS:
+            var bed = at + front * 1.3
+            stops.append(
+                Stop(bed.x, bed.z, yaw_of(Vector3(0, 0, 0) - front), WORK)
+            )
+        elif prop.kind == WELL:
+            var side = at + along * (prop.length + 0.7)
+            stops.append(
+                Stop(side.x, side.z, yaw_of(Vector3(0, 0, 0) - along), WORK)
+            )
+    return stops^
+
+
 def default_residents() raises -> ResidentsParameters:
     """Return the people and the animals of the default village.
 
@@ -256,7 +336,7 @@ def default_residents() raises -> ResidentsParameters:
         around the pond; an old monk, who visits the framed cottage; and
         a noblewoman by the framed house, who visits it. Each wears the
         hair and the beard of their calling. Four
-        sheep and a goat right of the trail, two cows and a horse left
+        sheep and a goat in their pen right of the trail, two cows and a horse left
         of it, a pig by the barn, a dog near the start, two rabbits by
         the trail and two deer past the pond. The deer run from a player
         12 meters away, the rabbits from 6, the sheep from 3 and the goat
@@ -327,11 +407,11 @@ def default_residents() raises -> ResidentsParameters:
     ]
     residents.herds = [
         Herd(SHEEP, 4, 15, 4, 7, 51, flee=Length(3.0, METER)),
-        Herd(GOAT, 1, 20, -6, 5, 52, flee=Length(2.0, METER)),
+        Herd(GOAT, 1, 17, 6, 4, 52, flee=Length(2.0, METER)),
         Herd(COW, 2, -18, 6, 8, 53),
         Herd(HORSE, 1, -22, -10, 6, 54),
         Herd(PIG, 1, -12, -48, 4, 55),
-        Herd(DOG, 1, 4, 22, 4, 56),
+        Herd(DOG, 1, 4, 22, 4, 56, follows=True),
         Herd(RABBIT, 2, -6, 14, 3, 57, flee=Length(6.0, METER)),
         Herd(DEER, 2, 30, -40, 10, 58, flee=Length(12.0, METER)),
     ]
@@ -642,6 +722,7 @@ struct VillageGame(Movable):
             self.terrain,
             keep_off,
             homes,
+            prop_stops(parameters.village.props),
         )
         self.body = Body(
             scene,
@@ -873,7 +954,22 @@ struct VillageGame(Movable):
         around.append(
             Obstacle(feet.x, feet.z, self.player.parameters.radius.to(METER))
         )
-        self.residents.update(scene, delta, self.terrain, around, feet)
+        # At night, and in hard rain or snow, the people go home.
+        var look = self.weather.look
+        var shelter = (
+            self.day.daylight() < SHELTER_LIGHT
+            or look.rain > SHELTER_FALL
+            or look.snow > SHELTER_FALL
+        )
+        self.residents.update(
+            scene,
+            delta,
+            self.terrain,
+            around,
+            feet,
+            shelter,
+            self.battle.dangers(),
+        )
         var people = List[Vector3]()
         people.append(feet)
         for index in range(len(self.residents.people)):
@@ -915,6 +1011,9 @@ struct VillageGame(Movable):
         for index in range(len(self.residents.people)):
             places.append(self.residents.people[index].position)
         var free = input.use and self.gathering.focus < 0 and not gathered
+        self.talk.mood = village_mood(
+            self.day.daylight(), self.weather.wet, self.weather.snowed
+        )
         var spoke = self.talk.update(
             scene,
             feet,

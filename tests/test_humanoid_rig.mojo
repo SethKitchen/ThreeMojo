@@ -19,8 +19,10 @@ from extensions.humanoid.rig.clips import (
     joint_rotation,
     jump_clip,
     run_clip,
+    sit_clip,
     walk_clip,
     wave_clip,
+    work_clip,
 )
 from extensions.humanoid.fidelity import (
     CANONICAL_RECIPE,
@@ -485,6 +487,8 @@ def test_clips_play_on_the_bones() raises:
     assert_equal(idle_clip(bones, rig).name, "idle")
     assert_equal(jump_clip(bones, rig).name, "jump")
     assert_equal(wave_clip(bones, rig).name, "wave")
+    assert_equal(sit_clip(bones, rig).name, "sit")
+    assert_equal(work_clip(bones, rig).name, "work")
     var mixer = AnimationMixer()
     var playing = mixer.add(AnimationAction(walk^))
     mixer.action(playing).play()
