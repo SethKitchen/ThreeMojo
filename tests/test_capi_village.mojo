@@ -86,6 +86,7 @@ from renderers.game_gpu import (
 from std.math import inf
 from std.os import getenv, remove, setenv, unsetenv
 from std.pathlib import Path
+from std.memory import Layout
 from extensions.village.gathering import HERBS
 from std.testing import (
     TestSuite,
@@ -95,7 +96,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import DEGREE, SECOND, Angle, Duration
+from units.si import DEGREE, RADIAN, SECOND, Angle, Duration
 from window.capi_abi import (
     ABI_VERSION,
     KEY_DOWN,
@@ -119,6 +120,7 @@ from window.capi_village import (
     tm_step,
     tm_village_finish,
     tm_village_floats,
+    tm_village_audio,
     tm_village_ints,
     tm_village_passes,
     tm_village_pointers,
@@ -399,7 +401,7 @@ def test_a_key_that_repeats_acts_once() raises:
     tm_destroy(app)
 
 
-def test_a_pointer_or_a_wheel_event_is_dropped() raises:
+def test_a_drag_looks_at_the_next_step_and_a_wheel_is_dropped() raises:
     var app = _make()
     var before = _hash(app)
     tm_event(app, Int32(POINTER_DOWN), Int32(10), Int32(10), Int32(0))
@@ -409,6 +411,12 @@ def test_a_pointer_or_a_wheel_event_is_dropped() raises:
     tm_event(app, Int32(UNKNOWN_KIND), Int32(0), Int32(0), Int32(KEY_SPACE))
     assert_false(_state(app)[].tapped)
     assert_equal(before, _hash(app))
+    # The drag turns the camera at the next step.
+    var yaw = _state(app)[].game.view.yaw.to(RADIAN)
+    tm_event(app, Int32(POINTER_DOWN), Int32(10), Int32(10), Int32(0))
+    tm_event(app, Int32(POINTER_MOVE), Int32(60), Int32(10), Int32(0))
+    _step(app, 1)
+    assert_true(_state(app)[].game.view.yaw.to(RADIAN) != yaw)
     tm_destroy(app)
 
 
@@ -877,6 +885,34 @@ def test_a_weather_is_named() raises:
     assert_equal(weather_named("snow"), SNOW)
     with assert_raises(contains="rain, fog or snow, not storm"):
         _ = weather_named("storm")
+
+
+def test_keys_pause_the_game_and_show_the_map() raises:
+    var app = _make()
+    _press(app, 112)
+    assert_true(_state(app)[].game.paused)
+    _release(app, 112)
+    _press(app, 110)
+    assert_true(_state(app)[].game.show_map)
+    _release(app, 110)
+    _press(app, 57)
+    assert_equal(_state(app)[].game.weather.kind.value, 4)
+    tm_destroy(app)
+
+
+def test_an_app_gives_its_host_the_village_s_sound() raises:
+    var app = _make()
+    var room = alloc(Layout[Float32](count=400)).unsafe_leak()
+    for k in range(400):
+        room.unsafe_offset(k).unsafe_write(9)
+    assert_equal(tm_village_audio(app, room, Int32(200)), Int32(200))
+    for k in range(400):
+        var s = room[unsafe_offset=k]
+        assert_true(s >= -1 and s <= 1)
+    # Too many samples at once makes none.
+    assert_equal(tm_village_audio(app, room, Int32(100000)), Int32(0))
+    room.unsafe_free()
+    tm_destroy(app)
 
 
 def test_an_app_keeps_its_progress_in_a_file() raises:

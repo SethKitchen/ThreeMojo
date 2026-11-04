@@ -82,7 +82,7 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Change the fighting style | Hold the left trigger, and press the south button | `Y` |
 | Taunt the Stone Warden | Hold the left trigger, and press the east button | `U` |
 | Show the combo book | Hold the left trigger, and press the back button | `K` |
-| Weather | | `1` clear, `2` overcast, `3` rain, `4` fog, `6` snow |
+| Weather | | `1` clear, `2` overcast, `3` rain, `4` fog, `9` snow |
 | Time | | `5` moves the day on three hours |
 | Quit | The start button | Escape. Command+Q in the macOS window. |
 
@@ -91,6 +91,29 @@ The buttons are named by position, as SDL names them. The south button is A on a
 The X11 game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 34 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do. This holds in the macOS window too, where a step is at most a tenth of a second.
 
 The X11 game prints the frames a second to the standard error. The macOS window shows them in its title bar and prints them each second.
+
+## Sound
+
+The village has sound. `extensions/village/sound.mojo` makes every sound from noise and sine waves, so the game needs no recording. `VillageGame.audio` gives a host the next samples: stereo, `SAMPLE_RATE`, 44,100, a second, the left first, from -1 to 1.
+
+| Sound | When |
+|---|---|
+| A footfall | Each stride of the player on the ground: quicker and louder at a run |
+| A splash | A footfall in the pond |
+| A swing | As an attack of the player begins |
+| A knock | When a blow takes a foe's health |
+| A chime | When coins come into the satchel |
+| A bird's chirp | Now and then by day |
+
+The wind and the rain are under every sound, as soft noise and as hiss. At night, crickets trill. `examples/village_walk.mojo path.png --wav path.wav` keeps the scripted walk's sound in a WAV file.
+
+## Pause and the map
+
+`VillageGame.paused` stops the game: its frames run with no time and no input, and the frame shows the controls. `VillageGame.show_map` shows a map of the village round the player in the top left corner, 60 meters each way. The map shows the houses, the pond, the trail, the player, the villagers, those with an errand to give, and the foes. `P` pauses the game, and `N` shows the map.
+
+## The mouse
+
+A drag of the mouse with a button held turns the camera. A click with the primary button is a light attack, and with the secondary a heavy one. `MouseLook` in `extensions/village/mouse.mojo` reads the window's pointer events.
 
 ## Saved progress
 
@@ -109,7 +132,7 @@ The module is `extensions/village/progress.mojo`. `VillageGame.progress` gives a
 | `spent` | Each spot used up for good: a chest opened, a trinket taken. |
 | `place` | Where the player stands, the hour and the weather. |
 
-So the world comes back as the player left it, and an errand or a chest cannot be done again by beginning a new game. The macOS host keeps the progress in the file that `--save FILE` names.
+So the world comes back as the player left it, and an errand or a chest cannot be done again by beginning a new game. Each file is a save slot: `THREEMOJO_PROGRESS` names another file for `--play`. The macOS host keeps the progress in the file that `--save FILE` names.
 
 The bytes begin with the letters `TMVP` and the version, 2. A record of version 1 has no errands, spots or place, and the game keeps its own. Each number takes 4 bytes. A record from an earlier game, of fewer skills, things or combos, reads with zero for the rest. A record of a later version, or of more than this game holds, is refused. Where the bytes are kept is the game's: a file, or anywhere it likes.
 
@@ -376,3 +399,6 @@ The clothes follow the skin, and the skin follows the bones, so they move togeth
 - A resident walks straight to its next point. Round a house, it walks aside and tries again, but it does not plan a way. It can give up on a point it cannot reach.
 - An animal slides across the ground while it turns on the spot.
 - The camera comes in before a wall, but not before a tree or a roof.
+- The X11 window and the macOS window do not play the sound: `--wav` keeps it, and a host can take it with `tm_village_audio`.
+- The macOS window reads no gamepad. A key cannot be bound to another action, and the game has no menu of settings: its options are its command line.
+- The game draws on a GPU only through Metal, in the macOS window. The web host draws the water and the splats, and not the village.

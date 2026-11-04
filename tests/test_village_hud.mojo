@@ -91,7 +91,7 @@ def test_text_is_drawn_with_a_shadow() raises:
     assert_equal(_changed(frame), 0)
     # A capital I: seven dots down its middle and two pairs at its ends,
     # eleven dots, and its shadow.
-    draw_text(frame, 1, 1, "i", 1, WHITE_TEXT, 1)
+    draw_text(frame, 1, 1, "I", 1, WHITE_TEXT, 1)
     var lit = 0
     var dark = 0
     for k in range(40 * 12):
@@ -101,6 +101,14 @@ def test_text_is_drawn_with_a_shadow() raises:
             dark += 1
     assert_equal(lit, 11)
     assert_true(dark > 0)
+    # A small i is its own: a dot over a stem with a foot, nine dots.
+    var small = _frame(40, 12)
+    draw_text(small, 1, 1, "i", 1, WHITE_TEXT, 1)
+    var dots = 0
+    for k in range(40 * 12):
+        if Int(small.pixels[4 * k]) == WHITE_TEXT.r:
+            dots += 1
+    assert_equal(dots, 9)
 
 
 def test_each_kind_has_a_color_and_a_prompt() raises:

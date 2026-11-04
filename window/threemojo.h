@@ -383,6 +383,12 @@ enum {
  * the app is one for a GPU, and 0 if not. */
 int32_t tm_village_passes(tm_app *app, int32_t on);
 
+/* Make the next FRAMES samples of the village's sound into SAMPLES: stereo,
+ * 44,100 samples a second, the left first, from -1 to 1, so 2 * FRAMES floats.
+ * Returns FRAMES, or 0 if FRAMES is not from 0 to 44,100. Call it once for
+ * each step, with the samples that the step's time takes. */
+int32_t tm_village_audio(tm_app *app, float *samples, int32_t frames);
+
 /* Prepare the frame that the last tm_step left. Returns 1 if the three arrays
  * describe it, and 0 if the app is not one for a GPU (THREEMOJO_GPU is not 1)
  * or the frame cannot be drawn. */

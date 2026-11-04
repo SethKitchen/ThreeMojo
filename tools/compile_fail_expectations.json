@@ -3919,6 +3919,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_sound_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'sound_length': value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'SoundKind'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_space_id_is_not_a_bare_int.mojo": {
     "errors": [
       {

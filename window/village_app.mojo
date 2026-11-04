@@ -31,12 +31,13 @@ in the afternoon, as in the X11 loop.
 """
 
 from controls.held_keys import HeldKeys
-from controls.input import Key
+from controls.input import InputEvent, InputKind, Key, PointerButton
 from core.assets import Assets
 from core.scene import Scene
 from extensions.village.day import DayCycle
 from extensions.village.pad_input import KEY_SPACE, keyboard_input
 from extensions.village.play import PlayParameters, VillageGame
+from extensions.village.mouse import MouseLook
 from extensions.village.progress import pack_progress, unpack_progress
 from extensions.village.quality import (
     HIGH,
@@ -102,8 +103,12 @@ comptime TIME_KEY = 4
 """The number key, counted from `1` as zero, that moves the day on."""
 comptime TIME_HOURS = 3
 """The hours that the time key moves the day on."""
-comptime SNOW_KEY = 5
-"""The number key, counted from `1` as zero, that sets the snow."""
+comptime SNOW_KEY = 8
+"""The number key, counted from `1` as zero, that sets the snow: `9`."""
+comptime PAUSE_KEY = Key(112)
+"""The `P` key: pause the game, or go on."""
+comptime MAP_KEY = Key(110)
+"""The `N` key: show the map, or hide it."""
 comptime KEY_HOLD = Duration(10.0, SECOND)
 """How long a key counts as held with no repeat. The host says when each key
 goes up, so this only catches a key let go while the window was not
@@ -309,6 +314,8 @@ struct VillageApp(Movable):
     """The frame that `prepare_gpu` last prepared, for the GPU."""
     var keeps: String
     """The file the game keeps its progress in, or empty for none."""
+    var mouse: MouseLook
+    """What the mouse did since the last step."""
 
     def __init__(
         out self,
@@ -361,6 +368,7 @@ struct VillageApp(Movable):
         self.passes = False
         self.frame = GpuFrame()
         self.keeps = String()
+        self.mouse = MouseLook()
 
     def handle(mut self, kind: Int, detail: Int) raises:
         """Take one input event.
@@ -397,6 +405,21 @@ struct VillageApp(Movable):
             self._act(key)
         self.keys.press(key)
 
+    def point(mut self, kind: Int, x: Int, y: Int, button: Int):
+        """Take one pointer event: a drag with a button held looks, and a
+        click strikes. See `extensions.village.mouse`.
+
+        Args:
+            kind: The event kind, as `controls.input.InputKind` numbers it.
+            x: The pointer's column, in pixels.
+            y: The pointer's row, in pixels.
+            button: The button, as `controls.input.PointerButton` numbers
+                it.
+        """
+        self.mouse.event(
+            InputEvent(InputKind(kind), button=PointerButton(button), x=x, y=y)
+        )
+
     def _act(mut self, key: Key) raises:
         """Do what a key does at the moment it goes down: the space bar is a
         tap, a number key from `1` sets the weather, and `5` moves the day
@@ -418,6 +441,10 @@ struct VillageApp(Movable):
             self.game.day.hour = (self.game.day.hour + TIME_HOURS) % 24
         if number == SNOW_KEY:
             self.game.weather.set(SNOW)
+        if key == PAUSE_KEY:
+            self.game.paused = not self.game.paused
+        if key == MAP_KEY:
+            self.game.show_map = not self.game.show_map
 
     def advance(mut self, microseconds: Int):
         """Move the game on by a time delta.
@@ -438,6 +465,7 @@ struct VillageApp(Movable):
             var input = keyboard_input(self.keys, self.shift)
             input.jump = input.jump or self.tapped
             self.tapped = False
+            self.mouse.apply(input)
             _ = self.game.tick(self.scene, self.assets, input, delta)
         except:
             pass

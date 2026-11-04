@@ -94,6 +94,7 @@ from extensions.village.character import (
     CharacterParameters,
     MoveInput,
     Obstacle,
+    no_input,
     player_movement,
 )
 from extensions.village.battle import Battle, BattleParameters
@@ -109,9 +110,13 @@ from extensions.village.battle_hud import DANGER, draw_target, hud_drop
 from extensions.village.compass import CompassMark, clock_text, draw_compass
 from extensions.village.hud import (
     GOLD_TEXT,
+    WHITE_TEXT,
     Rgb,
     draw_hud,
+    draw_text,
+    fill_box,
     hud_scale,
+    text_width,
     note_text,
     use_prompt,
 )
@@ -142,6 +147,8 @@ from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.faces import FaceLife, face_reach
 from extensions.village.day import DayCycle, dim_water
 from extensions.village.puffs import draw_puffs
+from extensions.village.map import MapHouse, MapMarks, draw_map
+from extensions.village.sound import COIN, HIT, SPLASH, STEP, SWING, Sounds
 from extensions.village.air import bloom, ground_mist
 from extensions.village.gpu_post import GpuPost
 from extensions.village.talk import (
@@ -238,6 +245,8 @@ comptime RAIN_RINGS = Float32(40)
 """How many drops a second ring the pond in a downpour."""
 comptime WAKE_EVERY = Float32(0.18)
 """The seconds between two taps of a wading player's wake."""
+comptime STRIDE = Float32(0.55)
+"""The seconds between two footfalls at a walk."""
 comptime FALL_COST = 25
 """The share, in percent, of the coins a player loses when they fall."""
 comptime DAWN_MIST = Float32(6.5)
@@ -609,6 +618,23 @@ struct VillageGame(Movable):
     var wake: Float32
     # The direction toward the sun, or the moon, as the scene last set it.
     var sun_was: Vector3
+    var sounds: Sounds
+    """The village's sounds, which a host takes with `audio`."""
+    var paused: Bool
+    """Whether the game is paused: nothing moves, and the frame shows the
+    controls."""
+    var show_map: Bool
+    """Whether the frame shows the map of the village round the
+    player."""
+    var stride: Float32
+    """The seconds until the player's next footfall."""
+    var swinging: Bool
+    """Whether the player was making an attack last frame."""
+    var foes_health: Float32
+    """The health of every foe last frame, so a blow that lands is
+    heard."""
+    var coins_were: Int
+    """The coins the satchel held last frame."""
     # How finely each part of a frame is drawn, the window's size, and the
     # renderer that draws the frame at its smaller size.
     var quality: GameQuality
@@ -822,6 +848,13 @@ struct VillageGame(Movable):
         self.rain_rings = 0
         self.splashes = 0
         self.wake = 0
+        self.sounds = Sounds()
+        self.paused = False
+        self.show_map = False
+        self.stride = 0
+        self.swinging = False
+        self.foes_health = 0
+        self.coins_were = 0
         self.sun_was = sun_direction(
             parameters.village.meadow.sun_elevation,
             parameters.village.meadow.sun_azimuth,
@@ -920,16 +953,17 @@ struct VillageGame(Movable):
         mut self,
         mut scene: Scene,
         mut assets: Assets,
-        input: MoveInput,
-        delta: Duration,
+        given: MoveInput,
+        elapsed: Duration,
     ) raises -> FieldStats:
-        """Run one frame of the game.
+        """Run one frame of the game. A paused game runs its frame with no
+        time and no input, so nothing moves.
 
         Args:
             scene: The scene the game is in.
             assets: The stores.
-            input: The player's input for the frame.
-            delta: The frame's time.
+            given: The player's input for the frame.
+            elapsed: The frame's time.
 
         Returns:
             What the frame draws of the grass.
@@ -938,6 +972,11 @@ struct VillageGame(Movable):
             Error: If the time is negative, or a part cannot move or
                 prepare the frame.
         """
+        var input = given
+        var delta = elapsed
+        if self.paused:
+            input = no_input()
+            delta = Duration(0.0, SECOND)
         self.view.turn(input.look_right, input.look_up, delta)
         var blocking = self.trees.copy()
         blocking.extend(self.residents.obstacles())
@@ -1143,6 +1182,7 @@ struct VillageGame(Movable):
         scene.update()
         self.clock += delta.to(SECOND)
         self.ripple_pond(scene, delta)
+        self.hear(delta)
         var stats = self.village.update(
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
@@ -1168,6 +1208,66 @@ struct VillageGame(Movable):
         )
         self.day.light(scene, roofed)
         return stats
+
+    def hear(mut self, delta: Duration) raises:
+        """Start the sounds of this frame: the player's footfalls, the
+        swing of an attack, a blow that lands on a foe, and coins into the
+        satchel; and set the air's sound to the weather and the hour.
+
+        Args:
+            delta: The frame's time.
+
+        Raises:
+            Error: Never: each sound is one.
+        """
+        var seconds = delta.to(SECOND)
+        # A footfall each stride, quicker and louder at a run; a splash in
+        # the pond.
+        var speed = self.player.speed().to(METER_PER_SECOND)
+        self.stride -= seconds
+        if self.player.grounded and speed > 0.5 and self.stride <= 0:
+            self.stride = STRIDE / max(Float32(1), speed / 1.4)
+            ref feet = self.player.position
+            var kind = STEP
+            if self.village.meadow.field.ground.drowned(feet.x, feet.z):
+                kind = SPLASH
+            self.sounds.play(kind, min(Float32(1), 0.3 + 0.1 * speed), 0)
+        var attacking = is_attack(self.battle.fighter.move)
+        if attacking and not self.swinging:
+            self.sounds.play(SWING, 0.6, 0)
+        self.swinging = attacking
+        var health = Float32(0)
+        for index in range(len(self.battle.foes)):
+            health += self.battle.foes[index].fighter.health
+        if health < self.foes_health - 0.5:
+            self.sounds.play(HIT, 0.8, 0)
+        self.foes_health = health
+        var coins = self.gathering.satchel.count(CHEST)
+        if coins > self.coins_were:
+            self.sounds.play(COIN, 0.7, 0)
+        self.coins_were = coins
+        ref look = self.weather.look
+        self.sounds.set_air(
+            min(Float32(1), 0.15 + 0.5 * look.gloom + 0.3 * look.clouds),
+            min(Float32(1), look.rain),
+            self.day.daylight(),
+        )
+
+    def audio(mut self, frames: Int) raises -> List[Float32]:
+        """Return the next samples of the village's sound, for a host to
+        play.
+
+        Args:
+            frames: How many samples to make on each side, from 0 to
+                `SAMPLE_RATE`.
+
+        Returns:
+            `2 * frames` stereo samples, the left first, from -1 to 1.
+
+        Raises:
+            Error: If `frames` is out of range.
+        """
+        return self.sounds.mix(frames)
 
     def follow_sun(mut self, mut scene: Scene) raises:
         """Turn the sun, or the moon, to the hour, once it has moved
@@ -1520,6 +1620,86 @@ struct VillageGame(Movable):
                 self.window,
                 self.battle,
                 (TARGET_TOP + drop) * hud_scale(self.window.height),
+            )
+        if self.show_map:
+            _ = draw_map(
+                self.window,
+                self.village.meadow.field.ground,
+                self.map_marks(scene),
+                self.player.position,
+                self.player.heading.to(RADIAN),
+            )
+        if self.paused:
+            self.draw_pause()
+
+    def map_marks(self, scene: Scene) -> MapMarks:
+        """Return what the map shows: the houses, the villagers, those with
+        an errand to give, and the foes that stand.
+
+        Args:
+            scene: The scene: the houses' places.
+
+        Returns:
+            The marks.
+        """
+        var marks = MapMarks()
+        for index in range(len(self.village.houses)):
+            ref house = self.village.houses[index]
+            try:
+                var at = scene.world_position(house.root)
+                marks.houses.append(MapHouse(at.x, at.z, house.radius))
+            except:
+                continue
+        var giving = List[Bool](length=len(self.residents.people), fill=False)
+        for index in range(len(self.talk.speakers)):
+            if self.talk.states[index] == OFFERED:
+                var v = self.talk.speakers[index].villager
+                if v < len(giving):
+                    giving[v] = True
+        for index in range(len(self.residents.people)):
+            var at = self.residents.people[index].position
+            if giving[index]:
+                marks.errands.append(at)
+            else:
+                marks.people.append(at)
+        marks.foes = self.battle.dangers()
+        return marks^
+
+    def draw_pause(mut self):
+        """Draw the pause panel over the window: the word, the controls,
+        and how to go on."""
+        var scale = hud_scale(self.window.height)
+        var lines: List[String] = [
+            "PAUSED",
+            "",
+            "Move  WASD or the left stick",
+            "Look  arrows, right stick or drag the mouse",
+            "Run  Shift   Jump  Space   Use  E",
+            "Attack  click, J, K   Dodge  L   Guard  hold G",
+            "Weather  1 to 4, 9 snow   Time  5",
+            "Map  N   Resume  P   Quit  Esc",
+        ]
+        var tall = len(lines) * 10 * scale
+        var top = (self.window.height - tall) // 2
+        fill_box(
+            self.window,
+            0,
+            top - 6 * scale,
+            self.window.width,
+            top + tall + 4 * scale,
+            Rgb(10, 8, 6),
+            0.6,
+        )
+        for k in range(len(lines)):
+            var width = text_width(lines[k], scale)
+            draw_text(
+                self.window,
+                (self.window.width - width) // 2,
+                top + k * 10 * scale,
+                lines[k],
+                scale,
+                GOLD_TEXT if k == 0 else WHITE_TEXT,
+                1,
             )
 
     def speech(self) -> String:

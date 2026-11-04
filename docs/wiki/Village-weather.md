@@ -20,7 +20,7 @@ parameters.weather = RAIN
 parameters.weather_cycle = True
 ```
 
-During the game, `VillageGame.weather.set` turns toward a weather. In `examples/village_walk.mojo --play`, the weather turns by itself, and the keys `1` to `4` set clear, overcast, rain and fog. The key `6` sets snow.
+During the game, `VillageGame.weather.set` turns toward a weather. In `examples/village_walk.mojo --play`, the weather turns by itself, and the keys `1` to `4` set clear, overcast, rain and fog. The key `9` sets snow.
 
 ## The weathers
 

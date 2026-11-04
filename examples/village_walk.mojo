@@ -5,7 +5,7 @@
 
 """Walk, run and jump through the village as a person, with a gamepad.
 
-    mojo run -I . examples/village_walk.mojo [path.png]
+    mojo run -I . examples/village_walk.mojo [path.png [--wav path.wav]]
     mojo run -I . examples/village_walk.mojo --play [WIDTH HEIGHT [QUALITY]]
 
 The page is Village walk. The village has people and animals: a woman by
@@ -27,12 +27,14 @@ cores.
 | Run | Hold the right trigger, the east button or the left stick | Hold Shift, or `R` |
 | Jump | The south button | Space |
 | Use | The west button | `E` |
-| Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
+| Weather | | `1` clear, `2` overcast, `3` rain, `4` fog, `9` snow |
+| Look by mouse | | Drag with a button held; a click strikes |
+| Pause, and the map | | `P`, and `N` |
 | Time | | `5` moves the day on three hours |
 | Quit | The start button | Escape |
 
 With `--play`, the game keeps the player's progress in
-`out/village_progress.bin`: the skills, the satchel, the combos' mastery,
+`out/village_progress.bin`, or the file that `THREEMOJO_PROGRESS` names: the skills, the satchel, the combos' mastery,
 the specialty and the style in hand. It reads the file as it begins, and
 writes it as the player quits. See `extensions.village.progress`.
 
@@ -76,6 +78,8 @@ from extensions.village.pad_input import (
 )
 from extensions.village.play import PlayParameters, VillageGame
 from extensions.village.progress import pack_progress, unpack_progress
+from extensions.village.sound import SAMPLE_RATE, write_wav
+from extensions.village.mouse import MouseLook
 from extensions.village.day import DayCycle
 from extensions.village.weather import SNOW, WeatherKind
 from extensions.village.quality import (
@@ -92,6 +96,7 @@ from render.framebuffer import Framebuffer
 from render.jpeg import decode
 from renderers.renderer import Renderer
 from std.pathlib import Path
+from std.os import getenv
 from std.sys import argv, stderr
 from units.si import MILLISECOND, SECOND, Duration
 from window.x11 import X11Window
@@ -111,6 +116,8 @@ comptime SECONDS = Float32(6)
 comptime DAY_RATE = Float32(24.0 / 1200.0)
 """The hours a second that pass in play: a day in twenty minutes."""
 comptime KEY_ONE = Key(49)
+comptime KEY_P = Key(112)
+comptime KEY_N = Key(110)
 """The `1` key: the number keys from it set the weather."""
 comptime POLL = Duration(1.0, MILLISECOND)
 """How long the play loop waits for input before it draws."""
@@ -148,8 +155,9 @@ def _script(mut state: WebGamepadState, t: Float32):
     # Then stand still, and let the camera settle.
 
 
-def _scripted(destination: String) raises:
-    """Play the scripted walk and write it as an animated PNG."""
+def _scripted(destination: String, wav: String = String()) raises:
+    """Play the scripted walk and write it as an animated PNG, and its
+    sound as a WAV file if `wav` names one."""
     var clock = Clock()
     clock.start()
     var assets = Assets()
@@ -173,6 +181,7 @@ def _scripted(destination: String) raises:
     var count = Int(SECONDS * FPS)
     var step = Duration(Float32(1) / Float32(FPS), SECOND)
     var drawing = Float32(0)
+    var sound = List[Float32]()
     for frame in range(count):
         _script(state, Float32(frame) / Float32(FPS))
         state.timestamp = Float64(frame + 1) * 1000.0 / Float64(FPS)
@@ -180,12 +189,17 @@ def _scripted(destination: String) raises:
         var input = gamepad_input(hub.pads[0].gamepad)
         var began = clock.elapsed().to(MILLISECOND)
         _ = game.tick(scene, assets, input, step)
+        if wav:
+            sound.extend(game.audio(SAMPLE_RATE // FPS))
         game.render(scene, assets)
         frames.append(
             Framebuffer(game.width, game.height, game.window.pixels.copy())
         )
         drawing += clock.elapsed().to(MILLISECOND) - began
     Path(destination).write_bytes(encode(frames, delay_ms=1000 // FPS))
+    if wav:
+        write_wav(wav, sound)
+        print("Wrote", wav, file=stderr)
     print(
         '{"build_ms": ',
         built,
@@ -230,6 +244,8 @@ def _preset(name: String) raises -> QualityPreset:
 
 def _play(width: Int, height: Int, preset: QualityPreset) raises:
     """Open a window and play until the player quits."""
+    # Each file is a slot: THREEMOJO_PROGRESS names another.
+    var slot = getenv("THREEMOJO_PROGRESS", PROGRESS_FILE)
     var assets = Assets()
     var scene = Scene()
     var bed = pebble_bed(decode(Path(PEBBLES).read_bytes()))
@@ -247,11 +263,11 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
         width,
         height,
     )
-    var kept = Path(PROGRESS_FILE)
+    var kept = Path(slot)
     if kept.exists():
         try:
             game.restore(scene, unpack_progress(kept.read_bytes()))
-            print("Took up the progress in", PROGRESS_FILE, file=stderr)
+            print("Took up the progress in", slot, file=stderr)
         except error:
             print("Could not take up the progress:", error, file=stderr)
     var window = X11Window(width, height, "ThreeMojo village")
@@ -260,6 +276,7 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
     var evdev = EvdevHub[EvdevFile]()
     var keys = HeldKeys(KEY_HOLD)
     var shift = False
+    var mouse = MouseLook()
     var clock = Clock()
     clock.start()
     var last = clock.elapsed()
@@ -269,6 +286,7 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
         while running and not window.close_requested:
             var tapped = False
             for event in window.poll(POLL):
+                mouse.event(event)
                 if event.kind == KEY_DOWN:
                     # The `q` key calls the companion's assist attack.
                     if event.key == ESCAPE or event.key == CTRL_C:
@@ -280,8 +298,12 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
                         game.weather.set(WeatherKind(number))
                     if number == 4:
                         game.day.hour = (game.day.hour + 3) % 24
-                    if number == 5:
+                    if number == 8:
                         game.weather.set(SNOW)
+                    if event.key == KEY_P:
+                        game.paused = not game.paused
+                    if event.key == KEY_N:
+                        game.show_map = not game.show_map
                     keys.press(event.key)
                     shift = event.shift
                 elif event.kind == KEY_UP:
@@ -311,6 +333,7 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
                 _pad_input(hid, evdev), keyboard_input(keys, shift)
             )
             input.jump = input.jump or tapped
+            mouse.apply(input)
             _ = game.tick(scene, assets, input, delta)
             game.render(scene, assets)
             window.present(game.window)
@@ -324,7 +347,7 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
     finally:
         window.close()
     kept.write_bytes(pack_progress(game.progress()))
-    print("Kept the progress in", PROGRESS_FILE, file=stderr)
+    print("Kept the progress in", slot, file=stderr)
 
 
 def main() raises:
@@ -343,4 +366,7 @@ def main() raises:
     var destination = String(DEFAULT_OUTPUT)
     if len(words) > 1:
         destination = words[1]
-    _scripted(destination)
+    var wav = String()
+    if len(words) > 3 and words[2] == "--wav":
+        wav = words[3]
+    _scripted(destination, wav)

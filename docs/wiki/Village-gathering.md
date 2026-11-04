@@ -86,7 +86,7 @@ The player's skills change three settings of `Gathering`: `ore_strikes`, `forage
 | The errands | The top right | Each errand taken and not done |
 | The skills | The top left | Each skill's level and experience. See [Village skills](Village-skills). |
 
-The font has 5 by 7 dots and needs no font file. It draws capitals, digits, and `+ / : . , ! ? ' -`. A dot is `hud_scale` pixels on a side: one pixel for each 270 pixels of the frame's height. So the text keeps its size on the screen. Each line has a dark shadow, so it reads over the sky and the grass.
+The font has 5 by 7 dots and needs no font file. It draws capitals, small letters, digits, and `+ / : . , ! ? ' -`. A dot is `hud_scale` pixels on a side: one pixel for each 270 pixels of the frame's height. So the text keeps its size on the screen. Each line has a dark shadow, so it reads over the sky and the grass.
 
 `draw_compass`, in `extensions/village/compass.mojo`, writes a compass at the top middle:
 

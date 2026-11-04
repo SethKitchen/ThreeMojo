@@ -38,6 +38,7 @@ from extensions.village.faces import FaceLife
 from extensions.village.battle_hud import DANGER
 from extensions.village.foes import bandit_fighter
 from extensions.village.hud import GOLD_TEXT
+from extensions.village.sound import COIN, HIT, SPLASH, SWING
 from extensions.village.talk import DONE, FAIR, NIGHT, SNOWY, TAKEN, WET
 from extensions.village.residents import SIT, WORK
 from extensions.village.props import BARREL, BENCH, CROPS, Prop, WELL, WOODPILE
@@ -60,6 +61,7 @@ from extensions.village.play import (
 )
 from extensions.village.combat import (
     DODGE,
+    FREE,
     FALL,
     FLINCH,
     HEAVY,
@@ -802,6 +804,40 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     game.player.velocity = Vector3(0, 0, 0)
     game.ripple_pond(scene, step)
     assert_true(len(game.village.water._drops) >= rained + 1)
+    # The game hears a wading footfall, a swing, and coins.
+    game.player.position = Vector3(0, game.village.level.to(METER) - 0.3, 4)
+    game.player.velocity = Vector3(2, 0, 0)
+    game.player.grounded = True
+    game.stride = 0
+    game.coins_were = 0
+    game.gathering.satchel.counts[CHEST.value] = 5
+    game.battle.fighter.move = LIGHT_ONE
+    game.swinging = False
+    game.foes_health = 1000
+    game.hear(step)
+    var kinds = List[Int]()
+    for voice in game.sounds.voices:
+        kinds.append(voice.kind.value)
+    assert_true(SPLASH.value in kinds)
+    assert_true(SWING.value in kinds)
+    assert_true(HIT.value in kinds)
+    assert_true(COIN.value in kinds)
+    assert_equal(len(game.audio(100)), 200)
+    game.battle.fighter.move = FREE
+    # Paused, nothing moves; the map and the pause panel show.
+    var before_pause = game.player.position
+    game.paused = True
+    game.show_map = True
+    var push = no_input()
+    push.forward = 1
+    _ = game.tick(scene, assets, push, step)
+    assert_almost_equal(game.player.position.x, before_pause.x, atol=1e-6)
+    game.render(scene, assets)
+    assert_equal(game.window.width, 32)
+    var marks = game.map_marks(scene)
+    assert_equal(len(marks.houses), len(game.village.houses))
+    game.paused = False
+    game.show_map = False
     # A fall costs a quarter of the coins the player carries.
     game.gathering.satchel.counts[CHEST.value] = 100
     game.battle.fell = True

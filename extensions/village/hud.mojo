@@ -48,7 +48,10 @@ from extensions.village.gathering import (
 from extensions.village.talk import SPEECH_SECONDS
 from render.framebuffer import Framebuffer
 
-comptime GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/:.,!?'-"
+comptime GLYPHS = (
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/:.,!?'-"
+    + "abcdefghijklmnopqrstuvwxyz"
+)
 """The characters the font draws, in the order of its rows. Any other
 character is a space."""
 comptime NOTE_SECONDS = Float32(2.0)
@@ -65,7 +68,10 @@ comptime _FONT = (
     + "FGGE11U V444444 HHHHHHE HHHHHA4 HHHLLLA HHA4AHH HHA4444 V1248GV EHJLPHE "
     + "4C4444E EH1248V V2421HE 26AIV22 VGU11HE 68GUHHE V124888 EHHEHHE EHHF12C "
     + "044V440 01248G0 0CC0CC0 00000CC 0000C48 4444404 EH12404 4480000 "
-    + "000V000"
+    + "000V000 "
+    + "00E1FHF GGMPHHU 00EGGHE 11DJHHF 00EHVGE 698S888 0FHHF1E GGMPHHH 40C444E "
+    + "20622IC GGIKOKI C44444E 00QLLHH 00MPHHH 00EHHHE 0UHHUGG 0DJJD11 00MPGGG "
+    + "00EGE1U 88S8896 00HHHJD 00HHHA4 00HHLLA 00HA4AH 0HHHF1E 00V248V"
 )
 """The font, a group of seven rows a glyph in the order of `GLYPHS`, each
 row one character of `_DIGITS`: its value's bit 4 is the left dot."""
@@ -171,7 +177,7 @@ def draw_text(
 ):
     """Draw a line of text with a shadow, its top left at a pixel.
 
-    Lower-case letters are drawn as capitals.
+    A character that the font does not hold is left as a space.
 
     Args:
         frame: The frame.
@@ -184,8 +190,7 @@ def draw_text(
             to 1.
     """
     var glyphs = String(GLYPHS)
-    var upper = text.upper()
-    var bytes = upper.as_bytes()
+    var bytes = text.as_bytes()
     for k in range(len(bytes)):
         var at = glyphs.find(chr(Int(bytes[k])))
         if at < 0:
