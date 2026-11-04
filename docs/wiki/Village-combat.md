@@ -207,6 +207,11 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 - **The companion's assist gauge**, in the bottom left. It says `ASSIST READY` when it is full.
 - **The gauges**, in the bottom right: the stance, the health, the stamina, the limit gauge, and the special gauge as a row of points. The health turns red below a quarter. In a surge, the limit gauge turns gold, says `SURGE`, and empties as the time runs out. Through an ultimate's start-up, its name stands large in the middle of the frame, and a gold star grows at the sword hand.
 - **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
+- **The red edges.** Below `VIGNETTE_HEALTH`, 35 percent, of their health, the edges of the player's frame redden, more the nearer they are to falling. A blow that lands on the player flashes them red for 0.4 seconds. `draw_vignette` draws them.
+
+### How a blow feels
+
+A blow that takes `HITSTOP_BLOW`, 40, of a foe's health or more all but stops the world for `HITSTOP`, 0.07 seconds. The world then moves at `HITSTOP_PACE`, 0.15, of its speed. A knock sounds as each blow lands: see [Village walk](Village-walk#sound). A hard landing and a roll kick up dust from the ground, which settles in a second.
 - **Each bandit's health and stamina**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a piercing attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under its bars.
 - **A dummy's stamina**, over its head, while its stamina is not full.
 - **The lock's mark**: four gold dots around the locked target's chest.

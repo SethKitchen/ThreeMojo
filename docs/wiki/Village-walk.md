@@ -185,7 +185,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 5. Each resident steps along its route, and its body or its mesh is posed.
 6. Each door swings open while someone stands near it, and shut after.
 7. The use button uses the spot in reach: see [Village gathering](Village-gathering). With no spot in reach, it talks to the villager in reach: see [Village errands](Village-errands).
-8. The camera's focus follows the player. The eye comes in before a wall, and stays below a ceiling and above the ground. The inside of each house hides while the eye is more than `INSIDE_REACH`, 18 meters, past the house's edge. The fireflies and the butterflies fly on: see [Village critters](Village-critters).
+8. The camera's focus follows the player. The eye comes in before a wall and before a tree's trunk, and stays below a ceiling and above the ground. The inside of each house hides while the eye is more than `INSIDE_REACH`, 18 meters, past the house's edge. The fireflies and the butterflies fly on: see [Village critters](Village-critters).
 9. The village grows the grass for the camera, and moves the water's clock on.
 10. The weather moves on, and scales the lights and the fog. See [Village weather](Village-weather). The day moves on, and dims and tints them for the hour. See [Village day and night](Village-day).
 
@@ -398,7 +398,7 @@ The clothes follow the skin, and the skin follows the bones, so they move togeth
 - The characters do not swim. Deep water stops them.
 - A resident walks straight to its next point. Round a house, it walks aside and tries again, but it does not plan a way. It can give up on a point it cannot reach.
 - An animal slides across the ground while it turns on the spot.
-- The camera comes in before a wall, but not before a tree or a roof.
+- The camera comes in before a wall and a trunk, but not before a crown of leaves or a roof.
 - The X11 window and the macOS window do not play the sound: `--wav` keeps it, and a host can take it with `tm_village_audio`.
 - The macOS window reads no gamepad. A key cannot be bound to another action, and the game has no menu of settings: its options are its command line.
 - The game draws on a GPU only through Metal, in the macOS window. The web host draws the water and the splats, and not the village.

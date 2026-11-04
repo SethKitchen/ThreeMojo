@@ -114,6 +114,7 @@ from extensions.village.hud import (
     Rgb,
     draw_hud,
     draw_text,
+    draw_vignette,
     fill_box,
     hud_scale,
     text_width,
@@ -135,6 +136,7 @@ from extensions.village.skills import (
 from extensions.village.progress import PLACE_SHIFT, Progress
 from extensions.village.styles import STYLES, FightingStyle
 from extensions.village.combat import (
+    DODGE,
     FALL,
     FLINCH,
     HEAVY,
@@ -146,7 +148,7 @@ from extensions.village.combat import (
 from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.faces import FaceLife, face_reach
 from extensions.village.day import DayCycle, dim_water
-from extensions.village.puffs import draw_puffs
+from extensions.village.puffs import draw_puffs, dust_puffs
 from extensions.village.map import MapHouse, MapMarks, draw_map
 from extensions.village.sound import COIN, HIT, SPLASH, STEP, SWING, Sounds
 from extensions.village.air import bloom, ground_mist
@@ -247,6 +249,14 @@ comptime WAKE_EVERY = Float32(0.18)
 """The seconds between two taps of a wading player's wake."""
 comptime STRIDE = Float32(0.55)
 """The seconds between two footfalls at a walk."""
+comptime HITSTOP = Float32(0.07)
+"""How long the world all but stops after a hard blow lands, in seconds."""
+comptime HITSTOP_PACE = Float32(0.15)
+"""How fast the world moves while it all but stops."""
+comptime HITSTOP_BLOW = Float32(40)
+"""How much health a blow must take for the world to stop a moment."""
+comptime VIGNETTE_HEALTH = Float32(0.35)
+"""Below this share of their health, the frame's edges redden."""
 comptime FALL_COST = 25
 """The share, in percent, of the coins a player loses when they fall."""
 comptime DAWN_MIST = Float32(6.5)
@@ -279,6 +289,44 @@ comptime WINDED = Float32(0.6)
 comptime ARM_EASE = Float32(3)
 """How fast the eye goes back out once a wall is passed: each second it
 closes all but `exp(-ARM_EASE)` of its gap."""
+
+
+def trunks_reach(
+    trunks: List[Obstacle], focus: Vector3, eye: Vector3, margin: Float32
+) -> Float32:
+    """Return how much of the way from a focus to an eye is clear of the
+    trees' trunks.
+
+    Args:
+        trunks: The trunks, as round obstacles.
+        focus: The point the camera looks at.
+        eye: Where the camera would stand.
+        margin: How far before a trunk the camera must stop, in meters.
+
+    Returns:
+        The share of the way, from 0 to 1, that the camera can stand at: 1
+        when no trunk is in the way.
+    """
+    var dx = eye.x - focus.x
+    var dz = eye.z - focus.z
+    var a = dx * dx + dz * dz
+    if a < 1.0e-8:
+        return 1
+    var first = Float32(1)
+    for trunk in trunks:
+        var fx = focus.x - trunk.x
+        var fz = focus.z - trunk.z
+        var b = 2 * (fx * dx + fz * dz)
+        var c = fx * fx + fz * fz - trunk.radius * trunk.radius
+        var d = b * b - 4 * a * c
+        if d < 0 or c < 0:
+            continue
+        var t = (-b - sqrt(d)) / (2 * a)
+        if t > 0 and t < first:
+            first = t
+    if first >= 1:
+        return 1
+    return max(Float32(0), first - margin / sqrt(a))
 
 
 def village_mood(day: Float32, wet: Float32, snowed: Float32) -> Mood:
@@ -623,6 +671,16 @@ struct VillageGame(Movable):
     var paused: Bool
     """Whether the game is paused: nothing moves, and the frame shows the
     controls."""
+    var hitstop: Float32
+    """How long the world still nearly stops after a blow landed, in
+    seconds."""
+    var dust_at: Vector3
+    """Where the player's feet last kicked up dust: a hard landing, or a
+    roll."""
+    var dust_since: Float32
+    """How long ago, in seconds, the dust was kicked up."""
+    var was_kicking: Bool
+    """Whether the player was landing hard or rolling last frame."""
     var show_map: Bool
     """Whether the frame shows the map of the village round the
     player."""
@@ -851,6 +909,10 @@ struct VillageGame(Movable):
         self.sounds = Sounds()
         self.paused = False
         self.show_map = False
+        self.hitstop = 0
+        self.dust_at = Vector3(0, 0, 0)
+        self.dust_since = 10
+        self.was_kicking = False
         self.stride = 0
         self.swinging = False
         self.foes_health = 0
@@ -977,6 +1039,10 @@ struct VillageGame(Movable):
         if self.paused:
             input = no_input()
             delta = Duration(0.0, SECOND)
+        # Just after a blow lands, the world all but stops a moment.
+        if self.hitstop > 0:
+            self.hitstop -= delta.to(SECOND)
+            delta = Duration(delta.to(SECOND) * HITSTOP_PACE, SECOND)
         self.view.turn(input.look_right, input.look_up, delta)
         var blocking = self.trees.copy()
         blocking.extend(self.residents.obstacles())
@@ -1129,7 +1195,10 @@ struct VillageGame(Movable):
         self.fast.focus = feet
         # The eye comes in at once before a wall, and goes back out slowly.
         var focus = self.view.focus
-        var clear = self.terrain.view_reach(focus, self.view.eye(), ARM_MARGIN)
+        var clear = min(
+            self.terrain.view_reach(focus, self.view.eye(), ARM_MARGIN),
+            trunks_reach(self.trees, focus, self.view.eye(), ARM_MARGIN),
+        )
         if clear < self.reach:
             self.reach = clear
         else:
@@ -1241,7 +1310,19 @@ struct VillageGame(Movable):
             health += self.battle.foes[index].fighter.health
         if health < self.foes_health - 0.5:
             self.sounds.play(HIT, 0.8, 0)
+            # A hard blow stops the world a moment, so it is felt.
+            if health < self.foes_health - HITSTOP_BLOW:
+                self.hitstop = HITSTOP
         self.foes_health = health
+        # A hard landing and a roll kick up dust from the ground.
+        var kicking = (
+            self.player.landing > 0 or self.battle.fighter.move == DODGE
+        ) and self.player.grounded
+        if kicking and not self.was_kicking:
+            self.dust_at = self.player.position
+            self.dust_since = 0
+        self.was_kicking = kicking
+        self.dust_since += seconds
         var coins = self.gathering.satchel.count(CHEST)
         if coins > self.coins_were:
             self.sounds.play(COIN, 0.7, 0)
@@ -1548,9 +1629,11 @@ struct VillageGame(Movable):
             # The chimneys smoke over the finished frame, dim at night.
             var day = self.day.daylight()
             var light = 0.2 + 0.8 * day
-            _ = draw_puffs(
-                image, self.village.smoke(self.clock), self.camera, light
+            var puffs = self.village.smoke(self.clock)
+            puffs.extend(
+                dust_puffs(self.dust_at, self.clock, self.dust_since, 7)
             )
+            _ = draw_puffs(image, puffs, self.camera, light)
             self.veil(image, scene, day)
             covered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
@@ -1629,8 +1712,25 @@ struct VillageGame(Movable):
                 self.player.position,
                 self.player.heading.to(RADIAN),
             )
+        if self.hud:
+            draw_vignette(self.window, self.vignette())
         if self.paused:
             self.draw_pause()
+
+    def vignette(self) -> Float32:
+        """Return how red the frame's edges are: the more, the nearer the
+        player is to falling, and in a flash as a blow lands.
+
+        Returns:
+            From 0 to 1.
+        """
+        ref f = self.battle.fighter
+        var share = f.health / max(Float32(1), f.parameters.health)
+        var low = max(Float32(0), (VIGNETTE_HEALTH - share) / VIGNETTE_HEALTH)
+        var flash = Float32(0)
+        for hurt in self.battle.hurts:
+            flash = max(flash, max(Float32(0), 1 - hurt.age / 0.4) * 0.6)
+        return min(Float32(1), max(low * 0.8, flash))
 
     def map_marks(self, scene: Scene) -> MapMarks:
         """Return what the map shows: the houses, the villagers, those with

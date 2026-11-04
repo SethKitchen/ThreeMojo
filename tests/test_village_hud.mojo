@@ -21,6 +21,7 @@ from extensions.village.gathering import (
     TRINKET,
 )
 from extensions.village.hud import (
+    draw_vignette,
     GOLD_TEXT,
     NOTE_SECONDS,
     Rgb,
@@ -41,6 +42,7 @@ from std.testing import (
     assert_almost_equal,
     assert_equal,
     assert_false,
+    assert_raises,
     assert_true,
 )
 
@@ -109,6 +111,18 @@ def test_text_is_drawn_with_a_shadow() raises:
         if Int(small.pixels[4 * k]) == WHITE_TEXT.r:
             dots += 1
     assert_equal(dots, 9)
+
+
+def test_a_vignette_reddens_the_corners_and_not_the_middle() raises:
+    var frame = _frame(40, 40)
+    draw_vignette(frame, 0)
+    assert_equal(_changed(frame), 0)
+    draw_vignette(frame, 1)
+    assert_true(Int(frame.pixels[0]) > Int(frame.pixels[1]))
+    var middle = (20 * 40 + 20) * 4
+    assert_equal(Int(frame.pixels[middle]), 100)
+    with assert_raises(contains="strength"):
+        draw_vignette(frame, 2)
 
 
 def test_each_kind_has_a_color_and_a_prompt() raises:

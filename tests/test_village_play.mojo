@@ -18,6 +18,7 @@ from extensions.vegetation.ground import Ground, Lot, Pond, footpath
 from extensions.vegetation.meadow import Planting
 from controls.third_person_controls import yaw_of
 from extensions.village.character import (
+    Obstacle,
     AIRBORNE,
     STANDING,
     MoveInput,
@@ -57,7 +58,9 @@ from extensions.village.play import (
     game_residents,
     tree_obstacles,
     prop_stops,
+    trunks_reach,
     village_mood,
+    HITSTOP,
 )
 from extensions.village.combat import (
     DODGE,
@@ -823,6 +826,19 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     assert_true(HIT.value in kinds)
     assert_true(COIN.value in kinds)
     assert_equal(len(game.audio(100)), 200)
+    # A hard blow stops the world a moment, and a roll kicks up dust.
+    assert_almost_equal(game.hitstop, HITSTOP, atol=1e-6)
+    game.battle.fighter.move = DODGE
+    game.was_kicking = False
+    game.hear(step)
+    assert_true(game.dust_since < 1)
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_true(game.hitstop <= 0)
+    # Near falling, and as a blow lands, the frame's edges redden.
+    game.battle.fighter.health = 10
+    assert_true(game.vignette() > 0.5)
+    game.battle.fighter.health = game.battle.fighter.parameters.health
+    assert_equal(game.vignette(), 0)
     game.battle.fighter.move = FREE
     # Paused, nothing moves; the map and the pause panel show.
     var before_pause = game.player.position
@@ -850,6 +866,24 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     game.battle.fell = True
     _ = game.tick(scene, assets, no_input(), step)
     assert_equal(game.gathering.satchel.count(CHEST), 0)
+
+
+def test_the_camera_comes_in_before_a_trunk() raises:
+    var trunks: List[Obstacle] = [Obstacle(0, 5, 0.5)]
+    var focus = Vector3(0, 1.5, 0)
+    # A trunk halfway along the sight brings the eye in before it.
+    var reach = trunks_reach(trunks, focus, Vector3(0, 2, 10), 0.3)
+    assert_almost_equal(reach, 0.45 - 0.03, atol=1e-4)
+    # No trunk in the way, or the eye on the focus, is the whole way.
+    assert_equal(trunks_reach(trunks, focus, Vector3(10, 2, 0), 0.3), 1)
+    assert_equal(trunks_reach(trunks, focus, focus, 0.3), 1)
+    # A trunk past the eye, or round the focus, stops nothing.
+    assert_equal(trunks_reach(trunks, focus, Vector3(0, 2, 2), 0.3), 1)
+    var round: List[Obstacle] = [Obstacle(0, 0, 1)]
+    assert_equal(trunks_reach(round, focus, Vector3(0, 2, 10), 0.3), 1)
+    # A trunk just past the margin leaves none of the way.
+    var near: List[Obstacle] = [Obstacle(0, 0.6, 0.5)]
+    assert_equal(trunks_reach(near, focus, Vector3(0, 2, 10), 0.3), 0)
 
 
 def test_the_village_s_mood_and_its_props_stops() raises:

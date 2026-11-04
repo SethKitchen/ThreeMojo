@@ -47,6 +47,7 @@ from extensions.village.gathering import (
 )
 from extensions.village.talk import SPEECH_SECONDS
 from render.framebuffer import Framebuffer
+from std.math import sqrt
 
 comptime GLYPHS = (
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/:.,!?'-"
@@ -54,6 +55,9 @@ comptime GLYPHS = (
 )
 """The characters the font draws, in the order of its rows. Any other
 character is a space."""
+comptime VIGNETTE_CLEAR = Float32(0.45)
+"""The share of the way from a frame's middle to its corner that a
+vignette leaves clear."""
 comptime NOTE_SECONDS = Float32(2.0)
 """How long a note stays, in seconds."""
 comptime NOTE_FADE = Float32(0.5)
@@ -304,6 +308,43 @@ def note_alpha(age: Float32, seconds: Float32 = NOTE_SECONDS) -> Float32:
     if left <= 0:
         return 0
     return min(Float32(1), left / NOTE_FADE)
+
+
+def draw_vignette(mut frame: Framebuffer, strength: Float32) raises:
+    """Redden a frame's edges, as a player who is hurt or near falling
+    sees it.
+
+    The red is strongest in the corners, and fades to nothing a
+    `VIGNETTE_CLEAR` share of the way out from the middle.
+
+    Args:
+        frame: The frame. Its pixels are changed.
+        strength: How strong the red is, from 0, none, to 1.
+
+    Raises:
+        Error: If the strength is not from 0 to 1.
+    """
+    if not (strength >= 0 and strength <= 1):
+        raise Error("A vignette's strength must be from 0 to 1")
+    if strength == 0:
+        return
+    var w = Float32(frame.width)
+    var h = Float32(frame.height)
+    for y in range(frame.height):
+        var dy = (Float32(y) + 0.5) / h * 2 - 1
+        for x in range(frame.width):
+            var dx = (Float32(x) + 0.5) / w * 2 - 1
+            var reach = sqrt(dx * dx + dy * dy) / 1.4142
+            if reach <= VIGNETTE_CLEAR:
+                continue
+            var t = (reach - VIGNETTE_CLEAR) / (1 - VIGNETTE_CLEAR)
+            _blend(
+                frame,
+                x,
+                y,
+                Rgb(150, 0, 0),
+                min(Float32(0.85), t * t * strength),
+            )
 
 
 def draw_hud(
