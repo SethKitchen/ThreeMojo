@@ -36,11 +36,21 @@ from extensions.humanoid.skeleton.head.expression import (
     FacialExpression,
 )
 from extensions.village.faces import FaceLife
+from extensions.village.battle import Hurt
+from render.framebuffer import Color, Framebuffer
 from extensions.village.battle_hud import DANGER
 from extensions.village.foes import bandit_fighter
 from extensions.village.hud import GOLD_TEXT
 from extensions.village.sound import COIN, HIT, SPLASH, SWING
-from extensions.village.talk import DONE, FAIR, NIGHT, SNOWY, TAKEN, WET
+from extensions.village.talk import (
+    DONE,
+    FAIR,
+    NIGHT,
+    OFFERED,
+    SNOWY,
+    TAKEN,
+    WET,
+)
 from extensions.village.residents import SIT, WORK
 from extensions.village.props import BARREL, BENCH, CROPS, Prop, WELL, WOODPILE
 from extensions.village.play import (
@@ -512,6 +522,16 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
     var marks = game.compass_marks()
     assert_equal(len(marks), 1)
     assert_equal(marks[0].color.r, GOLD_TEXT.r)
+    # The map marks her as one with an errand to give, and once the
+    # errand is taken, as one of the villagers.
+    scene.update()
+    assert_equal(len(game.map_marks(scene).errands), 1)
+    game.talk.states[0] = TAKEN
+    assert_equal(len(game.map_marks(scene).people), 1)
+    game.talk.states[0] = OFFERED
+    game.talk.speakers[0].villager = 9
+    assert_equal(len(game.map_marks(scene).errands), 0)
+    game.talk.speakers[0].villager = 0
     var use = no_input()
     use.use = True
     _ = game.tick(scene, assets, use, Duration(0.1, SECOND))
@@ -745,6 +765,26 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     world.place = [0, 0, PLACE_SHIFT + 30000, 9]
     game.restore(scene, world)
     assert_almost_equal(game.day.hour, 20.5, atol=1e-4)
+    # The errands come back to a game of as many speakers. A state that
+    # is not one is let go, and so is an hour that is not one, or a place
+    # far away.
+    game.talk.states = [TAKEN, TAKEN]
+    game.talk.rounds = [0, 0]
+    world.errands = [2, 9]
+    world.rounds = [3, 1]
+    world.place = [PLACE_SHIFT, PLACE_SHIFT + 2000000, PLACE_SHIFT - 1000, 2]
+    game.restore(scene, world)
+    assert_true(game.talk.states[0] == DONE)
+    assert_true(game.talk.states[1] == TAKEN)
+    assert_equal(game.talk.rounds[0], 3)
+    assert_equal(game.progress().errands[0], 2)
+    assert_almost_equal(game.day.hour, 20.5, atol=1e-4)
+    assert_almost_equal(game.player.position.x, 1.5, atol=1e-4)
+    # A game of other speakers keeps its own errands.
+    world.errands = [1]
+    world.rounds = [0]
+    game.restore(scene, world)
+    assert_true(game.talk.states[0] == DONE)
     _ = before.mastery.pop()
     with assert_raises(contains="mastery"):
         game.restore(scene, before)
@@ -800,6 +840,12 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     assert_equal(len(game.village.water._drops), rained + 1)
     game.ripple_pond(scene, Duration(0.01, SECOND))
     assert_equal(len(game.village.water._drops), rained + 1)
+    # A player who leaps over the pond leaves none.
+    game.wake = 0
+    game.player.position.y = game.village.level.to(METER) + 1
+    game.ripple_pond(scene, step)
+    assert_equal(len(game.village.water._drops), rained + 1)
+    game.player.position.y = game.village.level.to(METER) - 0.3
     # A fish that bites jerks its float.
     for index in range(len(game.gathering.spots)):
         if game.gathering.spots[index].spot.kind == FISH:
@@ -832,6 +878,15 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     game.was_kicking = False
     game.hear(step)
     assert_true(game.dust_since < 1)
+    # A roll kicks up dust once, as it begins.
+    var since = game.dust_since
+    game.hear(step)
+    assert_true(game.dust_since > since)
+    # A light blow is heard, and does not stop the world.
+    game.hitstop = 0
+    game.foes_health = 1
+    game.hear(step)
+    assert_equal(game.hitstop, 0)
     _ = game.tick(scene, assets, no_input(), step)
     assert_true(game.hitstop <= 0)
     # Near falling, and as a blow lands, the frame's edges redden.
@@ -839,6 +894,9 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     assert_true(game.vignette() > 0.5)
     game.battle.fighter.health = game.battle.fighter.parameters.health
     assert_equal(game.vignette(), 0)
+    game.battle.hurts.append(Hurt(Vector3(1, 0, 0), 0.1))
+    assert_true(game.vignette() > 0.4)
+    game.battle.hurts.clear()
     game.battle.fighter.move = FREE
     # Paused, nothing moves; the map and the pause panel show.
     var before_pause = game.player.position
@@ -852,6 +910,11 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     assert_equal(game.window.width, 32)
     var marks = game.map_marks(scene)
     assert_equal(len(marks.houses), len(game.village.houses))
+    # A frame with no depths cannot show what is sheltered.
+    var bare = Framebuffer(4, 4, Color(0, 0, 0, 255))
+    bare.depth = List[Float32]()
+    with assert_raises(contains="depth"):
+        _ = game.sheltered(bare)
     game.paused = False
     game.show_map = False
     # A fall costs a quarter of the coins the player carries.
@@ -884,6 +947,12 @@ def test_the_camera_comes_in_before_a_trunk() raises:
     # A trunk just past the margin leaves none of the way.
     var near: List[Obstacle] = [Obstacle(0, 0.6, 0.5)]
     assert_equal(trunks_reach(near, focus, Vector3(0, 2, 10), 0.3), 0)
+    # A trunk behind the focus, or no trunk at all, stops nothing.
+    var behind: List[Obstacle] = [Obstacle(0, -5, 0.5)]
+    assert_equal(trunks_reach(behind, focus, Vector3(0, 2, 10), 0.3), 1)
+    assert_equal(
+        trunks_reach(List[Obstacle](), focus, Vector3(0, 2, 10), 0.3), 1
+    )
 
 
 def test_the_village_s_mood_and_its_props_stops() raises:

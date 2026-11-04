@@ -245,6 +245,17 @@ def test_an_errand_comes_back_and_alternates_with_another() raises:
     # After a while, the second errand is offered.
     var places: List[Vector3] = [Vector3(50, 0, 50), Vector3(60, 0, 60)]
     var heads: List[Float32] = [1.7, 1.6]
+    # Not at once.
+    _ = talk.update(
+        scene,
+        Vector3(0, 0, 0),
+        places,
+        heads,
+        False,
+        satchel,
+        Duration(1.0, SECOND),
+    )
+    assert_true(talk.states[0] == DONE)
     _ = talk.update(
         scene,
         Vector3(0, 0, 0),
@@ -275,6 +286,10 @@ def test_an_errand_comes_back_and_alternates_with_another() raises:
     assert_equal(satchel.count(CHEST), 14 + paid - HERB_PRICE)
     # With herbs enough, the trader only talks.
     satchel.counts[HERBS.value] = 3
+    assert_equal(talk.speak(1, satchel), "Good day.")
+    # With no coins for an herb, too.
+    satchel.counts[HERBS.value] = 0
+    satchel.counts[CHEST.value] = 0
     assert_equal(talk.speak(1, satchel), "Good day.")
 
 

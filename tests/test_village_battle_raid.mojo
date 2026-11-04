@@ -55,6 +55,7 @@ from extensions.village.combat import (
 from extensions.village.combos import SUNDER
 from extensions.village.party import TAUNT_EVERY
 from extensions.village.foes import CIRCLING
+from extensions.village.raid import RISE_SECONDS
 from extensions.village.raid import (
     REVIVE_SHARE,
     RISE_SECONDS,
@@ -661,6 +662,19 @@ def test_the_companion_casts_at_the_warden_in_its_fight() raises:
     assert_equal(arena.battle.ally_target(Vector3(0, 0, 0)), warden)
     arena.battle.wardens[0].boss.health = 0
     assert_equal(arena.battle.ally_target(Vector3(0, 0, 0)), -1)
+
+
+def test_a_fallen_companion_lies_still_while_a_warden_fights() raises:
+    var arena = Arena(arena_parameters(0, 0, 30, ally=True, raid=True))
+    arena.tick(no_input())
+    # A warden is a danger, and the village's people run from it.
+    assert_equal(len(arena.battle.dangers()), 1)
+    arena.battle.allies[0].fighter.health = 0
+    arena.battle.allies[0].fighter.move = FALL
+    for _ in range(Int(RISE_SECONDS * 20) + 20):
+        arena.battle.wardens[0].boss.engaged = True
+        arena.tick(no_input())
+    assert_true(arena.battle.allies[0].down > RISE_SECONDS)
 
 
 def main() raises:

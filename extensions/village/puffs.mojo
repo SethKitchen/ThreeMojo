@@ -195,8 +195,8 @@ def draw_puffs(
             continue
         shown += 1
         var tint = puff.color * light
-        for y in range(y0, y1 + 1):
-            for x in range(x0, x1 + 1):
+        for y in range(y0, y1 + 1):  # pragma: no branch
+            for x in range(x0, x1 + 1):  # pragma: no branch
                 var k = y * w + x
                 # Nearer geometry hides the puff.
                 if image.depth[k] < middle.z:

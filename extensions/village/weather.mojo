@@ -637,8 +637,8 @@ struct Weather(Movable):
             var y0 = Int(Float32(window.height) * d.y)
             var size = 1 + Int(2 * d.z)
             var alpha = 0.35 + 0.5 * d.z
-            for dy in range(size):
-                for dx in range(size):
+            for dy in range(size):  # pragma: no branch
+                for dx in range(size):  # pragma: no branch
                     var x = x0 + dx
                     var y = y0 + dy
                     if x < 0 or x >= window.width or y >= window.height:

@@ -79,6 +79,11 @@ def test_a_progress_packs_and_comes_back() raises:
     with assert_raises(contains="four numbers"):
         p.check()
     p.place = List[Int]()
+    # Each errand keeps its rounds.
+    p.rounds.append(0)
+    with assert_raises(contains="round for each errand"):
+        p.check()
+    _ = p.rounds.pop()
     p.spent = List[Int](length=256, fill=0)
     with assert_raises(contains="255"):
         p.check()

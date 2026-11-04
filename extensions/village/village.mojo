@@ -642,6 +642,29 @@ def lamp_places(
     return places^
 
 
+def chimney_tops(
+    scene: Scene, houses: List[StandingHouse]
+) raises -> List[Vector3]:
+    """Return the top of each house's chimney pot, in the world.
+
+    Args:
+        scene: The scene, updated.
+        houses: The houses as they stand.
+
+    Returns:
+        One top a house with a chimney, in the order of `houses`.
+
+    Raises:
+        Error: If the scene is stale.
+    """
+    var tops = List[Vector3]()
+    for index in range(len(houses)):
+        ref house = houses[index]
+        if house.chimney:
+            tops.append(scene.local_to_world(house.root, house.chimney.value()))
+    return tops^
+
+
 def _hang_lamps(
     mut scene: Scene,
     parameters: VillageParameters,
@@ -810,13 +833,7 @@ struct Village(Movable):
         ]
         self.roofs = 6
         scene.update()
-        self.chimneys = List[Vector3]()
-        for index in range(len(self.houses)):
-            ref house = self.houses[index]
-            if house.chimney:
-                self.chimneys.append(
-                    scene.local_to_world(house.root, house.chimney.value())
-                )
+        self.chimneys = chimney_tops(scene, self.houses)
         var heading = meadow.wind.heading.to(RADIAN)
         self.wind = Vector3(cos(heading), 0, sin(heading)) * SMOKE_DRIFT
         self.water = WaterScene(
@@ -955,7 +972,7 @@ struct Village(Movable):
         )
         self.water.set_sun(toward)
         var lamps = day.daylight() < 0.5
-        for index in range(len(self.houses)):
+        for index in range(len(self.houses)):  # pragma: no branch
             ref house = self.houses[index]
             scene.node(house.lit).visible = lamps
             scene.node(house.daylit).visible = not lamps
@@ -989,7 +1006,7 @@ struct Village(Movable):
             if not (value >= 0 and value <= 1):
                 raise Error("A surface's weather must be from 0 to 1")
         var gray = UInt8(Int(255 * (1 - SOAKED * wet) + 0.5))
-        for index in range(len(self.weathered)):
+        for index in range(len(self.weathered)):  # pragma: no branch
             ref m = assets.materials.materials[self.weathered[index].value]
             m.color = Color(gray, gray, gray)
             if index < self.roofs:

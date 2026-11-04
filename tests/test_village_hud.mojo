@@ -17,6 +17,7 @@ from extensions.village.gathering import (
     HERBS,
     MUSHROOMS,
     ORE,
+    SEAL,
     Satchel,
     TRINKET,
 )
@@ -123,6 +124,8 @@ def test_a_vignette_reddens_the_corners_and_not_the_middle() raises:
     assert_equal(Int(frame.pixels[middle]), 100)
     with assert_raises(contains="strength"):
         draw_vignette(frame, 2)
+    with assert_raises(contains="strength"):
+        draw_vignette(frame, -1)
 
 
 def test_each_kind_has_a_color_and_a_prompt() raises:
@@ -144,6 +147,10 @@ def test_each_kind_has_a_color_and_a_prompt() raises:
         for b in range(a + 1, 7):
             assert_true(reds[a] != reds[b])
             assert_true(prompts[a] != prompts[b])
+    # A seal of the warden's has a color of its own.
+    var seal = kind_color(SEAL).g * 1000 + kind_color(SEAL).r
+    for red in reds:
+        assert_true(red != seal)
     assert_equal(use_prompt(ORE, 2), "E  MINE ORE 2/3")
     assert_equal(use_prompt(ORE, 0, 0, 1), "E  MINE ORE 0/1")
     assert_equal(use_prompt(HERBS, 0), "E  GATHER HERBS")

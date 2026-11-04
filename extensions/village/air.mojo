@@ -40,12 +40,12 @@ def _box(source: List[Float32], w: Int, h: Int, across: Bool) -> List[Float32]:
     """Return a box blur of three floats a texel, along one axis."""
     var blurred = List[Float32](length=len(source), fill=0)
     var span = Float32(2 * BLOOM_REACH + 1)
-    for y in range(h):
-        for x in range(w):
+    for y in range(h):  # pragma: no branch
+        for x in range(w):  # pragma: no branch
             var r = Float32(0)
             var g = Float32(0)
             var b = Float32(0)
-            for k in range(-BLOOM_REACH, BLOOM_REACH + 1):
+            for k in range(-BLOOM_REACH, BLOOM_REACH + 1):  # pragma: no branch
                 var sx = x + k if across else x
                 var sy = y if across else y + k
                 sx = min(w - 1, max(0, sx))
@@ -90,8 +90,8 @@ def bloom(
     var sh = (h + BLOOM_SCALE - 1) // BLOOM_SCALE
     var small = List[Float32](length=sw * sh * 3, fill=0)
     var bright = 0
-    for y in range(h):
-        for x in range(w):
+    for y in range(h):  # pragma: no branch
+        for x in range(w):  # pragma: no branch
             var c = FloatColor(srgb=image.get_pixel(x, y))
             var peak = max(c.r, max(c.g, c.b))
             if peak <= threshold:
@@ -108,8 +108,8 @@ def bloom(
         return bright
     var blurred = _box(_box(small, sw, sh, True), sw, sh, False)
     blurred = _box(_box(blurred, sw, sh, True), sw, sh, False)
-    for y in range(h):
-        for x in range(w):
+    for y in range(h):  # pragma: no branch
+        for x in range(w):  # pragma: no branch
             var at = ((y // BLOOM_SCALE) * sw + x // BLOOM_SCALE) * 3
             var add_r = blurred[at] * strength
             var add_g = blurred[at + 1] * strength
@@ -172,9 +172,9 @@ def ground_mist(
     var eye = camera.position
     var mist = FloatColor(srgb=color)
     var veiled = 0
-    for y in range(h):
+    for y in range(h):  # pragma: no branch
         var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
-        for x in range(w):
+        for x in range(w):  # pragma: no branch
             var k = y * w + x
             var z = image.depth[k]
             if isinf(z):

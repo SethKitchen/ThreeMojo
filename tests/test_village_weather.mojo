@@ -206,6 +206,20 @@ def test_rain_soaks_the_village_and_snow_covers_it() raises:
     rainy.rain(covered, List[Bool](length=4, fill=True), 2, 2)
     for k in range(64 * 48):
         assert_equal(covered.pixels[k * 4], 0)
+    # Half under a roof, the drops and flakes show on the open half; a
+    # flake off the window's left edge is not drawn.
+    var half = Framebuffer(64, 48, Color(0, 0, 0, 255))
+    var roofed: List[Bool] = [True, False, True, False]
+    weather.drops[0].x = -0.2
+    weather.rain(half, roofed, 2, 2)
+    rainy.rain(half, roofed, 2, 2)
+    var open = 0
+    for y in range(48):
+        for x in range(64):
+            if half.pixels[(y * 64 + x) * 4] > 0:
+                assert_true(x >= 32)
+                open += 1
+    assert_true(open > 0)
     # A grid that does not fit shelters nothing.
     var bare = Framebuffer(64, 48, Color(0, 0, 0, 255))
     rainy.look.rain = 1

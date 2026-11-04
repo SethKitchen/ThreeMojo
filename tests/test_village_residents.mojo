@@ -40,6 +40,7 @@ from extensions.village.character import (
 from extensions.village.clothes import dyed_outfit
 from extensions.village.interior import Doorway
 from extensions.village.residents import (
+    FOLLOW_REACH,
     HEEL,
     IDLE,
     PANIC,
@@ -706,6 +707,20 @@ def test_a_person_sits_works_shelters_and_flees() raises:
         residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
     assert_equal(residents.bodies[0].clip, 4)
     assert_true(residents.doing(5) == IDLE)
+    assert_true(residents.doing(-1) == IDLE)
+    # At her work she works, for longer.
+    ref walk = residents.walks[0]
+    for k in range(len(walk.points)):
+        if walk.activities[k] == WORK:
+            walk.next = k
+    walk.resting = 0
+    residents.people[0].position = Vector3(
+        walk.points[walk.next].x, 0, walk.points[walk.next].z
+    )
+    for _ in range(6):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_true(residents.doing(0) == WORK)
+    assert_equal(residents.bodies[0].clip, 5)
     # A foe near her makes her run from it.
     var at = residents.people[0].position
     residents.update(
@@ -715,7 +730,7 @@ def test_a_person_sits_works_shelters_and_flees() raises:
         List[Obstacle](),
         None,
         False,
-        [at + Vector3(1, 0, 0)],
+        [at + Vector3(1, 0, 0), at + Vector3(0, 0, 2)],
     )
     assert_true(residents.people[0].velocity.x < 0)
     # At night she goes home, and stays in.
@@ -727,6 +742,11 @@ def test_a_person_sits_works_shelters_and_flees() raises:
     assert_true(residents.doing(0) == IDLE)
     ref home = residents.homeward[0]
     assert_true(home.next > 0 or home.at > 0)
+    # A long frame indoors keeps her in.
+    residents.update(
+        scene, Duration(1.0, SECOND), ground, List[Obstacle](), None, True
+    )
+    assert_true(residents.sheltering)
     # Once the night is over, she walks her route again.
     residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
     assert_false(residents.sheltering)
@@ -786,6 +806,17 @@ def test_a_dog_follows_and_a_shy_animal_runs_from_a_foe() raises:
     )
     assert_true(residents.beasts[0].character.speed().to(METER_PER_SECOND) < 1)
     _ = PANIC
+    # Left far behind, it keeps to its own walk.
+    residents.beasts[0].character.position = Vector3(
+        10 - FOLLOW_REACH - 5, 0, 0
+    )
+    residents.update(
+        scene,
+        Duration(0.1, SECOND),
+        ground,
+        List[Obstacle](),
+        Vector3(10, 0, 0),
+    )
 
 
 def test_an_animal_that_turns_on_the_spot_steps_round() raises:

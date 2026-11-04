@@ -1305,9 +1305,7 @@ struct VillageGame(Movable):
         if attacking and not self.swinging:
             self.sounds.play(SWING, 0.6, 0)
         self.swinging = attacking
-        var health = Float32(0)
-        for index in range(len(self.battle.foes)):
-            health += self.battle.foes[index].fighter.health
+        var health = self.battle.foes_health()
         if health < self.foes_health - 0.5:
             self.sounds.play(HIT, 0.8, 0)
             # A hard blow stops the world a moment, so it is felt.
@@ -1397,9 +1395,9 @@ struct VillageGame(Movable):
         inverse.multiply(self.camera.view_matrix())
         inverse.invert()
         var under = List[Bool](length=w * h, fill=False)
-        for y in range(h):
+        for y in range(h):  # pragma: no branch
             var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
-            for x in range(w):
+            for x in range(w):  # pragma: no branch
                 var z = image.depth[y * w + x]
                 if isinf(z):
                     continue
@@ -1732,24 +1730,24 @@ struct VillageGame(Movable):
             flash = max(flash, max(Float32(0), 1 - hurt.age / 0.4) * 0.6)
         return min(Float32(1), max(low * 0.8, flash))
 
-    def map_marks(self, scene: Scene) -> MapMarks:
+    def map_marks(self, scene: Scene) raises -> MapMarks:
         """Return what the map shows: the houses, the villagers, those with
         an errand to give, and the foes that stand.
 
         Args:
-            scene: The scene: the houses' places.
+            scene: The scene, updated: the houses' places.
 
         Returns:
             The marks.
+
+        Raises:
+            Error: If the scene is stale.
         """
         var marks = MapMarks()
-        for index in range(len(self.village.houses)):
+        for index in range(len(self.village.houses)):  # pragma: no branch
             ref house = self.village.houses[index]
-            try:
-                var at = scene.world_position(house.root)
-                marks.houses.append(MapHouse(at.x, at.z, house.radius))
-            except:
-                continue
+            var at = scene.world_position(house.root)
+            marks.houses.append(MapHouse(at.x, at.z, house.radius))
         var giving = List[Bool](length=len(self.residents.people), fill=False)
         for index in range(len(self.talk.speakers)):
             if self.talk.states[index] == OFFERED:
@@ -1790,7 +1788,7 @@ struct VillageGame(Movable):
             Rgb(10, 8, 6),
             0.6,
         )
-        for k in range(len(lines)):
+        for k in range(len(lines)):  # pragma: no branch
             var width = text_width(lines[k], scale)
             draw_text(
                 self.window,

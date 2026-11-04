@@ -30,7 +30,7 @@ from math.matrix4 import Matrix4
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
-from std.math import isinf, sin
+from std.math import floor, isinf, sin
 from units.si import METER, Length
 
 comptime MIRROR_MOST = Float32(0.85)
@@ -167,11 +167,13 @@ struct PondLook(Copyable, Movable):
                 var image_at = clip.transform_point(
                     Vector3(at.x, 2 * water - at.y, at.z)
                 )
-                var ty = Int((1 - image_at.y) * 0.5 * Float32(h))
+                var ty = Int(floor((1 - image_at.y) * 0.5 * Float32(h)))
                 if ty < 0 or ty >= h:
                     continue
                 var wobble = shake * sin(Float32(ty) * 0.35 + self.clock * 2.1)
-                var tx = Int((image_at.x + 1) * 0.5 * Float32(w) + wobble)
+                var tx = Int(
+                    floor((image_at.x + 1) * 0.5 * Float32(w) + wobble)
+                )
                 if tx < 0 or tx >= w:
                     continue
                 var t = ty * w + tx

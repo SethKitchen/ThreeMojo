@@ -911,6 +911,8 @@ def test_an_app_gives_its_host_the_village_s_sound() raises:
         assert_true(s >= -1 and s <= 1)
     # Too many samples at once makes none.
     assert_equal(tm_village_audio(app, room, Int32(100000)), Int32(0))
+    # No samples at all is no work.
+    assert_equal(tm_village_audio(app, room, Int32(0)), Int32(0))
     room.unsafe_free()
     tm_destroy(app)
 

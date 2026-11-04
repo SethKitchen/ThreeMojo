@@ -99,7 +99,8 @@ struct Progress(Copyable, Movable):
 
         Raises:
             Error: If it has not one experience for each skill, one count
-                for each thing and one mastery for each combo; a number is
+                for each thing, one mastery for each combo and one round
+                for each errand; a number is
                 not from 0 to `MOST_KEPT`; or the specialty or the style is
                 not a style.
         """
@@ -126,6 +127,8 @@ struct Progress(Copyable, Movable):
             raise Error("A progress lists at most 255 of each")
         if len(self.place) != 0 and len(self.place) != 4:
             raise Error("A progress's place is four numbers, or none")
+        if len(self.rounds) != len(self.errands):
+            raise Error("A progress keeps one round for each errand")
         if not kept:
             raise Error("A progress keeps numbers from 0 to 2,147,483,647")
         if not self.specialty.is_valid() or not self.style.is_valid():

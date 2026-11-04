@@ -330,9 +330,9 @@ def draw_vignette(mut frame: Framebuffer, strength: Float32) raises:
         return
     var w = Float32(frame.width)
     var h = Float32(frame.height)
-    for y in range(frame.height):
+    for y in range(frame.height):  # pragma: no branch
         var dy = (Float32(y) + 0.5) / h * 2 - 1
-        for x in range(frame.width):
+        for x in range(frame.width):  # pragma: no branch
             var dx = (Float32(x) + 0.5) / w * 2 - 1
             var reach = sqrt(dx * dx + dy * dy) / 1.4142
             if reach <= VIGNETTE_CLEAR:

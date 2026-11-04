@@ -16,7 +16,7 @@ from extensions.vegetation.field import (
     default_bands,
     no_stats,
 )
-from extensions.vegetation.ground import Clearing, Ground, Lot
+from extensions.vegetation.ground import Clearing, Ground, Lot, Pond
 from extensions.vegetation.kinds import (
     BEYOND,
     BROADLEAF,
@@ -348,6 +348,31 @@ def test_a_far_level_grows_its_flowers_as_grass() raises:
         if b:
             far += cluster_triangles(b.value())
     assert_true(near > 0 and far > 0)
+
+
+def test_no_blade_roots_under_the_pond() raises:
+    """A tuft on the shore can set a blade below the water. That blade does
+    not grow."""
+    var p = _small()
+    p.density = 200
+    var ground = Ground(
+        pond=Pond(
+            Length(0.0, METER),
+            Length(0.0, METER),
+            Length(4.0, METER),
+            Length(1.0, METER),
+        )
+    )
+    var field = GrassField(p^, ground)
+    var grown = 0
+    for index in range(len(field.clusters)):
+        for blade in range(field.clusters[index].blades):
+            var b = field.grow(index, blade)
+            if b:
+                grown += 1
+                var root = b.value().root
+                assert_false(field.ground.drowned(root.x, root.z))
+    assert_true(grown > 0)
 
 
 def test_a_level_whose_blades_are_all_bare_builds_nothing() raises:

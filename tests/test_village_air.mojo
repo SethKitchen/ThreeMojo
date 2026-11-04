@@ -47,6 +47,10 @@ def test_bright_light_glows_into_what_is_round_it() raises:
         _ = bloom(dim, 1, 1)
     with assert_raises(contains="strength"):
         _ = bloom(dim, 0.5, 5)
+    with assert_raises(contains="threshold"):
+        _ = bloom(dim, -0.1, 1)
+    with assert_raises(contains="strength"):
+        _ = bloom(dim, 0.5, -1)
 
 
 def _camera() raises -> PerspectiveCamera:
@@ -81,6 +85,8 @@ def test_the_mist_lies_low_and_far() raises:
     )
     with assert_raises(contains="thickness"):
         _ = ground_mist(image, camera, 0, 2, Color(0, 0, 0, 255))
+    with assert_raises(contains="thickness"):
+        _ = ground_mist(image, camera, 0, -1, Color(0, 0, 0, 255))
     image.depth = List[Float32]()
     with assert_raises(contains="depth"):
         _ = ground_mist(image, camera, 0, 0.5, Color(0, 0, 0, 255))
@@ -116,6 +122,8 @@ def test_the_rain_darkens_and_the_snow_whitens_the_village() raises:
     )
     with assert_raises(contains="from 0 to 1"):
         village.weather_surfaces(assets, 2, 0, 1)
+    with assert_raises(contains="from 0 to 1"):
+        village.weather_surfaces(assets, -1, 0, 1)
 
 
 def test_a_village_keeps_an_hour_for_a_still() raises:

@@ -1555,6 +1555,17 @@ struct Battle(Movable):
             return True
         return not self.wardens[index - self.first_warden()].boss.defeated()
 
+    def foes_health(self) -> Float32:
+        """Return the health the bandits and wolves have left, all told.
+
+        Returns:
+            The sum of each foe's health, or 0 with no foe.
+        """
+        var health = Float32(0)
+        for index in range(len(self.foes)):
+            health += self.foes[index].fighter.health
+        return health
+
     def dangers(self) -> List[Vector3]:
         """Return where each standing foe is: each bandit and wolf that
         has not fallen, and each warden not beaten. The village's people
@@ -2872,13 +2883,15 @@ struct Battle(Movable):
         self._hurt(scene, index, blow.value(), at, player)
 
     def _strike_ally(mut self, mut scene: Scene, index: Int) raises:
-        """Give a foe's swing to the companion, if it reaches her."""
+        """Give a foe's swing to the companion, if it reaches her.
+
+        A foe goes for her only while she stands, and a fighter who has
+        fallen takes no blow, so a fallen companion is not struck.
+        """
         ref foe = self.foes[index]
         var swing = foe.fighter.swing().value()
-        for k in range(len(self.allies)):
+        for k in range(len(self.allies)):  # pragma: no branch
             ref ally = self.allies[k]
-            if ally.down >= 0:
-                continue
             var at = foe.character.position
             var there = ally.character.position
             var radius = ally.character.parameters.radius

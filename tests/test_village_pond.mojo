@@ -83,6 +83,16 @@ def test_a_basin_is_checked_and_none_keeps_the_shelving_bed() raises:
         _ = Basin(_m(0), _m(0), _m(3), _m(1), 0.3, _m(20))
     with assert_raises(contains="10 kilometers"):
         _ = Basin(_m(2.0e4), _m(0), _m(3), _m(1), 0.3, _m(0.05))
+    with assert_raises(contains="10 kilometers"):
+        _ = Basin(_m(0), _m(2.0e4), _m(3), _m(1), 0.3, _m(0.05))
+    with assert_raises(contains="kilometer across"):
+        _ = Basin(_m(0), _m(0), _m(-1), _m(1), 0.3, _m(0.05))
+    with assert_raises(contains="deep"):
+        _ = Basin(_m(0), _m(0), _m(3), _m(-1), 0.3, _m(0.05))
+    with assert_raises(contains="level floor"):
+        _ = Basin(_m(0), _m(0), _m(3), _m(1), -0.1, _m(0.05))
+    with assert_raises(contains="rim"):
+        _ = Basin(_m(0), _m(0), _m(3), _m(1), 0.3, _m(-1))
 
 
 def test_a_basin_is_deep_in_the_middle_and_shallow_at_its_shore() raises:
@@ -186,6 +196,17 @@ def test_a_splash_and_a_window_are_checked() raises:
         water.splash(_m(0), _m(0), _m(11), 0.1)
     with assert_raises(contains="strength"):
         water.splash(_m(0), _m(0), _m(0.1), 2)
+    with assert_raises(contains="10 meters"):
+        water.splash(_m(0), _m(0), _m(-1), 0.1)
+    with assert_raises(contains="strength"):
+        water.splash(_m(0), _m(0), _m(0.1), -1)
+    # A splash off the ripple window, on any side, is let go.
+    var drops = len(water._drops)
+    water.splash(_m(-1000), _m(0), _m(0.1), 0.1)
+    water.splash(_m(1000), _m(0), _m(0.1), 0.1)
+    water.splash(_m(0), _m(-1000), _m(0.1), 0.1)
+    water.splash(_m(0), _m(1000), _m(0.1), 0.1)
+    assert_equal(len(water._drops), drops)
 
 
 def test_a_drowned_point_lies_below_the_water() raises:
@@ -252,6 +273,9 @@ def test_the_shore_grows_reeds_lays_stones_and_floats_pads() raises:
     assert_equal(none.meshes, 0)
     var many = ShoreParameters()
     many.reeds = 501
+    with assert_raises(contains="500"):
+        many.check()
+    many.reeds = -1
     with assert_raises(contains="500"):
         many.check()
 
@@ -384,6 +408,32 @@ def test_a_pond_look_is_checked() raises:
         _ = look.apply(image, before, camera, _m(0), FogView.none(), 2)
     with assert_raises(contains="depth"):
         _ = look.apply(image, List[Float32](), camera, _m(0), FogView.none(), 0)
+    look.mirror = -1
+    with assert_raises(contains="mirror"):
+        _ = look.apply(image, before, camera, _m(0), FogView.none(), 0)
+    look.mirror = 1
+    with assert_raises(contains="stars"):
+        _ = look.apply(image, before, camera, _m(0), FogView.none(), -1)
+    var bare = _clone(image)
+    bare.depth = List[Float32]()
+    with assert_raises(contains="depth"):
+        _ = water_mask(bare, before)
+
+
+def test_a_mirror_image_off_the_frame_is_not_drawn() raises:
+    # Low over the water and looking up, the wall's mirror image spreads
+    # past the frame's sides; looking up steeply, past its top.
+    var low = _camera()
+    low.place(Vector3(0, 0.5, 6), Vector3(0, 1, 0))
+    var made = _frame(low)
+    var image = _clone(made[0])
+    var look = PondLook()
+    assert_true(look.apply(image, made[1], low, _m(0), FogView.none(), 0) > 0)
+    var steep = _camera()
+    steep.place(Vector3(0, 0.5, 4), Vector3(0, 3, 0))
+    var up = _frame(steep)
+    var sky = _clone(up[0])
+    _ = look.apply(sky, up[1], steep, _m(0), FogView.none(), 0)
 
 
 def main() raises:

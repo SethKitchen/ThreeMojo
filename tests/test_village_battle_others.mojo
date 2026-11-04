@@ -28,6 +28,7 @@ from extensions.village.combat import (
     FLINCH,
     ULTIMATE,
     PLUNGE,
+    is_attack,
     RISING_EDGE,
 )
 from extensions.village.foes import CLOSING, CIRCLING, RETURNING
@@ -225,6 +226,29 @@ def test_a_foe_goes_for_the_companion_who_falls_and_rises() raises:
     arena.battle.fighter.move = FALL
     arena.run(0.1)
     assert_true(arena.battle.fell)
+
+
+def test_a_swing_misses_a_companion_who_slips_out_of_reach() raises:
+    var arena = Arena(arena_parameters(1, 0, 6, ally=True))
+    var waited = 0
+    while not is_attack(arena.battle.foes[0].fighter.move) and waited < 160:
+        arena.player.position = Vector3(0, 0, 3)
+        arena.battle.allies[0].character.position = Vector3(0, 0, -4.8)
+        arena.tick(no_input())
+        waited += 1
+    assert_equal(arena.battle.quarries[0], COMPANION_QUARRY)
+    # She steps behind the bandit as it swings, so the swing misses her.
+    var full = arena.battle.allies[0].fighter.health
+    for _ in range(40):
+        if not is_attack(arena.battle.foes[0].fighter.move):
+            break
+        var foe = arena.battle.foes[0].character.position
+        arena.battle.allies[0].character.position = foe + Vector3(0, 0, -1.2)
+        arena.tick(no_input())
+    assert_equal(arena.battle.allies[0].fighter.health, full)
+    assert_equal(
+        arena.battle.foes_health(), arena.battle.foes[0].fighter.health
+    )
 
 
 def test_a_companion_casts_heals_and_makes_a_assist_attack() raises:

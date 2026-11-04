@@ -128,7 +128,7 @@ The module is `extensions/village/progress.mojo`. `VillageGame.progress` gives a
 | `mastery` | Each combo's mastery, so its rank and its perks. |
 | `specialty` | The style the player specializes in. |
 | `style` | The style in hand. The game takes it up if the player carries it. |
-| `errands` and `rounds` | Each speaker's errand state, and how many of their errands are done. |
+| `errands` and `rounds` | Each speaker's errand state, and how many of their errands are done. The two lists must be of the same length. The game takes them up only if it has as many speakers. |
 | `spent` | Each spot used up for good: a chest opened, a trinket taken. |
 | `place` | Where the player stands, the hour and the weather. |
 

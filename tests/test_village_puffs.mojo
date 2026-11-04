@@ -8,9 +8,24 @@
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.scene import Scene
-from extensions.building.material import brick
+from extensions.building.material import brick, timber
 from extensions.vegetation.ground import Ground
-from extensions.village.house import HouseParameters, house_lot, house_model
+from extensions.village.house import (
+    BARN,
+    BOARDED,
+    HouseParameters,
+    house_lot,
+    house_model,
+)
+from extensions.village.house_view import StandingHouse
+from extensions.village.props import LAMP_POST, Prop
+from extensions.village.village import (
+    HousePlacement,
+    VillageParameters,
+    chimney_tops,
+    lamp_places,
+)
+from renderers.game_renderer import GAME_LAMPS
 from extensions.village.house_view import stand_house
 from extensions.village.puffs import (
     DUST_TAN,
@@ -119,6 +134,15 @@ def test_puffs_are_checked() raises:
     var image = Framebuffer(8, 8, Color(0, 0, 0, 255))
     with assert_raises(contains="light"):
         _ = draw_puffs(image, List[Puff](), camera, 2)
+    with assert_raises(contains="light"):
+        _ = draw_puffs(image, List[Puff](), camera, -1)
+    # A puff nearer than the camera's near plane is not drawn.
+    var blunt = PerspectiveCamera(
+        Angle(60.0, DEGREE), 1, Length(5.0, METER), Length(100.0, METER)
+    )
+    blunt.place(Vector3(0, 1, 5), Vector3(0, 1, 0))
+    var near = Puff(Vector3(0, 1, 3), 0.1, 1, Vector3(1, 1, 1))
+    assert_equal(draw_puffs(image, [near], blunt, 1), 0)
     var bare = Framebuffer(8, 8, Color(0, 0, 0, 255))
     bare.depth = List[Float32]()
     with assert_raises(contains="depth"):
@@ -163,6 +187,56 @@ def test_a_house_with_a_hearth_has_a_chimney_pot() raises:
         Ground(hill_height=Length(0.0, METER)),
     )
     assert_false(Bool(bare.chimney))
+    # The village finds the tops of the chimneys there are.
+    scene.update()
+    flat_scene.update()
+    var lone = List[StandingHouse]()
+    lone.append(standing^)
+    assert_equal(len(chimney_tops(scene, lone)), 1)
+    var cold = List[StandingHouse]()
+    cold.append(bare^)
+    assert_equal(len(chimney_tops(flat_scene, cold)), 0)
+
+
+def test_a_barn_has_no_lamp_and_the_lamps_are_few() raises:
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    var scene = Scene()
+    var barn = HouseParameters(
+        "barn",
+        Length(13.0, METER),
+        Length(8.0, METER),
+        1,
+        timber(),
+        BOARDED,
+        Length(4.2, METER),
+        Angle(30.0, DEGREE),
+        use=BARN,
+    )
+    var ground = Ground(hill_height=Length(0.0, METER))
+    var houses = List[StandingHouse]()
+    houses.append(
+        stand_house(
+            scene,
+            assets,
+            looks,
+            barn,
+            house_model(barn),
+            house_lot(barn, 0, 0, Angle(0.0, RADIAN)),
+            ground,
+        )
+    )
+    var p = VillageParameters()
+    p.houses = [HousePlacement(barn.copy(), 0, 0, Angle(0.0, RADIAN))]
+    p.props = List[Prop]()
+    for k in range(GAME_LAMPS + 1):
+        p.props.append(
+            Prop(LAMP_POST, Float32(3 * k), 20, Angle(0.0, RADIAN), 2.6)
+        )
+    var lamps = lamp_places(p, houses, ground)
+    assert_equal(len(lamps), GAME_LAMPS)
+    for lamp in lamps:
+        assert_true(lamp.z > 19)
 
 
 def main() raises:
