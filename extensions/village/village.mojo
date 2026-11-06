@@ -306,7 +306,7 @@ struct VillageParameters(Copyable, Movable):
                     "brick house",
                     Length(9.0, METER),
                     Length(7.0, METER),
-                    2,
+                    3,
                     brick(),
                     BRICK_FACADE,
                     roof=Vector3(0.78, 0.66, 0.62),

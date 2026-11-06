@@ -488,13 +488,14 @@ def front_wall(building: Building) raises -> ElementId:
 
 @fieldwise_init
 struct Stair(ImplicitlyCopyable):
-    """A straight stair along a hall's back wall, from the ground floor up
-    to the floor of the story above, in the model's plan.
+    """A straight flight along a hall's back wall, from the floor of one
+    story up to the floor of the story above, in the model's plan.
 
     It climbs along the plan's +x. Tread `k`, from zero, runs from
     `x0 + k * STAIR_GOING` to one going further, and its top stands
-    `(k + 1) * rise` over the ground floor. The last riser reaches the
-    upper floor at `x1`."""
+    `base + (k + 1) * rise` over the ground floor. The last riser reaches
+    the upper floor at `x1`. The flights of a house stand one over the
+    other, in one well."""
 
     # Where its foot and its top are along the plan's x, in meters.
     var x0: Float64
@@ -506,24 +507,94 @@ struct Stair(ImplicitlyCopyable):
     # How many risers it has, and how high each one is, in meters.
     var risers: Int
     var rise: Float64
+    # The story its foot stands on, from zero for the ground story, and
+    # that story's floor over the ground floor, in meters.
+    var storey: Int
+    var base: Float64
 
     def height(self) -> Float64:
-        """Return how high the stair climbs.
+        """Return how high the flight climbs.
 
         Returns:
-            The height of the upper floor over the ground floor, in meters.
+            The height of the upper floor over the floor of the foot, in
+            meters.
         """
         return Float64(self.risers) * self.rise
 
+    def top(self) -> Float64:
+        """Return how high the flight's upper floor is.
 
-def house_stair(building: Building) -> Optional[Stair]:
-    """Return a house's stair: along the back wall of its hall, from the
-    ground floor up to the story above.
+        Returns:
+            The height of the upper floor over the ground floor, in
+            meters.
+        """
+        return self.base + self.height()
+
+
+def house_stairs(building: Building) -> List[Stair]:
+    """Return a house's stairs: a flight from each story to the next, one
+    over the other, along the back wall of the hall.
 
     The hall is the first space of the ground story, as `house_model`
-    writes it. The stair keeps `STAIR_LANDING` of floor clear before its
+    writes it. Each flight keeps `STAIR_LANDING` of floor clear before its
     foot, at the hall's -x end. It has as few risers as keep each one at
-    most `STAIR_RISE`.
+    most `STAIR_RISE`. A flight arrives at its top, at the +x end, and the
+    next flight starts again from the -x end, so a climber walks back
+    along the well between the two.
+
+    Args:
+        building: A house's model.
+
+    Returns:
+        The flights from the ground story up. There are none for a model
+        of one story or of no room, or for a hall too short for a flight.
+        The flights stop under the first story that is no more than one
+        riser over the story below it.
+    """
+    var stairs = List[Stair]()
+    if len(building.storeys) < 2:
+        return stairs^
+    if len(building.spaces) == 0:
+        return stairs^
+    var west = Float64(1.0e30)
+    var east = Float64(-1.0e30)
+    var back = Float64(-1.0e30)
+    for p in building.spaces[0].outline:  # pragma: no branch
+        west = min(west, p.x)
+        east = max(east, p.x)
+        back = max(back, p.y)
+    var half = building.constructions[0].thickness().value / 2
+    var foot = west + half + STAIR_LANDING
+    var wall = back - half
+    var ground = building.storeys[0].elevation.value
+    for s in range(len(building.storeys) - 1):
+        var low = building.storeys[s].elevation.value
+        var climb = building.storeys[s + 1].elevation.value - low
+        # A flight has two risers or more: a lower story needs no stair.
+        if climb <= STAIR_RISE:
+            break
+        var risers = Int(ceil(climb / STAIR_RISE))
+        var top = foot + Float64(risers - 1) * STAIR_GOING
+        if top > east - half:
+            break
+        stairs.append(
+            Stair(
+                foot,
+                top,
+                wall - STAIR_WIDTH,
+                wall,
+                risers,
+                climb / Float64(risers),
+                s,
+                low - ground,
+            )
+        )
+    return stairs^
+
+
+def house_stair(building: Building) -> Optional[Stair]:
+    """Return a house's first stair: along the back wall of its hall, from
+    the ground floor up to the story above. See `house_stairs`.
 
     Args:
         building: A house's model.
@@ -533,34 +604,10 @@ def house_stair(building: Building) -> Optional[Stair]:
         an upper story no more than one riser over the ground floor, and
         for a hall too short for the stair.
     """
-    if len(building.storeys) < 2:
+    var stairs = house_stairs(building)
+    if len(stairs) == 0:
         return None
-    if len(building.spaces) == 0:
-        return None
-    var west = Float64(1.0e30)
-    var east = Float64(-1.0e30)
-    var back = Float64(-1.0e30)
-    for p in building.spaces[0].outline:  # pragma: no branch
-        west = min(west, p.x)
-        east = max(east, p.x)
-        back = max(back, p.y)
-    var half = building.constructions[0].thickness().value / 2
-    var climb = (
-        building.storeys[1].elevation.value
-        - building.storeys[0].elevation.value
-    )
-    # A stair has two risers or more: a lower story needs no stair.
-    if climb <= STAIR_RISE:
-        return None
-    var risers = Int(ceil(climb / STAIR_RISE))
-    var foot = west + half + STAIR_LANDING
-    var top = foot + Float64(risers - 1) * STAIR_GOING
-    if top > east - half:
-        return None
-    var wall = back - half
-    return Stair(
-        foot, top, wall - STAIR_WIDTH, wall, risers, climb / Float64(risers)
-    )
+    return stairs[0]
 
 
 def _clear_furniture(
@@ -597,8 +644,9 @@ def _clear_furniture(
 
 
 def clear_stair(mut building: Building, stair: Stair) raises:
-    """Take away the furniture of the ground story and of the story above
-    that stands on a stair, before its foot, or over its well.
+    """Take away the furniture of the stair's story, of the story above
+    and of the stories below that stands on a stair, before its foot, or
+    over its well.
 
     Args:
         building: A house's model. It is changed.
@@ -608,7 +656,12 @@ def clear_stair(mut building: Building, stair: Stair) raises:
         Error: If a piece's room is not in the model.
     """
     _clear_furniture(
-        building, stair.x0 - STAIR_LANDING, stair.x1, stair.y0, stair.y1, 1
+        building,
+        stair.x0 - STAIR_LANDING,
+        stair.x1,
+        stair.y0,
+        stair.y1,
+        stair.storey + 1,
     )
 
 
@@ -889,9 +942,8 @@ def house_model(parameters: HouseParameters) raises -> Building:
     var breast = house_breast(building)
     if breast:
         clear_breast(building, breast.value())
-    var stair = house_stair(building)
-    if stair:
-        clear_stair(building, stair.value())
+    for stair in house_stairs(building):
+        clear_stair(building, stair)
     return building^
 
 

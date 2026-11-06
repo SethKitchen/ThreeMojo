@@ -25,11 +25,15 @@ render view is: it reads the model and never writes it.
 - **Furniture.** Each piece is a `WallSpan` along its longer side, as
   thick as its shorter side and as high as the piece, on its story's
   floor. So a piece upstairs passes over a character on the floor below.
-- **The stair.** Where `house_stair` finds a stair, each tread is a
-  `Floor`, and so is the upper floor around the stairwell. A railing
-  guards the well's open side, from the ground floor up, so it closes the
-  stair's side too. A railing crosses the well's foot upstairs, and a
-  wall closes the space under the stair's top.
+- **The stairs.** `house_stairs` finds a flight from each story to the
+  next, one over the other in one well. Each tread is a `Floor`, and so
+  is the floor of the story above around the well. A railing guards the
+  well's open side, from the flight's floor up, so it closes the flight's
+  side too. Over the top flight, a railing crosses the well's foot; under
+  it, the next flight starts there. A wall closes the space under the
+  first flight's top. Under a higher flight's top, the flight below
+  arrives, so it stays open. Under the next flight, a tread's ceiling is the
+  underside of the tread over it.
 - **Doorways.** Each door of the ground story is a `Doorway`: the jamb
   it hangs on, its width and the way it swings.
 
@@ -42,7 +46,7 @@ from extensions.building.ids import ElementId
 from extensions.building.kinds import COLUMN, DOOR, ROOF, SLAB, WALL
 from extensions.building.model import Building
 from extensions.vegetation.ground import Ground, Lot
-from extensions.village.house import STAIR_GOING, Stair, house_stair
+from extensions.village.house import STAIR_GOING, Stair, house_stairs
 from extensions.village.terrain import OPEN_SKY, Floor, WallSpan
 from generators.utils import Vec3d
 from math.vector3 import Vector3
@@ -393,14 +397,22 @@ def _stair(
     placer: _Placer,
     stair: Stair,
     ceiling: Float32,
+    onward: Bool,
 ):
-    """Add a stair's treads, the upper floor around its well, and the
-    railings. `ceiling` is the upper story's."""
-    var floor = placer.floor
-    var top = floor + Float32(stair.height())
-    # `house_stair` gives a stair two risers or more: a tread or more.
+    """Add a flight's treads, the upper floor around its well, and the
+    railings. `ceiling` is the upper story's. Where another flight rises
+    from the upper story, `onward` is True, and no railing crosses the
+    well's foot there: the next flight starts at it."""
+    var floor = placer.floor + Float32(stair.base)
+    var top = placer.floor + Float32(stair.top())
+    # `house_stairs` gives a flight two risers or more: a tread or more.
     for k in range(stair.risers - 1):  # pragma: no branch
         var x0 = stair.x0 + Float64(k) * STAIR_GOING
+        # Under the next flight, a tread's ceiling is the underside of the
+        # tread over it, a riser under its top.
+        var over = ceiling
+        if onward:
+            over = min(over, top + Float32(Float64(k) * stair.rise))
         interior.floors.append(
             _plan_floor(
                 placer,
@@ -409,7 +421,7 @@ def _stair(
                 stair.y0,
                 stair.y1,
                 floor + Float32(Float64(k + 1) * stair.rise),
-                ceiling,
+                over,
             )
         )
     # The upper floor before the well, beside its foot, and past its top.
@@ -436,30 +448,34 @@ def _stair(
             top + RAIL_HEIGHT,
         )
     )
-    interior.walls.append(
-        _plan_span(
-            placer,
-            stair.x0,
-            stair.y0,
-            stair.x0,
-            stair.y1,
-            RAIL_HALF,
-            top,
-            top + RAIL_HEIGHT,
+    if not onward:
+        interior.walls.append(
+            _plan_span(
+                placer,
+                stair.x0,
+                stair.y0,
+                stair.x0,
+                stair.y1,
+                RAIL_HALF,
+                top,
+                top + RAIL_HEIGHT,
+            )
         )
-    )
-    interior.walls.append(
-        _plan_span(
-            placer,
-            stair.x1,
-            stair.y0,
-            stair.x1,
-            stair.y1,
-            RAIL_HALF,
-            floor,
-            floor + Float32(stair.height() / 2),
+    # Under the first flight's top, a wall closes the low space. Under a
+    # higher flight's top, the flight below arrives, so it stays open.
+    if stair.storey == 0:
+        interior.walls.append(
+            _plan_span(
+                placer,
+                stair.x1,
+                stair.y0,
+                stair.x1,
+                stair.y1,
+                RAIL_HALF,
+                floor,
+                floor + Float32(stair.height() / 2),
+            )
         )
-    )
 
 
 def _box_span(
@@ -590,12 +606,16 @@ def house_interior(
     )
     _doorways(interior, placer, building)
     _steps(interior, ground)
-    var stair = house_stair(building)
-    if stair:
-        ref upper = building.storeys[1]
+    var stairs = house_stairs(building)
+    for index in range(len(stairs)):
+        ref stair = stairs[index]
+        ref upper = building.storeys[stair.storey + 1]
         var over = floor + Float32(
-            upper.elevation.value + upper.height.value - slab
+            upper.elevation.value
+            - building.storeys[0].elevation.value
+            + upper.height.value
+            - slab
         )
-        _stair(interior, placer, stair.value(), over)
+        _stair(interior, placer, stair, over, index + 1 < len(stairs))
     _furniture(interior, placer, building)
     return interior^

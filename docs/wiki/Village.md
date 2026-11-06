@@ -116,7 +116,7 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 |---|---|
 | A pond 12 meters across and 1.2 meters deep | Right of the trail, 11 meters ahead of the camera. |
 | A stone cottage of one story, 7 by 5.5 meters, under slates | Left of the trail, about 25 meters away, turned 80 degrees. |
-| A brick house of two stories, 9 by 7 meters, under weathered tiles | West of the green, about 55 meters away, turned 90 degrees to face it. |
+| A brick house of three stories, 9 by 7 meters, under weathered tiles | West of the green, about 55 meters away, turned 90 degrees to face it. |
 | A framed cottage of one story, 6.5 by 5 meters, under thatch | South of the green, about 60 meters away, facing it. |
 | A framed house of two stories, 8 by 6 meters, under warm tiles | Right of the trail, across it from the green, about 55 meters away, turned -80 degrees. |
 | A boarded barn of one story 4.2 meters tall, 13 by 8 meters, under gray tiles | Ahead, about 90 meters away, turned -12 degrees. |

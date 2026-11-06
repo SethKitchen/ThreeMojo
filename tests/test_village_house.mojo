@@ -63,6 +63,7 @@ from extensions.village.house import (
     house_lot,
     house_model,
     house_stair,
+    house_stairs,
     lime_plaster,
 )
 from math.vector3 import Vector3
@@ -283,6 +284,37 @@ def test_a_house_of_two_stories_has_a_stair() raises:
         )
         var inside_y = piece.center.y > stair.y0
         assert_false(inside_x and inside_y)
+
+
+def test_a_house_of_three_stories_has_a_flight_to_each() raises:
+    var model = house_model(_two_stories(9, 3))
+    var stairs = house_stairs(model)
+    assert_equal(len(stairs), 2)
+    for k in range(2):
+        ref flight = stairs[k]
+        assert_equal(flight.storey, k)
+        assert_almost_equal(flight.base, 2.8 * Float64(k), atol=1e-9)
+        assert_almost_equal(flight.top(), 2.8 * Float64(k + 1), atol=1e-9)
+        # The flights stand one over the other, in one well.
+        assert_almost_equal(flight.x0, stairs[0].x0, atol=1e-12)
+        assert_almost_equal(flight.x1, stairs[0].x1, atol=1e-12)
+        assert_almost_equal(flight.y0, stairs[0].y0, atol=1e-12)
+    # The first is the stair `house_stair` gives.
+    assert_equal(house_stair(model).value().storey, 0)
+    # Every story keeps its furniture off the well and the landings.
+    ref stair = stairs[0]
+    for piece in model.furnishings:
+        var inside_x = (
+            piece.center.x > stair.x0 - STAIR_LANDING
+            and piece.center.x < stair.x1
+        )
+        assert_false(inside_x and piece.center.y > stair.y0)
+    # A story less than a riser over the one below ends the flights under
+    # it.
+    var low = house_model(_two_stories(9, 3))
+    low.storeys[2].elevation = Length64(2.8 + STAIR_RISE / 2, METER)
+    assert_equal(len(house_stairs(low)), 1)
+    assert_equal(len(house_stairs(house_model(_two_stories(9, 1)))), 0)
 
 
 def test_some_houses_have_no_stair() raises:
