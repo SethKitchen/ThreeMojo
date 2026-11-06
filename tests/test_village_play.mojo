@@ -7,6 +7,8 @@
 walks and jumps in front of the third-person camera."""
 
 from core.assets import Assets
+from core.object3d import Object3D
+from renderers.game_renderer import GAME_LAMPS
 from core.scene import Scene
 from extensions.attire.outfit import Outfit
 from extensions.animals.registry import RABBIT
@@ -267,6 +269,8 @@ def test_a_player_walks_jumps_and_is_followed() raises:
     for _ in range(10):
         _ = game.tick(scene, assets, MoveInput(1, 0, 0, 0, False, False), step)
     assert_true(game.player.position.z < start.z - 1)
+    # By day, no lantern follows the player.
+    assert_false(scene.node(game.lantern).visible)
     # The camera stands behind the player, and looks at a point above the
     # feet.
     assert_true(game.camera.position.z > game.player.position.z)
@@ -447,6 +451,23 @@ def test_at_night_the_lamps_are_lit_and_the_pond_darkens() raises:
     assert_equal(game.window.width, 32)
     assert_true(scene.node(game.village.houses[0].lit).visible)
     assert_false(scene.node(game.village.houses[0].daylit).visible)
+    # A lantern's light follows the player by night, over their head.
+    assert_true(scene.node(game.lantern).visible)
+    assert_true(scene.node(game.lantern).position.y > game.player.position.y)
+    # With fewer lamps than the renderer draws, every lamp keeps its light;
+    # with as many, the one farthest from the camera gives up its own.
+    for bulb in game.village.bulbs:
+        assert_true(scene.node(bulb).visible)
+    var near = game.village.bulbs[0]
+    var far = scene.add(Object3D())
+    var eye = game.camera.position
+    scene.node(far).set_position(eye.x + 500, eye.y, eye.z)
+    while len(game.village.bulbs) < GAME_LAMPS - 1:
+        game.village.bulbs.append(near)
+    game.village.bulbs.append(far)
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_false(scene.node(far).visible)
+    assert_true(scene.node(near).visible)
     # As the hours pass, the sun turns and its shadows are drawn again:
     # the frame reads the moved sun's world matrix, and draws.
     game.day.hours_a_second = 2

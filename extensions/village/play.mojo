@@ -54,7 +54,7 @@ window, and writes the heads-up display over it: see
 from cameras.perspective_camera import PerspectiveCamera
 from controls.third_person_controls import ThirdPersonControls, yaw_of
 from core.assets import Assets
-from core.object3d import NodeId
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.animals.registry import (
     COW,
@@ -214,11 +214,12 @@ from extensions.village.village import Village, VillageParameters
 from extensions.water.pebbles import PebbleBed
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from render.framebuffer import Framebuffer
+from render.framebuffer import Color, Framebuffer
 from render.tasks import TaskGroup
 from render.game_smooth import smooth_edges
 from render.game_upscale import upscale_into
-from renderers.game_renderer import FULL_SHADOWS, GameRenderer
+from renderers.game_renderer import FULL_SHADOWS, GAME_LAMPS, GameRenderer
+from lights.light import PHYSICAL_DECAY, point_light
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, exp, isinf, sin, sqrt
 from std.time import perf_counter_ns
@@ -274,6 +275,16 @@ comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
 comptime SHAKEN = Float32(1.0e-3)
 """A camera's shake of less than this, in meters, is not seen."""
+comptime LANTERN_COLOR = Color(255, 205, 150)
+"""The color of the lantern's light that follows the player by night."""
+comptime LANTERN_INTENSITY = Float32(5)
+"""How bright the player's lantern burns, as a point light's intensity:
+a little less than a lamp's."""
+comptime LANTERN_REACH = Float32(10)
+"""How far the player's lantern lights, in meters."""
+comptime LANTERN_HEIGHT = Float32(3)
+"""How high over the player's feet the lantern's light stands, in
+meters."""
 comptime PUNCH = Float32(0.06)
 """The share by which a finisher's shake narrows the camera's field of
 view."""
@@ -660,6 +671,8 @@ struct VillageGame(Movable):
     var camera: PerspectiveCamera
     # The camera's field of view while no blow tightens it.
     var wide: Angle
+    # The node of the lantern's light that follows the player by night.
+    var lantern: NodeId
     var trees: List[Obstacle]
     # The ground, the houses' walls and floors, and the solid lots.
     var terrain: Terrain
@@ -866,6 +879,19 @@ struct VillageGame(Movable):
         self.talker = -1
         self.view = ThirdPersonControls(parameters.heading)
         self.wide = parameters.field_of_view
+        # A lantern's light follows the player by night: see `tick`.
+        var holder = Object3D()
+        holder.visible = False
+        self.lantern = scene.add(holder^)
+        scene.add_light(
+            point_light(
+                LANTERN_COLOR,
+                self.lantern,
+                LANTERN_INTENSITY,
+                PHYSICAL_DECAY,
+                LANTERN_REACH,
+            )
+        )
         self.camera = PerspectiveCamera(
             parameters.field_of_view,
             Float32(width) / Float32(height),
@@ -1256,6 +1282,25 @@ struct VillageGame(Movable):
         ref eye_at = self.camera.position
         scene.node(self.village.props.lit).visible = lamps
         scene.node(self.village.lamps).visible = lamps
+        # By night a lantern's light follows the player, so a fight can be
+        # seen. When the lamps take every light the renderer draws, it
+        # takes the light of the lamp farthest from the camera.
+        scene.node(self.lantern).visible = lamps
+        ref held = self.player.position
+        scene.node(self.lantern).set_position(
+            held.x, held.y + LANTERN_HEIGHT, held.z
+        )
+        var spare = -1
+        if len(self.village.bulbs) >= GAME_LAMPS:
+            var farthest = Float32(-1)
+            for k in range(len(self.village.bulbs)):  # pragma: no branch
+                var p = scene.node(self.village.bulbs[k]).position
+                var d = (p - self.camera.position).length()
+                if d > farthest:
+                    farthest = d
+                    spare = k
+        for k in range(len(self.village.bulbs)):
+            scene.node(self.village.bulbs[k]).visible = k != spare
         scene.node(self.village.props.daylit).visible = not lamps
         for index in range(len(self.village.houses)):
             ref house = self.village.houses[index]
