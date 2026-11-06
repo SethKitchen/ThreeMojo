@@ -417,6 +417,9 @@ comptime CHEST = Float32(1.3)
 """How high over a fighter's feet a blow's sparks burst, in meters."""
 comptime POPUP_SECONDS = Float32(0.9)
 """How long a number or a word shows over a fighter, in seconds."""
+comptime WORD_REPEAT = Float32(0.4)
+"""How long, in seconds, a blow's word that shows keeps the same word from
+showing again."""
 comptime POPUP_RISE = Float32(0.9)
 """How fast a number or a word rises, in meters a second."""
 comptime ENGAGE = Float32(10)
@@ -2342,6 +2345,21 @@ struct Battle(Movable):
                 self.token = -1
                 self.token_rest = TOKEN_REST
 
+    def says(self, word: String) -> Bool:
+        """Return whether a word shows over a fighter, and has shown for
+        less than `WORD_REPEAT`.
+
+        Args:
+            word: The word.
+
+        Returns:
+            True if such a word shows.
+        """
+        for popup in self.popups:
+            if popup.text == word and popup.age < WORD_REPEAT:
+                return True
+        return False
+
     def _popup(mut self, at: Vector3, text: String, color: Rgb):
         """Show a number or a word over a fighter's feet."""
         self.popups.append(Popup(at + Vector3(0, HEAD, 0), text, color, 0))
@@ -2374,7 +2392,9 @@ struct Battle(Movable):
         elif outcome == BLOCKED or outcome == PARRIED:
             # Steel on steel: a small cold flash.
             self.impacts.append(Impact(chest, CLANG_FLASH, CLANG_POWER, 0))
-        if word.byte_length() > 0:
+        # A word already showing, and new, is not shown again: a burst of
+        # critical blows says CRITICAL once, and its numbers each.
+        if word.byte_length() > 0 and not self.says(word):
             var tone = GOLD_TEXT if landed_blow(outcome) else CALM_TEXT
             self._popup(at + Vector3(0, 0.35, 0), word, tone)
         if outcome == PERFECT_DODGE and hurt:
