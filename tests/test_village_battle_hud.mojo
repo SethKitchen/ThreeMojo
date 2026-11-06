@@ -27,7 +27,7 @@ from extensions.village.battle_hud import (
     popup_scale,
     on_screen,
     stance_label,
-    stack_popups,
+    stack_boxes,
     tint_edges,
 )
 from extensions.village.combat import (
@@ -153,33 +153,61 @@ def test_a_number_pops_and_outlines() raises:
 
 def test_numbers_that_would_cover_each_other_stand_one_over_another() raises:
     # The newest, the last, keeps its place; the older moves over it.
-    var tops = stack_popups([100, 110], [50, 52], [40, 40], [20, 20])
+    var tops = stack_boxes([100, 110], [50, 52], [40, 40], [20, 20])
     assert_equal(tops[1], 52)
     assert_equal(tops[0], 32)
     # Side by side, or apart in height, they do not move.
-    var apart = stack_popups([100, 150], [50, 52], [40, 40], [20, 20])
+    var apart = stack_boxes([100, 150], [50, 52], [40, 40], [20, 20])
     assert_equal(apart[0], 50)
-    var left = stack_popups([150, 100], [50, 52], [40, 40], [20, 20])
+    var left = stack_boxes([150, 100], [50, 52], [40, 40], [20, 20])
     assert_equal(left[0], 50)
-    var over = stack_popups([100, 100], [10, 50], [40, 40], [20, 20])
+    var over = stack_boxes([100, 100], [10, 50], [40, 40], [20, 20])
     assert_equal(over[0], 10)
-    var under = stack_popups([100, 100], [90, 50], [40, 40], [20, 20])
+    var under = stack_boxes([100, 100], [90, 50], [40, 40], [20, 20])
     assert_equal(under[0], 90)
     # The oldest of three goes over the middle one, which went over the
     # newest.
-    var three = stack_popups(
+    var three = stack_boxes(
         [100, 100, 100], [50, 50, 50], [40, 40, 40], [20, 20, 20]
     )
     assert_equal(three[2], 50)
     assert_equal(three[1], 30)
     assert_equal(three[0], 10)
     # A move over the newest can cross the middle one: it moves again.
-    var again = stack_popups(
+    var again = stack_boxes(
         [100, 100, 100], [50, 25, 60], [40, 40, 40], [20, 20, 20]
     )
     assert_equal(again[1], 25)
     assert_equal(again[0], 5)
-    assert_equal(len(stack_popups([], [], [], [])), 0)
+    assert_equal(len(stack_boxes([], [], [], [])), 0)
+
+
+def test_a_nearer_foes_bar_keeps_its_place_over_a_crowd() raises:
+    var arena = Arena(arena_parameters(3, 0, 5))
+    var camera = _camera()
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    ref foes = arena.battle.foes
+    # The nearest, the farthest, and one between, nearly in a line.
+    foes[0].character.position = Vector3(0, 0, -2)
+    foes[1].character.position = Vector3(0.2, 0, -6)
+    foes[2].character.position = Vector3(-0.1, 0, -4)
+    for k in range(3):
+        foes[k].brain.state = CIRCLING
+    var crowd = _frame()
+    draw_battle(crowd, arena.battle, arena.scene, camera, look)
+    foes[1].down = 0
+    foes[2].down = 0
+    var alone = _frame()
+    draw_battle(alone, arena.battle, arena.scene, camera, look)
+    # Each pixel that the nearest bar drew is the same in the crowd: no
+    # other bar covers it.
+    var drawn = 0
+    for k in range(len(alone.pixels)):
+        if alone.pixels[k] != 0 and k % 4 != 3:
+            drawn += 1
+            assert_equal(crowd.pixels[k], alone.pixels[k])
+    assert_true(drawn > 0)
+    assert_true(_changed(crowd) > _changed(alone))
 
 
 def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:

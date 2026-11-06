@@ -152,18 +152,24 @@ begins, in meters: half a man's shoulders."""
 comptime HURT_REACH = Float32(0.4)
 """How far from the frame's middle a blow's mark stands, as a share of
 the frame's width across and of its height down."""
-comptime HURT_ARC = Float32(0.06)
-"""How far apart the squares of a blow's mark stand along its arc, as a
-share of the way from the middle."""
+comptime HURT_SPREAD = Float32(0.2)
+"""How far a blow's mark reaches each side of its middle along its arc, as
+the sine of the angle from the frame's middle."""
+comptime HURT_THICK = 4
+"""Half the width of a blow's mark at its middle, in dots of the display's
+font."""
 comptime CHIP_COLOR = Rgb(255, 236, 196)
 """The color of the health a blow took, behind the health on a bar."""
 comptime POP_SECONDS = Float32(0.12)
 """How long a number stands larger as it appears, in seconds."""
 comptime POPUP_FADE = Float32(0.3)
 """How long a number or a word takes to fade at its end, in seconds."""
+comptime BAR_GAP = 2
+"""How many dots of the display's font stand between two foes' bars that
+`stack_boxes` sets one over the other."""
 comptime POPUP_GAP = 1
 """How many dots of a number's font stand between two numbers that
-`stack_popups` sets one over the other."""
+`stack_boxes` sets one over the other."""
 comptime TOP_BAND = 46
 """How many dots of the heads-up display's font the compass, its caption
 and the target panel take at the top of the frame. The numbers and the
@@ -646,6 +652,12 @@ def draw_battle(
             alpha,
         )
     var bar = 30 * scale
+    # The bars' boxes, the farthest foe first, so that a nearer foe's bar
+    # keeps its place and a farther one's stands over it.
+    var foes = List[Int]()
+    var depths = List[Float32]()
+    var bar_lefts = List[Int]()
+    var bar_tops = List[Int]()
     for index in range(len(battle.foes)):
         ref foe = battle.foes[index]
         if foe.down >= 0:
@@ -653,17 +665,27 @@ def draw_battle(
         var hurt = foe.fighter.health < foe.fighter.parameters.health
         if foe.brain.state == POSTED and not hurt:
             continue
-        var over = on_screen(
-            camera,
-            look,
-            foe.character.position + Vector3(0, HEAD + 0.2, 0),
-            w,
-            h,
-        )
+        var head = foe.character.position + Vector3(0, HEAD + 0.2, 0)
+        var over = on_screen(camera, look, head, w, h)
         if not over:
             continue
-        var x = Int(over.value().x) - bar // 2
-        var y = Int(over.value().y)
+        var off = head - camera.position
+        var depth = off.x * look.x + off.y * look.y + off.z * look.z
+        # Insert it before the first nearer one.
+        var k = 0
+        while k < len(depths) and depths[k] >= depth:
+            k += 1
+        foes.insert(k, index)
+        depths.insert(k, depth)
+        bar_lefts.insert(k, Int(over.value().x) - bar // 2)
+        bar_tops.insert(k, Int(over.value().y))
+    var bar_widths = List[Int](length=len(foes), fill=bar)
+    var bar_heights = List[Int](length=len(foes), fill=(4 + BAR_GAP) * scale)
+    bar_tops = stack_boxes(bar_lefts, bar_tops, bar_widths, bar_heights)
+    for k in range(len(foes)):
+        ref foe = battle.foes[foes[k]]
+        var x = bar_lefts[k]
+        var y = bar_tops[k]
         ref p = foe.fighter.parameters
         draw_bar(
             frame,
@@ -767,7 +789,7 @@ def draw_battle(
         heights.append((8 + POPUP_GAP) * size)
     # A newer number keeps its place. An older one that would cover it
     # moves up over it.
-    tops = stack_popups(lefts, tops, widths, heights)
+    tops = stack_boxes(lefts, tops, widths, heights)
     # Numbers over a head high in the frame stand under the compass and
     # the target panel, so they do not cross them. They move down
     # together, so they keep their order and do not cover each other.
@@ -788,19 +810,20 @@ def draw_battle(
         )
 
 
-def stack_popups(
+def stack_boxes(
     lefts: List[Int], tops: List[Int], widths: List[Int], heights: List[Int]
 ) -> List[Int]:
-    """Set the numbers over the fighters one over another where they would
-    cover each other.
+    """Set boxes over the fighters one over another where they would cover
+    each other: the numbers of the blows, and the foes' bars.
 
-    The boxes are taken from the newest, the last, to the oldest. A box
-    that crosses a box already placed moves up, until its bottom touches
-    that box's top. So the newest number stays by its fighter, and the
-    older numbers stand over it.
+    The boxes are taken from the last to the first. A box that crosses a
+    box already placed moves up, until its bottom touches that box's top.
+    So the last box stays where it is, and the boxes before it stand over
+    it.
 
     Args:
-        lefts: The left of each box, in pixels, the oldest first.
+        lefts: The left of each box, in pixels. The box that keeps its
+            place last.
         tops: The top of each box, in pixels.
         widths: The width of each box, in pixels.
         heights: The height of each box, in pixels, with the space below
@@ -1005,22 +1028,51 @@ def draw_hurts(mut frame: Framebuffer, battle: Battle, look: Vector3):
     var my = Float32(frame.height) / 2
     var rx = Float32(frame.width) * HURT_REACH
     var ry = Float32(frame.height) * HURT_REACH
-    var size = 3 * scale
+    var half = Float32(HURT_THICK * scale)
     for hurt in battle.hurts:
         var way = hurt_way(battle.feet, hurt.source, look)
         if way.x == 0 and way.y == 0:
             continue
         var alpha = 0.9 * (1 - hurt.age / HURT_SECONDS)
-        # Seven squares along the arc, across the way.
-        for k in range(-3, 4):  # pragma: no branch
-            var t = Float32(k) * HURT_ARC
-            var x = way.x - t * way.y
-            var y = way.y + t * way.x
-            var px = Int(mx + x * rx)
-            var py = Int(my + y * ry)
-            fill_box(
-                frame, px - size, py - size, px + size, py + size, DANGER, alpha
-            )
+        # The mark is a crescent on the ellipse through the middles of the
+        # frame's edges: widest and strongest at its middle, and thin and
+        # faint at its ends.
+        var cx = Int(mx + way.x * rx)
+        var cy = Int(my + way.y * ry)
+        # The box round the arc: its run across the way, and how far its
+        # ends bow in from its middle.
+        var bow = HURT_SPREAD * HURT_SPREAD / 2
+        var reach_x = Int(
+            HURT_SPREAD * rx * abs(way.y) + bow * rx * abs(way.x) + half + 2
+        )
+        var reach_y = Int(
+            HURT_SPREAD * ry * abs(way.x) + bow * ry * abs(way.y) + half + 2
+        )
+        for py in range(
+            max(0, cy - reach_y), min(frame.height, cy + reach_y + 1)
+        ):  # pragma: no branch
+            var v = (Float32(py) + 0.5 - my) / ry
+            for px in range(
+                max(0, cx - reach_x), min(frame.width, cx + reach_x + 1)
+            ):  # pragma: no branch
+                var u = (Float32(px) + 0.5 - mx) / rx
+                var r = sqrt(u * u + v * v)
+                # How far along the arc from its middle, from 0 to 1.
+                var along = abs(u * way.y - v * way.x) / r / HURT_SPREAD
+                if along >= 1:
+                    continue
+                var taper = 1 - along * along
+                var thick = half * (0.3 + 0.7 * taper)
+                # How far off the ellipse, in pixels.
+                var off = (
+                    abs(r - 1) * sqrt(u * u * rx * rx + v * v * ry * ry) / r
+                )
+                if off >= thick:
+                    continue
+                var edge = min(Float32(1), 2 * (1 - off / thick))
+                fill_box(
+                    frame, px, py, px + 1, py + 1, DANGER, alpha * taper * edge
+                )
 
 
 def boss_fights(battle: Battle) -> Bool:
