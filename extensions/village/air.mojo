@@ -30,7 +30,7 @@ from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.srgb import srgb_to_linear
 from render.tasks import TaskGroup
 from renderers.renderer import available_workers
-from std.math import exp, isinf
+from std.math import exp, isinf, sqrt
 
 comptime BLOOM_SCALE = 4
 """How many pixels across and down of the frame one texel of the bloom's
@@ -367,6 +367,59 @@ def ground_mist(
     return veiled
 
 
+comptime MIST_LANES = 8
+"""How many pixels of a row the mist finds its share for at once."""
+
+
+@always_inline
+def _mist_shares[
+    n: Int
+](
+    x: Int,
+    z: SIMD[DType.float32, n],
+    width: Int,
+    inverse: Pointer[Matrix4, ImmutAnyOrigin],
+    rows: SIMD[DType.float32, 4],
+    eye: Vector3,
+    base: Float32,
+    thickness: Float32,
+) -> SIMD[DType.float32, n]:
+    """Return the mist's share over `n` pixels of a row from column `x`,
+    from their depths and the row's fixed terms."""
+    comptime F = SIMD[DType.float32, n]
+    ref e = inverse[].elements
+    var column = F(Float32(x))
+    comptime for lane in range(n):
+        column[lane] += Float32(lane)
+    var nx = (column + 0.5) / Float32(width) * 2 - 1
+    var inv = 1 / (e[3] * nx + e[11] * z + rows[3])
+    var dx = (e[0] * nx + e[8] * z + rows[0]) * inv - eye.x
+    var ay = (e[1] * nx + e[9] * z + rows[1]) * inv
+    var dz = (e[2] * nx + e[10] * z + rows[2]) * inv - eye.z
+    var dy = ay - eye.y
+    var high = max(F(0), ay - base)
+    var far = sqrt(dx * dx + dy * dy + dz * dz)
+    return thickness * exp(-high / MIST_HEIGHT) * (1 - exp(-far / MIST_NEAR))
+
+
+@always_inline
+def _veil(
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    p: Int,
+    share: Float32,
+    mist: FloatColor,
+    linear: Pointer[Float32, ImmutAnyOrigin],
+    bytes: Pointer[SrgbBytes, ImmutAnyOrigin],
+):
+    """Blend one pixel toward the mist by its share."""
+    var r = linear[unsafe_offset=Int(pixels[unsafe_offset=p])]
+    var g = linear[unsafe_offset=Int(pixels[unsafe_offset=p + 1])]
+    var b = linear[unsafe_offset=Int(pixels[unsafe_offset=p + 2])]
+    pixels[unsafe_offset=p] = bytes[].byte(r + (mist.r - r) * share)
+    pixels[unsafe_offset=p + 1] = bytes[].byte(g + (mist.g - g) * share)
+    pixels[unsafe_offset=p + 2] = bytes[].byte(b + (mist.b - b) * share)
+
+
 __async def _mist_task(
     pixels: MutPointer[UInt8, MutAnyOrigin],
     depth: Pointer[Float32, ImmutAnyOrigin],
@@ -385,44 +438,47 @@ __async def _mist_task(
     past: Int,
 ):
     """Veil rows `first` to `past` with the mist, and count the pixels it
-    veils."""
+    veils. The shares are found `MIST_LANES` pixels at a time, and the
+    pixels past the last whole run one at a time."""
     var veiled = 0
     for y in range(first, past):  # pragma: no branch
         var ny = 1 - (Float32(y) + 0.5) / Float32(height) * 2
         # A row's points are mixed from its fixed terms: only `nx` and the
         # depth change along it.
         ref e = inverse[].elements
-        var row_x = e[4] * ny + e[12]
-        var row_y = e[5] * ny + e[13]
-        var row_z = e[6] * ny + e[14]
-        var row_w = e[7] * ny + e[15]
-        for x in range(width):  # pragma: no branch
-            var k = y * width + x
-            var z = depth[unsafe_offset=k]
-            if isinf(z):
-                continue
-            var nx = (Float32(x) + 0.5) / Float32(width) * 2 - 1
-            var inv = 1 / (e[3] * nx + e[11] * z + row_w)
-            var at = Vector3(
-                (e[0] * nx + e[8] * z + row_x) * inv,
-                (e[1] * nx + e[9] * z + row_y) * inv,
-                (e[2] * nx + e[10] * z + row_z) * inv,
+        var rows = SIMD[DType.float32, 4](
+            e[4] * ny + e[12],
+            e[5] * ny + e[13],
+            e[6] * ny + e[14],
+            e[7] * ny + e[15],
+        )
+        var x = 0
+        while x + MIST_LANES <= width:
+            var at = y * width + x
+            var z = depth.unsafe_load[width=MIST_LANES](at)
+            var share = _mist_shares[MIST_LANES](
+                x, z, width, inverse, rows, eye, base, thickness
             )
-            var high = max(Float32(0), at.y - base)
-            var far = (at - eye).length()
-            var share = (
-                thickness
-                * exp(-high / MIST_HEIGHT)
-                * (1 - exp(-far / MIST_NEAR))
+            comptime for lane in range(MIST_LANES):
+                if not isinf(z[lane]) and share[lane] > 1.0e-3:
+                    veiled += 1
+                    _veil(
+                        pixels,
+                        (at + lane) * 4,
+                        share[lane],
+                        mist,
+                        linear,
+                        bytes,
+                    )
+            x += MIST_LANES
+        while x < width:
+            var at = y * width + x
+            var z = depth[unsafe_offset=at]
+            var share = _mist_shares[1](
+                x, z, width, inverse, rows, eye, base, thickness
             )
-            if share <= 1.0e-3:
-                continue
-            veiled += 1
-            var p = k * 4
-            var r = linear[unsafe_offset=Int(pixels[unsafe_offset=p])]
-            var g = linear[unsafe_offset=Int(pixels[unsafe_offset=p + 1])]
-            var b = linear[unsafe_offset=Int(pixels[unsafe_offset=p + 2])]
-            pixels[unsafe_offset=p] = bytes[].byte(r + (mist.r - r) * share)
-            pixels[unsafe_offset=p + 1] = bytes[].byte(g + (mist.g - g) * share)
-            pixels[unsafe_offset=p + 2] = bytes[].byte(b + (mist.b - b) * share)
+            if not isinf(z) and share > 1.0e-3:
+                veiled += 1
+                _veil(pixels, at * 4, share[0], mist, linear, bytes)
+            x += 1
     counts[unsafe_offset=task] = veiled
