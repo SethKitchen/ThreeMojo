@@ -208,12 +208,14 @@ from extensions.village.clothes import (
 )
 from extensions.village.quality import GameQuality, planted
 from extensions.village.scanned import CutBuilding
-from extensions.village.terrain import OPEN_SKY, Terrain
+from extensions.village.terrain import OPEN_SKY, Floor, FloorIndex, Terrain
 from extensions.village.interior import Doorway
 from extensions.village.village import Village, VillageParameters
 from extensions.water.pebbles import PebbleBed
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
+from render.tasks import TaskGroup
 from render.game_smooth import smooth_edges
 from render.game_upscale import upscale_into
 from renderers.game_renderer import FULL_SHADOWS, GameRenderer
@@ -1413,16 +1415,36 @@ struct VillageGame(Movable):
         inverse.multiply(self.camera.view_matrix())
         inverse.invert()
         var under = List[Bool](length=w * h, fill=False)
-        for y in range(h):  # pragma: no branch
-            var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
-            for x in range(w):  # pragma: no branch
-                var z = image.depth[y * w + x]
-                if isinf(z):
-                    continue
-                var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
-                var at = inverse.transform_point(Vector3(nx, ny, z))
-                var ceiling = self.terrain.ceiling_over(at.x, at.z, at.y)
-                under[y * w + x] = at.y < ceiling
+        # The floors sorted into cells, and the rows shared over every
+        # core: a pixel tests only the floors over its point.
+        var index = FloorIndex(self.terrain.floors)
+        var tasks = max(1, min(available_workers() * 2, h))
+        var group = TaskGroup()
+        for t in range(tasks):  # pragma: no branch
+            group.create_task(
+                _shelter_task(
+                    image.depth.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    under.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    w,
+                    h,
+                    Pointer(to=inverse)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=index)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=self.terrain.floors)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    t * h // tasks,
+                    (t + 1) * h // tasks,
+                )
+            )
+        group.wait()
+        _ = inverse
+        _ = len(index.members)
         return under^
 
     def veil(self, mut image: Framebuffer, scene: Scene, day: Float32) raises:
@@ -1893,3 +1915,28 @@ struct VillageGame(Movable):
         return use_prompt(
             g.spot.kind, g.strikes, g.phase, self.gathering.ore_strikes
         )
+
+
+__async def _shelter_task(
+    depth: Pointer[Float32, ImmutAnyOrigin],
+    under: MutPointer[Bool, MutAnyOrigin],
+    w: Int,
+    h: Int,
+    inverse: Pointer[Matrix4, ImmutAnyOrigin],
+    index: Pointer[FloorIndex, ImmutAnyOrigin],
+    floors: Pointer[List[Floor], ImmutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Mark which pixels of rows `first` to `past` show a point under a
+    roof."""
+    for y in range(first, past):  # pragma: no branch
+        var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
+        for x in range(w):  # pragma: no branch
+            var z = depth[unsafe_offset=y * w + x]
+            if isinf(z):
+                continue
+            var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
+            var at = inverse[].transform_point(Vector3(nx, ny, z))
+            var ceiling = index[].ceiling_over(floors[], at.x, at.z, at.y)
+            under[unsafe_offset=y * w + x] = at.y < ceiling

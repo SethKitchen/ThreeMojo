@@ -196,6 +196,145 @@ struct Floor(ImplicitlyCopyable):
     var ceiling: Float32
 
 
+comptime FLOOR_CELL = Float32(2)
+"""The side of a cell of `FloorIndex`'s grid, in meters."""
+comptime FLOOR_CELLS = 1 << 20
+"""The most cells `FloorIndex`'s grid has: a wider spread of floors takes
+larger cells."""
+
+
+struct FloorIndex(Movable):
+    """The floors of a terrain, sorted into a grid of square cells on the
+    ground, so that a point need test only the floors over its cell.
+
+    Each floor goes into every cell that the circle round its rectangle
+    touches, with `INSIDE` to spare, and the floors of a cell keep their
+    order. So `ceiling_over` finds the floor that `Terrain.floor_under`
+    finds, and the same ceiling, testing a handful of floors rather than
+    all of them. Build it again when the floors change."""
+
+    var x0: Float32
+    var z0: Float32
+    var cell: Float32
+    var columns: Int
+    var rows: Int
+    # Where each cell's floors start in `members`, and one past the last
+    # cell's end.
+    var starts: List[Int]
+    var members: List[Int]
+
+    def __init__(out self, floors: List[Floor]):
+        """Sort a terrain's floors into the grid.
+
+        Args:
+            floors: The terrain's floors.
+        """
+        self.x0 = 0
+        self.z0 = 0
+        self.cell = FLOOR_CELL
+        self.columns = 0
+        self.rows = 0
+        self.starts = List[Int]()
+        self.members = List[Int]()
+        if len(floors) == 0:
+            return
+        var x1 = Float32(-1.0e30)
+        var z1 = Float32(-1.0e30)
+        self.x0 = 1.0e30
+        self.z0 = 1.0e30
+        for floor in floors:  # pragma: no branch
+            var r = _floor_radius(floor)
+            self.x0 = min(self.x0, floor.area.x - r)
+            self.z0 = min(self.z0, floor.area.z - r)
+            x1 = max(x1, floor.area.x + r)
+            z1 = max(z1, floor.area.z + r)
+        while (Int((x1 - self.x0) / self.cell) + 1) * (
+            Int((z1 - self.z0) / self.cell) + 1
+        ) > FLOOR_CELLS:
+            self.cell *= 2
+        self.columns = Int((x1 - self.x0) / self.cell) + 1
+        self.rows = Int((z1 - self.z0) / self.cell) + 1
+        var counts = List[Int](length=self.columns * self.rows, fill=0)
+        for floor in floors:  # pragma: no branch
+            var span = self._span(floor)
+            for row in range(span[2], span[3] + 1):  # pragma: no branch
+                for column in range(span[0], span[1] + 1):  # pragma: no branch
+                    counts[row * self.columns + column] += 1
+        self.starts = List[Int](capacity=len(counts) + 1)
+        var total = 0
+        for count in counts:  # pragma: no branch
+            self.starts.append(total)
+            total += count
+        self.starts.append(total)
+        self.members = List[Int](length=total, fill=0)
+        var filled = List[Int](length=len(counts), fill=0)
+        for index in range(len(floors)):  # pragma: no branch
+            var span = self._span(floors[index])
+            for row in range(span[2], span[3] + 1):  # pragma: no branch
+                for column in range(span[0], span[1] + 1):  # pragma: no branch
+                    var c = row * self.columns + column
+                    self.members[self.starts[c] + filled[c]] = index
+                    filled[c] += 1
+
+    def _span(self, floor: Floor) -> Tuple[Int, Int, Int, Int]:
+        """Return the first and last column and row a floor touches."""
+        var r = _floor_radius(floor)
+        return (
+            max(0, Int((floor.area.x - r - self.x0) / self.cell)),
+            min(
+                self.columns - 1, Int((floor.area.x + r - self.x0) / self.cell)
+            ),
+            max(0, Int((floor.area.z - r - self.z0) / self.cell)),
+            min(self.rows - 1, Int((floor.area.z + r - self.z0) / self.cell)),
+        )
+
+    def ceiling_over(
+        self, floors: List[Floor], x: Float32, z: Float32, foot: Float32
+    ) -> Float32:
+        """Return how high something can stand over a point, as
+        `Terrain.ceiling_over` does.
+
+        Args:
+            floors: The floors the index was built from.
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+            foot: The height of its feet, in meters.
+
+        Returns:
+            The ceiling of the highest floor under the point that the feet
+            can reach, or `OPEN_SKY`.
+        """
+        var column = (x - self.x0) / self.cell
+        var row = (z - self.z0) / self.cell
+        if not (
+            column >= 0
+            and row >= 0
+            and column < Float32(self.columns)
+            and row < Float32(self.rows)
+        ):
+            return OPEN_SKY
+        var c = Int(row) * self.columns + Int(column)
+        var best = -1
+        for k in range(self.starts[c], self.starts[c + 1]):
+            var index = self.members[k]
+            ref floor = floors[index]
+            if floor.area.reach(x, z) >= INSIDE:
+                continue
+            if floor.height > foot + CLIMB:
+                continue
+            if best < 0 or floor.height > floors[best].height:
+                best = index
+        if best < 0:
+            return OPEN_SKY
+        return floors[best].ceiling
+
+
+def _floor_radius(floor: Floor) -> Float32:
+    """Return how far from its middle a floor's rectangle reaches at most,
+    with `INSIDE` to spare."""
+    return floor.area.half_width + floor.area.half_depth + 2 * INSIDE
+
+
 struct Terrain(Copyable, Movable):
     """The ground, the floors on it, the walls on them, and the solid
     buildings."""
