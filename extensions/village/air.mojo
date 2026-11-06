@@ -389,13 +389,25 @@ __async def _mist_task(
     var veiled = 0
     for y in range(first, past):  # pragma: no branch
         var ny = 1 - (Float32(y) + 0.5) / Float32(height) * 2
+        # A row's points are mixed from its fixed terms: only `nx` and the
+        # depth change along it.
+        ref e = inverse[].elements
+        var row_x = e[4] * ny + e[12]
+        var row_y = e[5] * ny + e[13]
+        var row_z = e[6] * ny + e[14]
+        var row_w = e[7] * ny + e[15]
         for x in range(width):  # pragma: no branch
             var k = y * width + x
             var z = depth[unsafe_offset=k]
             if isinf(z):
                 continue
             var nx = (Float32(x) + 0.5) / Float32(width) * 2 - 1
-            var at = inverse[].transform_point(Vector3(nx, ny, z))
+            var inv = 1 / (e[3] * nx + e[11] * z + row_w)
+            var at = Vector3(
+                (e[0] * nx + e[8] * z + row_x) * inv,
+                (e[1] * nx + e[9] * z + row_y) * inv,
+                (e[2] * nx + e[10] * z + row_z) * inv,
+            )
             var high = max(Float32(0), at.y - base)
             var far = (at - eye).length()
             var share = (
