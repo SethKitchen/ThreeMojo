@@ -238,6 +238,36 @@ def test_a_nearer_foes_bar_keeps_its_place_over_a_crowd() raises:
     assert_true(_changed(crowd) > _changed(alone))
 
 
+def test_a_quick_combo_writes_a_short_column_of_numbers() raises:
+    var arena = Arena(arena_parameters(0, 0, 5))
+    var camera = _camera()
+    camera.place(Vector3(0, 5, 4), Vector3(0, 1, -2))
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    var at = Vector3(0, 1, -1)
+    var rows = List[Int]()
+    for many in [1, 4, 9]:
+        arena.battle.popups.clear()
+        for _ in range(many):
+            arena.battle.popups.append(Popup(at, "88", WHITE_TEXT, 0.5))
+        var bare = _frame()
+        arena.battle.popups.clear()
+        draw_battle(bare, arena.battle, arena.scene, camera, look)
+        for _ in range(many):
+            arena.battle.popups.append(Popup(at, "88", WHITE_TEXT, 0.5))
+        var shown = _frame()
+        draw_battle(shown, arena.battle, arena.scene, camera, look)
+        var top = 180
+        var bottom = 0
+        for k in range(len(shown.pixels)):
+            if shown.pixels[k] != bare.pixels[k]:
+                top = min(top, k // 4 // 320)
+                bottom = max(bottom, k // 4 // 320)
+        rows.append(bottom - top)
+    # Four numbers stand one over another; nine stand no taller than four.
+    assert_true(rows[1] > 3 * rows[0])
+    assert_equal(rows[2], rows[1])
+
+
 def test_a_number_over_a_foe_stands_over_its_bar() raises:
     var arena = Arena(arena_parameters(1, 0, 5))
     # A camera high over the foe, so its head stands well under the band.

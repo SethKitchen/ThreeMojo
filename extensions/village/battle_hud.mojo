@@ -167,6 +167,9 @@ comptime POPUP_FADE = Float32(0.3)
 comptime BAR_GAP = 2
 """How many dots of the display's font stand between two foes' bars that
 `stack_boxes` sets one over the other."""
+comptime POPUP_STACK = 3
+"""How many of its own heights newer numbers may lift a number before it
+is not drawn."""
 comptime POPUP_GAP = 1
 """How many dots of a number's font stand between two numbers that
 `stack_boxes` sets one over the other."""
@@ -819,20 +822,30 @@ def draw_battle(
     # moves up over it. The foes' bars are placed after the newest, so
     # they keep their places, and a number moves up over a bar.
     var count = len(tops)
+    var natural = tops.copy()
     lefts.extend(bar_lefts.copy())
     tops.extend(bar_tops.copy())
     widths.extend(bar_widths.copy())
     heights.extend(bar_heights.copy())
     tops = stack_boxes(lefts, tops, widths, heights)
     tops.resize(count, 0)
+    # A number that the newer ones lift more than `POPUP_STACK` of its own
+    # heights is not drawn: a quick combo writes a short column, not a
+    # wall over the fighter.
+    var kept = List[Bool](capacity=count)
+    for k in range(count):
+        kept.append(natural[k] - tops[k] <= POPUP_STACK * heights[k])
     # Numbers over a head high in the frame stand under the compass and
     # the target panel, so they do not cross them. They move down
     # together, so they keep their order and do not cover each other.
     var band = (TOP_BAND + hud_drop(battle)) * scale
     var drop = 0
-    for top in tops:
-        drop = max(drop, band - top)
+    for k in range(count):
+        if kept[k]:
+            drop = max(drop, band - tops[k])
     for k in range(len(shown)):
+        if not kept[k]:
+            continue
         ref popup = battle.popups[shown[k]]
         draw_outlined(
             frame,
