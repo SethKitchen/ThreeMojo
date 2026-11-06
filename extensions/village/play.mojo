@@ -37,6 +37,8 @@ and its animals, seen by a third-person camera.
    goes back out slowly when the wall is passed. Under a ceiling, the
    eye stays below it. It stays above the ground or the floor. The
    inside of each house further than `INSIDE_REACH` from the eye hides.
+   An eye that a wall brings within `CLOSE_EYE` of the player's head
+   hides the player's body, so it does not fill the frame.
 9. The village prepares the frame: the grass for the camera, and the
    water's clock.
 10. The weather moves on, and scales the lights and the fog: see
@@ -273,6 +275,10 @@ comptime INSIDE_REACH = Float32(18)
 drawn, in meters."""
 comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
+comptime CLOSE_EYE = Float32(1.2)
+"""How near the player's head, in meters, the camera's eye can come before
+the player's body hides: nearer, the head and the shoulders fill the
+frame."""
 comptime SHAKEN = Float32(1.0e-3)
 """A camera's shake of less than this, in meters, is not seen."""
 comptime LANTERN_COLOR = Color(255, 205, 150)
@@ -308,6 +314,20 @@ comptime WINDED = Float32(0.6)
 comptime ARM_EASE = Float32(3)
 """How fast the eye goes back out once a wall is passed: each second it
 closes all but `exp(-ARM_EASE)` of its gap."""
+
+
+def shows_player(eye: Vector3, focus: Vector3) -> Bool:
+    """Return whether the camera's eye stands far enough from the player's
+    head to show the player's body.
+
+    Args:
+        eye: Where the camera's eye is.
+        focus: What it looks at: the player's head.
+
+    Returns:
+        True if the eye is `CLOSE_EYE` or more from the focus.
+    """
+    return (eye - focus).length() >= CLOSE_EYE
 
 
 def trunks_reach(
@@ -1257,6 +1277,10 @@ struct VillageGame(Movable):
             Length(self.terrain.height_at(eye.x, eye.z, feet.y), METER),
             Length(self.terrain.view_ceiling(focus, eye, feet.y), METER),
             self.reach,
+        )
+        # An eye that a wall brings in close hides the player's body.
+        scene.node(self.body.carrier).visible = shows_player(
+            self.camera.position, self.view.focus
         )
         # A strong blow shakes the camera, and what it looks at with it.
         var jolt = self.battle.shake

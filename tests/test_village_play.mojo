@@ -56,6 +56,7 @@ from extensions.village.talk import (
 from extensions.village.residents import SIT, WORK
 from extensions.village.props import BARREL, BENCH, CROPS, Prop, WELL, WOODPILE
 from extensions.village.play import (
+    CLOSE_EYE,
     FOCUS_HEIGHT,
     FOE_SIGHT,
     SILVER_MARK,
@@ -70,6 +71,7 @@ from extensions.village.play import (
     game_residents,
     tree_obstacles,
     prop_stops,
+    shows_player,
     trunks_reach,
     village_mood,
     HITSTOP,
@@ -981,6 +983,13 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     game.battle.fell = True
     _ = game.tick(scene, assets, no_input(), step)
     assert_equal(game.gathering.satchel.count(CHEST), 0)
+
+
+def test_an_eye_close_to_the_head_hides_the_player() raises:
+    var focus = Vector3(0, 1.5, 0)
+    assert_true(shows_player(Vector3(0, 2, 4), focus))
+    assert_false(shows_player(Vector3(0, 1.6, 0.4), focus))
+    assert_true(shows_player(Vector3(0, 1.5, CLOSE_EYE), focus))
 
 
 def test_the_camera_comes_in_before_a_trunk() raises:
