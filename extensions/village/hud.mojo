@@ -47,7 +47,9 @@ from extensions.village.gathering import (
 )
 from extensions.village.talk import SPEECH_SECONDS
 from render.framebuffer import Framebuffer
-from std.math import sqrt
+from render.tasks import TaskGroup
+from renderers.renderer import available_workers
+from std.math import ceil, floor, sqrt
 
 comptime GLYPHS = (
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/:.,!?'-"
@@ -386,23 +388,96 @@ def draw_vignette(mut frame: Framebuffer, strength: Float32) raises:
         raise Error("A vignette's strength must be from 0 to 1")
     if strength == 0:
         return
-    var w = Float32(frame.width)
-    var h = Float32(frame.height)
-    for y in range(frame.height):  # pragma: no branch
+    var tasks = max(1, min(available_workers() * 2, frame.height))
+    var group = TaskGroup()
+    for t in range(tasks):  # pragma: no branch
+        group.create_task(
+            _vignette_task(
+                frame.pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                frame.width,
+                frame.height,
+                strength,
+                t * frame.height // tasks,
+                (t + 1) * frame.height // tasks,
+            )
+        )
+    group.wait()
+
+
+def clear_span(
+    y: Int, width: Int, height: Int, radius: Float32
+) -> Tuple[Int, Int]:
+    """Return the pixels of a row that lie, for certain, within a radius
+    of the frame's middle, as an edge's tint measures it.
+
+    A pixel's place is `((x + 0.5) / width * 2 - 1, (y + 0.5) / height *
+    2 - 1)`. The span keeps a little inside the circle, and a pixel of
+    margin at each end, so a pixel near the circle's edge is left to the
+    tint's own test.
+
+    Args:
+        y: The row.
+        width: The frame's width, in pixels.
+        height: The frame's height, in pixels.
+        radius: The radius, in those units.
+
+    Returns:
+        The first pixel of the span and the one past its last; the two
+        are equal for a row with no such pixel.
+    """
+    var dy = (Float32(y) + 0.5) / Float32(height) * 2 - 1
+    # A row near the top or the bottom of the circle meets it at a slant,
+    # where a rounding of its height moves the ends far: the span keeps
+    # a little inside the circle.
+    var inside = radius * 0.999
+    var room = inside * inside - dy * dy
+    if room <= 0:
+        return (0, 0)
+    var half = sqrt(room)
+    var w = Float32(width)
+    var first = max(0, Int(ceil((1 - half) * w / 2 - 0.5)) + 1)
+    var past = min(width, Int(floor((1 + half) * w / 2 - 0.5)))
+    if past <= first:
+        return (0, 0)
+    return (first, past)
+
+
+__async def _vignette_task(
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    strength: Float32,
+    first: Int,
+    past: Int,
+):
+    """Redden rows `first` to `past`, past the clear middle."""
+    var w = Float32(width)
+    var h = Float32(height)
+    for y in range(first, past):  # pragma: no branch
         var dy = (Float32(y) + 0.5) / h * 2 - 1
-        for x in range(frame.width):  # pragma: no branch
+        var clear = clear_span(y, width, height, VIGNETTE_CLEAR * 1.4142)
+        var x = 0
+        while x < width:
+            if x == clear[0] and clear[1] > clear[0]:
+                x = clear[1]
+                continue
             var dx = (Float32(x) + 0.5) / w * 2 - 1
             var reach = sqrt(dx * dx + dy * dy) / 1.4142
-            if reach <= VIGNETTE_CLEAR:
-                continue
-            var t = (reach - VIGNETTE_CLEAR) / (1 - VIGNETTE_CLEAR)
-            _blend(
-                frame,
-                x,
-                y,
-                Rgb(150, 0, 0),
-                min(Float32(0.85), t * t * strength),
-            )
+            if reach > VIGNETTE_CLEAR:
+                var t = (reach - VIGNETTE_CLEAR) / (1 - VIGNETTE_CLEAR)
+                var alpha = min(Float32(0.85), t * t * strength)
+                var at = (y * width + x) * 4
+                var keep = 1 - alpha
+                pixels[unsafe_offset=at] = UInt8(
+                    Int(Float32(pixels[unsafe_offset=at]) * keep + 150 * alpha)
+                )
+                pixels[unsafe_offset=at + 1] = UInt8(
+                    Int(Float32(pixels[unsafe_offset=at + 1]) * keep)
+                )
+                pixels[unsafe_offset=at + 2] = UInt8(
+                    Int(Float32(pixels[unsafe_offset=at + 2]) * keep)
+                )
+            x += 1
 
 
 def draw_hud(

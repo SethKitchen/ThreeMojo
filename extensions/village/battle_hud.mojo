@@ -92,6 +92,7 @@ from extensions.village.slashes import (
 )
 from extensions.village.hud import (
     PANEL_ALPHA,
+    clear_span,
     GOLD_TEXT,
     SHADOW,
     WHITE_TEXT,
@@ -104,6 +105,8 @@ from extensions.village.hud import (
     text_width,
 )
 from math.vector3 import Vector3
+from render.tasks import TaskGroup
+from renderers.renderer import available_workers
 from std.math import sqrt
 from render.framebuffer import Framebuffer
 from units.si import METER, SECOND
@@ -381,27 +384,74 @@ def tint_edges(mut frame: Framebuffer, color: Rgb, strength: Float32):
             Nothing is tinted within `EDGE` of the way from the middle to
             a corner.
     """
-    var cx = Float32(frame.width) / 2
-    var cy = Float32(frame.height) / 2
-    var tint: List[Float32] = [
-        Float32(color.r),
-        Float32(color.g),
-        Float32(color.b),
-    ]
-    # A frame's width and height are positive.
-    for y in range(frame.height):  # pragma: no branch
+    var tasks = max(1, min(available_workers() * 2, frame.height))
+    var group = TaskGroup()
+    for t in range(tasks):  # pragma: no branch
+        group.create_task(
+            _tint_task(
+                frame.pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                frame.width,
+                frame.height,
+                color,
+                strength,
+                t * frame.height // tasks,
+                (t + 1) * frame.height // tasks,
+            )
+        )
+    group.wait()
+
+
+__async def _tint_task(
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    color: Rgb,
+    strength: Float32,
+    first: Int,
+    past: Int,
+):
+    """Tint rows `first` to `past`, past the clear middle."""
+    var cx = Float32(width) / 2
+    var cy = Float32(height) / 2
+    var tr = Float32(color.r)
+    var tg = Float32(color.g)
+    var tb = Float32(color.b)
+    for y in range(first, past):  # pragma: no branch
         var dy = (Float32(y) + 0.5 - cy) / cy
-        for x in range(frame.width):  # pragma: no branch
+        var clear = clear_span(y, width, height, EDGE * 1.4142)
+        var x = 0
+        while x < width:
+            if x == clear[0] and clear[1] > clear[0]:
+                x = clear[1]
+                continue
             var dx = (Float32(x) + 0.5 - cx) / cx
             var reach = sqrt((dx * dx + dy * dy) / 2)
-            if reach <= EDGE:
-                continue
-            var share = (reach - EDGE) / (1 - EDGE)
-            var w = min(Float32(1), share * share) * strength
-            var at = (y * frame.width + x) * 4
-            for k in range(3):  # pragma: no branch
-                var mixed = Float32(frame.pixels[at + k]) * (1 - w)
-                frame.pixels[at + k] = UInt8(Int(mixed + tint[k] * w + 0.5))
+            if reach > EDGE:
+                var share = (reach - EDGE) / (1 - EDGE)
+                var w = min(Float32(1), share * share) * strength
+                var at = (y * width + x) * 4
+                pixels[unsafe_offset=at] = UInt8(
+                    Int(
+                        Float32(pixels[unsafe_offset=at]) * (1 - w)
+                        + tr * w
+                        + 0.5
+                    )
+                )
+                pixels[unsafe_offset=at + 1] = UInt8(
+                    Int(
+                        Float32(pixels[unsafe_offset=at + 1]) * (1 - w)
+                        + tg * w
+                        + 0.5
+                    )
+                )
+                pixels[unsafe_offset=at + 2] = UInt8(
+                    Int(
+                        Float32(pixels[unsafe_offset=at + 2]) * (1 - w)
+                        + tb * w
+                        + 0.5
+                    )
+                )
+            x += 1
 
 
 def _edges(

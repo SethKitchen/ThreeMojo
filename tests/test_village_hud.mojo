@@ -22,6 +22,7 @@ from extensions.village.gathering import (
     TRINKET,
 )
 from extensions.village.hud import (
+    clear_span,
     draw_vignette,
     GOLD_TEXT,
     NOTE_SECONDS,
@@ -260,6 +261,24 @@ def test_punctuation_is_drawn() raises:
         var frame = _frame(12, 12)
         draw_text(frame, 1, 1, mark, 1, WHITE_TEXT, 1)
         assert_true(_changed(frame) > 0)
+
+
+def test_a_row_skips_only_what_lies_clear_inside_a_circle() raises:
+    # The middle row of a wide circle: a long span, short of its ends.
+    var wide = clear_span(50, 100, 101, 1)
+    assert_true(wide[0] > 0 and wide[0] < 5)
+    assert_true(wide[1] > 95 and wide[1] < 100)
+    # Each pixel in the span lies inside the circle.
+    for x in range(wide[0], wide[1]):
+        var dx = (Float32(x) + 0.5) / 100 * 2 - 1
+        assert_true(dx * dx <= 1)
+    # A row past the circle, and a row that meets it in less than a pixel
+    # or two, skip nothing.
+    var past = clear_span(0, 100, 100, 0.5)
+    assert_equal(past[0], past[1])
+    var thin = clear_span(50, 100, 101, 0.02)
+    assert_equal(thin[0], 0)
+    assert_equal(thin[1], 0)
 
 
 def main() raises:
