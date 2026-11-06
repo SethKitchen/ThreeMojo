@@ -74,6 +74,7 @@ typedef struct {
   float night_down[4];
   float night_glow[4];
   float night_sky[4];
+  float night_moon[4];
   int32_t cover_ints[4];
   int32_t water_ints[4];
   int32_t flags[4];
@@ -316,6 +317,8 @@ static void fill_post(VillagePost *post, const int64_t *n, const float *f) {
   take(post->night_down, f + TM_VILLAGE_FLOAT_NIGHT_DOWN, 3);
   take(post->night_glow, f + TM_VILLAGE_FLOAT_NIGHT_GLOW, 3);
   take(post->night_sky, f + TM_VILLAGE_FLOAT_NIGHT_SKY, 3);
+  take(post->night_moon, f + TM_VILLAGE_FLOAT_NIGHT_MOON, 3);
+  post->night_moon[3] = f[TM_VILLAGE_FLOAT_NIGHT_MOONLIT];
   post->cover_ints[0] = (int32_t)n[TM_VILLAGE_INT_COVER_COLUMNS];
   post->cover_ints[1] = (int32_t)n[TM_VILLAGE_INT_COVER_ROWS];
   post->cover_ints[2] = (int32_t)n[TM_VILLAGE_INT_COVER_STEP];

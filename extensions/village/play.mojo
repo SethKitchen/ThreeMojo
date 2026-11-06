@@ -52,7 +52,7 @@ window, and writes the heads-up display over it: see
 """
 
 from cameras.perspective_camera import PerspectiveCamera
-from controls.third_person_controls import ThirdPersonControls
+from controls.third_person_controls import ThirdPersonControls, yaw_of
 from core.assets import Assets
 from core.object3d import NodeId
 from core.scene import Scene
@@ -86,12 +86,15 @@ from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.field import FieldStats
 from extensions.vegetation.ground import Lot, lot_openness
-from extensions.vegetation.meadow import EXPOSURE, FARTHEST
+from extensions.vegetation.meadow import EXPOSURE, FARTHEST, sun_direction
+from extensions.vegetation.noise import hash01
+from core.fog import FogView
 from extensions.village.character import (
     Character,
     CharacterParameters,
     MoveInput,
     Obstacle,
+    no_input,
     player_movement,
 )
 from extensions.village.battle import Battle, BattleParameters
@@ -99,6 +102,7 @@ from extensions.village.battle_hud import draw_battle
 from extensions.village.gathering import (
     CHEST,
     HERBS,
+    SEAL,
     GatherParameters,
     Gathering,
 )
@@ -106,9 +110,14 @@ from extensions.village.battle_hud import DANGER, draw_target, hud_drop
 from extensions.village.compass import CompassMark, clock_text, draw_compass
 from extensions.village.hud import (
     GOLD_TEXT,
+    WHITE_TEXT,
     Rgb,
     draw_hud,
+    draw_text,
+    draw_vignette,
+    fill_box,
     hud_scale,
+    text_width,
     note_text,
     use_prompt,
 )
@@ -124,9 +133,10 @@ from extensions.village.skills import (
     skill_name,
     style_skill,
 )
-from extensions.village.progress import Progress
+from extensions.village.progress import PLACE_SHIFT, Progress
 from extensions.village.styles import STYLES, FightingStyle
 from extensions.village.combat import (
+    DODGE,
     FALL,
     FLINCH,
     HEAVY,
@@ -138,9 +148,19 @@ from extensions.village.combat import (
 from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.faces import FaceLife, face_reach
 from extensions.village.day import DayCycle, dim_water
+from extensions.village.puffs import draw_puffs, dust_puffs
+from extensions.village.map import MapHouse, MapMarks, draw_map
+from extensions.village.sound import COIN, HIT, SPLASH, STEP, SWING, Sounds
+from extensions.village.air import bloom, ground_mist
 from extensions.village.gpu_post import GpuPost
 from extensions.village.talk import (
+    FAIR,
+    NIGHT,
+    SNOWY,
+    WET,
+    Mood,
     DONE,
+    ErrandState,
     OFFERED,
     SPEECH_SECONDS,
     Speaker,
@@ -153,15 +173,27 @@ from extensions.village.weather import (
     Weather,
     WeatherKind,
     weather_label,
+    weather_look,
 )
 from extensions.village.residents import (
+    SIT,
+    WORK,
     Body,
     Herd,
     HouseId,
     NO_HOUSE,
     Residents,
     ResidentsParameters,
+    Stop,
     Villager,
+)
+from extensions.village.props import (
+    BENCH,
+    CROPS,
+    WELL,
+    WOODPILE,
+    WOODPILE_DEPTH,
+    Prop,
 )
 from extensions.village.clothes import (
     CREAM_WOOL,
@@ -186,7 +218,7 @@ from render.game_smooth import smooth_edges
 from render.game_upscale import upscale_into
 from renderers.game_renderer import FULL_SHADOWS, GameRenderer
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, exp, sin
+from std.math import cos, exp, isinf, sin, sqrt
 from std.time import perf_counter_ns
 from units.si import (
     DEGREE,
@@ -207,6 +239,30 @@ comptime TRUNK = Float32(0.35)
 """A tree's trunk radius for a planting of size 1, in meters."""
 comptime CALM = Float32(0.1)
 """A look stick that leans less than this lets the camera trail."""
+comptime SHELTER_LIGHT = Float32(0.2)
+"""Below this share of the day's light, the people stay home."""
+comptime SHELTER_FALL = Float32(0.6)
+"""Above this share of the heaviest rain or snow, the people stay home."""
+comptime RAIN_RINGS = Float32(40)
+"""How many drops a second ring the pond in a downpour."""
+comptime WAKE_EVERY = Float32(0.18)
+"""The seconds between two taps of a wading player's wake."""
+comptime STRIDE = Float32(0.55)
+"""The seconds between two footfalls at a walk."""
+comptime HITSTOP = Float32(0.07)
+"""How long the world all but stops after a hard blow lands, in seconds."""
+comptime HITSTOP_PACE = Float32(0.15)
+"""How fast the world moves while it all but stops."""
+comptime HITSTOP_BLOW = Float32(40)
+"""How much health a blow must take for the world to stop a moment."""
+comptime VIGNETTE_HEALTH = Float32(0.35)
+"""Below this share of their health, the frame's edges redden."""
+comptime FALL_COST = 25
+"""The share, in percent, of the coins a player loses when they fall."""
+comptime DAWN_MIST = Float32(6.5)
+"""The hour that the dawn's ground mist lies thickest."""
+comptime SUN_STEP = Float32(1)
+"""How far the sun turns, in degrees, before its shadows are drawn again."""
 comptime SIGHT_POINTS = 4
 """How many points along the camera's sight hold a door open."""
 comptime INSIDE_REACH = Float32(18)
@@ -235,6 +291,104 @@ comptime ARM_EASE = Float32(3)
 closes all but `exp(-ARM_EASE)` of its gap."""
 
 
+def trunks_reach(
+    trunks: List[Obstacle], focus: Vector3, eye: Vector3, margin: Float32
+) -> Float32:
+    """Return how much of the way from a focus to an eye is clear of the
+    trees' trunks.
+
+    Args:
+        trunks: The trunks, as round obstacles.
+        focus: The point the camera looks at.
+        eye: Where the camera would stand.
+        margin: How far before a trunk the camera must stop, in meters.
+
+    Returns:
+        The share of the way, from 0 to 1, that the camera can stand at: 1
+        when no trunk is in the way.
+    """
+    var dx = eye.x - focus.x
+    var dz = eye.z - focus.z
+    var a = dx * dx + dz * dz
+    if a < 1.0e-8:
+        return 1
+    var first = Float32(1)
+    for trunk in trunks:
+        var fx = focus.x - trunk.x
+        var fz = focus.z - trunk.z
+        var b = 2 * (fx * dx + fz * dz)
+        var c = fx * fx + fz * fz - trunk.radius * trunk.radius
+        var d = b * b - 4 * a * c
+        if d < 0 or c < 0:
+            continue
+        var t = (-b - sqrt(d)) / (2 * a)
+        if t > 0 and t < first:
+            first = t
+    if first >= 1:
+        return 1
+    return max(Float32(0), first - margin / sqrt(a))
+
+
+def village_mood(day: Float32, wet: Float32, snowed: Float32) -> Mood:
+    """Return what the village is like, for its speakers to remark on.
+
+    Args:
+        day: The share of the day's light, from 0 to 1.
+        wet: How wet the village is, from 0 to 1.
+        snowed: How much snow lies on it, from 0 to 1.
+
+    Returns:
+        `NIGHT` in the dark, then `SNOWY` under snow, then `WET` when the
+        village is soaked, and `FAIR` else.
+    """
+    if day < 0.5:
+        return NIGHT
+    if snowed > 0.3:
+        return SNOWY
+    if wet > 0.4:
+        return WET
+    return FAIR
+
+
+def prop_stops(props: List[Prop]) -> List[Stop]:
+    """Return the stops that a village's props give its people: a seat on
+    each bench, and a place to work at each woodpile, bed of crops and
+    well.
+
+    Args:
+        props: The props.
+
+    Returns:
+        The stops, in the order of the props.
+    """
+    var stops = List[Stop]()
+    for prop in props:
+        var turn = prop.turn.to(RADIAN)
+        # The prop's own x and z on the ground.
+        var along = Vector3(cos(turn), 0, -sin(turn))
+        var front = Vector3(sin(turn), 0, cos(turn))
+        var at = Vector3(prop.x, 0, prop.z)
+        if prop.kind == BENCH:
+            var seat = at + front * 0.45
+            stops.append(Stop(seat.x, seat.z, yaw_of(front), SIT))
+        elif prop.kind == WOODPILE:
+            var block = at + front * (WOODPILE_DEPTH / 2 + 0.9)
+            stops.append(
+                Stop(block.x, block.z, yaw_of(Vector3(0, 0, 0) - front), WORK)
+            )
+        elif prop.kind == CROPS:
+            var bed = at + front * 1.3
+            stops.append(
+                Stop(bed.x, bed.z, yaw_of(Vector3(0, 0, 0) - front), WORK)
+            )
+        elif prop.kind == WELL:
+            var side = at + along * (prop.length + 0.7)
+            stops.append(
+                Stop(side.x, side.z, yaw_of(Vector3(0, 0, 0) - along), WORK)
+            )
+    return stops^
+
+
 def default_residents() raises -> ResidentsParameters:
     """Return the people and the animals of the default village.
 
@@ -244,7 +398,7 @@ def default_residents() raises -> ResidentsParameters:
         around the pond; an old monk, who visits the framed cottage; and
         a noblewoman by the framed house, who visits it. Each wears the
         hair and the beard of their calling. Four
-        sheep and a goat right of the trail, two cows and a horse left
+        sheep and a goat in their pen right of the trail, two cows and a horse left
         of it, a pig by the barn, a dog near the start, two rabbits by
         the trail and two deer past the pond. The deer run from a player
         12 meters away, the rabbits from 6, the sheep from 3 and the goat
@@ -257,9 +411,9 @@ def default_residents() raises -> ResidentsParameters:
     residents.villagers = [
         Villager(
             HumanoidSpec(Length(65.0, INCH), FEMALE, UNTONED, random_genome(3)),
-            -18,
-            -32,
-            7,
+            -6,
+            -28,
+            6,
             41,
             False,
             dressed_as(GOODWIFE, FEMALE, 3),
@@ -315,11 +469,11 @@ def default_residents() raises -> ResidentsParameters:
     ]
     residents.herds = [
         Herd(SHEEP, 4, 15, 4, 7, 51, flee=Length(3.0, METER)),
-        Herd(GOAT, 1, 20, -6, 5, 52, flee=Length(2.0, METER)),
+        Herd(GOAT, 1, 17, 6, 4, 52, flee=Length(2.0, METER)),
         Herd(COW, 2, -18, 6, 8, 53),
-        Herd(HORSE, 1, -14, -16, 7, 54),
+        Herd(HORSE, 1, -22, -10, 6, 54),
         Herd(PIG, 1, -12, -48, 4, 55),
-        Herd(DOG, 1, 4, 22, 4, 56),
+        Herd(DOG, 1, 4, 22, 4, 56, follows=True),
         Herd(RABBIT, 2, -6, 14, 3, 57, flee=Length(6.0, METER)),
         Herd(DEER, 2, 30, -40, 10, 58, flee=Length(12.0, METER)),
     ]
@@ -504,6 +658,43 @@ struct VillageGame(Movable):
     var reach: Float32
     # The game's clock, in seconds.
     var clock: Float32
+    # The rain's drops on the pond that are owed to the next frame, how
+    # many drops have fallen, and the seconds until a wading player's
+    # next wake.
+    var rain_rings: Float32
+    var splashes: Int
+    var wake: Float32
+    # The direction toward the sun, or the moon, as the scene last set it.
+    var sun_was: Vector3
+    var sounds: Sounds
+    """The village's sounds, which a host takes with `audio`."""
+    var paused: Bool
+    """Whether the game is paused: nothing moves, and the frame shows the
+    controls."""
+    var hitstop: Float32
+    """How long the world still nearly stops after a blow landed, in
+    seconds."""
+    var dust_at: Vector3
+    """Where the player's feet last kicked up dust: a hard landing, or a
+    roll."""
+    var dust_since: Float32
+    """How long ago, in seconds, the dust was kicked up."""
+    var was_kicking: Bool
+    """Whether the player was landing hard or rolling last frame."""
+    var show_map: Bool
+    """Whether the frame shows the map of the village round the
+    player."""
+    var stride: Float32
+    """The seconds until the player's next footfall."""
+    var swinging: Bool
+    """Whether the player was making an attack last frame."""
+    var foes_health: Float32
+    """The health of every foe last frame, so a blow that lands is
+    heard."""
+    var combo_was: Int
+    """The player's combo last frame, so a blow on a dummy is heard too."""
+    var coins_were: Int
+    """The coins the satchel held last frame."""
     # How finely each part of a frame is drawn, the window's size, and the
     # renderer that draws the frame at its smaller size.
     var quality: GameQuality
@@ -622,6 +813,7 @@ struct VillageGame(Movable):
             self.terrain,
             keep_off,
             homes,
+            prop_stops(parameters.village.props),
         )
         self.body = Body(
             scene,
@@ -713,6 +905,25 @@ struct VillageGame(Movable):
         self.day = parameters.day
         self.weather_ms = 0
         self.clock = 0
+        self.rain_rings = 0
+        self.splashes = 0
+        self.wake = 0
+        self.sounds = Sounds()
+        self.paused = False
+        self.show_map = False
+        self.hitstop = 0
+        self.dust_at = Vector3(0, 0, 0)
+        self.dust_since = 10
+        self.was_kicking = False
+        self.stride = 0
+        self.swinging = False
+        self.foes_health = 0
+        self.combo_was = 0
+        self.coins_were = 0
+        self.sun_was = sun_direction(
+            parameters.village.meadow.sun_elevation,
+            parameters.village.meadow.sun_azimuth,
+        )
         self.village.meadow.register_shadings(self.fast, assets)
         self.fast.set_shadows(self.quality.shadows, self.quality.shadow_size)
         var movers = List[NodeId]()
@@ -741,20 +952,56 @@ struct VillageGame(Movable):
         out.mastery = self.battle.book.mastery.copy()
         out.specialty = self.battle.book.specialty
         out.style = self.battle.fighter.style
+        for index in range(len(self.talk.states)):
+            out.errands.append(self.talk.states[index].value)
+            out.rounds.append(self.talk.rounds[index])
+        out.spent = self.gathering.spent()
+        ref at = self.player.position
+        out.place = [
+            Int(at.x * 100) + PLACE_SHIFT,
+            Int(at.z * 100) + PLACE_SHIFT,
+            Int(self.day.hour * 1000) + PLACE_SHIFT,
+            self.weather.kind.value,
+        ]
         return out^
 
-    def restore(mut self, progress: Progress) raises:
+    def restore(mut self, mut scene: Scene, progress: Progress) raises:
         """Take up what the player kept from a game before: the levels
         that the experience gives teach their combos again. The style in
         hand is taken up if the player carries it.
 
         Args:
+            scene: The scene: the spots used up hide.
             progress: The kept progress.
 
         Raises:
             Error: If `Progress.check` refuses it.
         """
         progress.check()
+        # The world as the game before left it: its errands, its spots
+        # used up, where the player stood, the hour and the weather.
+        if len(progress.errands) == len(self.talk.states):
+            for index in range(len(progress.errands)):
+                var state = ErrandState(progress.errands[index])
+                if state.is_valid():
+                    self.talk.states[index] = state
+                self.talk.rounds[index] = progress.rounds[index]
+        for index in progress.spent:
+            self.gathering.spend(scene, index)
+        if len(progress.place) == 4:
+            var x = Float32(progress.place[0] - PLACE_SHIFT) / 100
+            var z = Float32(progress.place[1] - PLACE_SHIFT) / 100
+            var hour = Float32(progress.place[2] - PLACE_SHIFT) / 1000
+            if hour >= 0 and hour < 24:
+                self.day.hour = hour
+            var weather = WeatherKind(progress.place[3])
+            if weather.is_valid():
+                self.weather.set(weather)
+                self.weather.look = weather_look(weather)
+            if abs(x) < 1.0e4 and abs(z) < 1.0e4:
+                var ground = self.terrain.height_at(x, z, 1.0e4)
+                self.player.position = Vector3(x, ground, z)
+                self.player.velocity = Vector3(0, 0, 0)
         self.skills.experience = progress.experience.copy()
         self.gathering.satchel.counts = progress.satchel.copy()
         self.battle.book.mastery = progress.mastery.copy()
@@ -771,16 +1018,17 @@ struct VillageGame(Movable):
         mut self,
         mut scene: Scene,
         mut assets: Assets,
-        input: MoveInput,
-        delta: Duration,
+        given: MoveInput,
+        elapsed: Duration,
     ) raises -> FieldStats:
-        """Run one frame of the game.
+        """Run one frame of the game. A paused game runs its frame with no
+        time and no input, so nothing moves.
 
         Args:
             scene: The scene the game is in.
             assets: The stores.
-            input: The player's input for the frame.
-            delta: The frame's time.
+            given: The player's input for the frame.
+            elapsed: The frame's time.
 
         Returns:
             What the frame draws of the grass.
@@ -789,6 +1037,15 @@ struct VillageGame(Movable):
             Error: If the time is negative, or a part cannot move or
                 prepare the frame.
         """
+        var input = given
+        var delta = elapsed
+        if self.paused:
+            input = no_input()
+            delta = Duration(0.0, SECOND)
+        # Just after a blow lands, the world all but stops a moment.
+        if self.hitstop > 0:
+            self.hitstop -= delta.to(SECOND)
+            delta = Duration(delta.to(SECOND) * HITSTOP_PACE, SECOND)
         self.view.turn(input.look_right, input.look_up, delta)
         var blocking = self.trees.copy()
         blocking.extend(self.residents.obstacles())
@@ -822,6 +1079,16 @@ struct VillageGame(Movable):
         # last word is the note.
         self.gathering.satchel.counts[CHEST.value] += self.battle.loot
         self.battle.loot = 0
+        self.gathering.satchel.counts[SEAL.value] += self.battle.seals
+        self.battle.seals = 0
+        # A fall costs a share of the coins the player carries.
+        if self.battle.fell:
+            self.battle.fell = False
+            var coins = self.gathering.satchel.count(CHEST)
+            var lost = coins * FALL_COST // 100
+            if lost > 0:
+                self.gathering.satchel.counts[CHEST.value] -= lost
+                self.battle.notes.append(String("YOU LOSE ", lost, " COINS"))
         self.gathering.satchel.counts[HERBS.value] += (
             self.battle.found - self.battle.eaten
         )
@@ -846,7 +1113,22 @@ struct VillageGame(Movable):
         around.append(
             Obstacle(feet.x, feet.z, self.player.parameters.radius.to(METER))
         )
-        self.residents.update(scene, delta, self.terrain, around, feet)
+        # At night, and in hard rain or snow, the people go home.
+        var look = self.weather.look
+        var shelter = (
+            self.day.daylight() < SHELTER_LIGHT
+            or look.rain > SHELTER_FALL
+            or look.snow > SHELTER_FALL
+        )
+        self.residents.update(
+            scene,
+            delta,
+            self.terrain,
+            around,
+            feet,
+            shelter,
+            self.battle.dangers(),
+        )
         var people = List[Vector3]()
         people.append(feet)
         for index in range(len(self.residents.people)):
@@ -888,6 +1170,9 @@ struct VillageGame(Movable):
         for index in range(len(self.residents.people)):
             places.append(self.residents.people[index].position)
         var free = input.use and self.gathering.focus < 0 and not gathered
+        self.talk.mood = village_mood(
+            self.day.daylight(), self.weather.wet, self.weather.snowed
+        )
         var spoke = self.talk.update(
             scene,
             feet,
@@ -913,7 +1198,10 @@ struct VillageGame(Movable):
         self.fast.focus = feet
         # The eye comes in at once before a wall, and goes back out slowly.
         var focus = self.view.focus
-        var clear = self.terrain.view_reach(focus, self.view.eye(), ARM_MARGIN)
+        var clear = min(
+            self.terrain.view_reach(focus, self.view.eye(), ARM_MARGIN),
+            trunks_reach(self.trees, focus, self.view.eye(), ARM_MARGIN),
+        )
         if clear < self.reach:
             self.reach = clear
         else:
@@ -951,6 +1239,9 @@ struct VillageGame(Movable):
         var lamps = daylight < 0.5
         self.critters.update(scene, daylight, self.weather.look.rain, delta)
         ref eye_at = self.camera.position
+        scene.node(self.village.props.lit).visible = lamps
+        scene.node(self.village.lamps).visible = lamps
+        scene.node(self.village.props.daylit).visible = not lamps
         for index in range(len(self.village.houses)):
             ref house = self.village.houses[index]
             scene.node(house.lit).visible = lamps
@@ -962,6 +1253,8 @@ struct VillageGame(Movable):
             scene.node(house.inside).visible = dx * dx + dz * dz < near * near
         scene.update()
         self.clock += delta.to(SECOND)
+        self.ripple_pond(scene, delta)
+        self.hear(delta)
         var stats = self.village.update(
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
@@ -970,6 +1263,16 @@ struct VillageGame(Movable):
         self.weather.update(scene, delta, self.view.yaw)
         # The day dims and tints what the weather set.
         self.day.advance(delta)
+        self.follow_sun(scene)
+        # The rain soaks the village, and the snow whitens it in the day's
+        # light.
+        self.village.weather_surfaces(
+            assets,
+            self.weather.wet,
+            self.weather.snowed,
+            self.day.daylight()
+            * (0.5 + 0.5 * min(Float32(1), self.weather.look.sky / 2.6)),
+        )
         ref seen_from = self.camera.position
         var roofed = (
             self.terrain.ceiling_over(seen_from.x, seen_from.z, feet.y)
@@ -977,6 +1280,209 @@ struct VillageGame(Movable):
         )
         self.day.light(scene, roofed)
         return stats
+
+    def hear(mut self, delta: Duration) raises:
+        """Start the sounds of this frame: the player's footfalls, the
+        swing of an attack, a blow that lands on a foe, and coins into the
+        satchel; and set the air's sound to the weather and the hour.
+
+        Args:
+            delta: The frame's time.
+
+        Raises:
+            Error: Never: each sound is one.
+        """
+        var seconds = delta.to(SECOND)
+        # A footfall each stride, quicker and louder at a run; a splash in
+        # the pond.
+        var speed = self.player.speed().to(METER_PER_SECOND)
+        self.stride -= seconds
+        if self.player.grounded and speed > 0.5 and self.stride <= 0:
+            self.stride = STRIDE / max(Float32(1), speed / 1.4)
+            ref feet = self.player.position
+            var kind = STEP
+            if self.village.meadow.field.ground.drowned(feet.x, feet.z):
+                kind = SPLASH
+            self.sounds.play(kind, min(Float32(1), 0.3 + 0.1 * speed), 0)
+        var attacking = is_attack(self.battle.fighter.move)
+        if attacking and not self.swinging:
+            self.sounds.play(SWING, 0.6, 0)
+        self.swinging = attacking
+        var health = self.battle.foes_health()
+        var landed = self.battle.fighter.combo > self.combo_was
+        self.combo_was = self.battle.fighter.combo
+        if health < self.foes_health - 0.5 or landed:
+            self.sounds.play(HIT, 0.8, 0)
+            # A hard blow stops the world a moment, so it is felt.
+            if health < self.foes_health - HITSTOP_BLOW:
+                self.hitstop = HITSTOP
+        self.foes_health = health
+        # A hard landing and a roll kick up dust from the ground.
+        var kicking = (
+            self.player.landing > 0 or self.battle.fighter.move == DODGE
+        ) and self.player.grounded
+        if kicking and not self.was_kicking:
+            self.dust_at = self.player.position
+            self.dust_since = 0
+        self.was_kicking = kicking
+        self.dust_since += seconds
+        var coins = self.gathering.satchel.count(CHEST)
+        if coins > self.coins_were:
+            self.sounds.play(COIN, 0.7, 0)
+        self.coins_were = coins
+        ref look = self.weather.look
+        self.sounds.set_air(
+            min(Float32(1), 0.15 + 0.5 * look.gloom + 0.3 * look.clouds),
+            min(Float32(1), look.rain),
+            self.day.daylight(),
+        )
+
+    def audio(mut self, frames: Int) raises -> List[Float32]:
+        """Return the next samples of the village's sound, for a host to
+        play.
+
+        Args:
+            frames: How many samples to make on each side, from 0 to
+                `SAMPLE_RATE`.
+
+        Returns:
+            `2 * frames` stereo samples, the left first, from -1 to 1.
+
+        Raises:
+            Error: If `frames` is out of range.
+        """
+        return self.sounds.mix(frames)
+
+    def follow_sun(mut self, mut scene: Scene) raises:
+        """Turn the sun, or the moon, to the hour, once it has moved
+        `SUN_STEP` degrees: its light, its shadows and the water's glints.
+
+        Args:
+            scene: The scene: the sun's node is moved.
+
+        Raises:
+            Error: If the sun's node is not in the scene.
+        """
+        var toward = self.day.sun_toward()
+        var turned = (
+            toward.x * self.sun_was.x
+            + toward.y * self.sun_was.y
+            + toward.z * self.sun_was.z
+        )
+        if turned > cos(SUN_STEP * 0.017453292):
+            return
+        self.sun_was = toward
+        scene.node(self.village.meadow.sun.node).set_position(
+            toward.x * 100, toward.y * 100, toward.z * 100
+        )
+        self.fast.refresh_shadows()
+        self.village.water.set_sun(toward)
+
+    def sheltered(self, image: Framebuffer) raises -> List[Bool]:
+        """Return which pixels of a frame show a point under a roof.
+
+        Args:
+            image: The frame, with its depths.
+
+        Returns:
+            True for each pixel whose point stands under the ceiling of a
+            floor of a house.
+
+        Raises:
+            Error: If the frame has no depth for each pixel, or the
+                camera's matrices cannot be inverted.
+        """
+        var w = image.width
+        var h = image.height
+        if len(image.depth) != w * h:
+            raise Error("A frame needs a depth for each pixel")
+        var inverse = self.camera.projection_matrix()
+        inverse.multiply(self.camera.view_matrix())
+        inverse.invert()
+        var under = List[Bool](length=w * h, fill=False)
+        for y in range(h):  # pragma: no branch
+            var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
+            for x in range(w):  # pragma: no branch
+                var z = image.depth[y * w + x]
+                if isinf(z):
+                    continue
+                var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
+                var at = inverse.transform_point(Vector3(nx, ny, z))
+                var ceiling = self.terrain.ceiling_over(at.x, at.z, at.y)
+                under[y * w + x] = at.y < ceiling
+        return under^
+
+    def veil(self, mut image: Framebuffer, scene: Scene, day: Float32) raises:
+        """Lay the ground mist of the hour and the weather over a frame,
+        and make its bright light glow.
+
+        The mist rises in fog, and at dawn. The light glows most at night,
+        when the lamps and the windows are the brightest things there are.
+
+        Args:
+            image: The frame, with its depths.
+            scene: The scene: the mist takes its fog's color.
+            day: The share of the day's light, from 0 to 1.
+
+        Raises:
+            Error: If the frame has no depth for each pixel.
+        """
+        var hour = self.day.hour
+        var dawn = max(Float32(0), 1 - abs(hour - DAWN_MIST) / 1.5)
+        var thick = min(Float32(0.7), self.weather.look.fog * 30 + dawn * 0.3)
+        _ = ground_mist(
+            image,
+            self.camera,
+            self.village.level.to(METER),
+            thick,
+            scene.fog.color,
+        )
+        _ = bloom(image, 0.92 - 0.2 * (1 - day), 0.25 + 0.5 * (1 - day))
+
+    def ripple_pond(mut self, scene: Scene, delta: Duration) raises:
+        """Tap the pond where something stirs it this frame: the rain, a
+        wading player, and a fish that bites at a float.
+
+        Args:
+            scene: The scene, with current world matrices.
+            delta: The frame's time.
+
+        Raises:
+            Error: If a float's node is not in the scene.
+        """
+        ref ground = self.village.meadow.field.ground
+        ref pond = ground.pond
+        var radius = pond.radius.to(METER)
+        var seconds = delta.to(SECOND)
+        var level = self.village.level.to(METER)
+        # Rain rings: about `RAIN_RINGS` drops a second in a downpour.
+        self.rain_rings += self.weather.look.rain * RAIN_RINGS * seconds
+        var falling = min(Int(self.rain_rings), 32)
+        self.rain_rings -= Float32(Int(self.rain_rings))
+        for _ in range(falling):
+            self.splashes += 1
+            var a = hash01(self.splashes, 1, 71) * 6.2831855
+            var r = radius * sqrt(hash01(self.splashes, 2, 71))
+            self.village.splash(
+                pond.x.to(METER) + r * cos(a),
+                pond.z.to(METER) + r * sin(a),
+                Length(0.12, METER),
+                0.02 + 0.03 * hash01(self.splashes, 3, 71),
+            )
+        # A wading player leaves a wake, a few taps a second.
+        ref feet = self.player.position
+        self.wake -= seconds
+        if (
+            ground.drowned(feet.x, feet.z)
+            and feet.y < level + 0.05
+            and self.player.speed().to(METER_PER_SECOND) > 0.3
+            and self.wake <= 0
+        ):
+            self.wake = WAKE_EVERY
+            self.village.splash(feet.x, feet.z, Length(0.35, METER), 0.05)
+        # A fish that bites jerks its float.
+        for at in self.gathering.biting(scene):
+            self.village.splash(at.x, at.z, Length(0.15, METER), 0.03)
 
     def render(mut self, scene: Scene, assets: Assets) raises:
         """Draw the frame that `tick` prepared into `window`.
@@ -1097,8 +1603,7 @@ struct VillageGame(Movable):
             if self.village.pond_seen(self.camera):
                 # The water is lit by its own sky: it darkens with the night.
                 var share = self.day.water_light()
-                var dark = share < 1
-                var before = image.depth.copy() if dark else List[Float32]()
+                var before = image.depth.copy()
                 _ = self.village.water.compose(
                     image,
                     scene,
@@ -1106,11 +1611,33 @@ struct VillageGame(Movable):
                     self.village.level,
                     self.village.bed,
                 )
-                if dark:
+                if share < 1:
                     dim_water(image, before, share)
+                # The pond mirrors the village and the stars, and fades into
+                # the fog.
+                var clear = 1 - self.weather.look.clouds
+                var stars = self.day.night_look(self.camera, clear).stars
+                self.village.look.clock = self.clock
+                _ = self.village.look.apply(
+                    image,
+                    before,
+                    self.camera,
+                    self.village.level,
+                    FogView(scene.fog),
+                    stars,
+                )
             watered = perf_counter_ns()
             self.weather.cover(image, self.camera)
             self.day.night_sky(image, self.camera, 1 - self.weather.look.clouds)
+            # The chimneys smoke over the finished frame, dim at night.
+            var day = self.day.daylight()
+            var light = 0.2 + 0.8 * day
+            var puffs = self.village.smoke(self.clock)
+            puffs.extend(
+                dust_puffs(self.dust_at, self.clock, self.dust_since, 7)
+            )
+            _ = draw_puffs(image, puffs, self.camera, light)
+            self.veil(image, scene, day)
             covered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
         self.water_ms = Float64(watered - drawn) / 1.0e6
@@ -1119,6 +1646,14 @@ struct VillageGame(Movable):
             smooth_edges(image, available_workers())
             self.smooth_ms = Float64(perf_counter_ns() - covered) / 1.0e6
         self.upscale_ms = 0
+        # What a house's roof keeps the rain and the snow off, on the
+        # frame's own grid: a door open onto a room shows no rain.
+        var falling = self.weather.look.rain + self.weather.look.snow > 0.01
+        var sheltered = List[Bool]()
+        var mask_width = image.width
+        var mask_height = image.height
+        if falling and not passes:
+            sheltered = self.sheltered(image)
         if image.width == self.width and image.height == self.height:
             swap(self.window, image)
         else:
@@ -1130,7 +1665,7 @@ struct VillageGame(Movable):
         ref eye = self.camera.position
         var feet = self.player.position.y
         if self.terrain.ceiling_over(eye.x, eye.z, feet) >= OPEN_SKY:
-            self.weather.rain(self.window)
+            self.weather.rain(self.window, sheltered, mask_width, mask_height)
         self.weather_ms = (
             Float64(perf_counter_ns() - raining + covered - watered) / 1.0e6
         )
@@ -1171,6 +1706,103 @@ struct VillageGame(Movable):
                 self.window,
                 self.battle,
                 (TARGET_TOP + drop) * hud_scale(self.window.height),
+            )
+        if self.show_map:
+            _ = draw_map(
+                self.window,
+                self.village.meadow.field.ground,
+                self.map_marks(scene),
+                self.player.position,
+                self.player.heading.to(RADIAN),
+            )
+        if self.hud:
+            draw_vignette(self.window, self.vignette())
+        if self.paused:
+            self.draw_pause()
+
+    def vignette(self) -> Float32:
+        """Return how red the frame's edges are: the more, the nearer the
+        player is to falling, and in a flash as a blow lands.
+
+        Returns:
+            From 0 to 1.
+        """
+        ref f = self.battle.fighter
+        var share = f.health / max(Float32(1), f.parameters.health)
+        var low = max(Float32(0), (VIGNETTE_HEALTH - share) / VIGNETTE_HEALTH)
+        var flash = Float32(0)
+        for hurt in self.battle.hurts:
+            flash = max(flash, max(Float32(0), 1 - hurt.age / 0.4) * 0.6)
+        return min(Float32(1), max(low * 0.8, flash))
+
+    def map_marks(self, scene: Scene) raises -> MapMarks:
+        """Return what the map shows: the houses, the villagers, those with
+        an errand to give, and the foes that stand.
+
+        Args:
+            scene: The scene, updated: the houses' places.
+
+        Returns:
+            The marks.
+
+        Raises:
+            Error: If the scene is stale.
+        """
+        var marks = MapMarks()
+        for index in range(len(self.village.houses)):  # pragma: no branch
+            ref house = self.village.houses[index]
+            var at = scene.world_position(house.root)
+            marks.houses.append(MapHouse(at.x, at.z, house.radius))
+        var giving = List[Bool](length=len(self.residents.people), fill=False)
+        for index in range(len(self.talk.speakers)):
+            if self.talk.states[index] == OFFERED:
+                var v = self.talk.speakers[index].villager
+                if v < len(giving):
+                    giving[v] = True
+        for index in range(len(self.residents.people)):
+            var at = self.residents.people[index].position
+            if giving[index]:
+                marks.errands.append(at)
+            else:
+                marks.people.append(at)
+        marks.foes = self.battle.dangers()
+        return marks^
+
+    def draw_pause(mut self):
+        """Draw the pause panel over the window: the word, the controls,
+        and how to go on."""
+        var scale = hud_scale(self.window.height)
+        var lines: List[String] = [
+            "PAUSED",
+            "",
+            "Move  WASD or the left stick",
+            "Look  arrows, right stick or drag the mouse",
+            "Run  Shift   Jump  Space   Use  E",
+            "Attack  click, J, K   Dodge  L   Guard  hold G",
+            "Weather  1 to 4, 9 snow   Time  5",
+            "Map  N   Resume  P   Quit  Esc",
+        ]
+        var tall = len(lines) * 10 * scale
+        var top = (self.window.height - tall) // 2
+        fill_box(
+            self.window,
+            0,
+            top - 6 * scale,
+            self.window.width,
+            top + tall + 4 * scale,
+            Rgb(10, 8, 6),
+            0.6,
+        )
+        for k in range(len(lines)):  # pragma: no branch
+            var width = text_width(lines[k], scale)
+            draw_text(
+                self.window,
+                (self.window.width - width) // 2,
+                top + k * 10 * scale,
+                lines[k],
+                scale,
+                GOLD_TEXT if k == 0 else WHITE_TEXT,
+                1,
             )
 
     def speech(self) -> String:

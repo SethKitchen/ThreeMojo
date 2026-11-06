@@ -259,7 +259,8 @@ jobs:
   # `macos-latest` is a standard runner, which GitHub runs free for a public
   # repository. A larger one (`-large`, `-xlarge`) is billed even here, so
   # these jobs must not move to one. A free account runs five macOS jobs at
-  # once, so the Mac takes three: lint, and the suites in two groups.
+  # once. The Mac takes six: lint, the tool regressions, and the suites in
+  # four groups. The last group waits the two minutes the tools take.
   lint-macos:
     needs: scope
     if: needs.scope.outputs.run_lint == 'true'
@@ -344,7 +345,9 @@ jobs:
         run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools
 
   # Each macOS group compiles one suite at a time (JOBS=1). Two groups ran
-  # to within seconds of the 150-minute timeout, so the suites split three ways.
+  # to within seconds of the 150-minute timeout, so the suites split three
+  # ways. Three groups then ran 133 to 144 minutes, and a change that added
+  # suites passed the timeout, so the suites split four ways.
   cpu-macos:
     needs: scope
     if: needs.scope.outputs.run_cpu == 'true'
@@ -357,12 +360,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - part: suites 1/3
-            target: test-cpu SHARD=1/3
-          - part: suites 2/3
-            target: test-cpu SHARD=2/3
-          - part: suites 3/3
-            target: test-cpu SHARD=3/3
+          - part: suites 1/4
+            target: test-cpu SHARD=1/4
+          - part: suites 2/4
+            target: test-cpu SHARD=2/4
+          - part: suites 3/4
+            target: test-cpu SHARD=3/4
+          - part: suites 4/4
+            target: test-cpu SHARD=4/4
 
     steps:
       - uses: actions/checkout@v4

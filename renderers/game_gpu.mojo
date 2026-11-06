@@ -169,7 +169,11 @@ comptime FLOAT_NIGHT_STAR_GRID = 58
 """The cells of the stars' lattice across a unit direction."""
 comptime FLOAT_NIGHT_STAR_RATE = 59
 """The share of the lattice's cells that hold a star."""
-comptime FLOAT_COUNT = 60
+comptime FLOAT_NIGHT_MOON = 60
+"""The direction toward the moon: three floats."""
+comptime FLOAT_NIGHT_MOONLIT = 63
+"""How much the moon shows, from 0 to 1."""
+comptime FLOAT_COUNT = 64
 """How many floats there are."""
 
 comptime POINTER_VERTICES = 0

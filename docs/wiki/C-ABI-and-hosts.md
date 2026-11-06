@@ -33,7 +33,9 @@ examples/capi/run.sh native village 1280 720 --quality low
 
 The window is 1280 by 720 points by default, and the frame is as large as its pixels: see `--scale native` above. The CPU pays for every pixel, so `--scale 1` is faster and blurry on a Retina display. The script builds the library first. The library builds the village for about 10 seconds, and then the window shows its first frame.
 
-`--quality` takes `low`, `medium`, `high` or `ultra`, and `medium` is the default. See [Game renderer](Game-renderer). The keys are in [Village walk](Village-walk#play-the-game). A mouse or a gamepad does nothing yet.
+`--quality` takes `low`, `medium`, `high` or `ultra`, and `medium` is the default. See [Game renderer](Game-renderer). The keys are in [Village walk](Village-walk#play-the-game). A drag of the mouse with a button held turns the camera, and a click strikes. A gamepad does nothing yet. `--save FILE` keeps the game's progress in a file: see [Village walk](Village-walk#saved-progress).
+
+`tm_village_audio` makes the village's sound for the host to play: stereo samples at 44,100 a second, the left first. The macOS host does not play them yet. See [Village walk](Village-walk#sound).
 
 `--gpu` draws the village on Metal: see [Draw the village on the GPU](#draw-the-village-on-the-gpu). The frame then has the size of the window's pixels. `--hour H` and `--weather NAME` set the hour and the weather where the game begins. They set `THREEMOJO_HOUR` and `THREEMOJO_WEATHER` before `tm_create`.
 

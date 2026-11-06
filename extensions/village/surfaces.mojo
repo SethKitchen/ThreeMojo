@@ -49,6 +49,8 @@ comptime WOOD_TILE = Float32(1.0)
 comptime ASHLAR_TILE = Float32(0.8)
 comptime TILE_TILE = Float32(1.0)
 comptime SLATE_TILE = Float32(0.9)
+comptime THATCH_TILE = Float32(1.0)
+"""The meters of roof that one copy of the thatch texture covers."""
 comptime PLANK_TILE = Float32(1.2)
 comptime CLOTH_TILE = Float32(0.25)
 
@@ -481,6 +483,52 @@ def slate_texture(size: Int, seed: Int) raises -> Texture:
     return _courses(size, seed, 6, 4, Vector3(92, 96, 104), 0.3)
 
 
+def thatch_texture(size: Int, seed: Int) raises -> Texture:
+    """Return straw thatch, `THATCH_TILE` meters on a side.
+
+    Args:
+        size: The texels on a side.
+        seed: Which straws are lighter or darker.
+
+    Returns:
+        Four courses of straw. The straws run up the roof, and each
+        course's butt ends shade the course below.
+
+    Raises:
+        Error: If `size` is below one.
+    """
+    var canvas = _Canvas(size)
+    var straws = 96
+    for y in range(size):  # pragma: no branch
+        var fy = (Float32(y) + 0.5) / Float32(size) * 4
+        var row = Int(fy)
+        var lv = fy - Float32(row)
+        for x in range(size):  # pragma: no branch
+            var fx = (Float32(x) + 0.5) / Float32(size) * Float32(straws)
+            var straw = Int(fx) % straws
+            var tone = 0.78 + 0.4 * hash01(straw, row, seed + 31)
+            var grit = 0.9 + 0.15 * hash01(x, y, seed + 32)
+            # The butt ends of a course are dark, and shade what is below.
+            var shade = Float32(1)
+            if lv < 0.1:
+                shade = 0.5 + lv * 4
+            elif lv > 0.85:
+                shade = 0.8
+            # Weathered gray patches among the gold.
+            var gray = tiled_noise(
+                Float32(x) / Float32(size) * 3,
+                Float32(y) / Float32(size) * 3,
+                3,
+                seed + 33,
+            )
+            var s = tone * grit * shade
+            var r = (176 - 50 * gray) * s
+            var g = (146 - 34 * gray) * s
+            var b = (88 - 6 * gray) * s
+            canvas.set(x, y, r, g, b)
+    return canvas.texture()
+
+
 def plank_texture(size: Int, seed: Int) raises -> Texture:
     """Return floor planks, `PLANK_TILE` meters on a side.
 
@@ -579,6 +627,7 @@ struct HouseLooks(ImplicitlyCopyable):
     # The roofs' coverings.
     var tiles: MaterialId
     var slates: MaterialId
+    var thatch: MaterialId
     # The floors and the window panes, seen from outside and, lit by
     # the day beyond them, from inside.
     var planks: MaterialId
@@ -604,7 +653,8 @@ def house_looks(mut assets: Assets, size: Int, seed: Int) raises -> HouseLooks:
     """Make the textures and the materials of the village's houses.
 
     Args:
-        assets: The stores. Ten textures and twelve materials are added.
+        assets: The stores. Eleven textures and thirteen materials are
+            added.
         size: The texels on a side of each texture.
         seed: Which bricks, stones, boards and tiles.
 
@@ -625,6 +675,7 @@ def house_looks(mut assets: Assets, size: Int, seed: Int) raises -> HouseLooks:
         _look(assets, ashlar_texture(size, seed), 0.9),
         _look(assets, tile_texture(size, seed), 0.8),
         _look(assets, slate_texture(size, seed), 0.6),
+        _look(assets, thatch_texture(size, seed), 0.95),
         _look(assets, plank_texture(size, seed), 0.7),
         assets.materials.add(glass),
         assets.materials.add(

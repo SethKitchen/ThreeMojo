@@ -233,6 +233,9 @@ def ground_litter(
         var chance = SHADE_LITTER * shade + DIRT_LITTER * ground.bare(x, z)
         if hash01(i, 2, seed) >= chance:
             continue
+        # Nothing lies on the bed of a pond.
+        if ground.drowned(x, z):
+            continue
         var place = Vector3(x, ground.height_at(x, z) + LIFT, z)
         var kind = hash01(i, 3, seed)
         var size = hash01(i, 4, seed)

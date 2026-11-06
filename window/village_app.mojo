@@ -31,12 +31,14 @@ in the afternoon, as in the X11 loop.
 """
 
 from controls.held_keys import HeldKeys
-from controls.input import Key
+from controls.input import InputEvent, InputKind, Key, PointerButton
 from core.assets import Assets
 from core.scene import Scene
 from extensions.village.day import DayCycle
 from extensions.village.pad_input import KEY_SPACE, keyboard_input
 from extensions.village.play import PlayParameters, VillageGame
+from extensions.village.mouse import MouseLook
+from extensions.village.progress import pack_progress, unpack_progress
 from extensions.village.quality import (
     HIGH,
     LOW,
@@ -46,6 +48,7 @@ from extensions.village.quality import (
     game_quality,
 )
 from extensions.village.weather import (
+    SNOW,
     CLEAR,
     FOG,
     OVERCAST,
@@ -78,6 +81,10 @@ comptime DEFAULT_QUALITY = "medium"
 comptime GPU_VARIABLE = "THREEMOJO_GPU"
 """The environment variable that, set to `1`, makes a game for a GPU to draw.
 `threemojo_host --gpu` sets it."""
+comptime PROGRESS_VARIABLE = "THREEMOJO_PROGRESS"
+"""The environment variable that names the file the game keeps its progress
+in: read as it begins, if the file is there, and written as it ends.
+`threemojo_host --save` sets it."""
 comptime HOUR_VARIABLE = "THREEMOJO_HOUR"
 """The environment variable that sets the hour the game begins at, from 0 to
 less than 24. `threemojo_host --hour` sets it."""
@@ -96,6 +103,12 @@ comptime TIME_KEY = 4
 """The number key, counted from `1` as zero, that moves the day on."""
 comptime TIME_HOURS = 3
 """The hours that the time key moves the day on."""
+comptime SNOW_KEY = 8
+"""The number key, counted from `1` as zero, that sets the snow: `9`."""
+comptime PAUSE_KEY = Key(112)
+"""The `P` key: pause the game, or go on."""
+comptime MAP_KEY = Key(110)
+"""The `N` key: show the map, or hide it."""
 comptime KEY_HOLD = Duration(10.0, SECOND)
 """How long a key counts as held with no repeat. The host says when each key
 goes up, so this only catches a key let go while the window was not
@@ -196,7 +209,7 @@ def quality_from_environment() raises -> QualityPreset:
         it is not set.
 
     Raises:
-        Error: If the variable is set to none of the four names.
+        Error: If the variable is set to none of the names.
     """
     return quality_named(getenv(QUALITY_VARIABLE, DEFAULT_QUALITY))
 
@@ -205,13 +218,13 @@ def weather_named(name: String) raises -> WeatherKind:
     """Return the weather that a name names.
 
     Args:
-        name: `clear`, `overcast`, `rain` or `fog`.
+        name: `clear`, `overcast`, `rain`, `fog` or `snow`.
 
     Returns:
         The kind of weather.
 
     Raises:
-        Error: If the name is none of the four.
+        Error: If the name is none of the five.
     """
     if name == "clear":
         return CLEAR
@@ -221,7 +234,11 @@ def weather_named(name: String) raises -> WeatherKind:
         return RAIN
     if name == "fog":
         return FOG
-    raise Error("A weather must be clear, overcast, rain or fog, not ", name)
+    if name == "snow":
+        return SNOW
+    raise Error(
+        "A weather must be clear, overcast, rain, fog or snow, not ", name
+    )
 
 
 def weather_from_environment() raises -> Int:
@@ -232,7 +249,7 @@ def weather_from_environment() raises -> Int:
         not set.
 
     Raises:
-        Error: If the variable is set to none of the four names.
+        Error: If the variable is set to none of the names.
     """
     var name = getenv(WEATHER_VARIABLE, "")
     if name == "":
@@ -295,6 +312,10 @@ struct VillageApp(Movable):
     and the smoothing of edges: see `VillageGame.prepare_gpu`."""
     var frame: GpuFrame
     """The frame that `prepare_gpu` last prepared, for the GPU."""
+    var keeps: String
+    """The file the game keeps its progress in, or empty for none."""
+    var mouse: MouseLook
+    """What the mouse did since the last step."""
 
     def __init__(
         out self,
@@ -346,6 +367,8 @@ struct VillageApp(Movable):
         self.gpu = gpu
         self.passes = False
         self.frame = GpuFrame()
+        self.keeps = String()
+        self.mouse = MouseLook()
 
     def handle(mut self, kind: Int, detail: Int) raises:
         """Take one input event.
@@ -382,6 +405,21 @@ struct VillageApp(Movable):
             self._act(key)
         self.keys.press(key)
 
+    def point(mut self, kind: Int, x: Int, y: Int, button: Int):
+        """Take one pointer event: a drag with a button held looks, and a
+        click strikes. See `extensions.village.mouse`.
+
+        Args:
+            kind: The event kind, as `controls.input.InputKind` numbers it.
+            x: The pointer's column, in pixels.
+            y: The pointer's row, in pixels.
+            button: The button, as `controls.input.PointerButton` numbers
+                it.
+        """
+        self.mouse.event(
+            InputEvent(InputKind(kind), button=PointerButton(button), x=x, y=y)
+        )
+
     def _act(mut self, key: Key) raises:
         """Do what a key does at the moment it goes down: the space bar is a
         tap, a number key from `1` sets the weather, and `5` moves the day
@@ -401,6 +439,12 @@ struct VillageApp(Movable):
             self.game.weather.set(WeatherKind(number))
         if number == TIME_KEY:
             self.game.day.hour = (self.game.day.hour + TIME_HOURS) % 24
+        if number == SNOW_KEY:
+            self.game.weather.set(SNOW)
+        if key == PAUSE_KEY:
+            self.game.paused = not self.game.paused
+        if key == MAP_KEY:
+            self.game.show_map = not self.game.show_map
 
     def advance(mut self, microseconds: Int):
         """Move the game on by a time delta.
@@ -421,6 +465,7 @@ struct VillageApp(Movable):
             var input = keyboard_input(self.keys, self.shift)
             input.jump = input.jump or self.tapped
             self.tapped = False
+            self.mouse.apply(input)
             _ = self.game.tick(self.scene, self.assets, input, delta)
         except:
             pass
@@ -433,6 +478,33 @@ struct VillageApp(Movable):
             self.game.render(self.scene, self.assets)
         except:
             pass
+
+    def resume(mut self, path: String) raises:
+        """Keep the game's progress in a file: read it now, if it is there,
+        and write it there with `keep`.
+
+        Args:
+            path: The file, or empty to keep nothing.
+
+        Raises:
+            Error: If the file is there and cannot be read, or holds no
+                progress that the game can take up.
+        """
+        self.keeps = path
+        if path == "" or not Path(path).exists():
+            return
+        self.game.restore(self.scene, unpack_progress(Path(path).read_bytes()))
+
+    def keep(self) raises:
+        """Write the game's progress to the file that `resume` named, if it
+        named one.
+
+        Raises:
+            Error: If the file cannot be written.
+        """
+        if self.keeps == "":
+            return
+        Path(self.keeps).write_bytes(pack_progress(self.game.progress()))
 
     def start_at(mut self, hour: Float32, weather: Int) raises:
         """Begin the game at an hour, in a weather, instead of the afternoon's
@@ -569,6 +641,7 @@ def new_app(
     # A start that is refused costs no build of the game.
     _ = _start_weather(hour, weather)
     var app = VillageApp(width, height, parameters, bed^, gpu)
+    app.resume(getenv(PROGRESS_VARIABLE, ""))
     app.start_at(hour, weather)
     var slot = alloc(Layout[VillageApp](count=1)).unsafe_leak()
     slot.unsafe_write(app^)

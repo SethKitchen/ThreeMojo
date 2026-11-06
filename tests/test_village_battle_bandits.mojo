@@ -79,7 +79,8 @@ def test_the_player_defeats_a_bandit_who_comes_back() raises:
     assert_true(aim != 0)
     assert_almost_equal(arena.battle.obstacles()[0].radius, 0, atol=1e-6)
     assert_equal(arena.battle.loot, LOOT)
-    assert_true(holds_text(arena.battle.notes, "+8 COINS +1 HERB"))
+    assert_true(holds_text(arena.battle.notes, "+8 COINS +1 SEAL +1 HERB"))
+    assert_equal(arena.battle.seals, 1)
     assert_equal(arena.battle.found, 1)
     assert_equal(
         arena.battle.trained[SWORD.value], BLOW_EXPERIENCE + DEFEAT_EXPERIENCE
@@ -130,7 +131,7 @@ def test_a_cut_breaks_off_an_attack_and_fells_a_bandit() raises:
     fell.battle.foes[0].fighter.health = 1
     fell.battle.foes[0].brain.seed = herb_seed(False)
     light_cut(fell)
-    assert_true(holds_text(fell.battle.notes, "+8 COINS"))
+    assert_true(holds_text(fell.battle.notes, "+8 COINS +1 SEAL"))
     assert_equal(fell.battle.found, 0)
     assert_true(fell.battle.foes[0].fighter.defeated())
     assert_equal(fell.battle.token, -1)

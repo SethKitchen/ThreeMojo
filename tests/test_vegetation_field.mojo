@@ -8,6 +8,7 @@ and the blades each cluster grows."""
 
 from cameras.perspective_camera import PerspectiveCamera
 from extensions.vegetation.field import (
+    FLOWER_WIDEN,
     FieldParameters,
     GrassField,
     LodBand,
@@ -15,7 +16,7 @@ from extensions.vegetation.field import (
     default_bands,
     no_stats,
 )
-from extensions.vegetation.ground import Clearing, Ground, Lot
+from extensions.vegetation.ground import Clearing, Ground, Lot, Pond
 from extensions.vegetation.kinds import (
     BEYOND,
     BROADLEAF,
@@ -322,6 +323,57 @@ def test_build_bakes_a_level_and_a_thin_level_is_lighter() raises:
         if built:
             thin = cluster_triangles(built.value())
     assert_true(thin.value() <= 1 + 5)
+
+
+def test_a_far_level_grows_its_flowers_as_grass() raises:
+    """At a level that widens its blades past `FLOWER_WIDEN`, a poppy or a
+    buttercup grows as a blade of grass, so a far field is not speckled."""
+    var p = _small()
+    p.density = 400
+    p.poppy_share = 1
+    p.buttercup_share = 1
+    p.bands = [
+        LodBand(Length(10.0, METER), 1.0, 3),
+        LodBand(Length(30.0, METER), 0.1, 1),
+    ]
+    assert_true(p.bands[1].widen() > FLOWER_WIDEN)
+    var field = GrassField(p^, Ground())
+    var near = 0
+    var far = 0
+    for index in range(len(field.clusters)):
+        var a = field.build(index, 0, still_air(), Duration(0.0, SECOND))
+        var b = field.build(index, 1, still_air(), Duration(0.0, SECOND))
+        if a:
+            near += cluster_triangles(a.value())
+        if b:
+            far += cluster_triangles(b.value())
+    assert_true(near > 0 and far > 0)
+
+
+def test_no_blade_roots_under_the_pond() raises:
+    """A tuft on the shore can set a blade below the water. That blade does
+    not grow."""
+    var p = _small()
+    p.density = 200
+    p.tuft_radius = Length(1.0, METER)
+    var ground = Ground(
+        pond=Pond(
+            Length(0.0, METER),
+            Length(0.0, METER),
+            Length(4.0, METER),
+            Length(1.0, METER),
+        )
+    )
+    var field = GrassField(p^, ground)
+    var grown = 0
+    for index in range(len(field.clusters)):
+        for blade in range(field.clusters[index].blades):
+            var b = field.grow(index, blade)
+            if b:
+                grown += 1
+                var root = b.value().root
+                assert_false(field.ground.drowned(root.x, root.z))
+    assert_true(grown > 0)
 
 
 def test_a_level_whose_blades_are_all_bare_builds_nothing() raises:

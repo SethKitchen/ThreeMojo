@@ -28,7 +28,14 @@ from extensions.village.quality import (
     ULTRA,
     game_quality,
 )
-from extensions.village.weather import CLEAR, FOG, OVERCAST, RAIN, WeatherKind
+from extensions.village.weather import (
+    CLEAR,
+    FOG,
+    OVERCAST,
+    RAIN,
+    SNOW,
+    WeatherKind,
+)
 from extensions.water.pebbles import pebble_bed
 from extensions.water.upload import (
     COMPOSE_WORDS,
@@ -39,7 +46,7 @@ from extensions.water.upload import (
     WORD_WIDTH,
     grid_samples,
 )
-from lights.light import point_light
+from lights.light import spot_light
 from render.framebuffer import Color
 from renderers.game_gpu import (
     FLOAT_COVER_BRIGHT,
@@ -77,7 +84,10 @@ from renderers.game_gpu import (
     POINTER_WATER_WORDS,
 )
 from std.math import inf
-from std.os import setenv, unsetenv
+from std.os import getenv, remove, setenv, unsetenv
+from std.pathlib import Path
+from std.memory import Layout
+from extensions.village.gathering import HERBS
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -86,7 +96,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import DEGREE, SECOND, Angle, Duration
+from units.si import DEGREE, RADIAN, SECOND, Angle, Duration
 from window.capi_abi import (
     ABI_VERSION,
     KEY_DOWN,
@@ -110,6 +120,7 @@ from window.capi_village import (
     tm_step,
     tm_village_finish,
     tm_village_floats,
+    tm_village_audio,
     tm_village_ints,
     tm_village_passes,
     tm_village_pointers,
@@ -390,7 +401,7 @@ def test_a_key_that_repeats_acts_once() raises:
     tm_destroy(app)
 
 
-def test_a_pointer_or_a_wheel_event_is_dropped() raises:
+def test_a_drag_looks_at_the_next_step_and_a_wheel_is_dropped() raises:
     var app = _make()
     var before = _hash(app)
     tm_event(app, Int32(POINTER_DOWN), Int32(10), Int32(10), Int32(0))
@@ -400,6 +411,12 @@ def test_a_pointer_or_a_wheel_event_is_dropped() raises:
     tm_event(app, Int32(UNKNOWN_KIND), Int32(0), Int32(0), Int32(KEY_SPACE))
     assert_false(_state(app)[].tapped)
     assert_equal(before, _hash(app))
+    # The drag turns the camera at the next step.
+    var yaw = _state(app)[].game.view.yaw.to(RADIAN)
+    tm_event(app, Int32(POINTER_DOWN), Int32(10), Int32(10), Int32(0))
+    tm_event(app, Int32(POINTER_MOVE), Int32(60), Int32(10), Int32(0))
+    _step(app, 1)
+    assert_true(_state(app)[].game.view.yaw.to(RADIAN) != yaw)
     tm_destroy(app)
 
 
@@ -451,8 +468,8 @@ def test_a_frame_that_cannot_be_drawn_is_the_last_one() raises:
     _step(app, 4)
     var before = _hash(app)
     _step(app, 4)
-    # The game draws no point light.
-    _state(app)[].scene.add_light(point_light(Color(255, 255, 255), NodeId(0)))
+    # The game draws no spot light.
+    _state(app)[].scene.add_light(spot_light(Color(255, 255, 255), NodeId(0)))
     assert_equal(before, _hash(app))
     tm_destroy(app)
 
@@ -624,8 +641,8 @@ def test_the_same_painted_frames_finish_the_same() raises:
 def test_a_frame_that_cannot_be_prepared_for_a_gpu_is_refused() raises:
     var app = _make_gpu()
     _step(app, 2)
-    # The game draws no point light.
-    _state(app)[].scene.add_light(point_light(Color(255, 255, 255), NodeId(0)))
+    # The game draws no spot light.
+    _state(app)[].scene.add_light(spot_light(Color(255, 255, 255), NodeId(0)))
     assert_equal(tm_village_prepare(app), Int32(0))
     tm_destroy(app)
 
@@ -865,8 +882,62 @@ def test_a_weather_is_named() raises:
     assert_equal(weather_named("overcast"), OVERCAST)
     assert_equal(weather_named("rain"), RAIN)
     assert_equal(weather_named("fog"), FOG)
-    with assert_raises(contains="clear, overcast, rain or fog, not storm"):
+    assert_equal(weather_named("snow"), SNOW)
+    with assert_raises(contains="rain, fog or snow, not storm"):
         _ = weather_named("storm")
+
+
+def test_keys_pause_the_game_and_show_the_map() raises:
+    var app = _make()
+    _press(app, 112)
+    assert_true(_state(app)[].game.paused)
+    _release(app, 112)
+    _press(app, 110)
+    assert_true(_state(app)[].game.show_map)
+    _release(app, 110)
+    _press(app, 57)
+    assert_equal(_state(app)[].game.weather.kind.value, 4)
+    tm_destroy(app)
+
+
+def test_an_app_gives_its_host_the_village_s_sound() raises:
+    var app = _make()
+    var room = alloc(Layout[Float32](count=400)).unsafe_leak()
+    for k in range(400):
+        room.unsafe_offset(k).unsafe_write(9)
+    assert_equal(tm_village_audio(app, room, Int32(200)), Int32(200))
+    for k in range(400):
+        var s = room[unsafe_offset=k]
+        assert_true(s >= -1 and s <= 1)
+    # Too many samples at once makes none.
+    assert_equal(tm_village_audio(app, room, Int32(100000)), Int32(0))
+    # No samples at all is no work.
+    assert_equal(tm_village_audio(app, room, Int32(0)), Int32(0))
+    room.unsafe_free()
+    tm_destroy(app)
+
+
+def test_an_app_keeps_its_progress_in_a_file() raises:
+    var path = String(getenv("TMPDIR", "/tmp"), "/village_progress_kept.bin")
+    if Path(path).exists():
+        remove(path)
+    var app = _make()
+    # No file yet: the game begins as it is, and keeps nothing until told.
+    _state(app)[].keep()
+    _state(app)[].resume(path)
+    assert_false(Path(path).exists())
+    _state(app)[].game.gathering.satchel.counts[HERBS.value] = 4
+    _state(app)[].game.day.hour = 21
+    tm_destroy(app)
+    assert_true(Path(path).exists())
+    # The next game takes up where this one ended.
+    var again = _make()
+    _state(again)[].resume(path)
+    assert_equal(_state(again)[].game.gathering.satchel.count(HERBS), 4)
+    assert_almost_equal(_state(again)[].game.day.hour, 21, atol=1e-3)
+    # A file that cannot be written loses only the progress.
+    _state(again)[].keeps = String(path, "/not/a/dir")
+    tm_destroy(again)
 
 
 def test_the_environment_sets_the_weather_and_the_hour() raises:

@@ -329,7 +329,9 @@ enum {
   TM_VILLAGE_FLOAT_NIGHT_SKY = 55,    /* 3 floats: bytes */
   TM_VILLAGE_FLOAT_NIGHT_STAR_GRID = 58,
   TM_VILLAGE_FLOAT_NIGHT_STAR_RATE = 59,
-  TM_VILLAGE_FLOAT_COUNT = 60
+  TM_VILLAGE_FLOAT_NIGHT_MOON = 60,   /* 3 floats */
+  TM_VILLAGE_FLOAT_NIGHT_MOONLIT = 63,
+  TM_VILLAGE_FLOAT_COUNT = 64
 };
 
 /* tm_village_pointers: addresses, 64-bit integers. */
@@ -380,6 +382,12 @@ enum {
  * before tm_village_prepare; it takes effect at the next one. Returns 1 if
  * the app is one for a GPU, and 0 if not. */
 int32_t tm_village_passes(tm_app *app, int32_t on);
+
+/* Make the next FRAMES samples of the village's sound into SAMPLES: stereo,
+ * 44,100 samples a second, the left first, from -1 to 1, so 2 * FRAMES floats.
+ * Returns FRAMES, or 0 if FRAMES is not from 0 to 44,100. Call it once for
+ * each step, with the samples that the step's time takes. */
+int32_t tm_village_audio(tm_app *app, float *samples, int32_t frames);
 
 /* Prepare the frame that the last tm_step left. Returns 1 if the three arrays
  * describe it, and 0 if the app is not one for a GPU (THREEMOJO_GPU is not 1)

@@ -39,6 +39,7 @@ constant uint M_GRID_HEIGHT = 28u;
 constant uint SURFACE_TABLE = 32u;
 constant uint CAUSTIC_TABLE = 96u;
 constant uint PEBBLE_TABLE = 160u;
+constant uint BASIN = 256u;
 constant float PI = 3.141592653589793;
 constant float IOR = 1.3335;
 constant float CAUSTIC_LOD_BIAS = 1.0;
@@ -316,6 +317,29 @@ static float floor_depth(thread const Water &ctx, float x, float z) {
         + 0.17 * shelf
         + 0.30 * (value_noise(ctx, x * 0.22, z * 0.22) - 0.5)
         + 0.10 * (value_noise(ctx, x * 0.9 + 7.0, z * 0.9 + 7.0) - 0.5);
+}
+
+// The bed of the water's basin: optics.mojo's basin_depth and basin_mud.
+static float basin_depth(thread const Water &ctx, float x, float z) {
+    const auto radius = mf(ctx, BASIN + 2u);
+    if (radius <= 0.0) {
+        return floor_depth(ctx, x, z);
+    }
+    const auto dx = x - mf(ctx, BASIN);
+    const auto dz = z - mf(ctx, BASIN + 1u);
+    const auto r = sqrt(dx * dx + dz * dz);
+    const auto inner = radius * mf(ctx, BASIN + 4u);
+    const auto t = clamp01(ctx, (r - radius) / (inner - radius));
+    const auto fall = t * t * (3.0 - 2.0 * t);
+    const auto rim = mf(ctx, BASIN + 5u);
+    return fall * (mf(ctx, BASIN + 3u) + rim) - rim;
+}
+
+static float basin_mud(thread const Water &ctx, float depth) {
+    if (mf(ctx, BASIN + 2u) <= 0.0) {
+        return 0.0;
+    }
+    return 0.85 * clamp01(ctx, 1.0 - depth / 0.35);
 }
 
 // ---------------------------------------------------------------------------
@@ -904,7 +928,7 @@ static float3 underwater(thread const Water &ctx, float x, float z, float height
     auto bed_z = z;
     auto travel = 0.0;
     for (auto i = 0; i < 2; i++) {
-        const auto depth = floor_depth(ctx, bed_x, bed_z);
+        const auto depth = basin_depth(ctx, bed_x, bed_z);
         travel = (-depth - height) / ray.y;
         if (travel < 0.0) {
             travel = 0.0;
@@ -917,13 +941,17 @@ static float3 underwater(thread const Water &ctx, float x, float z, float height
         span = 0.05;
     }
     span = (span + travel) / span;
-    const auto bed = bed_color(ctx, bed_x, bed_z, dpx_x * span, dpx_z * span, dpy_x * span, dpy_z * span);
+    auto bed = bed_color(ctx, bed_x, bed_z, dpx_x * span, dpx_z * span, dpy_x * span, dpy_z * span);
     const auto sun_ray = refracted_sun(ctx, sun);
     const auto ts = 1.0 - fresnel(ctx, sun.y, IOR);
-    auto column = height - (-floor_depth(ctx, bed_x, bed_z));
+    const auto bed_depth = basin_depth(ctx, bed_x, bed_z);
+    auto column = height - (-bed_depth);
     if (column < 0.0) {
         column = 0.0;
     }
+    // A basin's bed turns to mud where its water is shallow.
+    const auto mud = basin_mud(ctx, bed_depth);
+    bed.rgb = bed.rgb + (float3(0.075, 0.058, 0.040) - bed.rgb) * mud;
     const auto nudge = (bed.height - 0.35) * 0.05 / -sun_ray.y;
     const auto caustic_patch = mf(ctx, 20u);
     const auto cu = (bed_x - mf(ctx, 21u) + sun_ray.x * nudge) / caustic_patch;

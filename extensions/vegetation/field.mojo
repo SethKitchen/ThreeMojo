@@ -157,6 +157,10 @@ struct LodBand(ImplicitlyCopyable):
         return pow(self.keep, -COVER_EXPONENT)
 
 
+comptime FLOWER_WIDEN = Float32(3)
+"""The widening of a level past which its flowers grow as grass."""
+
+
 def default_bands() -> List[LodBand]:
     """Return the four levels of a meadow seen from head height.
 
@@ -648,6 +652,10 @@ struct GrassField(Movable):
         )
         var x = tx + cos(spread) * reach
         var z = tz + sin(spread) * reach
+        # A blade is set round its tuft, so a tuft on the shore can put a
+        # blade below the pond's water. No blade roots under the water.
+        if self.ground.drowned(x, z):
+            return None
         # Each tuft is a plant of its own: its height, the width of its
         # blades, how far they droop, their color and their sway are its
         # own. Its blades vary round them.
@@ -705,7 +713,9 @@ struct GrassField(Movable):
             curl *= 0.3
         elif pick > 1 - p.dry_share * (0.3 + 1.4 * self.ground.dryness(x, z)):
             kind = DRY_GRASS
-        elif hash01(index, key + 9, seed + 5) < p.seed_share:
+        elif hash01(
+            index, key + 9, seed + 5
+        ) < p.seed_share and not self.ground.wet(x, z):
             kind = SEED_HEAD
             height = (
                 height / (TRODDEN + (1 - TRODDEN) * cover) * SEED_LIFT / tall
@@ -771,7 +781,16 @@ struct GrassField(Movable):
             var grown = self.grow(index, blade)
             if not grown:
                 continue
-            ref placed = grown.value()
+            var placed = grown.value()
+            # A flower far away is smaller than a pixel. Widened as the
+            # level widens its blades, it would speckle the far field, so
+            # it grows there as a blade of grass. The ground's far color
+            # keeps the flowers' tint.
+            if widen > FLOWER_WIDEN and (
+                placed.kind == POPPY or placed.kind == BUTTERCUP
+            ):
+                placed.kind = GRASS
+                placed.width = self.parameters.width
             var gust = wind.gust(placed.root.x, placed.root.z, time)
             var bend = wind.tip_bend(
                 placed.root.x, placed.root.z, gust, placed.phase, time

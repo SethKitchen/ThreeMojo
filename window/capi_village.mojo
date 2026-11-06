@@ -46,7 +46,13 @@ without it `tm_create` crashes.
 
 from std.runtime import initialize_runtime
 from std.sys import stderr
-from window.capi_abi import ABI_VERSION, MAX_SIDE
+from window.capi_abi import (
+    ABI_VERSION,
+    MAX_SIDE,
+    POINTER_DOWN,
+    POINTER_MOVE,
+    POINTER_UP,
+)
 from window.village_app import (
     VillageApp,
     gpu_from_environment,
@@ -128,12 +134,19 @@ def tm_create(
 
 @export("tm_destroy")
 def tm_destroy(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> None:
-    """Free an app. The handle must not be used again.
+    """Keep the game's progress, if it keeps it, and free an app. The handle
+    must not be used again.
 
     Args:
         handle: A handle from `tm_create`.
     """
     var app = _app(handle)
+    # The game keeps its progress as it ends, if it keeps it anywhere. A
+    # file that cannot be written loses only this game's progress.
+    try:
+        app[].keep()
+    except:
+        print("The village's progress could not be kept", file=stderr)
     _ = app.unsafe_take_pointee()
     app.unsafe_free()
 
@@ -150,18 +163,24 @@ def tm_event(
 
     A key press holds the key, and a release lets it go. The keys are those
     of `window.village_app`: `W`, `A`, `S` and `D` move, the arrows look, the
-    space bar jumps, and Shift, as `KEY_SHIFT`, runs. A pointer or a wheel
-    event is dropped, and so is an event that is not a key.
+    space bar jumps, and Shift, as `KEY_SHIFT`, runs. A drag of the pointer
+    with a button held looks, and a click strikes. A wheel event is
+    dropped.
 
     Args:
         handle: A handle from `tm_create`.
         kind: The kind, as `controls.input.InputKind` numbers it.
-        x: The pointer's column, in pixels. The game does not use it.
-        y: The pointer's row, in pixels. The game does not use it.
-        detail: The key code of a key event.
+        x: The pointer's column, in pixels.
+        y: The pointer's row, in pixels.
+        detail: The key code of a key event, or the button of a pointer
+            event.
     """
+    var what = Int(kind)
+    if what == POINTER_DOWN or what == POINTER_MOVE or what == POINTER_UP:
+        _app(handle)[].point(what, Int(x), Int(y), Int(detail))
+        return
     try:
-        _app(handle)[].handle(Int(kind), Int(detail))
+        _app(handle)[].handle(what, Int(detail))
     except:
         pass
 
@@ -230,6 +249,34 @@ def tm_height(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
         The height, in pixels.
     """
     return Int32(_app(handle)[].height)
+
+
+@export("tm_village_audio")
+def tm_village_audio(
+    handle: OpaquePointer[MutUntrackedOrigin],
+    samples: Pointer[Float32, MutUntrackedOrigin],
+    frames: Int32,
+) abi("C") -> Int32:
+    """Make the next samples of the village's sound, for a host to play.
+
+    Args:
+        handle: A handle from `tm_create`.
+        samples: Room for `2 * frames` floats: stereo samples at
+            `SAMPLE_RATE`, the left first, from -1 to 1.
+        frames: How many samples to make on each side, from 0 to
+            `SAMPLE_RATE`.
+
+    Returns:
+        How many samples it made on each side: `frames`, or 0 if `frames`
+        is out of range. The samples are not changed then.
+    """
+    try:
+        var made = _app(handle)[].game.audio(Int(frames))
+        for k in range(len(made)):
+            samples[unsafe_offset=k] = made[k]
+        return frames
+    except:
+        return 0
 
 
 @export("tm_village_passes")

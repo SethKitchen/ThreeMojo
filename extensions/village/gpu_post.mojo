@@ -57,6 +57,8 @@ from renderers.game_gpu import (
     FLOAT_NIGHT_DOWN,
     FLOAT_NIGHT_DUSK,
     FLOAT_NIGHT_GLOW,
+    FLOAT_NIGHT_MOON,
+    FLOAT_NIGHT_MOONLIT,
     FLOAT_NIGHT_SKY,
     FLOAT_NIGHT_STAR_GRID,
     FLOAT_NIGHT_STAR_RATE,
@@ -142,7 +144,9 @@ struct GpuPost(Movable):
             Vector3(0, 0, 0), Vector3(0, 0, 0), 0, 0, 1, 0
         )
         var none = Vector3(0, 0, 0)
-        self.night = NightLook(False, 1, 0, 0, none, none, none)
+        self.night = NightLook(
+            False, 1, 0, 0, none, none, none, Vector3(0, 1, 0), 0
+        )
         self.water = False
         self.share = 1
         self.step = 0
@@ -233,6 +237,8 @@ struct GpuPost(Movable):
         _put(frame, FLOAT_NIGHT_SKY, NIGHT_SKY)
         frame.floats[FLOAT_NIGHT_STAR_GRID] = STAR_GRID
         frame.floats[FLOAT_NIGHT_STAR_RATE] = STARS
+        _put(frame, FLOAT_NIGHT_MOON, self.night.moon)
+        frame.floats[FLOAT_NIGHT_MOONLIT] = self.night.moonlit
         _count(frame, INT_SMOOTH_ON, 1 if self.smooth else 0)
         _count(frame, INT_WATER_ON, 1 if self.water else 0)
         if not self.water:

@@ -38,6 +38,7 @@ from extensions.village.gathering import (
     KINDS,
     MUSHROOMS,
     ORE,
+    SEAL,
     STRIKES,
     WAITING,
     Satchel,
@@ -46,10 +47,17 @@ from extensions.village.gathering import (
 )
 from extensions.village.talk import SPEECH_SECONDS
 from render.framebuffer import Framebuffer
+from std.math import sqrt
 
-comptime GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/:.,!?'-"
+comptime GLYPHS = (
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/:.,!?'-"
+    + "abcdefghijklmnopqrstuvwxyz"
+)
 """The characters the font draws, in the order of its rows. Any other
 character is a space."""
+comptime VIGNETTE_CLEAR = Float32(0.45)
+"""The share of the way from a frame's middle to its corner that a
+vignette leaves clear."""
 comptime NOTE_SECONDS = Float32(2.0)
 """How long a note stays, in seconds."""
 comptime NOTE_FADE = Float32(0.5)
@@ -64,7 +72,10 @@ comptime _FONT = (
     + "FGGE11U V444444 HHHHHHE HHHHHA4 HHHLLLA HHA4AHH HHA4444 V1248GV EHJLPHE "
     + "4C4444E EH1248V V2421HE 26AIV22 VGU11HE 68GUHHE V124888 EHHEHHE EHHF12C "
     + "044V440 01248G0 0CC0CC0 00000CC 0000C48 4444404 EH12404 4480000 "
-    + "000V000"
+    + "000V000 "
+    + "00E1FHF GGMPHHU 00EGGHE 11DJHHF 00EHVGE 698S888 0FHHF1E GGMPHHH 40C444E "
+    + "20622IC GGIKOKI C44444E 00QLLHH 00MPHHH 00EHHHE 0UHHUGG 0DJJD11 00MPGGG "
+    + "00EGE1U 88S8896 00HHHJD 00HHHA4 00HHLLA 00HA4AH 0HHHF1E 00V248V"
 )
 """The font, a group of seven rows a glyph in the order of `GLYPHS`, each
 row one character of `_DIGITS`: its value's bit 4 is the left dot."""
@@ -170,7 +181,7 @@ def draw_text(
 ):
     """Draw a line of text with a shadow, its top left at a pixel.
 
-    Lower-case letters are drawn as capitals.
+    A character that the font does not hold is left as a space.
 
     Args:
         frame: The frame.
@@ -183,8 +194,7 @@ def draw_text(
             to 1.
     """
     var glyphs = String(GLYPHS)
-    var upper = text.upper()
-    var bytes = upper.as_bytes()
+    var bytes = text.as_bytes()
     for k in range(len(bytes)):
         var at = glyphs.find(chr(Int(bytes[k])))
         if at < 0:
@@ -213,7 +223,7 @@ def kind_color(kind: GatherKind) -> Rgb:
 
     Returns:
         Green herbs, red mushrooms, purple berries, copper ore, gold
-        coins, blue trinkets and silver fish.
+        coins, blue trinkets, silver fish and black seals.
     """
     if kind == HERBS:
         return Rgb(90, 160, 60)
@@ -227,6 +237,8 @@ def kind_color(kind: GatherKind) -> Rgb:
         return Rgb(250, 200, 70)
     if kind == FISH:
         return Rgb(150, 190, 210)
+    if kind == SEAL:
+        return Rgb(60, 50, 60)
     return Rgb(80, 140, 240)
 
 
@@ -296,6 +308,43 @@ def note_alpha(age: Float32, seconds: Float32 = NOTE_SECONDS) -> Float32:
     if left <= 0:
         return 0
     return min(Float32(1), left / NOTE_FADE)
+
+
+def draw_vignette(mut frame: Framebuffer, strength: Float32) raises:
+    """Redden a frame's edges, as a player who is hurt or near falling
+    sees it.
+
+    The red is strongest in the corners, and fades to nothing a
+    `VIGNETTE_CLEAR` share of the way out from the middle.
+
+    Args:
+        frame: The frame. Its pixels are changed.
+        strength: How strong the red is, from 0, none, to 1.
+
+    Raises:
+        Error: If the strength is not from 0 to 1.
+    """
+    if not (strength >= 0 and strength <= 1):
+        raise Error("A vignette's strength must be from 0 to 1")
+    if strength == 0:
+        return
+    var w = Float32(frame.width)
+    var h = Float32(frame.height)
+    for y in range(frame.height):  # pragma: no branch
+        var dy = (Float32(y) + 0.5) / h * 2 - 1
+        for x in range(frame.width):  # pragma: no branch
+            var dx = (Float32(x) + 0.5) / w * 2 - 1
+            var reach = sqrt(dx * dx + dy * dy) / 1.4142
+            if reach <= VIGNETTE_CLEAR:
+                continue
+            var t = (reach - VIGNETTE_CLEAR) / (1 - VIGNETTE_CLEAR)
+            _blend(
+                frame,
+                x,
+                y,
+                Rgb(150, 0, 0),
+                min(Float32(0.85), t * t * strength),
+            )
 
 
 def draw_hud(

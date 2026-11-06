@@ -957,16 +957,61 @@ def test_what_the_game_renderer_cannot_draw_is_refused() raises:
     two_suns.update()
     with assert_raises(contains="one directional"):
         _ = fast.render(two_suns, assets, _above(), NOW)
-    var bulb = _floor_scene(assets, Material(Color(180, 180, 180)))
-    bulb.add_light(point_light(Color(255, 255, 255), NodeId(0)))
-    with assert_raises(contains="point"):
-        _ = fast.render(bulb, assets, _above(), NOW)
+    var spot = _floor_scene(assets, Material(Color(180, 180, 180)))
+    spot.add_light(spot_light(Color(255, 255, 255), NodeId(0)))
+    with assert_raises(contains="spot"):
+        _ = fast.render(spot, assets, _above(), NOW)
+    var bulbs = _floor_scene(assets, Material(Color(180, 180, 180)))
+    for _ in range(9):
+        bulbs.add_light(point_light(Color(255, 255, 255), NodeId(0)))
+    with assert_raises(contains="8 point lights"):
+        _ = fast.render(bulbs, assets, _above(), NOW)
     var misty = _floor_scene(assets, Material(Color(180, 180, 180)))
     misty.fog = linear_fog(
         Color(1, 1, 1), Length(1.0, METER), Length(10.0, METER)
     )
     with assert_raises(contains="exponential"):
         _ = fast.render(misty, assets, _above(), NOW)
+
+
+def _lamp(
+    mut scene: Scene, x: Float32, y: Float32, z: Float32
+) raises -> NodeId:
+    var node = Object3D()
+    node.set_position(x, y, z)
+    return scene.add(node^)
+
+
+def test_a_lamp_lights_what_faces_it() raises:
+    var assets = Assets()
+    var fast = GameRenderer(WIDTH, HEIGHT)
+    var plain = _floor_scene(assets, Material(Color(180, 180, 180)))
+    var dark = _brightness(
+        _pixel(fast.render(plain, assets, _above(), NOW), 40, 30)
+    )
+    # A near lamp that fades to its cutoff, a lamp with no falloff, and a
+    # lamp too far away to reach the floor.
+    var lit = _floor_scene(assets, Material(Color(180, 180, 180)))
+    var near = _lamp(lit, 0, 1, 0)
+    lit.add_light(point_light(Color(255, 200, 120), near, 4.0, 2.0, 20.0))
+    var even = _lamp(lit, 0, 3, 0)
+    lit.add_light(point_light(Color(255, 255, 255), even, 0.3, 0.0))
+    var far = _lamp(lit, 50, 1, 50)
+    lit.add_light(point_light(Color(255, 255, 255), far, 4.0, 2.0, 0.5))
+    lit.update()
+    var bright = _brightness(
+        _pixel(fast.render(lit, assets, _above(), NOW), 40, 30)
+    )
+    assert_true(bright > dark)
+    # A lamp under the floor lights nothing that faces up.
+    var under = _floor_scene(assets, Material(Color(180, 180, 180)))
+    var below = _lamp(under, 0, -1, 0)
+    under.add_light(point_light(Color(255, 255, 255), below, 4.0, 2.0, 20.0))
+    under.update()
+    assert_equal(
+        _brightness(_pixel(fast.render(under, assets, _above(), NOW), 40, 30)),
+        dark,
+    )
 
 
 def test_many_meshes_and_a_large_one_share_the_work() raises:

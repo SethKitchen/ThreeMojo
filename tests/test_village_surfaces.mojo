@@ -17,6 +17,7 @@ from extensions.village.surfaces import (
     plank_texture,
     plaster_texture,
     slate_texture,
+    thatch_texture,
     tile_texture,
     tiled_noise,
     wood_texture,
@@ -74,6 +75,7 @@ def test_each_texture_has_its_pattern() raises:
         slate_texture(size, 17),
         plank_texture(size, 17),
         cloth_texture(size, 17),
+        thatch_texture(size, 17),
     ]
     for k in range(len(textures)):
         # Each shows a pattern: its texels differ.
@@ -87,10 +89,11 @@ def test_each_texture_has_its_pattern() raises:
 def test_the_looks_wear_the_textures() raises:
     var assets = Assets()
     var looks = house_looks(assets, 16, 3)
-    assert_equal(len(assets.textures.textures), 10)
+    assert_equal(len(assets.textures.textures), 11)
     for id in [
         looks.brick,
         looks.tiles,
+        looks.thatch,
         looks.planks,
         looks.glass,
         looks.cloth,

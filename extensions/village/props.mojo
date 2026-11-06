@@ -4,7 +4,8 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """The things that stand about the village: a well, barrels, crates, hay
-bales, fences, benches and woodpiles.
+bales, fences, benches, woodpiles, carts, signposts, washing lines,
+troughs, scarecrows, crops, lamp posts and hedges.
 
 Each `Prop` is a kind, a place on the ground, a turn about +y and a
 length. `stand_props` draws every prop with the houses' materials, in one
@@ -20,9 +21,22 @@ for each prop but a fence, and a `WallSpan` for each fence.
 | `FENCE` | Posts every 2 meters, and two rails | Its length, along its own x |
 | `BENCH` | A plank on two trestles | Its length |
 | `WOODPILE` | Split logs stacked under a board lid, their ends out | Its length, along its own x; it is `WOODPILE_DEPTH` deep and `WOODPILE_HEIGHT` tall |
+| `CART` | A handcart: a bed of boards on two spoked wheels, with two shafts | Its bed's length, along its own x |
+| `SIGNPOST` | A post with two pointing arms | Its height |
+| `WASHING_LINE` | Two posts, a line between them, and cloths hung on it | Its length, along its own x |
+| `TROUGH` | A trough of boards on legs, full of water | Its length, along its own x |
+| `SCARECROW` | A post and a cross arm in a coat, with a straw head and a hat | Its height |
+| `CROPS` | A garden bed of three rows of cabbages | Its length, along its own x |
+| `LAMP_POST` | An iron post with a lantern, lit from dusk to dawn | Its height |
+| `HEDGE` | A clipped hedge of leaves, 1.4 meters tall and 0.9 meters deep | Its length, along its own x |
 
 A prop stands on the ground at its middle, and its foot reaches a little
-below the ground, so a slope shows no gap.
+below the ground, so a slope shows no gap. A fence and a hedge stop a
+character as a wall span. Crops stop nobody. Each other prop is a solid
+lot.
+
+A lamp post's glass hangs from two nodes: `StandingProps.lit`, shown from
+dusk to dawn, and `StandingProps.daylit`, shown by day.
 """
 
 from core.assets import Assets
@@ -33,8 +47,10 @@ from extensions.vegetation.checks import require_between
 from extensions.vegetation.ground import Ground, Lot
 from extensions.village.house_view import OAK, STONE
 from extensions.village.sheet import Sheet
+from extensions.village.dressing import FLAME, lantern_glass, prism
 from extensions.village.surfaces import (
     ASHLAR_TILE,
+    CLOTH_TILE,
     HouseLooks,
     PLASTER_TILE,
     TILE_TILE,
@@ -64,6 +80,22 @@ comptime WOODPILE_HEIGHT = Float32(1.15)
 """How tall a woodpile is, to the top of its lid, in meters."""
 comptime LOG = Float32(0.065)
 """The radius of a log's end in a woodpile, in meters."""
+comptime HEDGE_HEIGHT = Float32(1.4)
+"""How tall a hedge is, in meters."""
+comptime HEDGE_DEPTH = Float32(0.9)
+"""How deep a hedge is, along its own z, in meters."""
+comptime LEAVES = Vector3(0.16, 0.30, 0.08)
+"""The tint of a hedge's leaves over the plaster texture."""
+comptime CABBAGE = Vector3(0.30, 0.52, 0.22)
+"""The tint of a cabbage over the plaster texture."""
+comptime SOIL = Vector3(0.20, 0.13, 0.08)
+"""The tint of a garden bed's tilled soil over the plaster texture."""
+comptime STRAW = Vector3(0.85, 0.70, 0.36)
+"""The tint of a scarecrow's straw over the plaster texture."""
+comptime WATER = Vector3(0.05, 0.08, 0.09)
+"""The color of the still water in a trough."""
+comptime COLD_GLASS = Vector3(0.16, 0.15, 0.12)
+"""The color of a lamp post's glass by day, drawn unlit."""
 
 
 @fieldwise_init
@@ -73,12 +105,12 @@ struct PropKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the seven kinds there are.
+        """Return True if this is one of the fifteen kinds there are.
 
         Returns:
             Whether the value names a kind.
         """
-        return ordinal_valid(self.value, 6)
+        return ordinal_valid(self.value, 14)
 
 
 comptime WELL = PropKind(0)
@@ -88,6 +120,14 @@ comptime HAY_BALE = PropKind(3)
 comptime FENCE = PropKind(4)
 comptime BENCH = PropKind(5)
 comptime WOODPILE = PropKind(6)
+comptime CART = PropKind(7)
+comptime SIGNPOST = PropKind(8)
+comptime WASHING_LINE = PropKind(9)
+comptime TROUGH = PropKind(10)
+comptime SCARECROW = PropKind(11)
+comptime CROPS = PropKind(12)
+comptime LAMP_POST = PropKind(13)
+comptime HEDGE = PropKind(14)
 
 
 @fieldwise_init
@@ -112,7 +152,7 @@ struct Prop(ImplicitlyCopyable):
                 meters.
         """
         if not self.kind.is_valid():
-            raise Error("A prop's kind must be one of the seven")
+            raise Error("A prop's kind must be one of the fifteen")
         require_between(
             self.x, -1.0e4, 1.0e4, "A prop must stand within 10 kilometers"
         )
@@ -131,21 +171,30 @@ struct StandingProps(Movable):
     var root: NodeId
     var meshes: Int
     var triangles: Int
-    # Each prop's footprint but a fence's, and each fence.
+    # Each prop's footprint but a fence's, a hedge's and crops', and each
+    # fence and hedge.
     var lots: List[Lot]
     var walls: List[WallSpan]
+    var lit: NodeId
+    """The node of the lamp posts' glowing glass, hidden by day."""
+    var daylit: NodeId
+    """The node of the lamp posts' cold glass, shown by day."""
 
-    def __init__(out self, root: NodeId):
+    def __init__(out self, root: NodeId, lit: NodeId, daylit: NodeId):
         """Hold no prop yet, under a node.
 
         Args:
             root: The node the props hang from.
+            lit: The node of the lamps' glowing glass.
+            daylit: The node of the lamps' cold glass.
         """
         self.root = root
         self.meshes = 0
         self.triangles = 0
         self.lots = List[Lot]()
         self.walls = List[WallSpan]()
+        self.lit = lit
+        self.daylit = daylit
 
 
 struct _PropSheets(Movable):
@@ -155,12 +204,22 @@ struct _PropSheets(Movable):
     var ashlar: Sheet
     var plaster: Sheet
     var tiles: Sheet
+    var cloth: Sheet
+    # The lamps' glass: glowing, and cold.
+    var glow: Sheet
+    var cold: Sheet
+    # The water in the troughs, drawn unlit.
+    var water: Sheet
 
     def __init__(out self):
         self.wood = Sheet(WOOD_TILE)
         self.ashlar = Sheet(ASHLAR_TILE)
         self.plaster = Sheet(PLASTER_TILE)
         self.tiles = Sheet(TILE_TILE)
+        self.cloth = Sheet(CLOTH_TILE)
+        self.glow = Sheet(1)
+        self.cold = Sheet(1)
+        self.water = Sheet(1)
 
 
 struct _Frame(ImplicitlyCopyable):
@@ -436,8 +495,295 @@ def _woodpile(mut sheets: _PropSheets, frame: _Frame, length: Float32):
                 sheets.wood.triangle(core, rim[corner], rim[(corner + 1) % 8])
 
 
+def _wheel(
+    mut sheet: Sheet, frame: _Frame, x: Float32, z: Float32, radius: Float32
+):
+    """Add a cart's wheel at its own x and z: a rim of eight felloes, a hub
+    and two spokes across it, in the plane of the prop's x and up."""
+    var hub = frame.at(x, radius, z)
+    var up = Vector3(0, 1, 0)
+    var thick = frame.z * 0.03
+    for k in range(8):  # pragma: no branch
+        var a = Float32(k) * Float32(pi) / 4
+        var b = Float32(k + 1) * Float32(pi) / 4
+        var p = hub + frame.x * (radius * cos(a)) + up * (radius * sin(a))
+        var q = hub + frame.x * (radius * cos(b)) + up * (radius * sin(b))
+        var middle = (p + q) / 2
+        var outward = (middle - hub) / (middle - hub).length()
+        sheet.box(middle, (q - p) / 2, outward * 0.035, thick, OAK * 0.8)
+    sheet.box(hub, frame.x * 0.06, up * 0.06, frame.z * 0.08, IRON)
+    sheet.box(hub, frame.x * radius, up * 0.02, thick * 0.7, OAK)
+    sheet.box(hub, frame.x * 0.02, up * radius, thick * 0.7, OAK)
+
+
+def _cart(mut sheets: _PropSheets, frame: _Frame, length: Float32):
+    """Add a handcart: a bed of boards with low sides on two wheels, and
+    two shafts that rest on the ground."""
+    var half = length / 2
+    var radius = Float32(0.42)
+    var bed = radius + 0.12
+    frame.block(sheets.wood, Vector3(0, bed, 0), half, 0.04, 0.45, OAK * 1.2)
+    for side in [Float32(-1), Float32(1)]:  # pragma: no branch
+        frame.block(
+            sheets.wood,
+            Vector3(0, bed + 0.17, side * 0.43),
+            half,
+            0.13,
+            0.02,
+            OAK * 1.1,
+        )
+        _wheel(sheets.wood, frame, 0, side * 0.55, radius)
+        # A shaft from the bed down to the ground before it.
+        var from_p = frame.at(half, bed, side * 0.3)
+        var to_p = frame.at(half + 1.2, 0.05, side * 0.3)
+        var middle = (from_p + to_p) / 2
+        sheets.wood.box(
+            middle,
+            (to_p - from_p) / 2,
+            Vector3(0, 0.03, 0),
+            frame.z * 0.03,
+            OAK,
+        )
+    frame.block(sheets.wood, Vector3(0, radius, 0), 0.04, 0.04, 0.6, OAK * 0.7)
+
+
+def _signpost(mut sheets: _PropSheets, frame: _Frame, height: Float32):
+    """Add a signpost: a post with two arms that point two ways."""
+    frame.block(
+        sheets.wood,
+        Vector3(0, (height - SUNK) / 2, 0),
+        0.06,
+        (height + SUNK) / 2,
+        0.06,
+        OAK,
+    )
+    frame.block(
+        sheets.wood,
+        Vector3(0.35, height - 0.25, 0),
+        0.35,
+        0.08,
+        0.02,
+        OAK * 1.5,
+    )
+    frame.block(
+        sheets.wood,
+        Vector3(0, height - 0.5, -0.32),
+        0.02,
+        0.08,
+        0.32,
+        OAK * 1.4,
+    )
+    frame.block(
+        sheets.wood, Vector3(0, height + 0.02, 0), 0.08, 0.02, 0.08, OAK * 0.8
+    )
+
+
+def _washing_line(mut sheets: _PropSheets, frame: _Frame, length: Float32):
+    """Add a washing line: two posts, a line between them, and cloths
+    of three colors hung on it."""
+    var half = length / 2
+    var high = Float32(1.8)
+    for side in [Float32(-1), Float32(1)]:  # pragma: no branch
+        frame.block(
+            sheets.wood,
+            Vector3(side * half, (high - SUNK) / 2, 0),
+            0.04,
+            (high + SUNK) / 2,
+            0.04,
+            OAK,
+        )
+    frame.block(
+        sheets.wood, Vector3(0, high - 0.05, 0), half, 0.006, 0.006, OAK * 0.4
+    )
+    var colors: List[Vector3] = [
+        Vector3(0.85, 0.83, 0.76),
+        Vector3(0.40, 0.12, 0.10),
+        Vector3(0.20, 0.28, 0.45),
+    ]
+    var count = max(1, Int(length / 0.9))
+    for k in range(count):  # pragma: no branch
+        var x = -half + length * (Float32(k) + 0.5) / Float32(count)
+        var drop = 0.45 + 0.2 * Float32(k % 2)
+        frame.block(
+            sheets.cloth,
+            Vector3(x, high - 0.05 - drop / 2, 0),
+            min(Float32(0.32), length / Float32(count) / 2 - 0.05),
+            drop / 2,
+            0.01,
+            colors[k % 3],
+        )
+
+
+def _trough(mut sheets: _PropSheets, frame: _Frame, length: Float32):
+    """Add a trough of boards on legs, full of still water."""
+    var half = length / 2
+    var top = Float32(0.6)
+    for side in [Float32(-1), Float32(1)]:  # pragma: no branch
+        frame.block(
+            sheets.wood,
+            Vector3(0, top - 0.15, side * 0.28),
+            half,
+            0.15,
+            0.03,
+            OAK * 1.1,
+        )
+        frame.block(
+            sheets.wood,
+            Vector3(side * half, top - 0.15, 0),
+            0.03,
+            0.15,
+            0.31,
+            OAK * 1.1,
+        )
+        for end in [Float32(-1), Float32(1)]:  # pragma: no branch
+            frame.block(
+                sheets.wood,
+                Vector3(end * (half - 0.1), (top - 0.3 - SUNK) / 2, side * 0.2),
+                0.04,
+                (top - 0.3 + SUNK) / 2,
+                0.04,
+                OAK * 0.9,
+            )
+    frame.block(sheets.wood, Vector3(0, top - 0.3, 0), half, 0.02, 0.28, OAK)
+    var a = frame.at(-half + 0.03, top - 0.06, -0.25)
+    var b = frame.at(half - 0.03, top - 0.06, -0.25)
+    var c = frame.at(half - 0.03, top - 0.06, 0.25)
+    var d = frame.at(-half + 0.03, top - 0.06, 0.25)
+    sheets.water.quad(d, c, b, a, WATER)
+
+
+def _scarecrow(mut sheets: _PropSheets, frame: _Frame, height: Float32):
+    """Add a scarecrow: a post and a cross arm in a coat, a head of
+    straw, and a broad hat."""
+    frame.block(
+        sheets.wood,
+        Vector3(0, (height - SUNK) / 2, 0),
+        0.04,
+        (height + SUNK) / 2,
+        0.04,
+        OAK,
+    )
+    var arms = height * 0.72
+    frame.block(sheets.wood, Vector3(0, arms, 0), 0.7, 0.03, 0.03, OAK)
+    # The coat over the post and the arms, and its sleeves.
+    frame.block(
+        sheets.cloth,
+        Vector3(0, arms - 0.25, 0),
+        0.22,
+        0.32,
+        0.12,
+        Vector3(0.30, 0.22, 0.12),
+    )
+    frame.block(
+        sheets.cloth,
+        Vector3(0, arms, 0),
+        0.6,
+        0.07,
+        0.07,
+        Vector3(0.26, 0.19, 0.10),
+    )
+    frame.block(
+        sheets.plaster,
+        Vector3(0, arms + 0.2, 0),
+        0.12,
+        0.13,
+        0.12,
+        STRAW,
+    )
+    frame.block(
+        sheets.plaster,
+        Vector3(0, arms + 0.34, 0),
+        0.26,
+        0.015,
+        0.26,
+        STRAW * 0.7,
+    )
+    frame.block(
+        sheets.plaster,
+        Vector3(0, arms + 0.42, 0),
+        0.11,
+        0.08,
+        0.11,
+        STRAW * 0.7,
+    )
+
+
+def _crops(mut sheets: _PropSheets, frame: _Frame, length: Float32):
+    """Add a garden bed: tilled soil with three rows of cabbages."""
+    var half = length / 2
+    frame.block(sheets.plaster, Vector3(0, 0.0, 0), half, 0.06, 0.95, SOIL)
+    var count = max(1, Int(length / 0.55))
+    for row in range(3):  # pragma: no branch
+        var z = (Float32(row) - 1) * 0.6
+        for k in range(count):  # pragma: no branch
+            var x = -half + length * (Float32(k) + 0.5) / Float32(count)
+            var size = 0.14 + 0.04 * Float32((k * 5 + row * 3) % 3) / 2
+            prism(
+                sheets.plaster,
+                frame.at(x, 0.04, z),
+                size,
+                size * 0.6,
+                size * 1.1,
+                6,
+                CABBAGE * (0.85 + 0.15 * Float32((k + row) % 2)),
+            )
+
+
+def _lamp_post(mut sheets: _PropSheets, frame: _Frame, height: Float32):
+    """Add a lamp post: an iron post on a stone foot, an arm, and a
+    lantern that glows from dusk to dawn."""
+    frame.block(
+        sheets.ashlar,
+        Vector3(0, 0.15 - SUNK / 2, 0),
+        0.16,
+        0.15 + SUNK / 2,
+        0.16,
+        STONE,
+    )
+    frame.block(
+        sheets.wood, Vector3(0, height / 2, 0), 0.035, height / 2, 0.035, IRON
+    )
+    frame.block(
+        sheets.wood, Vector3(0.2, height - 0.05, 0), 0.22, 0.02, 0.02, IRON
+    )
+    var hook = frame.at(0.38, height - 0.05, 0)
+    _ = lantern_glass(sheets.glow, hook, 0.3, FLAME * 0.8)
+    _ = lantern_glass(sheets.cold, hook, 0.3, COLD_GLASS)
+    sheets.wood.box(
+        hook - Vector3(0, 0.07, 0),
+        Vector3(0.1, 0, 0),
+        Vector3(0, 0.02, 0),
+        Vector3(0, 0, 0.1),
+        IRON,
+    )
+
+
+def _hedge(mut sheets: _PropSheets, frame: _Frame, length: Float32) -> WallSpan:
+    """Add a clipped hedge of leaves, and return the span that stops a
+    character."""
+    var half = length / 2
+    var count = max(1, Int(length / 0.8))
+    for k in range(count):  # pragma: no branch
+        var x = -half + length * (Float32(k) + 0.5) / Float32(count)
+        var bulge = 0.04 * Float32((k * 7) % 3)
+        frame.block(
+            sheets.plaster,
+            Vector3(x, (HEDGE_HEIGHT - SUNK) / 2 + bulge / 2, 0),
+            length / Float32(count) / 2 + 0.05,
+            (HEDGE_HEIGHT + SUNK) / 2 + bulge / 2,
+            HEDGE_DEPTH / 2 + bulge,
+            LEAVES * (0.85 + 0.12 * Float32(k % 3)),
+        )
+    var a = frame.at(-half, 0, 0)
+    var b = frame.at(half, 0, 0)
+    return WallSpan(
+        a.x, a.z, b.x, b.z, HEDGE_DEPTH / 2, a.y - SUNK, a.y + HEDGE_HEIGHT
+    )
+
+
 def _footprint(prop: Prop) -> Lot:
-    """Return the ground a prop that is not a fence takes up."""
+    """Return the ground a prop that is not a fence, a hedge or crops
+    takes up."""
     var half_x = prop.length / 2
     var half_z = prop.length / 2
     if prop.kind == WELL or prop.kind == BARREL:
@@ -449,6 +795,19 @@ def _footprint(prop: Prop) -> Lot:
         half_z = 0.18
     elif prop.kind == WOODPILE:
         half_z = WOODPILE_DEPTH / 2
+    elif prop.kind == CART:
+        half_x = prop.length / 2 + 0.6
+        half_z = 0.6
+    elif prop.kind == WASHING_LINE:
+        half_z = 0.1
+    elif prop.kind == TROUGH:
+        half_z = 0.32
+    elif prop.kind == SIGNPOST or prop.kind == LAMP_POST:
+        half_x = 0.2
+        half_z = 0.2
+    elif prop.kind == SCARECROW:
+        half_x = 0.15
+        half_z = 0.15
     return Lot(prop.x, prop.z, half_x, half_z, prop.turn.to(RADIAN))
 
 
@@ -487,28 +846,42 @@ def stand_props(
     character.
 
     Args:
-        scene: The scene. One node, and one mesh for each material the
-            props wear, are added.
+        scene: The scene. Three nodes, and one mesh for each material the
+            props wear, are added: the props' node, and under it the
+            nodes of the lamps' glowing glass and of their cold glass.
         assets: The stores for the geometries.
         looks: The houses' materials, which the props wear too.
         props: The props.
         ground: The ground they stand on.
 
     Returns:
-        The node, what it draws, and a solid lot for each prop but a
-        fence, and a wall span for each fence.
+        The nodes, what they draw, a solid lot for each prop but a fence,
+        a hedge or crops, and a wall span for each fence and each hedge.
 
     Raises:
         Error: If a prop does not check.
     """
     var root = scene.add(Object3D())
-    var standing = StandingProps(root)
+    var lamps = Object3D()
+    lamps.parent = root
+    lamps.visible = False
+    var lit = scene.add(lamps^)
+    var sun = Object3D()
+    sun.parent = root
+    var daylit = scene.add(sun^)
+    var standing = StandingProps(root, lit, daylit)
     var sheets = _PropSheets()
     for prop in props:
         prop.check()
         var frame = _Frame(prop, ground)
         if prop.kind == FENCE:
             standing.walls.append(_fence(sheets, frame, prop.length))
+            continue
+        if prop.kind == HEDGE:
+            standing.walls.append(_hedge(sheets, frame, prop.length))
+            continue
+        if prop.kind == CROPS:
+            _crops(sheets, frame, prop.length)
             continue
         standing.lots.append(_footprint(prop))
         if prop.kind == WELL:
@@ -521,10 +894,26 @@ def stand_props(
             _hay(sheets, frame, prop.length)
         elif prop.kind == BENCH:
             _bench(sheets, frame, prop.length)
-        else:
+        elif prop.kind == WOODPILE:
             _woodpile(sheets, frame, prop.length)
+        elif prop.kind == CART:
+            _cart(sheets, frame, prop.length)
+        elif prop.kind == SIGNPOST:
+            _signpost(sheets, frame, prop.length)
+        elif prop.kind == WASHING_LINE:
+            _washing_line(sheets, frame, prop.length)
+        elif prop.kind == TROUGH:
+            _trough(sheets, frame, prop.length)
+        elif prop.kind == SCARECROW:
+            _scarecrow(sheets, frame, prop.length)
+        else:
+            _lamp_post(sheets, frame, prop.length)
     _add(scene, assets, sheets.wood, looks.wood, root, standing)
     _add(scene, assets, sheets.ashlar, looks.ashlar, root, standing)
     _add(scene, assets, sheets.plaster, looks.plaster, root, standing)
     _add(scene, assets, sheets.tiles, looks.tiles, root, standing)
+    _add(scene, assets, sheets.cloth, looks.cloth, root, standing)
+    _add(scene, assets, sheets.water, looks.daylight, root, standing)
+    _add(scene, assets, sheets.glow, looks.daylight, lit, standing)
+    _add(scene, assets, sheets.cold, looks.daylight, daylit, standing)
     return standing^

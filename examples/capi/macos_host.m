@@ -50,7 +50,10 @@
  *
  * --hour H and --weather NAME set THREEMOJO_HOUR and THREEMOJO_WEATHER, which
  * the village library reads too: the hour the game begins at, from 0 to less
- * than 24, and its weather: clear, overcast, rain or fog.
+ * than 24, and its weather: clear, overcast, rain, fog or snow.
+ *
+ * --save FILE sets THREEMOJO_PROGRESS: the village reads the player's and the
+ * world's progress from FILE as it begins, and writes it there as it ends.
  *
  * --gpu draws the village on Metal (macos_village.m). The library still does the
  * shadow maps, the light at the vertices and the setup of each triangle. Metal
@@ -714,7 +717,8 @@ static void usage(void) {
   fprintf(stderr,
           "usage: threemojo_host LIBRARY [WIDTH HEIGHT] [--frames N] [--dump FILE.ppm] "
           "[--chdir DIR] [--headless] [--crisp] [--cpu] [--gpu] [--scan FILE] "
-          "[--quality NAME] [--hour H] [--weather NAME] [--scale N|native]\n");
+          "[--quality NAME] [--hour H] [--weather NAME] [--save FILE] "
+          "[--scale N|native]\n");
 }
 
 static bool load_symbols(Host *host, void *library) {
@@ -793,6 +797,8 @@ int main(int argc, char **argv) {
         setenv("THREEMOJO_HOUR", argv[++index], 1);
       } else if (!strcmp(argument, "--weather") && index + 1 < argc) {
         setenv("THREEMOJO_WEATHER", argv[++index], 1);
+      } else if (!strcmp(argument, "--save") && index + 1 < argc) {
+        setenv("THREEMOJO_PROGRESS", argv[++index], 1);
       } else if (!strcmp(argument, "--scale") && index + 1 < argc) {
         scale = argv[++index];
       } else if (!strcmp(argument, "--chdir") && index + 1 < argc) {

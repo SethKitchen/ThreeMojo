@@ -70,14 +70,29 @@ The front door is 1 meter wide and 2.1 meters tall. A barn is different: see [Th
 
 1. **Walls.** Each face of a wall is cut into cells at the edges of its openings. No cell is more than 1 meter across. The outside face wears the facade's texture. Its vertex colors darken it at its foot and under the eaves. The inside face wears lime plaster, and is darker in the corners of the room.
 2. **Windows.** A window has a painted frame, a mullion and a transom, panes of glass and a stone sill. From outside, a pane shows the sky at its top and darkens toward its foot. The panes show the day from inside. A pair of shutters stands open against the wall, in the trim's paint.
-3. **Doors.** A door has an oak frame and a stone threshold. Its leaf is boards on ledges, with iron straps. The leaf hangs from a hinge node of its own. A door 2 meters wide or more hangs two leaves, one at each jamb. A leaf 1.2 meters wide or more has diagonal braces. An outside door of a dwelling has a hood of the roof's tiles over it, on two oak brackets, with boarded cheeks at its ends. The hood reaches 75 centimeters out, and stays under the eaves. An iron lantern hangs from an arm beside the door. A barn's doors have no hood.
+3. **Doors.** A door has an oak frame and a stone threshold. Its leaf is boards on ledges, with iron straps. The leaf hangs from a hinge node of its own. A door 2 meters wide or more hangs two leaves, one at each jamb. A leaf 1.2 meters wide or more has diagonal braces. An outside door of a dwelling has a hood of the roof's tiles over it, on two oak brackets, with boarded cheeks at its ends. The hood reaches 75 centimeters out, and stays under the eaves. An iron lantern hangs from an arm beside the door. Its glass glows from dusk to dawn, and is cold by day. A barn's doors have no hood.
 4. **Rooms.** Each room has a floor of planks and a plastered ceiling. The ground story's ceiling has oak joists.
-5. **The roof.** Two slopes of tiles or slates, 16 centimeters thick, reach 35 centimeters past the long walls. Each slope is cut into cells no more than `ROOF_CELL`, 0.8 meters, across, and `roof_shade` weathers each corner. The roof is darker and damper at the eave and paler at the ridge. Each batch of tiles is a little lighter or darker. Moss greens it in patches, most near the eave. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast. Each gable is cut into cells no more than 1 meter across, as a wall is. A zinc gutter runs along each eave. A downpipe runs from each end of each gutter down the wall to the ground.
+5. **The roof.** Two slopes of tiles, slates or thatch, 16 centimeters thick, reach 35 centimeters past the long walls. Each slope is cut into cells no more than `ROOF_CELL`, 0.8 meters, across, and `roof_shade` weathers each corner. The roof is darker and damper at the eave and paler at the ridge. Each batch of tiles is a little lighter or darker. Moss greens it in patches, most near the eave. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast. Each gable is cut into cells no more than 1 meter across, as a wall is. A zinc gutter runs along each eave. A downpipe runs from each end of each gutter down the wall to the ground.
 6. **The plinth and the steps.** A stone plinth reaches 40 centimeters below the lowest ground under the house. Stone steps lead up to the front door.
 
 The house hangs from one node at its lot's middle, at the floor's height. Its shell shows from outside: its outside walls, its windows and doors, its roof, its plinth and its steps. Its inside hangs from a node of its own, `StandingHouse.inside`. The inside holds the rooms, the stair, the hearth, the furniture, the dressing and the inside faces of the walls. A game can hide the inside from far away. The inside casts no shadow, because a still shadow map is drawn only once.
 
-Each material of the shell is one mesh, and so is each material of the inside. The windows' lamplight and the night in their panes hang from the node `lit`, hidden by day. The day in their panes hangs from the node `daylit`. See [Village day and night](Village-day). A dwelling with windows is eighteen meshes with its two door leaves.
+Each material of the shell is one mesh, and so is each material of the inside. The windows' lamplight, the door lantern's glowing glass and the night in the panes hang from the node `lit`, hidden by day. The day in the panes and the lantern's cold glass hang from the node `daylit`. See [Village day and night](Village-day). A dwelling with windows is seventeen meshes with its two door leaves.
+
+Not every room is lit at night. `window_lit` lights a `LIT_WINDOWS` share of a dwelling's windows, 70 percent. The choice is the window's own, so the same window is always lit, or always dark.
+
+### Roof coverings
+
+`HouseParameters.covering` is a `RoofCovering`:
+
+| Covering | What it is | Its texture's tile |
+|---|---|---|
+| `BY_FACADE` | Slates over fieldstone, and tiles over every other facade. The default. | |
+| `TILES` | Clay tiles in staggered courses | `TILE_TILE`, 1 meter |
+| `SLATES` | Gray slates in staggered courses | `SLATE_TILE`, 0.9 meters |
+| `THATCH` | Straw in four courses, gold with weathered gray patches | `THATCH_TILE`, 1 meter |
+
+`roof_covering` resolves `BY_FACADE`. `HouseParameters.roof` tints the covering's texture. White shows it as it is.
 
 ## Surfaces
 

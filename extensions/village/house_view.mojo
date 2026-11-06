@@ -93,6 +93,7 @@ from extensions.village.dressing import (
     herbs,
     jars,
     lantern,
+    lantern_glass,
     patchwork,
     prism,
     rug,
@@ -106,7 +107,10 @@ from extensions.village.house import (
     Breast,
     Facade,
     HouseParameters,
+    RoofCovering,
+    SLATES,
     STAIR_GOING,
+    THATCH,
     STONE_FACADE,
     Stair,
     TIMBER_FRAMED,
@@ -131,6 +135,7 @@ from extensions.village.surfaces import (
     PLANK_TILE,
     PLASTER_TILE,
     SLATE_TILE,
+    THATCH_TILE,
     TILE_TILE,
     WOOD_TILE,
     tiled_noise,
@@ -202,6 +207,10 @@ comptime NIGHT_GLASS = Vector3(0.02, 0.03, 0.07)
 """The color of a pane seen from inside at night, drawn unlit."""
 comptime LAMPLIGHT = Vector3(1.0, 0.66, 0.3)
 """The color of a window lit from inside at night, drawn unlit."""
+comptime LIT_WINDOWS = Float32(0.7)
+"""The share of a dwelling's windows that glow at night."""
+comptime COLD_LANTERN = Vector3(0.16, 0.15, 0.12)
+"""The color of an outside lantern's glass by day, unlit, drawn unlit."""
 comptime HOOD_REACH = Float32(0.75)
 """How far a door's hood reaches out from its wall, in meters."""
 comptime BRACED_LEAF = Float32(1.2)
@@ -213,6 +222,41 @@ comptime BALE = Vector3(0.9, 0.4, 0.45)
 """A bale of straw's length, height and width, in meters."""
 comptime LOFT_DOOR = Vector3(1.4, 1.5, 0)
 """A barn's loft door's width and its most height, in meters."""
+
+
+def roof_tile(covering: RoofCovering) -> Float32:
+    """Return the meters of roof that one copy of a covering's texture
+    covers.
+
+    Args:
+        covering: The covering, resolved: not `BY_FACADE`.
+
+    Returns:
+        `SLATE_TILE` for slates, `THATCH_TILE` for thatch, and `TILE_TILE`
+        for tiles.
+    """
+    if covering == SLATES:
+        return SLATE_TILE
+    if covering == THATCH:
+        return THATCH_TILE
+    return TILE_TILE
+
+
+def window_lit(corner: Vector3, seed: Int) -> Bool:
+    """Return whether a dwelling's window glows at night.
+
+    A `LIT_WINDOWS` share of the windows glow. The choice is the window's
+    own: the same window of the same house is always lit, or always dark.
+
+    Args:
+        corner: A corner of the window's pane, in meters.
+        seed: The house's seed.
+
+    Returns:
+        True if the window glows.
+    """
+    var key = Int(corner.x * 20) * 7919 + Int(corner.y * 20) * 104729
+    return hash01(key, Int(corner.z * 20), seed + 211) < LIT_WINDOWS
 
 
 def painted(paint: Vector3) -> Vector3:
@@ -353,7 +397,7 @@ struct _Sheets(Movable):
         self.plaster = Sheet(PLASTER_TILE)
         self.wood = Sheet(WOOD_TILE)
         self.ashlar = Sheet(ASHLAR_TILE)
-        self.roof = Sheet(SLATE_TILE if facade == STONE_FACADE else TILE_TILE)
+        self.roof = Sheet(TILE_TILE)
         self.planks = Sheet(PLANK_TILE)
         self.glass = Sheet(1)
         self.daylight = Sheet(1)
@@ -813,8 +857,9 @@ def _window(
     sheets.night_panes.quad(
         low + across, low - across, high - across, high + across, NIGHT_GLASS
     )
-    # A dwelling's window glows with its lamps at night, from outside.
-    if parameters.use != BARN:
+    # A dwelling's window glows with its lamps at night, from outside: but
+    # not every room is lit, so some windows stay dark.
+    if parameters.use != BARN and window_lit(low, parameters.seed):
         var lit = n * 0.01
         sheets.lamplight.painted_quad(
             low - across + lit,
@@ -1015,7 +1060,9 @@ def _door_hood(
     var arm = face.at(u1 + 0.25, o.v1 + 0.05, wall)
     var tip = face.at(u1 + 0.25, o.v1 + 0.05, wall + out_sign * 0.32)
     _bar(sheets.wood, arm, tip, up, 0.025, 0.025, WROUGHT)
-    _ = lantern(sheets.wood, sheets.daylight, tip, 0.33)
+    # Its glass glows from dusk to dawn, and is cold by day.
+    _ = lantern(sheets.wood, sheets.lamplight, tip, 0.33)
+    _ = lantern_glass(sheets.day_panes, tip, 0.33, COLD_LANTERN)
 
 
 def _door_frame(
@@ -2027,8 +2074,9 @@ def _roof(
     parameters: HouseParameters,
     half_t: Float32,
     breast: Optional[Breast],
-) raises:
-    """Add the gable roof, its gables, and the chimney over a breast."""
+) raises -> Optional[Vector3]:
+    """Add the gable roof, its gables, and the chimney over a breast, and
+    return the top of the chimney's pot, in the house's own frame."""
     var half_w = parameters.width.to(METER) / 2
     var half_d = parameters.depth.to(METER) / 2
     var base = parameters.story_height.to(METER) * Float32(parameters.stories)
@@ -2173,7 +2221,7 @@ def _roof(
                 OAK,
             )
     if not breast:
-        return
+        return None
     # A chimney through the roof, over the breast.
     ref over = breast.value()
     var cx = Float32((over.x0 + over.x1) / 2)
@@ -2202,6 +2250,7 @@ def _roof(
         Vector3(0, 0, 0.09),
         Vector3(0.75, 0.42, 0.3),
     )
+    return Vector3(cx, stack_top + 0.34, cz)
 
 
 def _end_sign(end: Int) -> Float32:
@@ -2902,6 +2951,9 @@ struct StandingHouse(Movable):
     # The hinge of each door leaf of the ground story, in the order of
     # `interior.doorways`.
     var hinges: List[Hinge]
+    var chimney: Optional[Vector3]
+    """The top of the house's chimney pot, in the house's own frame, or
+    None for a house with no chimney."""
 
     def __init__(
         out self,
@@ -2914,6 +2966,7 @@ struct StandingHouse(Movable):
         triangles: Int,
         var interior: HouseInterior,
         var hinges: List[Hinge],
+        chimney: Optional[Vector3] = None,
     ):
         """Hold a house in a scene.
 
@@ -2928,6 +2981,8 @@ struct StandingHouse(Movable):
             triangles: How many triangles they hold.
             interior: Where a character can walk in it.
             hinges: The hinge of each door leaf of the ground story.
+            chimney: The top of its chimney's pot, in its own frame, or
+                None for a house with no chimney.
         """
         self.root = root
         self.inside = inside
@@ -2938,6 +2993,7 @@ struct StandingHouse(Movable):
         self.triangles = triangles
         self.interior = interior^
         self.hinges = hinges^
+        self.chimney = chimney
 
 
 def _add(
@@ -2991,9 +3047,12 @@ def _add_all(
     """Add each sheet of a house as a mesh of its material under a node,
     and return their triangles. The planks, the glass, the panes' light
     and the cloth never cast."""
-    var roof = (
-        looks.slates if parameters.facade == STONE_FACADE else looks.tiles
-    )
+    var covering = parameters.roof_covering()
+    var roof = looks.tiles
+    if covering == SLATES:
+        roof = looks.slates
+    elif covering == THATCH:
+        roof = looks.thatch
     var triangles = 0
     triangles += _add(
         scene,
@@ -3082,6 +3141,7 @@ def stand_house(
     # from a node of its own, which a game can hide from far away.
     var sheets = _Sheets(parameters.facade)
     var inside = _Sheets(parameters.facade)
+    sheets.roof.tile = roof_tile(parameters.roof_covering())
     var half_x = parameters.width.to(METER) / 2
     var half_z = parameters.depth.to(METER) / 2
     var top = parameters.story_height.to(METER) * Float32(parameters.stories)
@@ -3098,8 +3158,9 @@ def stand_house(
     if breast:
         _breast_view(inside, building, breast.value(), glows)
     var half_t = Float32(building.constructions[0].thickness().value) / 2
+    var chimney = Optional[Vector3](None)
     if parameters.pitch.to(RADIAN) > 0:
-        _roof(sheets, parameters, half_t, breast)
+        chimney = _roof(sheets, parameters, half_t, breast)
         _gutters(sheets, parameters, half_t, feet[0] - floor)
     _plinth(sheets, half_x, half_z, feet[0] - floor)
     _steps(sheets, interior, lot, ground)
@@ -3212,4 +3273,5 @@ def stand_house(
         triangles,
         interior^,
         hinges^,
+        chimney,
     )

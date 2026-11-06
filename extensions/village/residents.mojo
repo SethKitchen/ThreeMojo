@@ -52,7 +52,9 @@ from extensions.humanoid.rig.clips import (
     idle_clip,
     jump_clip,
     run_clip,
+    sit_clip,
     walk_clip,
+    work_clip,
 )
 from extensions.humanoid.rig.game import GameHumanoid, add_game_humanoid
 from extensions.humanoid.rig.joints import RIGHT_SHIN, RIGHT_TOES
@@ -69,6 +71,7 @@ from extensions.vegetation.noise import hash01
 from extensions.village.faces import FACE_TRIANGLES, FaceLife
 from extensions.village.clothes import Groom, plain_groom
 from extensions.village.interior import Doorway
+from core.ordinal import ordinal_valid
 from extensions.village.terrain import Terrain
 from extensions.village.character import (
     AIRBORNE,
@@ -86,7 +89,7 @@ from controls.third_person_controls import turn_toward, yaw_of
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from std.math import cos, pi, sin, sqrt
+from std.math import cos, floor, isnan, nan, pi, sin, sqrt
 from units.measure import length_meters
 from units.si import (
     METER,
@@ -129,9 +132,31 @@ comptime ARRIVED = Float32(0.6)
 """How near a point a resident must come, in meters, to have reached it."""
 comptime STALL_SPEED = Float32(0.1)
 """A resident that walks slower than this, in meters a second, is stuck."""
-comptime GIVE_UP = Float32(2.5)
-"""How long a resident stays stuck, in seconds, before it gives up on its
-point and rests, then walks on to the next."""
+comptime SIDESTEP = Float32(0.6)
+"""How long a resident stays stuck, in seconds, before it walks aside."""
+comptime DETOUR = Float32(1.2)
+"""How long a stuck resident walks aside, in seconds."""
+comptime ACTIVITY_REST = Float32(4)
+"""How many rests long a person sits or works at a stop."""
+comptime TURN_STEP = Float32(0.35)
+"""How far an animal's feet step, in meters, for each radian it turns on
+the spot."""
+comptime TURNING = Float32(0.5)
+"""How fast an animal must turn, in radians a second, for its feet to step
+as it turns on the spot."""
+comptime STOP_REACH = Float32(14)
+"""How far from the middle of where a person wanders a stop can be, in
+meters, for them to stop at it."""
+comptime FOLLOW_REACH = Float32(30)
+"""How near a player must be, in meters, for a dog to follow them."""
+comptime HEEL = Float32(2.5)
+"""How near the player a following dog keeps, in meters."""
+comptime PANIC = Float32(9)
+"""How near a foe must be, in meters, for a person or an animal to run
+from it."""
+comptime DETOURS = 4
+"""How many times a resident walks round something on its way to a point
+before it gives up on the point, rests, and walks on to the next."""
 comptime APPROACH = Float32(3.2)
 """How far in front of its door a villager stops before it goes in, in
 meters."""
@@ -240,10 +265,12 @@ struct Body(Movable):
     # The node the humanoid hangs from. It stands at the feet.
     var carrier: NodeId
     var mixer: AnimationMixer
-    # The idle, walk, run and jump actions, in that order.
+    # The idle, walk, run, jump, sit and work actions, in that order.
     var actions: List[Int]
     # The stance whose clip plays.
     var playing: Stance
+    var clip: Int
+    """The place in `actions` of the clip that plays."""
     # How far the humanoid's origin is above its soles, in meters.
     var lift: Float32
     # Whether the person speaks: whether its face moves. Its face's
@@ -361,22 +388,36 @@ struct Body(Movable):
         self.actions.append(
             self.mixer.add(AnimationAction(jump_clip(bones, rig)))
         )
+        self.actions.append(
+            self.mixer.add(AnimationAction(sit_clip(bones, rig)))
+        )
+        self.actions.append(
+            self.mixer.add(AnimationAction(work_clip(bones, rig)))
+        )
         self.mixer.action(self.actions[3]).set_loop(ONCE)
         self.mixer.action(self.actions[3]).clamp_when_finished = True
         self.mixer.action(self.actions[0]).play()
         self.playing = STANDING
+        self.clip = 0
         var scale = rig.stature / Float32(1.8288)
         self.lift = -rig.at(RIGHT_TOES).y + SOLE * scale
 
     def pose(
-        mut self, mut scene: Scene, character: Character, delta: Duration
+        mut self,
+        mut scene: Scene,
+        character: Character,
+        delta: Duration,
+        activity: Activity = IDLE,
     ) raises:
-        """Stand the body where a character stands, and play its stance.
+        """Stand the body where a character stands, and play its stance,
+        or what it does while it stands.
 
         Args:
             scene: The scene the body is in.
             character: The character the body shows.
             delta: The frame's time.
+            activity: What the person does while they stand: at ease, on a
+                bench, or at work.
 
         Raises:
             Error: If the time is negative, or a clip cannot be played.
@@ -388,19 +429,26 @@ struct Body(Movable):
             Vector3(0, 1, 0), facing_turn(character.heading)
         )
         var stance = character.stance
-        if stance != self.playing:
-            var next = self.actions[clip_of(stance)]
-            var last = self.actions[clip_of(self.playing)]
+        var clip = clip_of(stance)
+        if stance == STANDING and activity == SIT:
+            clip = 4
+        elif stance == STANDING and activity == WORK:
+            clip = 5
+        if clip != self.clip:
+            var next = self.actions[clip]
+            var last = self.actions[self.clip]
             ref action = self.mixer.action(next)
             action.reset()
             if stance == AIRBORNE:
                 action.phase = JUMP_TAKEOFF * action.clip.duration().to(SECOND)
             action.play()
             self.mixer.cross_fade_from(next, last, FADE)
-            self.playing = stance
-        self.mixer.action(self.actions[clip_of(stance)]).time_scale = play_rate(
-            stance, character.speed()
-        )
+            self.clip = clip
+        self.playing = stance
+        if clip < 4:
+            self.mixer.action(self.actions[clip]).time_scale = play_rate(
+                stance, character.speed()
+            )
         self.mixer.update(scene, delta)
 
     def head(self, scene: Scene) raises -> Vector3:
@@ -455,10 +503,56 @@ struct Body(Movable):
             self.person.move_face(scene, weights)
 
 
+@fieldwise_init
+struct Activity(Equatable, ImplicitlyCopyable, Writable):
+    """What a person does while they rest at a point of their route, as a
+    type rather than a bare int."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the three activities there are.
+
+        Returns:
+            Whether the value names an activity.
+        """
+        return ordinal_valid(self.value, 2)
+
+
+# Standing at ease.
+comptime IDLE = Activity(0)
+# Sitting on a bench.
+comptime SIT = Activity(1)
+# Working with a tool: hoeing, chopping or drawing water.
+comptime WORK = Activity(2)
+
+
+@fieldwise_init
+struct Stop(Copyable, ImplicitlyCopyable):
+    """A place where a person stops a while to do something: a bench to
+    sit on, or a place to work."""
+
+    var x: Float32
+    """Where the person stands, along x, in meters."""
+    var z: Float32
+    """Where the person stands, along z, in meters."""
+    var facing: Angle
+    """Which way the person faces there, as a yaw."""
+    var activity: Activity
+    """What the person does there."""
+
+
 struct Route(Copyable, Movable):
     """The points a resident walks between, and how long it rests at each."""
 
     var points: List[Vector3]
+    var activities: List[Activity]
+    """What the resident does at each point."""
+    var facings: List[Float32]
+    """The yaw, in radians, that the resident turns to at each point, or
+    NaN to keep its heading."""
+    var at: Int
+    """The point the resident rests at, or last rested at."""
     # The point it walks to now.
     var next: Int
     # How long it rests at each point, and how long it has left there.
@@ -468,6 +562,14 @@ struct Route(Copyable, Movable):
     var run: Bool
     # How long it has been stuck on its way to the point, in seconds.
     var stalled: Float32
+    var detour: Float32
+    """How long it still walks aside round something in its way, in
+    seconds."""
+    var side: Float32
+    """Which side it last walked round on: one to its left, minus one to
+    its right."""
+    var detours: Int
+    """How many times it has walked aside on its way to the point."""
 
     def __init__(
         out self, var points: List[Vector3], rest: Duration, run: Bool = False
@@ -486,12 +588,20 @@ struct Route(Copyable, Movable):
             raise Error("A route must have a point")
         if not (rest.to(SECOND) >= 0):
             raise Error("A route's rest must not be negative")
+        self.activities = List[Activity](length=len(points), fill=IDLE)
+        self.facings = List[Float32](
+            length=len(points), fill=nan[DType.float32]()
+        )
         self.points = points^
+        self.at = 0
         self.next = 0
         self.rest = rest
         self.resting = 0
         self.run = run
         self.stalled = 0
+        self.detour = 0
+        self.side = 1
+        self.detours = 0
 
     def steer(
         mut self, character: Character, delta: Duration
@@ -506,22 +616,40 @@ struct Route(Copyable, Movable):
         Returns:
             A full lean toward the next point and the yaw toward it, or no
             input and the character's heading while it rests. A character
-            that has been stuck for `GIVE_UP` seconds on its way, behind
+            that has walked aside `DETOURS` times on its way, behind
             a wall or another resident, rests as if it had arrived.
         """
         var seconds = delta.to(SECOND)
         if self.resting > 0:
             self.resting -= seconds
-            return (no_input(), character.heading)
+            var facing = self.facings[self.at]
+            if isnan(facing):
+                return (no_input(), character.heading)
+            return (no_input(), Angle(facing, RADIAN))
         var goal = self.points[self.next]
         var way = Vector3(
             goal.x - character.position.x, 0, goal.z - character.position.z
         )
-        if way.length() < ARRIVED or self.stalled >= GIVE_UP:
+        if way.length() < ARRIVED or self.detours > DETOURS:
+            self.at = self.next
             self.next = (self.next + 1) % len(self.points)
             self.resting = self.rest.to(SECOND)
+            # A person sits or works a while longer than they stand.
+            if self.activities[self.at] != IDLE:
+                self.resting *= ACTIVITY_REST
             self.stalled = 0
+            self.detours = 0
             return (no_input(), character.heading)
+        # A resident stuck behind something walks round it: aside for
+        # `DETOUR` seconds, to one side and then, stuck again, the other.
+        if self.stalled >= SIDESTEP and self.detour <= 0:
+            self.detour = DETOUR
+            self.side = -self.side
+            self.stalled = 0
+            self.detours += 1
+        if self.detour > 0:
+            self.detour -= seconds
+            way = Vector3(-way.z * self.side, 0, way.x * self.side) + way * 0.25
         if character.speed().to(METER_PER_SECOND) < STALL_SPEED:
             self.stalled += seconds
         else:
@@ -530,6 +658,48 @@ struct Route(Copyable, Movable):
         input.forward = 1
         input.run = self.run
         return (input, yaw_of(way))
+
+    def add(mut self, stop: Stop):
+        """Add a stop to the end of the route.
+
+        Args:
+            stop: Where to stop, which way to face, and what to do there.
+        """
+        self.points.append(Vector3(stop.x, 0, stop.z))
+        self.activities.append(stop.activity)
+        self.facings.append(stop.facing.to(RADIAN))
+
+    def doing(self) -> Activity:
+        """Return what the resident does now.
+
+        Returns:
+            The activity of the point it rests at, or `IDLE` on its way.
+        """
+        if self.resting > 0:
+            return self.activities[self.at]
+        return IDLE
+
+
+def home_route(door: Doorway) raises -> Route:
+    """Return a route home: up to the front door, over the threshold,
+    and in, where the person stays.
+
+    Args:
+        door: The home's front door.
+
+    Returns:
+        The route, at its first point. A person on it stays at the last
+        point, indoors, for as long as they keep to it.
+
+    Raises:
+        Error: Never: the route has its points.
+    """
+    var middle = door.middle()
+    var into = Vector3(door.swing_x, 0, door.swing_z)
+    var points = List[Vector3]()
+    for reach in [-APPROACH, -THRESHOLD, INDOORS]:  # pragma: no branch
+        points.append(middle + into * reach)
+    return Route(points^, Duration(0.2, SECOND))
 
 
 def visit(mut route: Route, door: Doorway):
@@ -550,6 +720,8 @@ def visit(mut route: Route, door: Doorway):
         -APPROACH,
     ]:  # pragma: no branch
         route.points.append(middle + into * reach)
+        route.activities.append(IDLE)
+        route.facings.append(nan[DType.float32]())
 
 
 def wander_route(
@@ -701,6 +873,8 @@ struct Herd(Copyable, Movable):
     var seed: Int
     # How near the player may come before they run. Zero is tame.
     var flee: Length
+    var follows: Bool
+    """Whether they follow the player who comes near, as a dog does."""
 
     def __init__(
         out self,
@@ -711,6 +885,7 @@ struct Herd(Copyable, Movable):
         reach: Float32,
         seed: Int,
         flee: Length = Length(0.0, METER),
+        follows: Bool = False,
     ):
         """Create a herd.
 
@@ -723,6 +898,7 @@ struct Herd(Copyable, Movable):
             seed: Which individual, and which points they graze between.
             flee: How near the player may come before they run away. Zero
                 is tame.
+            follows: Whether they follow the player within `FOLLOW_REACH`.
         """
         self.species = species
         self.count = count
@@ -731,6 +907,7 @@ struct Herd(Copyable, Movable):
         self.reach = reach
         self.seed = seed
         self.flee = flee
+        self.follows = follows
 
 
 struct ResidentsParameters(Copyable, Movable):
@@ -873,11 +1050,26 @@ struct Flipbook(Copyable, Movable):
             The standing mesh while it stands or has no stride, and the
             walk's pose at how far it has walked otherwise.
         """
-        if character.stance == STANDING or self.stride <= 0:
+        return self.frame_at(character.traveled, character.stance != STANDING)
+
+    def frame_at(self, paced: Float32, moving: Bool) -> GeometryId:
+        """Return the mesh of an animal that has paced a distance.
+
+        Args:
+            paced: How far its feet have stepped, in meters: its walk, and
+                the steps it took to turn.
+            moving: Whether its feet step now: it walks, or turns on the
+                spot.
+
+        Returns:
+            The standing mesh while its feet are still or it has no
+            stride, and the walk's pose at `paced` otherwise.
+        """
+        if not moving or self.stride <= 0:
             return self.stand
         if len(self.frames) == 0:
             return self.stand
-        var strides = character.traveled / self.stride
+        var strides = paced / self.stride
         var phase = strides - Float32(Int(strides))
         var index = Int(phase * Float32(len(self.frames)))
         return self.frames[min(index, len(self.frames) - 1)]
@@ -1059,6 +1251,32 @@ struct Beast(Copyable, Movable):
     var book: Int
     # How near the player may come before it runs, in meters.
     var flee: Float32
+    # Whether it follows the player.
+    var follows: Bool
+    var paced: Float32
+    """How far its feet have stepped, in meters, its turns on the spot
+    included."""
+
+
+def _flight(
+    at: Vector3, dangers: List[Vector3]
+) -> Optional[Tuple[MoveInput, Angle]]:
+    """Return the run away from the nearest danger within `PANIC`, or
+    None."""
+    var nearest = PANIC
+    var away = Vector3(0, 0, 0)
+    for danger in dangers:
+        var off = Vector3(at.x - danger.x, 0, at.z - danger.z)
+        var d = off.length()
+        if d < nearest:
+            nearest = d
+            away = off
+    if nearest >= PANIC:
+        return None
+    var run = no_input()
+    run.forward = 1
+    run.run = True
+    return (run, yaw_of(away))
 
 
 struct Residents(Movable):
@@ -1073,6 +1291,11 @@ struct Residents(Movable):
     # they face while they do: see `hold`.
     var holds: List[Float32]
     var faces: List[Vector3]
+    var homeward: List[Route]
+    """Each person's way home and in, for when the village shelters."""
+    var sheltering: Bool
+    """Whether the people keep to their homes now: at night, or in hard
+    rain or snow."""
 
     def __init__(
         out self,
@@ -1082,6 +1305,7 @@ struct Residents(Movable):
         terrain: Terrain,
         lots: List[Lot],
         homes: List[Doorway],
+        stops: List[Stop] = List[Stop](),
     ) raises:
         """Build the residents into a scene, each at its first place.
 
@@ -1093,6 +1317,9 @@ struct Residents(Movable):
             lots: The buildings' footprints, which their routes keep off.
             homes: Each house's front door, in the order of the village's
                 houses.
+            stops: The benches to sit on and the places to work. A person
+                stops at each one within `STOP_REACH` of the middle of
+                where they wander.
 
         Raises:
             Error: If `parameters.check` refuses a value, a villager's
@@ -1107,6 +1334,8 @@ struct Residents(Movable):
         self.faces = List[Vector3](
             length=len(parameters.villagers), fill=Vector3(0, 0, 0)
         )
+        self.homeward = List[Route]()
+        self.sheltering = False
         for index in range(len(parameters.villagers)):
             ref villager = parameters.villagers[index]
             self.bodies.append(
@@ -1135,11 +1364,21 @@ struct Residents(Movable):
             )
             route.run = villager.runs
             var start = route.points[len(route.points) - 1]
+            for stop in stops:
+                var dx = stop.x - villager.x
+                var dz = stop.z - villager.z
+                if dx * dx + dz * dz <= STOP_REACH * STOP_REACH:
+                    route.add(stop)
             var home = villager.home.value
             if home >= 0:
                 if home >= len(homes):
                     raise Error("A villager's home must be a house")
                 visit(route, homes[home])
+            # A person with no home of their own shelters in the first.
+            if home >= 0 or len(homes) > 0:
+                self.homeward.append(home_route(homes[max(0, home)]))
+            else:
+                self.homeward.append(route.copy())
             self.people.append(
                 Character(
                     CharacterParameters(),
@@ -1206,6 +1445,8 @@ struct Residents(Movable):
                         mesh,
                         book,
                         herd.flee.to(METER),
+                        herd.follows,
+                        0,
                     )
                 )
 
@@ -1216,6 +1457,8 @@ struct Residents(Movable):
         terrain: Terrain,
         obstacles: List[Obstacle],
         player: Optional[Vector3] = None,
+        shelter: Bool = False,
+        dangers: List[Vector3] = List[Vector3](),
     ) raises:
         """Move every resident along its route by one frame, and pose it.
 
@@ -1232,7 +1475,13 @@ struct Residents(Movable):
             terrain: The ground, the floors, the walls and the solid
                 buildings.
             obstacles: The round things in the way.
-            player: Where the player stands, which a shy animal runs from.
+            player: Where the player stands, which a shy animal runs from,
+                and which a dog follows.
+            shelter: Whether the people go home and stay in: at night, or
+                in hard rain or snow. Once it is false again, they go back
+                to their routes.
+            dangers: Where each foe stands. A person or an animal within
+                `PANIC` of one runs from it.
 
         Raises:
             Error: If the time is negative, or a clip cannot be played.
@@ -1244,9 +1493,19 @@ struct Residents(Movable):
         crowd.extend(self.obstacles())
         var people = len(self.people)
         var seconds = delta.to(SECOND)
+        if shelter and not self.sheltering:
+            # Each person sets out for home from where they stand.
+            for index in range(people):
+                self.homeward[index].next = 0
+                self.homeward[index].resting = 0
+        self.sheltering = shelter
         for index in range(people):
             var steer: Tuple[MoveInput, Angle]
-            if self.holds[index] > 0:
+            var fled = _flight(self.people[index].position, dangers)
+            var doing = IDLE
+            if fled:
+                steer = fled.value()
+            elif self.holds[index] > 0:
                 # A held person stands, and turns to face their point. Their
                 # route waits.
                 self.holds[index] -= seconds
@@ -1259,15 +1518,30 @@ struct Residents(Movable):
                 )
                 self.people[index].heading = turned
                 steer = (no_input(), turned)
+            elif shelter:
+                steer = self.homeward[index].steer(self.people[index], delta)
+                # Home, they stay in.
+                ref home = self.homeward[index]
+                if home.at == len(home.points) - 1 and home.resting > 0:
+                    home.next = home.at
+                    home.resting = 1
             else:
                 steer = self.walks[index].steer(self.people[index], delta)
+                doing = self.walks[index].doing()
+                # A seated person or one at work turns to their stop.
+                if doing != IDLE:
+                    self.people[index].heading = turn_toward(
+                        self.people[index].heading,
+                        steer[1],
+                        Angle(FACE_SPEED * seconds, RADIAN),
+                    )
             self.people[index].step(
                 steer[0], steer[1], delta, terrain, crowd, first + index
             )
             ref feet = self.people[index].position
             crowd[first + index].x = feet.x
             crowd[first + index].z = feet.z
-            self.bodies[index].pose(scene, self.people[index], delta)
+            self.bodies[index].pose(scene, self.people[index], delta, doing)
         for index in range(len(self.beasts)):
             ref beast = self.beasts[index]
             var steer = beast.route.steer(beast.character, delta)
@@ -1276,13 +1550,36 @@ struct Residents(Movable):
                 var away = Vector3(
                     at.x - player.value().x, 0, at.z - player.value().z
                 )
-                if away.length() < beast.flee:
+                var apart = away.length()
+                if apart < beast.flee:
                     var run = no_input()
                     run.forward = 1
                     run.run = True
                     steer = (run, yaw_of(away))
+                elif beast.follows and apart < FOLLOW_REACH:
+                    # A dog keeps at its master's heel, and runs to catch
+                    # up from far.
+                    if apart > HEEL:
+                        var go = no_input()
+                        go.forward = 1
+                        go.run = apart > HEEL * 3
+                        steer = (go, yaw_of(Vector3(0, 0, 0) - away))
+                    else:
+                        steer = (no_input(), beast.character.heading)
+            if beast.flee > 0:
+                var fled = _flight(beast.character.position, dangers)
+                if fled:
+                    steer = fled.value()
             var own = first + people + index
+            var was = beast.character.heading.to(RADIAN)
+            var walked = beast.character.traveled
             beast.character.step(steer[0], steer[1], delta, terrain, crowd, own)
+            # An animal that turns on the spot steps round as it turns.
+            var turn = beast.character.heading.to(RADIAN) - was
+            turn = turn - Float32(2 * pi) * floor(turn / Float32(2 * pi) + 0.5)
+            var stepped = beast.character.traveled - walked
+            beast.paced += stepped + abs(turn) * TURN_STEP
+            var turning = abs(turn) > TURNING * delta.to(SECOND)
             crowd[own].x = beast.character.position.x
             crowd[own].z = beast.character.position.z
             var at = beast.character.position
@@ -1291,9 +1588,24 @@ struct Residents(Movable):
             node.set_rotation_from_axis_angle(
                 Vector3(0, 1, 0), facing_turn(beast.character.heading)
             )
-            scene.meshes[beast.mesh].geometry = self.books[beast.book].frame(
-                beast.character
+            scene.meshes[beast.mesh].geometry = self.books[beast.book].frame_at(
+                beast.paced,
+                beast.character.stance != STANDING or turning,
             )
+
+    def doing(self, index: Int) -> Activity:
+        """Return what a person does now.
+
+        Args:
+            index: The person's place among `people`.
+
+        Returns:
+            Their activity, or `IDLE` on their way, while they shelter, and
+            for a person who is not one.
+        """
+        if index < 0 or index >= len(self.people) or self.sheltering:
+            return IDLE
+        return self.walks[index].doing()
 
     def hold(mut self, index: Int, seconds: Float32, toward: Vector3) raises:
         """Stop a person on their route for a while, turned to face a point,
