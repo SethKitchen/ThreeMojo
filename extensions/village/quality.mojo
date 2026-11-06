@@ -15,7 +15,7 @@ each can be turned up or down alone:
 | `plants` | `FEWEST_PLANTS` | `ALL_PLANTS` |
 | `grass_wind_every` | 0: still grass | 1: every blade every frame |
 | `sky_step` | One sky sample every 3 pixels | Every pixel |
-| `water_step` | One water sample every 8 pixels | Every pixel |
+| `water_step` | One water sample every 4 pixels | Every pixel |
 | `water_refresh_every` | The waves found every fourth frame | Every frame |
 | `animal_coarseness` | Animals three times coarser | Each tier's own mesh |
 | `shadows` | `NO_SHADOWS` | `FULL_SHADOWS`: every caster every frame |
@@ -227,7 +227,7 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
     Returns:
         `LOW`: 45 percent of the window, the fewest plants, the grass's wind
         every fourth frame, a sky sample every 3 pixels, and a water
-        sample every 8 pixels on a surface found every fourth frame,
+        sample every 4 pixels on a surface found every fourth frame,
         animals three times coarser, cached shadows on a map of 1,024
         texels, fighters posed every frame within 12 meters, and a
         sharpness of 0.8. Every preset smooths the frame's edges.
@@ -249,7 +249,7 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
             FEWEST_PLANTS,
             4,
             3,
-            8,
+            4,
             4,
             3,
             CACHED_SHADOWS,
