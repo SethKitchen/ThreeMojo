@@ -54,6 +54,7 @@ from extensions.village.combos import (
     tier_name,
 )
 from extensions.village.hud import (
+    PANEL_ALPHA,
     GOLD_TEXT,
     SHADOW,
     WHITE_TEXT,
@@ -310,11 +311,26 @@ def _boss_bar(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
 
 
 def _party(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
-    """Draw each raider who joined: their role and their health, or `DOWN`
-    and the revive."""
+    """Draw each raider who joined, on a dark panel: their role and their
+    health, or `DOWN` and the revive."""
     var x = 6 * scale
     var y = frame.height // 3
     var width = 48 * scale
+    # A dark panel behind the raiders who joined, as behind the gauges.
+    var joined = 0
+    for k in range(len(battle.members)):
+        if battle.members[k].joined:
+            joined += 1
+    if joined > 0:
+        fill_box(
+            frame,
+            x - 3 * scale,
+            y - 3 * scale,
+            x + width + 3 * scale,
+            y + joined * 16 * scale + scale,
+            SHADOW,
+            PANEL_ALPHA,
+        )
     for k in range(len(battle.members)):
         ref member = battle.members[k]
         if not member.joined:

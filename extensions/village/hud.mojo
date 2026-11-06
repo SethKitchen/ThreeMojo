@@ -99,6 +99,9 @@ struct Rgb(ImplicitlyCopyable):
 comptime WHITE_TEXT = Rgb(245, 238, 220)
 comptime GOLD_TEXT = Rgb(255, 205, 90)
 comptime SHADOW = Rgb(10, 8, 6)
+comptime PANEL_ALPHA = Float32(0.38)
+"""How dark a panel behind a group of the display's words and bars is,
+from 0 to 1."""
 
 
 def hud_scale(height: Int) -> Int:

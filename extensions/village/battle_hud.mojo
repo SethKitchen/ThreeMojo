@@ -91,6 +91,7 @@ from extensions.village.slashes import (
     glow_star,
 )
 from extensions.village.hud import (
+    PANEL_ALPHA,
     GOLD_TEXT,
     SHADOW,
     WHITE_TEXT,
@@ -153,8 +154,6 @@ comptime HURT_ARC = Float32(0.06)
 share of the way from the middle."""
 comptime CHIP_COLOR = Rgb(255, 236, 196)
 """The color of the health a blow took, behind the health on a bar."""
-comptime PANEL_ALPHA = Float32(0.38)
-"""How dark the panel behind the player's gauges is, from 0 to 1."""
 comptime POP_SECONDS = Float32(0.12)
 """How long a number stands larger as it appears, in seconds."""
 comptime POPUP_FADE = Float32(0.3)
