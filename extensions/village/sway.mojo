@@ -22,6 +22,11 @@ stop. `Sway` gives the hem that swing, with no cloth to simulate:
    hem trails a run, kicks forward as the runner stops, and settles.
 3. **The weights.** `sway_weights` turns the offset into the four
    targets' weights, each from 0 to 1.
+4. **The flare.** A fifth target moves the hem out from the body's axis,
+   and a little up. `Sway.flare` follows the body's spin, by `FLARE_SPIN`
+   for each radian a second, and its fall, by `FLARE_FALL` for each
+   meter a second: a whirlwind spreads the skirt, and so does a jump as
+   it comes down.
 
 The offset is held within `SWAY_REACH`. The game's renderer applies the
 targets before the bones, so the swing turns with the hips.
@@ -38,7 +43,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
 from core.scene import Scene
 from math.vector3 import Vector3
-from std.math import cos, sin, sqrt
+from std.math import cos, floor, pi, sin, sqrt
 
 comptime SWAY_REACH = Float32(0.09)
 """How far the hem swings at most, in meters on a person of six feet."""
@@ -53,6 +58,16 @@ for each meter a second squared."""
 comptime SWAY_DRAG = Float32(0.01)
 """How far the air holds the hem back, in meters for each meter a
 second."""
+comptime FLARE_TARGET = 4
+"""The place of the flare among a skirt's targets."""
+comptime FLARE_LIFT = Float32(0.4)
+"""How far up the hem rises as it flares, as a share of how far out."""
+comptime FLARE_SPIN = Float32(0.12)
+"""How much the hem flares for each radian a second the body turns."""
+comptime FLARE_FALL = Float32(0.15)
+"""How much the hem flares for each meter a second the body falls."""
+comptime FLARE_EASE = Float32(8)
+"""How fast the flare follows what the body does, per second."""
 comptime SWAY_LONGEST = Float32(0.1)
 """The longest step the spring takes at once, in seconds: a longer frame
 is taken in steps no longer than this, so the spring stays steady."""
@@ -61,12 +76,15 @@ is taken in steps no longer than this, so the spring stays steady."""
 def add_sway_targets(
     mut geometry: BufferGeometry, top: Float32, reach: Float32
 ) raises -> Bool:
-    """Add the four targets that swing a skirt's hem to a garment's piece.
+    """Add the five targets that swing and flare a skirt's hem to a
+    garment's piece.
 
-    Each target moves every vertex below `top` along one way of the
-    body's frame: +x, -x, +z and -z. A vertex moves by `reach` times the
-    square of how far it lies from `top` to the piece's lowest vertex.
-    The targets are relative: they hold how far each vertex moves.
+    Each of the first four targets moves every vertex below `top` along
+    one way of the body's frame: +x, -x, +z and -z. A vertex moves by
+    `reach` times the square of how far it lies from `top` to the piece's
+    lowest vertex. The fifth, the flare, moves it as far out from the
+    body's axis, and `FLARE_LIFT` of that up. The targets are relative:
+    they hold how far each vertex moves.
 
     Args:
         geometry: A piece of a skirted garment, in the body's frame. It is
@@ -97,6 +115,15 @@ def add_sway_targets(
     for v in range(count):  # pragma: no branch
         var fall = max(Float32(0), (top - points.vector3(v).y) / (top - hem))
         reaches[v] = reach * fall * fall
+    # The flare: each vertex out from the body's axis, and a little up.
+    var flared = List[Float32](capacity=3 * count)
+    for v in range(count):  # pragma: no branch
+        var p = points.vector3(v)
+        var out = sqrt(p.x * p.x + p.z * p.z)
+        var spread = reaches[v] / max(out, Float32(1.0e-6))
+        flared.append(p.x * spread)
+        flared.append(reaches[v] * FLARE_LIFT)
+        flared.append(p.z * spread)
     geometry.morph_relative = True
     var ways: List[Vector3] = [
         Vector3(1, 0, 0),
@@ -111,6 +138,9 @@ def add_sway_targets(
             moved.append(0)
             moved.append(ways[w].z * reaches[v])
         geometry.add_morph_target(BufferAttribute(moved^, 3), name=sway_name(w))
+    geometry.add_morph_target(
+        BufferAttribute(flared^, 3), name=sway_name(FLARE_TARGET)
+    )
     return True
 
 
@@ -154,10 +184,11 @@ def sway_name(way: Int) -> String:
     """Return the name of one of the four targets.
 
     Args:
-        way: The target, from 0 to 3: +x, -x, +z and -z.
+        way: The target, from 0 to 4: +x, -x, +z, -z and the flare.
 
     Returns:
-        `sway+x`, `sway-x`, `sway+z` or `sway-z`; `sway` for any other.
+        `sway+x`, `sway-x`, `sway+z`, `sway-z` or `sway-flare`; `sway` for
+        any other.
     """
     if way == 0:
         return "sway+x"
@@ -167,6 +198,8 @@ def sway_name(way: Int) -> String:
         return "sway+z"
     if way == 3:
         return "sway-z"
+    if way == FLARE_TARGET:
+        return "sway-flare"
     return "sway"
 
 
@@ -200,6 +233,10 @@ struct Sway(Copyable, Movable):
     var speed: Vector3
     var last_at: Vector3
     var last_velocity: Vector3
+    # How far the hem flares, from 0 to 1, and the body's turn at the last
+    # step, in radians.
+    var flare: Float32
+    var last_turn: Float32
     # Whether a step has been taken: the first step only learns where the
     # body stands.
     var primed: Bool
@@ -210,6 +247,8 @@ struct Sway(Copyable, Movable):
         self.speed = Vector3(0, 0, 0)
         self.last_at = Vector3(0, 0, 0)
         self.last_velocity = Vector3(0, 0, 0)
+        self.flare = 0
+        self.last_turn = 0
         self.primed = False
 
     def step(
@@ -232,12 +271,26 @@ struct Sway(Copyable, Movable):
         if not self.primed or seconds <= 0:
             if not self.primed:
                 self.last_at = at
+                self.last_turn = turn
                 self.primed = True
             return self.offset
         var velocity = (at - self.last_at) / seconds
         var speeding = (velocity - self.last_velocity) / seconds
         self.last_at = at
         self.last_velocity = velocity
+        # The hem flares as the body spins and as it falls. A turn is
+        # taken the short way round.
+        var turned = turn - self.last_turn
+        turned -= 2 * Float32(pi) * floor(turned / (2 * Float32(pi)) + 0.5)
+        self.last_turn = turn
+        var goal = min(
+            Float32(1),
+            abs(turned) / seconds * FLARE_SPIN
+            + max(Float32(0), -velocity.y) * FLARE_FALL,
+        )
+        self.flare += (goal - self.flare) * min(
+            Float32(1), seconds * FLARE_EASE
+        )
         # Into the body's frame: turned back by its turn about +y.
         var c = cos(turn)
         var s = sin(turn)

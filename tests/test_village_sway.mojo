@@ -47,7 +47,7 @@ def _piece(heights: List[Float32]) raises -> BufferGeometry:
 def test_the_hem_moves_most_and_the_waist_not_at_all() raises:
     var piece = _piece([1.0, 0.5, 0.0])
     assert_true(add_sway_targets(piece, 0.8, 0.1))
-    assert_equal(piece.morph_count(), 4)
+    assert_equal(piece.morph_count(), 5)
     assert_true(piece.morph_relative)
     assert_equal(piece.morph_target_name(0), "sway+x")
     assert_equal(piece.morph_target_name(3), "sway-z")
@@ -60,6 +60,12 @@ def test_the_hem_moves_most_and_the_waist_not_at_all() raises:
     assert_almost_equal(forth.component(2, 0), 0.1, atol=1e-6)
     assert_equal(forth.component(2, 1), 0)
     assert_almost_equal(piece.morph_positions[3].component(2, 2), -0.1)
+    # The flare moves the hem out from the axis, along +x here, and up.
+    ref flare = piece.morph_positions[4]
+    assert_equal(piece.morph_target_name(4), "sway-flare")
+    assert_almost_equal(flare.component(2, 0), 0.1, atol=1e-6)
+    assert_almost_equal(flare.component(2, 1), 0.04, atol=1e-6)
+    assert_equal(flare.component(0, 0), 0)
     # A piece that swings already, or that hangs wholly over the top, is
     # left alone.
     assert_false(add_sway_targets(piece, 0.8, 0.1))
@@ -94,7 +100,7 @@ def test_each_part_of_a_skirt_takes_the_targets() raises:
     var swung = sway_skirts(scene, assets, meshes, 0.8, 0.1)
     assert_equal(len(swung), 1)
     assert_equal(swung[0], meshes[0])
-    assert_equal(assets.geometries.get(low).morph_count(), 4)
+    assert_equal(assets.geometries.get(low).morph_count(), 5)
     assert_equal(
         scene.skinned_meshes[meshes[0]].morph_target_dictionary["sway-z"], 3
     )
@@ -117,6 +123,7 @@ def test_an_offset_splits_into_four_weights() raises:
         assert_equal(none[k], 0)
     assert_equal(sway_name(1), "sway-x")
     assert_equal(sway_name(2), "sway+z")
+    assert_equal(sway_name(4), "sway-flare")
     assert_equal(sway_name(7), "sway")
 
 
@@ -146,6 +153,40 @@ def test_a_hem_trails_a_run_and_swings_on_as_it_stops() raises:
     # A frame of no time leaves it as it is.
     var still = sway.step(at + Vector3(5, 0, 0), 0, 0, 0.1)
     assert_equal(still.x, sway.offset.x)
+
+
+def test_a_hem_flares_as_the_body_spins_and_falls() raises:
+    var dt = Float32(1) / 30
+    # Standing still, it does not flare.
+    var still = Sway()
+    for _ in range(10):
+        _ = still.step(Vector3(0, 0, 0), 0, dt, 0.1)
+    assert_equal(still.flare, 0)
+    # A whirlwind's spin, two turns a second, past a half turn each way.
+    var spin = Sway()
+    var turn = Float32(0)
+    for _ in range(20):
+        turn += 4 * Float32(pi) * dt
+        if turn > Float32(pi):
+            turn -= 2 * Float32(pi)
+        _ = spin.step(Vector3(0, 0, 0), turn, dt, 0.1)
+    assert_true(spin.flare > 0.9)
+    # Then it settles.
+    for _ in range(60):
+        _ = spin.step(Vector3(0, 0, 0), turn, dt, 0.1)
+    assert_true(spin.flare < 0.01)
+    # Falling from a jump flares it too; rising does not.
+    var jump = Sway()
+    var y = Float32(1)
+    _ = jump.step(Vector3(0, y, 0), 0, dt, 0.1)
+    for _ in range(10):
+        y += 3 * dt
+        _ = jump.step(Vector3(0, y, 0), 0, dt, 0.1)
+    assert_equal(jump.flare, 0)
+    for _ in range(10):
+        y -= 4 * dt
+        _ = jump.step(Vector3(0, y, 0), 0, dt, 0.1)
+    assert_true(jump.flare > 0.4)
 
 
 def test_a_hem_swings_in_the_bodys_frame_and_within_reach() raises:

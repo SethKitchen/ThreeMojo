@@ -386,6 +386,7 @@ A skirt's hem swings as the person moves. It trails a run, kicks forward as the 
 1. `Body` gives each piece of a skirted garment four morph targets: the hem moved forward, back, right and left, in the body's frame. A vertex moves by the square of how far it lies down the skirt. So the waist stays, and the hem moves `SWAY_REACH`, 9 cm on a person of six feet.
 2. Each frame, `Sway.step` moves the hem's offset on a damped spring. As the body speeds up, the spring's rest lies behind it by `SWAY_LAG`, 1.2 cm for each meter a second squared. As the body moves, the air holds the hem back by `SWAY_DRAG`, 1 cm for each meter a second. The spring swings about once a second, and its swing dies at `SWAY_DAMPING`, 4.5 a second.
 3. `sway_weights` turns the offset into the four targets' weights. `Body.swing_hem` sets them on each skirt.
+4. A fifth target flares the hem: out from the body's axis, and a little up. `Sway.flare` follows the body's spin, by `FLARE_SPIN`, 0.12 for each radian a second, and its fall, by `FLARE_FALL`, 0.15 for each meter a second. So a whirlwind spreads the skirt, and so does a jump as it comes down.
 
 The renderer moves the vertices by the targets before the bones, so the swing turns with the hips. The offset stays within `SWAY_REACH`.
 

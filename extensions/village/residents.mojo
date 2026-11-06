@@ -548,8 +548,9 @@ struct Body(Movable):
             character.position, turn, delta.to(SECOND), self.sway_reach
         )
         var weights = sway_weights(offset, self.sway_reach)
+        weights.append(self.sway.flare)
         for mesh in self.skirts:  # pragma: no branch
-            for w in range(4):  # pragma: no branch
+            for w in range(5):  # pragma: no branch
                 scene.skinned_meshes[mesh].set_morph_influence(w, weights[w])
 
     def head(self, scene: Scene) raises -> Vector3:

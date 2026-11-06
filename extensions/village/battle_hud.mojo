@@ -789,7 +789,7 @@ def target_name(battle: Battle, index: Int) -> String:
 
 def draw_target(mut frame: Framebuffer, battle: Battle, top: Int):
     """Draw the foe the player is locked on to, under the compass: its
-    name, and its health and stamina as wide bars.
+    name, and its health and stamina as wide bars, on a dark panel.
 
     Nothing is drawn while the player is locked on to no foe, as on a
     dummy or the warden, whose own bar is drawn apart.
@@ -806,6 +806,16 @@ def draw_target(mut frame: Framebuffer, battle: Battle, top: Int):
     var name = target_name(battle, battle.lock)
     var width = frame.width // 4
     var x = (frame.width - width) // 2
+    # A dark panel behind the name and the bars, as behind the gauges.
+    fill_box(
+        frame,
+        x - 4 * scale,
+        top - 2 * scale,
+        x + width + 4 * scale,
+        top + 17 * scale,
+        SHADOW,
+        PANEL_ALPHA,
+    )
     _centered(frame, frame.width // 2, top, name, scale, WHITE_TEXT, 1)
     ref p = foe.fighter.parameters
     var y = top + 9 * scale
