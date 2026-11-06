@@ -134,26 +134,37 @@ __async def _glow_task(
     first: Int,
     past: Int,
 ):
-    """Add the blurred light back over rows `first` to `past`."""
+    """Add the blurred light back over rows `first` to `past`.
+
+    Each cell of the small frame covers a block of `BLOOM_SCALE` pixels of
+    a row: its light is read, and tested, once for the block."""
     for y in range(first, past):  # pragma: no branch
-        for x in range(width):  # pragma: no branch
-            var at = ((y // BLOOM_SCALE) * small_width + x // BLOOM_SCALE) * 3
+        var cells = (y // BLOOM_SCALE) * small_width
+        for sx in range(small_width):  # pragma: no branch
+            var at = (cells + sx) * 3
             var add_r = blurred[unsafe_offset=at] * strength
             var add_g = blurred[unsafe_offset=at + 1] * strength
             var add_b = blurred[unsafe_offset=at + 2] * strength
             if add_r + add_g + add_b <= 1.0e-4:
                 continue
-            var p = (y * width + x) * 4
-            var r = linear[unsafe_offset=Int(pixels[unsafe_offset=p])]
-            var g = linear[unsafe_offset=Int(pixels[unsafe_offset=p + 1])]
-            var b = linear[unsafe_offset=Int(pixels[unsafe_offset=p + 2])]
-            pixels[unsafe_offset=p] = bytes[].byte(min(Float32(1), r + add_r))
-            pixels[unsafe_offset=p + 1] = bytes[].byte(
-                min(Float32(1), g + add_g)
-            )
-            pixels[unsafe_offset=p + 2] = bytes[].byte(
-                min(Float32(1), b + add_b)
-            )
+            var left = sx * BLOOM_SCALE
+            # A cell covers one pixel of the row at least.
+            for x in range(
+                left, min(width, left + BLOOM_SCALE)
+            ):  # pragma: no branch
+                var p = (y * width + x) * 4
+                var r = linear[unsafe_offset=Int(pixels[unsafe_offset=p])]
+                var g = linear[unsafe_offset=Int(pixels[unsafe_offset=p + 1])]
+                var b = linear[unsafe_offset=Int(pixels[unsafe_offset=p + 2])]
+                pixels[unsafe_offset=p] = bytes[].byte(
+                    min(Float32(1), r + add_r)
+                )
+                pixels[unsafe_offset=p + 1] = bytes[].byte(
+                    min(Float32(1), g + add_g)
+                )
+                pixels[unsafe_offset=p + 2] = bytes[].byte(
+                    min(Float32(1), b + add_b)
+                )
 
 
 def bloom(
