@@ -1371,6 +1371,8 @@ struct VillageGame(Movable):
     def follow_sun(mut self, mut scene: Scene) raises:
         """Turn the sun, or the moon, to the hour, once it has moved
         `SUN_STEP` degrees: its light, its shadows and the water's glints.
+        The scene is updated again once the sun has moved, so the frame
+        can read its world matrix.
 
         Args:
             scene: The scene: the sun's node is moved.
@@ -1390,6 +1392,9 @@ struct VillageGame(Movable):
         scene.node(self.village.meadow.sun.node).set_position(
             toward.x * 100, toward.y * 100, toward.z * 100
         )
+        # The frame reads the sun's world matrix to draw its shadows: it
+        # moved after the frame's update, so the scene is updated again.
+        scene.update()
         self.fast.refresh_shadows()
         self.village.water.set_sun(toward)
 

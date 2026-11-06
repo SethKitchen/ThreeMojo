@@ -447,6 +447,13 @@ def test_at_night_the_lamps_are_lit_and_the_pond_darkens() raises:
     assert_equal(game.window.width, 32)
     assert_true(scene.node(game.village.houses[0].lit).visible)
     assert_false(scene.node(game.village.houses[0].daylit).visible)
+    # As the hours pass, the sun turns and its shadows are drawn again:
+    # the frame reads the moved sun's world matrix, and draws.
+    game.day.hours_a_second = 2
+    for _ in range(3):
+        _ = game.tick(scene, assets, no_input(), step)
+        game.render(scene, assets)
+    assert_true(game.day.hour < 1 or game.day.hour > 23)
 
 
 def test_a_full_size_frame_is_not_stretched() raises:
