@@ -161,6 +161,9 @@ comptime POP_SECONDS = Float32(0.12)
 """How long a number stands larger as it appears, in seconds."""
 comptime POPUP_FADE = Float32(0.3)
 """How long a number or a word takes to fade at its end, in seconds."""
+comptime POPUP_GAP = 1
+"""How many dots of a number's font stand between two numbers that
+`stack_popups` sets one over the other."""
 comptime TOP_BAND = 46
 """How many dots of the heads-up display's font the compass, its caption
 and the target panel take at the top of the frame. The numbers and the
@@ -740,32 +743,94 @@ def draw_battle(
                 fill_box(frame, cx - d, cy - d, cx + d, cy + d, GOLD_TEXT, 1)
     draw_raid(frame, battle, camera, look, scale)
     draw_effects(frame, battle, camera, look)
-    # Numbers over a head high in the frame stand under the compass and
-    # the target panel, so they do not cross them. They move down
-    # together, so they keep their order and do not cover each other.
-    var band = (TOP_BAND + hud_drop(battle)) * scale
-    var lowest = band
-    for popup in battle.popups:
-        var at = on_screen(camera, look, popup.at, w, h)
-        if at:
-            lowest = min(lowest, Int(at.value().y))
-    for popup in battle.popups:
+    # The numbers' boxes on the frame, the oldest first.
+    var shown = List[Int]()
+    var lefts = List[Int]()
+    var tops = List[Int]()
+    var widths = List[Int]()
+    var heights = List[Int]()
+    var sizes = List[Int]()
+    for index in range(len(battle.popups)):
+        ref popup = battle.popups[index]
         var at = on_screen(camera, look, popup.at, w, h)
         if not at:
             continue
         var size = popup_scale(popup.text, popup.color, popup.age, scale)
-        var text = popup.text
-        # The outline reaches a stroke above the text: it too stands
-        # under the band.
+        var wide = text_width(popup.text, size)
+        shown.append(index)
+        sizes.append(size)
+        lefts.append(Int(at.value().x) - wide // 2)
+        # A box's top is the outline's, a stroke above the text. Its
+        # height holds the text, the outline and the gap.
+        tops.append(Int(at.value().y))
+        widths.append(wide)
+        heights.append((8 + POPUP_GAP) * size)
+    # A newer number keeps its place. An older one that would cover it
+    # moves up over it.
+    tops = stack_popups(lefts, tops, widths, heights)
+    # Numbers over a head high in the frame stand under the compass and
+    # the target panel, so they do not cross them. They move down
+    # together, so they keep their order and do not cover each other.
+    var band = (TOP_BAND + hud_drop(battle)) * scale
+    var drop = 0
+    for top in tops:
+        drop = max(drop, band - top)
+    for k in range(len(shown)):
+        ref popup = battle.popups[shown[k]]
         draw_outlined(
             frame,
-            Int(at.value().x) - text_width(text, size) // 2,
-            Int(at.value().y) + band - lowest + max(1, size // 2),
-            text,
-            size,
+            lefts[k],
+            tops[k] + drop + max(1, sizes[k] // 2),
+            popup.text,
+            sizes[k],
             popup.color,
             popup_alpha(popup.age),
         )
+
+
+def stack_popups(
+    lefts: List[Int], tops: List[Int], widths: List[Int], heights: List[Int]
+) -> List[Int]:
+    """Set the numbers over the fighters one over another where they would
+    cover each other.
+
+    The boxes are taken from the newest, the last, to the oldest. A box
+    that crosses a box already placed moves up, until its bottom touches
+    that box's top. So the newest number stays by its fighter, and the
+    older numbers stand over it.
+
+    Args:
+        lefts: The left of each box, in pixels, the oldest first.
+        tops: The top of each box, in pixels.
+        widths: The width of each box, in pixels.
+        heights: The height of each box, in pixels, with the space below
+            it.
+
+    Returns:
+        The top of each box after the move, in the same order.
+    """
+    var placed = tops.copy()
+    var count = len(tops)
+    for back in range(count):
+        var k = count - 1 - back
+        # Each move takes the box higher than before, to the top of one of
+        # the boxes after it less its height, so the moves end.
+        var moved = True
+        while moved:
+            moved = False
+            for j in range(k + 1, count):
+                var across = _crosses(lefts[k], widths[k], lefts[j], widths[j])
+                if across and _crosses(
+                    placed[k], heights[k], placed[j], heights[j]
+                ):
+                    placed[k] = placed[j] - heights[k]
+                    moved = True
+    return placed^
+
+
+def _crosses(a: Int, a_size: Int, b: Int, b_size: Int) -> Bool:
+    """Return whether two spans of pixels share a pixel."""
+    return a < b + b_size and b < a + a_size
 
 
 def popup_scale(text: String, color: Rgb, age: Float32, scale: Int) -> Int:

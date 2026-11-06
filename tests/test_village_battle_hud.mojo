@@ -27,6 +27,7 @@ from extensions.village.battle_hud import (
     popup_scale,
     on_screen,
     stance_label,
+    stack_popups,
     tint_edges,
 )
 from extensions.village.combat import (
@@ -148,6 +149,37 @@ def test_a_number_pops_and_outlines() raises:
     var before = _changed(blank)
     draw_outlined(blank, 4, 4, "", 2, WHITE_TEXT, 1)
     assert_equal(_changed(blank), before)
+
+
+def test_numbers_that_would_cover_each_other_stand_one_over_another() raises:
+    # The newest, the last, keeps its place; the older moves over it.
+    var tops = stack_popups([100, 110], [50, 52], [40, 40], [20, 20])
+    assert_equal(tops[1], 52)
+    assert_equal(tops[0], 32)
+    # Side by side, or apart in height, they do not move.
+    var apart = stack_popups([100, 150], [50, 52], [40, 40], [20, 20])
+    assert_equal(apart[0], 50)
+    var left = stack_popups([150, 100], [50, 52], [40, 40], [20, 20])
+    assert_equal(left[0], 50)
+    var over = stack_popups([100, 100], [10, 50], [40, 40], [20, 20])
+    assert_equal(over[0], 10)
+    var under = stack_popups([100, 100], [90, 50], [40, 40], [20, 20])
+    assert_equal(under[0], 90)
+    # The oldest of three goes over the middle one, which went over the
+    # newest.
+    var three = stack_popups(
+        [100, 100, 100], [50, 50, 50], [40, 40, 40], [20, 20, 20]
+    )
+    assert_equal(three[2], 50)
+    assert_equal(three[1], 30)
+    assert_equal(three[0], 10)
+    # A move over the newest can cross the middle one: it moves again.
+    var again = stack_popups(
+        [100, 100, 100], [50, 25, 60], [40, 40, 40], [20, 20, 20]
+    )
+    assert_equal(again[1], 25)
+    assert_equal(again[0], 5)
+    assert_equal(len(stack_popups([], [], [], [])), 0)
 
 
 def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
