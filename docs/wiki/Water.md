@@ -169,7 +169,9 @@ This extension draws a CPU still. It is not a shared scene-water object or a val
 
 ## Cost
 
-`draw` shades and grades disjoint runs of rows on every logical core. Each pixel keeps the serial arithmetic, so the picture does not change. `compose` runs its depth test first, by disjoint runs of rows. A quick test takes 8 pixels of a row at once. Where the plane that no wave rises above is plainly behind the scene, by `DEPTH_MARGIN`, the pixels keep the scene. Every other pixel takes the exact test. It then shades only the pixels that pass, in parallel.
+`draw` shades and grades disjoint runs of rows on every logical core. Each pixel keeps the serial arithmetic, so the picture does not change. `compose` runs its depth test first, by disjoint runs of rows. It then shades only the pixels that pass, in parallel.
+
+In the depth test, a quick test takes 8 pixels of a row at once. Where the plane that no wave rises above is plainly behind the scene, by `DEPTH_MARGIN`, the pixels keep the scene. Every other pixel takes the exact test.
 
 Set `WaterScene.workers` to control how each pass is cut into tasks. Zero, the default, sizes the cut for every logical core. One runs each pass serially, as one task. A larger count makes more tasks, but the shared thread pool decides how many run at once, so the count is not a thread limit. Every count draws the same picture.
 
