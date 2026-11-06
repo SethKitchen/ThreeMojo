@@ -1401,6 +1401,12 @@ struct Residents(Movable):
     var faces: List[Vector3]
     var homeward: List[Route]
     """Each person's way home and in, for when the village shelters."""
+    var outward: List[Route]
+    """Each person's way back out of their home: their way home, the other
+    way round."""
+    var leaving: List[Bool]
+    """Whether each person is still on their way out of their home, since
+    the village stopped sheltering."""
     var sheltering: Bool
     """Whether the people keep to their homes now: at night, or in hard
     rain or snow."""
@@ -1448,6 +1454,8 @@ struct Residents(Movable):
             length=len(parameters.villagers), fill=Vector3(0, 0, 0)
         )
         self.homeward = List[Route]()
+        self.outward = List[Route]()
+        self.leaving = List[Bool](length=len(parameters.villagers), fill=False)
         self.sheltering = False
         for index in range(len(parameters.villagers)):
             ref villager = parameters.villagers[index]
@@ -1493,9 +1501,18 @@ struct Residents(Movable):
                 var climb = List[Vector3]()
                 if at < len(climbs):
                     climb = climbs[at].copy()
-                self.homeward.append(home_route(homes[at], climb))
+                var going = home_route(homes[at], climb)
+                var back = List[Vector3]()
+                # A way home has its points at the door, at the least.
+                for k in range(
+                    len(going.points) - 1, -1, -1
+                ):  # pragma: no branch
+                    back.append(going.points[k])
+                self.outward.append(Route(back^, Duration(0.2, SECOND)))
+                self.homeward.append(going^)
             else:
                 self.homeward.append(route.copy())
+                self.outward.append(route.copy())
             self.people.append(
                 Character(
                     CharacterParameters(),
@@ -1615,6 +1632,14 @@ struct Residents(Movable):
             for index in range(people):
                 self.homeward[index].next = 0
                 self.homeward[index].resting = 0
+                self.leaving[index] = False
+        if self.sheltering and not shelter:
+            # Each person comes back out the way they went in: down the
+            # stairs, through the hall and out of the door.
+            for index in range(people):
+                self.outward[index].next = 0
+                self.outward[index].resting = 0
+                self.leaving[index] = True
         self.sheltering = shelter
         for index in range(people):
             var steer: Tuple[MoveInput, Angle]
@@ -1642,6 +1667,12 @@ struct Residents(Movable):
                 if home.at == len(home.points) - 1 and home.resting > 0:
                     home.next = home.at
                     home.resting = 1
+            elif self.leaving[index]:
+                steer = self.outward[index].steer(self.people[index], delta)
+                # Out of the door, they walk their route again.
+                ref out = self.outward[index]
+                if out.at == len(out.points) - 1:
+                    self.leaving[index] = False
             else:
                 steer = self.walks[index].steer(self.people[index], delta)
                 doing = self.walks[index].doing()

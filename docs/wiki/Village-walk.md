@@ -320,7 +320,9 @@ A person stops at each stop within `STOP_REACH`, 14 meters, of the middle of whe
 
 At night, while the daylight is below `SHELTER_LIGHT`, 0.2, the people go home. They also go home in hard rain or snow, above `SHELTER_FALL`, 0.6, of the heaviest. Each walks to their front door, over the threshold and in, and stays there.
 
-In a house with stairs, a person goes on up to bed, to a room on the top story. They climb each flight, and walk back along the well to the next. `HouseInterior.climb` gives the way, and `home_route` follows it. A person with no home of their own shelters in the first house. Once the night or the storm is over, they walk their routes again.
+In a house with stairs, a person goes on up to bed, to a room on the top story. They climb each flight, and walk back along the well to the next. `HouseInterior.climb` gives the way, and `home_route` follows it.
+
+Once the night or the storm is over, each comes back out the same way, down the stairs and out of the door. `Residents.outward` holds that way. A person with no home of their own shelters in the first house. Out of the door, they walk their routes again.
 
 ### Danger
 

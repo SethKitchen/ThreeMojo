@@ -761,9 +761,37 @@ def test_a_person_sits_works_shelters_and_flees() raises:
         scene, Duration(1.0, SECOND), ground, List[Obstacle](), None, True
     )
     assert_true(residents.sheltering)
-    # Once the night is over, she walks her route again.
+    # Once the night is over, she comes back out the way she went in, and
+    # then walks her route again.
     residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
     assert_false(residents.sheltering)
+    assert_true(residents.leaving[0])
+    var went = residents.homeward[0].points.copy()
+    var back = residents.outward[0].points.copy()
+    assert_equal(len(back), len(went))
+    assert_almost_equal(back[0].x, went[len(went) - 1].x)
+    for _ in range(400):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+        if not residents.leaving[0]:
+            break
+    assert_false(residents.leaving[0])
+
+
+def test_a_village_with_nobody_in_it_shelters_and_comes_out() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.villagers = List[Villager]()
+    p.herds = List[Herd]()
+    var residents = Residents(scene, assets, p, ground, List[Lot](), _homes())
+    residents.update(
+        scene, Duration(0.1, SECOND), ground, List[Obstacle](), None, True
+    )
+    assert_true(residents.sheltering)
+    residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_false(residents.sheltering)
+    assert_equal(len(residents.leaving), 0)
 
 
 def test_a_person_with_no_house_and_none_to_go_to_stays_out() raises:
