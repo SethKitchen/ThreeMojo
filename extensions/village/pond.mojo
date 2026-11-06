@@ -29,7 +29,10 @@ from extensions.village.day import star_at
 from math.matrix4 import Matrix4
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
+from render.tasks import TaskGroup
+from renderers.renderer import available_workers
+from extensions.village.air import linear_table
 from std.math import floor, isinf, sin
 from units.si import METER, Length
 
@@ -180,57 +183,52 @@ struct PondLook(Copyable, Movable):
                 if mask[t] and image_at.z < near[t]:
                     near[t] = image_at.z
                     found[t] = k
+        var mixed = image.pixels.copy()
+        var linear = linear_table()
+        var bytes = SrgbBytes()
+        var tasks = max(1, min(available_workers() * 2, h))
+        var counts = List[Int](length=tasks, fill=0)
+        var group = TaskGroup()
+        for t in range(tasks):  # pragma: no branch
+            group.create_task(
+                _blend_task(
+                    image.pixels.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    mixed.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    mask.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    found.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    w,
+                    h,
+                    Pointer(to=inverse)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    self.mirror,
+                    linear.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=bytes)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    counts.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    t,
+                    t * h // tasks,
+                    (t + 1) * h // tasks,
+                )
+            )
+        group.wait()
         var shown = 0
-        var mixed = List[UInt8](length=len(image.pixels), fill=0)
-        for k in range(len(image.pixels)):  # pragma: no branch
-            mixed[k] = image.pixels[k]
-        for y in range(h):  # pragma: no branch
-            for x in range(w):  # pragma: no branch
-                var t = y * w + x
-                if not mask[t]:
-                    continue
-                var source = found[t]
-                # A stretched mirror image leaves rows between its own.
-                var step = 1
-                while source < 0 and step <= MIRROR_FILL:
-                    if y - step >= 0 and found[t - step * w] >= 0:
-                        source = found[t - step * w]
-                    elif y + step < h and found[t + step * w] >= 0:
-                        source = found[t + step * w]
-                    step += 1
-                if source < 0:
-                    continue
-                var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
-                var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
-                var a = inverse.transform_point(Vector3(nx, ny, -1))
-                var b = inverse.transform_point(Vector3(nx, ny, 1))
-                var d = b - a
-                d = d / d.length()
-                var share = min(
-                    MIRROR_MOST, _fresnel(-d.y) * 1.15 * self.mirror
-                )
-                var p = t * 4
-                var q = source * 4
-                var lit = FloatColor(srgb=image.get_pixel(x, y))
-                var seen = FloatColor(
-                    srgb=Color(
-                        image.pixels[q],
-                        image.pixels[q + 1],
-                        image.pixels[q + 2],
-                        255,
-                    )
-                )
-                # Water darkens what it mirrors a little, and greens it.
-                var out = Vector3(
-                    lit.r + (seen.r * 0.82 - lit.r) * share,
-                    lit.g + (seen.g * 0.86 - lit.g) * share,
-                    lit.b + (seen.b * 0.84 - lit.b) * share,
-                )
-                var c = FloatColor(out.x, out.y, out.z).encode()
-                mixed[p] = c.r
-                mixed[p + 1] = c.g
-                mixed[p + 2] = c.b
-                shown += 1
+        for c in counts:  # pragma: no branch
+            shown += c
+        _ = len(found)
+        _ = len(mask)
+        _ = len(linear)
+        _ = bytes.byte(0)
+        _ = inverse
         image.pixels = mixed^
         return shown
 
@@ -249,53 +247,178 @@ struct PondLook(Copyable, Movable):
             return
         var w = image.width
         var h = image.height
-        var star = Vector3(1, 1, 0.95)
-        var eye = camera.position
-        for y in range(h):  # pragma: no branch
-            var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
-            for x in range(w):  # pragma: no branch
-                var k = y * w + x
-                if not mask[k]:
-                    continue
-                var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
-                var at = inverse.transform_point(
-                    Vector3(nx, ny, image.depth[k])
+        var linear = linear_table()
+        var bytes = SrgbBytes()
+        var tasks = max(1, min(available_workers() * 2, h))
+        var group = TaskGroup()
+        for t in range(tasks):  # pragma: no branch
+            group.create_task(
+                _sky_task(
+                    image.pixels.unsafe_ptr().unsafe_origin_cast[
+                        MutAnyOrigin
+                    ](),
+                    image.depth.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    mask.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    w,
+                    h,
+                    Pointer(to=view)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=inverse)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    camera.position,
+                    Pointer(to=fog)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    stars,
+                    linear.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=bytes)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    t * h // tasks,
+                    (t + 1) * h // tasks,
                 )
-                var lit = FloatColor(srgb=image.get_pixel(x, y))
-                var c = Vector3(lit.r, lit.g, lit.b)
-                if stars > 0:
-                    var d = at - eye
-                    d = d / d.length()
-                    var bright = star_at(Vector3(d.x, -d.y, d.z))
-                    if bright > 0:
-                        var seen = FloatColor(
-                            srgb=Color(
-                                UInt8(Int(bright)),
-                                UInt8(Int(bright)),
-                                UInt8(Int(bright * 0.95)),
-                                255,
-                            )
+            )
+        group.wait()
+        _ = len(mask)
+        _ = len(linear)
+        _ = bytes.byte(0)
+        _ = view
+        _ = inverse
+
+
+__async def _blend_task(
+    pixels: Pointer[UInt8, ImmutAnyOrigin],
+    mixed: MutPointer[UInt8, MutAnyOrigin],
+    mask: Pointer[Bool, ImmutAnyOrigin],
+    found: Pointer[Int, ImmutAnyOrigin],
+    w: Int,
+    h: Int,
+    inverse: Pointer[Matrix4, ImmutAnyOrigin],
+    mirror: Float32,
+    linear: Pointer[Float32, ImmutAnyOrigin],
+    bytes: Pointer[SrgbBytes, ImmutAnyOrigin],
+    counts: MutPointer[Int, MutAnyOrigin],
+    task: Int,
+    first: Int,
+    past: Int,
+):
+    """Blend the mirror image into the water pixels of rows `first` to
+    `past`, and count those that show some of it."""
+    var shown = 0
+    for y in range(first, past):  # pragma: no branch
+        for x in range(w):  # pragma: no branch
+            var t = y * w + x
+            if not mask[unsafe_offset=t]:
+                continue
+            var source = found[unsafe_offset=t]
+            # A stretched mirror image leaves rows between its own.
+            var step = 1
+            while source < 0 and step <= MIRROR_FILL:
+                if y - step >= 0 and found[unsafe_offset=t - step * w] >= 0:
+                    source = found[unsafe_offset=t - step * w]
+                elif y + step < h and found[unsafe_offset=t + step * w] >= 0:
+                    source = found[unsafe_offset=t + step * w]
+                step += 1
+            if source < 0:
+                continue
+            var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
+            var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
+            var a = inverse[].transform_point(Vector3(nx, ny, -1))
+            var b = inverse[].transform_point(Vector3(nx, ny, 1))
+            var d = b - a
+            d = d / d.length()
+            var share = min(MIRROR_MOST, _fresnel(-d.y) * 1.15 * mirror)
+            var p = t * 4
+            var q = source * 4
+            var lr = linear[unsafe_offset=Int(pixels[unsafe_offset=p])]
+            var lg = linear[unsafe_offset=Int(pixels[unsafe_offset=p + 1])]
+            var lb = linear[unsafe_offset=Int(pixels[unsafe_offset=p + 2])]
+            var sr = linear[unsafe_offset=Int(pixels[unsafe_offset=q])]
+            var sg = linear[unsafe_offset=Int(pixels[unsafe_offset=q + 1])]
+            var sb = linear[unsafe_offset=Int(pixels[unsafe_offset=q + 2])]
+            # Water darkens what it mirrors a little, and greens it.
+            mixed[unsafe_offset=p] = bytes[].byte(lr + (sr * 0.82 - lr) * share)
+            mixed[unsafe_offset=p + 1] = bytes[].byte(
+                lg + (sg * 0.86 - lg) * share
+            )
+            mixed[unsafe_offset=p + 2] = bytes[].byte(
+                lb + (sb * 0.84 - lb) * share
+            )
+            shown += 1
+    counts[unsafe_offset=task] = shown
+
+
+__async def _sky_task(
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    depth: Pointer[Float32, ImmutAnyOrigin],
+    mask: Pointer[Bool, ImmutAnyOrigin],
+    w: Int,
+    h: Int,
+    view: Pointer[Matrix4, ImmutAnyOrigin],
+    inverse: Pointer[Matrix4, ImmutAnyOrigin],
+    eye: Vector3,
+    fog: Pointer[FogView, ImmutAnyOrigin],
+    stars: Float32,
+    linear: Pointer[Float32, ImmutAnyOrigin],
+    bytes: Pointer[SrgbBytes, ImmutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Add the mirrored stars to the water pixels of rows `first` to
+    `past`, and fade them into the fog."""
+    var star = Vector3(1, 1, 0.95)
+    var fogged = fog[].is_on()
+    for y in range(first, past):  # pragma: no branch
+        var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
+        for x in range(w):  # pragma: no branch
+            var k = y * w + x
+            if not mask[unsafe_offset=k]:
+                continue
+            var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
+            var at = inverse[].transform_point(
+                Vector3(nx, ny, depth[unsafe_offset=k])
+            )
+            var p = k * 4
+            var c = Vector3(
+                linear[unsafe_offset=Int(pixels[unsafe_offset=p])],
+                linear[unsafe_offset=Int(pixels[unsafe_offset=p + 1])],
+                linear[unsafe_offset=Int(pixels[unsafe_offset=p + 2])],
+            )
+            if stars > 0:
+                var d = at - eye
+                d = d / d.length()
+                var bright = star_at(Vector3(d.x, -d.y, d.z))
+                if bright > 0:
+                    var seen = FloatColor(
+                        srgb=Color(
+                            UInt8(Int(bright)),
+                            UInt8(Int(bright)),
+                            UInt8(Int(bright * 0.95)),
+                            255,
                         )
-                        # The water mirrors a star at its Fresnel share.
-                        var share = (
-                            stars
-                            * _fresnel(-d.y)
-                            * 3
-                            * smoothstep(0.03, 0.12, -d.y)
-                        )
-                        share = min(Float32(1), share)
-                        c = (
-                            c
-                            + (Vector3(seen.r, seen.g, seen.b) * star - c)
-                            * share
-                        )
-                if fog.is_on():
-                    var depth = -view.transform_point(at).z
-                    var f = fog.factor_at(depth)
-                    var g = fog.color
-                    c = c + (Vector3(g.r, g.g, g.b) - c) * f
-                var out = FloatColor(c.x, c.y, c.z).encode()
-                var p = k * 4
-                image.pixels[p] = out.r
-                image.pixels[p + 1] = out.g
-                image.pixels[p + 2] = out.b
+                    )
+                    # The water mirrors a star at its Fresnel share.
+                    var share = (
+                        stars
+                        * _fresnel(-d.y)
+                        * 3
+                        * smoothstep(0.03, 0.12, -d.y)
+                    )
+                    share = min(Float32(1), share)
+                    c = c + (Vector3(seen.r, seen.g, seen.b) * star - c) * share
+            if fogged:
+                var depth_at = -view[].transform_point(at).z
+                var f = fog[].factor_at(depth_at)
+                var g = fog[].color
+                c = c + (Vector3(g.r, g.g, g.b) - c) * f
+            pixels[unsafe_offset=p] = bytes[].byte(c.x)
+            pixels[unsafe_offset=p + 1] = bytes[].byte(c.y)
+            pixels[unsafe_offset=p + 2] = bytes[].byte(c.z)

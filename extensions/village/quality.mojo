@@ -11,7 +11,7 @@ each can be turned up or down alone:
 
 | Setting | Cheapest | Finest |
 |---|---|---|
-| `render_scale` | A third of the window, stretched to it | The window itself |
+| `render_scale` | 45 percent of the window, stretched to it | The window itself |
 | `plants` | `FEWEST_PLANTS` | `ALL_PLANTS` |
 | `grass_wind_every` | 0: still grass | 1: every blade every frame |
 | `sky_step` | One sky sample every 3 pixels | Every pixel |
@@ -57,7 +57,7 @@ struct QualityPreset(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, 3)
 
 
-# For four cores: a third of the window, the fewest plants.
+# For four cores: 45 percent of the window, the fewest plants.
 comptime LOW = QualityPreset(0)
 # Half the window, fewer plants.
 comptime MEDIUM = QualityPreset(1)
@@ -225,7 +225,7 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
         preset: The preset.
 
     Returns:
-        `LOW`: a third of the window, the fewest plants, the grass's wind
+        `LOW`: 45 percent of the window, the fewest plants, the grass's wind
         every fourth frame, a sky sample every 3 pixels, and a water
         sample every 8 pixels on a surface found every fourth frame,
         animals three times coarser, cached shadows on a map of 1,024
@@ -245,7 +245,7 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
     """
     if preset == LOW:
         return GameQuality(
-            Float32(1) / 3,
+            0.45,
             FEWEST_PLANTS,
             4,
             3,

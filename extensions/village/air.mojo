@@ -69,9 +69,13 @@ def _box(source: List[Float32], w: Int, h: Int, across: Bool) -> List[Float32]:
     return blurred^
 
 
-def _linear_table() -> List[Float32]:
+def linear_table() -> List[Float32]:
     """Return the linear light of each sRGB byte, as `FloatColor(srgb=...)`
-    decodes it."""
+    decodes it.
+
+    Returns:
+        256 values, one for each byte.
+    """
     var table = List[Float32](capacity=256)
     for k in range(256):  # pragma: no branch
         table.append(srgb_to_linear(Float32(k) / 255))
@@ -186,7 +190,7 @@ def bloom(
     var sw = (w + BLOOM_SCALE - 1) // BLOOM_SCALE
     var sh = (h + BLOOM_SCALE - 1) // BLOOM_SCALE
     var small = List[Float32](length=sw * sh * 3, fill=0)
-    var linear = _linear_table()
+    var linear = linear_table()
     var reading = (
         linear.unsafe_ptr()
         .unsafe_mut_cast[False]()
@@ -290,7 +294,7 @@ def ground_mist(
     var inverse = camera.projection_matrix()
     inverse.multiply(camera.view_matrix())
     inverse.invert()
-    var linear = _linear_table()
+    var linear = linear_table()
     var bytes = SrgbBytes()
     var tasks = max(1, min(available_workers() * 2, h))
     var counts = List[Int](length=tasks, fill=0)
