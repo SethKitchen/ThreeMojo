@@ -552,8 +552,6 @@ def house_stairs(building: Building) -> List[Stair]:
         riser over the story below it.
     """
     var stairs = List[Stair]()
-    if len(building.storeys) < 2:
-        return stairs^
     if len(building.spaces) == 0:
         return stairs^
     var west = Float64(1.0e30)

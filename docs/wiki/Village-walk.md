@@ -379,6 +379,16 @@ The clothes follow the skin, and the skin follows the bones, so they move togeth
 - A platebody keeps off the arms. So its side does not tear open under a raised arm. See [Outfits and armor](Outfits-and-armor#plate).
 - A long robe or gown hides the legs inside it. So a running leg does not push out through its front. See [Garments](Garments).
 
+### The swinging hem
+
+A skirt's hem swings as the person moves. It trails a run, kicks forward as the runner stops, and settles. The module is `extensions/village/sway.mojo`.
+
+1. `Body` gives each piece of a skirted garment four morph targets: the hem moved forward, back, right and left, in the body's frame. A vertex moves by the square of how far it lies down the skirt. So the waist stays, and the hem moves `SWAY_REACH`, 9 cm on a person of six feet.
+2. Each frame, `Sway.step` moves the hem's offset on a damped spring. As the body speeds up, the spring's rest lies behind it by `SWAY_LAG`, 1.2 cm for each meter a second squared. As the body moves, the air holds the hem back by `SWAY_DRAG`, 1 cm for each meter a second. The spring swings about once a second, and its swing dies at `SWAY_DAMPING`, 4.5 a second.
+3. `sway_weights` turns the offset into the four targets' weights. `Body.swing_hem` sets them on each skirt.
+
+The renderer moves the vertices by the targets before the bones, so the swing turns with the hips. The offset stays within `SWAY_REACH`.
+
 ## The lighter village
 
 `planted` changes the default village to the quality's plant detail. This table compares the default village with `FEWEST_PLANTS`, the `low` detail:
@@ -394,7 +404,7 @@ The clothes follow the skin, and the skin follows the bones, so they move togeth
 ## Limits
 
 - The game renderer lights each vertex, not each pixel. See [Game renderer](Game-renderer#why-it-agrees-with-renderer).
-- A garment bends with the skin. It does not swing as cloth does.
+- A garment bends with the skin. Only a skirt's hem swings, and it swings as one piece: it does not fold or flutter. A sleeve and a hood do not swing.
 - The characters do not swim. Deep water stops them.
 - A resident walks straight to its next point. Round a house, it walks aside and tries again, but it does not plan a way. It can give up on a point it cannot reach.
 - The camera comes in before a wall and a trunk, but not before a crown of leaves or a roof.

@@ -7,6 +7,7 @@
 bars, the lock's mark and the blows' numbers."""
 
 from cameras.perspective_camera import PerspectiveCamera
+from extensions.village.slashes import Impact
 from extensions.village.battle import (
     CHEST,
     POPUP_SECONDS,
@@ -142,6 +143,11 @@ def test_a_number_pops_and_outlines() raises:
     var outlined = Framebuffer(64, 32, Color(200, 200, 200))
     draw_outlined(outlined, 4, 4, "8~", 2, WHITE_TEXT, 1)
     assert_true(_changed(outlined) < _changed(shadowed))
+    # No text draws nothing.
+    var blank = Framebuffer(64, 32, Color(200, 200, 200))
+    var before = _changed(blank)
+    draw_outlined(blank, 4, 4, "", 2, WHITE_TEXT, 1)
+    assert_equal(_changed(blank), before)
 
 
 def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
@@ -190,6 +196,8 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
         )
     )
     b.popups.append(Popup(Vector3(0, 2, 9), "99", WHITE_TEXT, 0.1))
+    # And a blow's flash.
+    b.impacts.append(Impact(Vector3(0, 1.2, -3), Vector3(255, 235, 190), 1, 0))
     # And a swing's trail.
     b.trail.shown = LIGHT_ONE.value
     b.trail.sweep = 1

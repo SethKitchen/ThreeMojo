@@ -617,6 +617,7 @@ struct Arms(Movable):
             Vector3(0, 1, 0), facing_turn(character.heading)
         )
         body.mixer.update(scene, delta)
+        body.swing_hem(scene, character, delta)
         self._swing_clear(scene)
 
     def _swing_clear(self, mut scene: Scene) raises:

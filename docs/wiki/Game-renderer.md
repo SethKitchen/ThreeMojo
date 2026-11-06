@@ -55,7 +55,7 @@ quality.check()
 - **`animal_coarseness`** multiplies the cell of each animal's mesh, from 1 to 8. It also multiplies the finer cell of the eyes, but the eyes' cell never becomes larger than the body's. A coarser animal has fewer triangles. A game given residents of its own meshes their animals no finer than its preset: `game_residents` keeps the coarser of the two.
 - **`shadows`** and **`shadow_size`** set how the sun's shadows are drawn. See [Shadows](#shadows).
 - **`smooth_edges`** smooths the stair steps along the frame's edges before the frame is stretched. See [Smooth edges](#smooth-edges).
-- **`sharpness`** sets how strongly the stretched frame is sharpened, from 0 to 1. `LOW` uses 0.8, `MEDIUM` 0.6, `HIGH` 0.4 and `ULTRA` 0. See [Stretch and sharpen](#stretch-and-sharpen).
+- **`sharpness`** sets how strongly the stretched frame is sharpened, from 0 to 1. `LOW` uses 0.8, `MEDIUM` 0.6, `HIGH` 0.4 and `ULTRA` 0. A frame drawn at the window's size, as the GPU draws it, is not sharpened. See [Stretch and sharpen](#stretch-and-sharpen).
 - **`fight_reach`** sets how far from the player a fighter is posed each frame, from 5 to 10,000 meters. A fighter further away is posed every third frame, for all the time it waited, and leaves no trail. Between, it only stands where its character stands. So a crowded fight costs less on a slow machine.
 
 ## Smooth edges

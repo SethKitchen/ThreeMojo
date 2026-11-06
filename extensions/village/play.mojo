@@ -1657,7 +1657,6 @@ struct VillageGame(Movable):
             sheltered = self.sheltered(image)
         if image.width == self.width and image.height == self.height:
             swap(self.window, image)
-            sharpen(self.window, self.quality.sharpness)
         else:
             var smoothed = perf_counter_ns()
             upscale_into(image, self.window, available_workers())

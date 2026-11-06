@@ -125,8 +125,8 @@ struct GameQuality(ImplicitlyCopyable):
     # trail, in meters: see `extensions.village.battle`.
     var fight_reach: Float32
     # How strongly the stretched frame is sharpened, from 0 to 1: see
-    # `render.game_sharpen`. A frame drawn at the window's own size is not
-    # stretched, and is sharpened only if this is above 0.
+    # `render.game_sharpen`. A frame drawn at the window's own size, as a
+    # GPU draws it, is not stretched and not sharpened.
     var sharpness: Float32
 
     def check(self) raises:

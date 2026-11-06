@@ -740,11 +740,9 @@ def popup_scale(text: String, color: Rgb, age: Float32, scale: Int) -> Int:
     if not number:
         return scale
     var size = scale + (scale + 1) // 2
-    if (
-        color.r == GOLD_TEXT.r
-        and color.g == GOLD_TEXT.g
-        and color.b == GOLD_TEXT.b
-    ):
+    # One number of the three bytes: gold or not.
+    var packed = (color.r * 256 + color.g) * 256 + color.b
+    if packed == (GOLD_TEXT.r * 256 + GOLD_TEXT.g) * 256 + GOLD_TEXT.b:
         size = 2 * scale
     if age < POP_SECONDS:
         size += max(1, scale // 2)

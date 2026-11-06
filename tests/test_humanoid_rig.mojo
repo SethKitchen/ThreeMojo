@@ -520,6 +520,14 @@ def test_a_hole_on_two_sides_is_closed_on_each_alone() raises:
     close_holes(short, touched, thin)
     assert_equal(short.vertex_count(), 13)
     assert_equal(len(short.index), 36 + 12)
+    # Runs of one, three, one and one: only the run of three closes.
+    var broken = List[Int](length=12, fill=0)
+    broken[6] = 1
+    broken[10] = 1
+    var scattered = _ring()
+    close_holes(scattered, touched, broken)
+    assert_equal(scattered.vertex_count(), 13)
+    assert_equal(len(scattered.index), 36 + 9)
     with assert_raises(contains="one side per vertex"):
         close_holes(short, touched, [0, 1])
 

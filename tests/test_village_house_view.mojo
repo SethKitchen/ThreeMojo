@@ -450,9 +450,12 @@ def test_a_stair_rises_through_each_story() raises:
     var assets = Assets()
     var looks = house_looks(assets, 8, 1)
     var house = HouseParameters(
-        "tall house", Length(9.0, METER), Length(7.0, METER), 3, brick()
+        "tall house", Length(9.0, METER), Length(7.0, METER), 4, brick()
     )
+    # The top story stands less than a riser over the third: two flights
+    # climb, and none reaches the top story's rooms.
     var model = house_model(house)
+    model.storeys[3].elevation = Length64(5.6 + STAIR_RISE / 2, METER)
     assert_equal(len(house_stairs(model)), 2)
     var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
     var scene = Scene()

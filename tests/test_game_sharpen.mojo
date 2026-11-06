@@ -54,6 +54,11 @@ def test_no_strength_and_a_tiny_frame_leave_the_frame_alone() raises:
     var tiny_before = tiny.pixels.copy()
     sharpen(tiny, 1)
     assert_equal(tiny.pixels, tiny_before)
+    # Wide but two rows short: no row has a row above and below it.
+    var flat = _edge(40, 2)
+    var flat_before = flat.pixels.copy()
+    sharpen(flat, 1)
+    assert_equal(flat.pixels, flat_before)
 
 
 def test_a_bad_strength_or_size_is_refused() raises:

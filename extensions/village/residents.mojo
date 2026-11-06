@@ -32,6 +32,7 @@ from animation.animation_mixer import ONCE, AnimationAction, AnimationMixer
 from core.assets import Assets
 from extensions.attire.kinds import CLOSED, SKIRTED
 from extensions.attire.outfit import Outfit, dress
+from extensions.attire.skirt import skirt_top
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -68,6 +69,12 @@ from renderers.renderer import available_workers
 from extensions.vegetation.checks import require_between, require_count_between
 from extensions.vegetation.ground import Ground, Lot
 from extensions.vegetation.noise import hash01
+from extensions.village.sway import (
+    SWAY_REACH,
+    Sway,
+    sway_skirts,
+    sway_weights,
+)
 from extensions.village.faces import FACE_TRIANGLES, FaceLife
 from extensions.village.clothes import Groom, plain_groom
 from extensions.village.interior import Doorway
@@ -280,6 +287,11 @@ struct Body(Movable):
     var near: Bool
     # Whether a closed skirt falls past the knees: see `hobbles`.
     var hobbled: Bool
+    # The skinned meshes of the skirts whose hems swing, how far they
+    # swing, and the swing: see `extensions.village.sway`.
+    var skirts: List[Int]
+    var sway_reach: Float32
+    var sway: Sway
 
     def __init__(
         out self,
@@ -364,6 +376,9 @@ struct Body(Movable):
         for skin in self.person.skins:  # pragma: no branch
             scene.skinned_meshes[skin].cast_shadow = True
         self.garments = List[Int]()
+        self.skirts = List[Int]()
+        self.sway = Sway()
+        self.sway_reach = SWAY_REACH * self.person.rig.stature / Float32(1.8288)
         if len(outfit.garments) > 0:
             var dressed = dress(scene, assets, self.person, outfit)
             self.garments = dressed.meshes.copy()
@@ -372,6 +387,16 @@ struct Body(Movable):
             for parts in dressed.parts:  # pragma: no branch
                 for mesh in parts:
                     scene.skinned_meshes[mesh].cast_shadow = True
+            # A skirt's hem swings as the person moves.
+            var top = skirt_top(self.person.rig)
+            for g in range(len(outfit.garments)):  # pragma: no branch
+                if outfit.garments[g].form != SKIRTED:
+                    continue
+                self.skirts.extend(
+                    sway_skirts(
+                        scene, assets, dressed.parts[g], top, self.sway_reach
+                    )
+                )
         ref rig = self.person.rig
         ref bones = self.person.bones
         self.mixer = AnimationMixer()
@@ -450,6 +475,32 @@ struct Body(Movable):
                 stance, character.speed()
             )
         self.mixer.update(scene, delta)
+        self.swing_hem(scene, character, delta)
+
+    def swing_hem(
+        mut self, mut scene: Scene, character: Character, delta: Duration
+    ) raises:
+        """Swing the hems of the person's skirts by the body's motion: see
+        `extensions.village.sway`.
+
+        Args:
+            scene: The scene the body is in.
+            character: The character the body shows.
+            delta: The frame's time.
+
+        Raises:
+            Error: If a skirt's mesh is not in the scene.
+        """
+        if len(self.skirts) == 0:
+            return
+        var turn = facing_turn(character.heading).to(RADIAN)
+        var offset = self.sway.step(
+            character.position, turn, delta.to(SECOND), self.sway_reach
+        )
+        var weights = sway_weights(offset, self.sway_reach)
+        for mesh in self.skirts:  # pragma: no branch
+            for w in range(4):  # pragma: no branch
+                scene.skinned_meshes[mesh].set_morph_influence(w, weights[w])
 
     def head(self, scene: Scene) raises -> Vector3:
         """Return about where the person's eyes are, in the world.
