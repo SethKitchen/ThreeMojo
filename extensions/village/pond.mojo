@@ -21,6 +21,12 @@ three things from the village:
    `DayCycle.night_sky`.
 
 A pixel shows the water where the composition changed its depth.
+
+Each step shares the frame's rows over every core. Each water pixel keeps
+the nearest mirror image that any core offers it, and of equal depths the
+first source, by an atomic least key, so the frame is the one that a
+single core gives. The bytes are decoded by a table and encoded by
+`SrgbBytes`.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -33,7 +39,9 @@ from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.tasks import TaskGroup
 from renderers.renderer import available_workers
 from extensions.village.air import linear_table
+from std.atomic import Atomic
 from std.math import floor, isinf, sin
+from std.memory import bitcast
 from units.si import METER, Length
 
 comptime MIRROR_MOST = Float32(0.85)
@@ -151,42 +159,46 @@ struct PondLook(Copyable, Movable):
         var w = image.width
         var h = image.height
         var water = level.to(METER)
-        # Each water pixel keeps the mirror image nearest the camera.
-        var near = List[Float32](length=w * h, fill=Float32.MAX)
-        var found = List[Int](length=w * h, fill=-1)
+        # Each water pixel keeps the mirror image nearest the camera: the
+        # least key of its depth and its source, which every core may
+        # offer at once. See `_mirror_key`.
+        var keys = List[UInt64](length=w * h, fill=UInt64.MAX)
         var shake = TREMBLE * Float32(h) / 720
-        # A frame has a pixel or more.
-        for y in range(h):  # pragma: no branch
-            var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
-            for x in range(w):  # pragma: no branch
-                var k = y * w + x
-                var z = before[k]
-                if mask[k] or isinf(z):
-                    continue
-                var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
-                var at = inverse.transform_point(Vector3(nx, ny, z))
-                if not (at.y > water + 0.01):
-                    continue
-                var image_at = clip.transform_point(
-                    Vector3(at.x, 2 * water - at.y, at.z)
+        var tasks = max(1, min(available_workers() * 2, h))
+        var scatter = TaskGroup()
+        for t in range(tasks):  # pragma: no branch
+            scatter.create_task(
+                _scatter_task(
+                    before.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    mask.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    keys.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    w,
+                    h,
+                    Pointer(to=clip)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=inverse)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    water,
+                    shake,
+                    self.clock,
+                    t * h // tasks,
+                    (t + 1) * h // tasks,
                 )
-                var ty = Int(floor((1 - image_at.y) * 0.5 * Float32(h)))
-                if ty < 0 or ty >= h:
-                    continue
-                var wobble = shake * sin(Float32(ty) * 0.35 + self.clock * 2.1)
-                var tx = Int(
-                    floor((image_at.x + 1) * 0.5 * Float32(w) + wobble)
-                )
-                if tx < 0 or tx >= w:
-                    continue
-                var t = ty * w + tx
-                if mask[t] and image_at.z < near[t]:
-                    near[t] = image_at.z
-                    found[t] = k
+            )
+        scatter.wait()
+        var found = List[Int](length=w * h, fill=-1)
+        for t in range(w * h):  # pragma: no branch
+            if keys[t] != UInt64.MAX:
+                found[t] = Int(keys[t] & 0xFFFFFFFF)
         var mixed = image.pixels.copy()
         var linear = linear_table()
         var bytes = SrgbBytes()
-        var tasks = max(1, min(available_workers() * 2, h))
         var counts = List[Int](length=tasks, fill=0)
         var group = TaskGroup()
         for t in range(tasks):  # pragma: no branch
@@ -422,3 +434,80 @@ __async def _sky_task(
             pixels[unsafe_offset=p] = bytes[].byte(c.x)
             pixels[unsafe_offset=p + 1] = bytes[].byte(c.y)
             pixels[unsafe_offset=p + 2] = bytes[].byte(c.z)
+
+
+def _mirror_key(depth: Float32, source: Int) -> UInt64:
+    """Return the key by which a water pixel keeps one mirror image: the
+    least depth, and of equal depths the first source, as a walk over the
+    sources in order with a strict `<` keeps.
+
+    The depth's bits are turned so that they rise as the depth does, and
+    stand over the source's.
+
+    Args:
+        depth: The mirror image's depth.
+        source: The pixel it comes from, from 0 to below 2 to the 32.
+
+    Returns:
+        The key. A depth no less than the most float, or not a number, is
+        never nearer than none: its key is the greatest, which a pixel
+        with no mirror image holds.
+    """
+    if not (depth < Float32.MAX):
+        return UInt64.MAX
+    # Zero and minus zero are one depth.
+    var bits = UInt64(bitcast[DType.uint32](depth + 0))
+    var rising = bits | 0x80000000
+    if bits & 0x80000000 != 0:
+        rising = (~bits) & 0xFFFFFFFF
+    return (rising << 32) | UInt64(source)
+
+
+__async def _scatter_task(
+    before: Pointer[Float32, ImmutAnyOrigin],
+    mask: Pointer[Bool, ImmutAnyOrigin],
+    keys: MutPointer[UInt64, MutAnyOrigin],
+    w: Int,
+    h: Int,
+    clip: Pointer[Matrix4, ImmutAnyOrigin],
+    inverse: Pointer[Matrix4, ImmutAnyOrigin],
+    water: Float32,
+    shake: Float32,
+    clock: Float32,
+    first: Int,
+    past: Int,
+):
+    """Offer the mirror image of each pixel of rows `first` to `past` that
+    stands above the water to the water pixel where it falls."""
+    for y in range(first, past):  # pragma: no branch
+        var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
+        for x in range(w):  # pragma: no branch
+            var k = y * w + x
+            var z = before[unsafe_offset=k]
+            if mask[unsafe_offset=k] or isinf(z):
+                continue
+            var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
+            var at = inverse[].transform_point(Vector3(nx, ny, z))
+            if not (at.y > water + 0.01):
+                continue
+            var image_at = clip[].transform_point(
+                Vector3(at.x, 2 * water - at.y, at.z)
+            )
+            var ty = Int(floor((1 - image_at.y) * 0.5 * Float32(h)))
+            if ty < 0 or ty >= h:
+                continue
+            var wobble = shake * sin(Float32(ty) * 0.35 + clock * 2.1)
+            var tx = Int(floor((image_at.x + 1) * 0.5 * Float32(w) + wobble))
+            if tx < 0 or tx >= w:
+                continue
+            var t = ty * w + tx
+            if not mask[unsafe_offset=t]:
+                continue
+            var key = _mirror_key(image_at.z, k)
+            var slot = keys.unsafe_offset(t)
+            # A failed exchange loads what the slot holds into `held`. One
+            # that succeeds leaves `held` as it was, so the next fails and
+            # loads the key itself, which ends the loop.
+            var held = Atomic[UInt64].fetch_add(slot, 0)
+            while key < held:
+                _ = Atomic[UInt64].compare_exchange(slot, held, key)
