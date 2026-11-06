@@ -45,27 +45,46 @@ comptime MIST_NEAR = Float32(25)
 
 
 def _box(source: List[Float32], w: Int, h: Int, across: Bool) -> List[Float32]:
-    """Return a box blur of three floats a texel, along one axis."""
+    """Return a box blur of three floats a texel, along one axis.
+
+    A texel at least `BLOOM_REACH` texels from both ends reads its taps
+    without the clamp at the edges. Every sum adds its taps from the
+    lowest to the highest, as the clamped sum does, so the blur does not
+    change."""
     var blurred = List[Float32](length=len(source), fill=0)
     var span = Float32(2 * BLOOM_REACH + 1)
+    var src = source.unsafe_ptr()
+    var out = blurred.unsafe_ptr()
+    # A step of one texel along the axis, in floats.
+    var stride = 3 if across else w * 3
+    var reach = w if across else h
     for y in range(h):  # pragma: no branch
         for x in range(w):  # pragma: no branch
+            var along = x if across else y
+            var p = (y * w + x) * 3
             var r = Float32(0)
             var g = Float32(0)
             var b = Float32(0)
-            for k in range(-BLOOM_REACH, BLOOM_REACH + 1):  # pragma: no branch
-                var sx = x + k if across else x
-                var sy = y if across else y + k
-                sx = min(w - 1, max(0, sx))
-                sy = min(h - 1, max(0, sy))
-                var at = (sy * w + sx) * 3
-                r += source[at]
-                g += source[at + 1]
-                b += source[at + 2]
-            var p = (y * w + x) * 3
-            blurred[p] = r / span
-            blurred[p + 1] = g / span
-            blurred[p + 2] = b / span
+            if along >= BLOOM_REACH and along + BLOOM_REACH < reach:
+                var at = p - BLOOM_REACH * stride
+                comptime for _ in range(2 * BLOOM_REACH + 1):
+                    r += src[unsafe_offset=at]
+                    g += src[unsafe_offset=at + 1]
+                    b += src[unsafe_offset=at + 2]
+                    at += stride
+            else:
+                for k in range(
+                    -BLOOM_REACH, BLOOM_REACH + 1
+                ):  # pragma: no branch
+                    var s = min(reach - 1, max(0, along + k))
+                    var at = p + (s - along) * stride
+                    r += src[unsafe_offset=at]
+                    g += src[unsafe_offset=at + 1]
+                    b += src[unsafe_offset=at + 2]
+            out[unsafe_offset=p] = r / span
+            out[unsafe_offset=p + 1] = g / span
+            out[unsafe_offset=p + 2] = b / span
+    _ = len(source)
     return blurred^
 
 
