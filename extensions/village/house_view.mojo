@@ -30,8 +30,8 @@ it. It draws more of what an eye sees from close by:
    plastered ceiling, or a ceiling of planks in a barn. The ground
    story's ceiling has oak joists.
 4. **The stairs.** Each flight that `house_stairs` finds has oak treads
-   and risers, a stringer on its open side, and a handrail on
-   balusters. Its well is cut out of the ceiling of the room it rises
+   and risers, a stringer on its open side, a handrail on balusters, and
+   a plaster soffit under it. Its well is cut out of the ceiling of the room it rises
    from and the floor above, with oak trimmers around it. A balustrade
    guards the well upstairs, and crosses its foot on the top story.
 5. **The roof.** A gable roof covers the flat roof of the model: two
@@ -1525,6 +1525,11 @@ struct _Rect(ImplicitlyCopyable):
     var z1: Float32
 
 
+comptime SOFFIT_DROP = Float32(0.2)
+"""How far under the line of a flight's nosings its soffit lies, in
+meters: under every tread and riser."""
+
+
 def _well(stair: Stair) -> _Rect:
     """Return a stair's well in the house's frame: where it rises through
     the floor above."""
@@ -1831,6 +1836,15 @@ def _stair_view(mut sheets: _Sheets, stair: Stair, onward: Bool):
         up * 0.14,
         Vector3(0, 0, 0.03),
         OAK * 0.9,
+    )
+    # A soffit of plaster under the flight, so that from the flight below
+    # the stair is a smooth slope, not the undersides of its steps.
+    sheets.plaster.box(
+        Vector3(hole.x0 + run / 2, base + top / 2 - SOFFIT_DROP, middle_z),
+        slope,
+        up * 0.015,
+        Vector3(0, 0, half_z),
+        INDOORS * 0.9,
     )
     var rail = RAIL_HEIGHT - 0.1
     sheets.wood.box(
