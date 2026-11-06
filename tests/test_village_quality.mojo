@@ -98,8 +98,11 @@ def test_each_setting_is_checked() raises:
     q = game_quality(MEDIUM)
     q.fight_reach = 1
     _refused(q, "fight's reach")
+    q = game_quality(MEDIUM)
+    q.sharpness = 1.5
+    _refused(q, "sharpness")
     var big = GameQuality(
-        2, ALL_PLANTS, 1, 1, 1, 1, 1, FULL_SHADOWS, 4096, True, 20
+        2, ALL_PLANTS, 1, 1, 1, 1, 1, FULL_SHADOWS, 4096, True, 20, 0
     )
     with assert_raises(contains="render scale"):
         _ = big.frame_size(10, 10)

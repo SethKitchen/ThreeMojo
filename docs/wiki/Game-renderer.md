@@ -2,7 +2,7 @@
 
 `GameRenderer` draws the [Village walk](Village-walk) at 24 frames a second or more, at 1920 by 1080 pixels, on four CPU cores. It draws less than `Renderer` draws, and it draws it in a different way. `GameQuality` sets how finely each part of a frame is drawn. A slow machine can turn each part down, and a fast machine can turn each part up.
 
-The modules are `renderers/game_renderer.mojo`, `render/game_math.mojo`, `render/game_smooth.mojo`, `render/game_upscale.mojo` and `extensions/village/quality.mojo`. See [Renderer](Renderer) for the general renderer.
+The modules are `renderers/game_renderer.mojo`, `render/game_math.mojo`, `render/game_smooth.mojo`, `render/game_upscale.mojo`, `render/game_sharpen.mojo` and `extensions/village/quality.mojo`. See [Renderer](Renderer) for the general renderer.
 
 ## Choose a quality
 
@@ -46,7 +46,7 @@ quality.check()
 
 ## The settings
 
-- **`render_scale`** is the share of the window's width and height that the frame is drawn at, from a quarter to one. `upscale_into` stretches the frame to the window, bilinear.
+- **`render_scale`** is the share of the window's width and height that the frame is drawn at, from a quarter to one. `upscale_into` stretches the frame to the window by the Catmull-Rom cubic. See [Stretch and sharpen](#stretch-and-sharpen).
 - **`plants`** sets how many leaves and blades grow near the camera. `planted` also draws the ground, the mountains and the canyon's wall more coarsely. `ALL_PLANTS` keeps the still picture's meadow.
 - **`grass_wind_every`** sets how often a cluster of grass grows again for the wind. A cluster grows again when its level changes, too. Zero keeps the grass still.
 - **`sky_step`** is the step between two samples of the sky, from 1 to 32 pixels. The samples between are mixed bilinearly. A cloud of the sky cube is smaller than 8 pixels across its edge, so a coarser step draws it as boxes. Each task finds the samples of one band of rows. A sample's direction is mixed from the directions through three corners of the window.
@@ -55,6 +55,7 @@ quality.check()
 - **`animal_coarseness`** multiplies the cell of each animal's mesh, from 1 to 8. It also multiplies the finer cell of the eyes, but the eyes' cell never becomes larger than the body's. A coarser animal has fewer triangles. A game given residents of its own meshes their animals no finer than its preset: `game_residents` keeps the coarser of the two.
 - **`shadows`** and **`shadow_size`** set how the sun's shadows are drawn. See [Shadows](#shadows).
 - **`smooth_edges`** smooths the stair steps along the frame's edges before the frame is stretched. See [Smooth edges](#smooth-edges).
+- **`sharpness`** sets how strongly the stretched frame is sharpened, from 0 to 1. `LOW` uses 0.8, `MEDIUM` 0.6, `HIGH` 0.4 and `ULTRA` 0. See [Stretch and sharpen](#stretch-and-sharpen).
 - **`fight_reach`** sets how far from the player a fighter is posed each frame, from 5 to 10,000 meters. A fighter further away is posed every third frame, for all the time it waited, and leaves no trail. Between, it only stands where its character stands. So a crowded fight costs less on a slow machine.
 
 ## Smooth edges
@@ -66,6 +67,15 @@ quality.check()
 3. The samples at a third and at two thirds of the step are averaged. The samples at its two ends are mixed in too, unless the mix leaves the range of brightness.
 
 Each sample is bilinear between pixel centers. The brightness is the luma of the sRGB bytes. Sixteen pixels are tested and blended at once. The rows are cut into small runs over the cores, and every count of cores gives the same frame. `VillageGame.smooth_ms` holds the time it took. At `LOW` it is about a millisecond.
+
+## Stretch and sharpen
+
+A frame drawn at a third of the window must be stretched three times. A bilinear stretch mixes only the two nearest pixels on each axis. It smears each edge over a whole small pixel, so a moving fighter looks soft. Two passes keep the edges hard:
+
+1. `upscale_into` in `render/game_upscale.mojo` mixes the four nearest pixels on each axis by the Catmull-Rom cubic. The two far pixels get a small negative weight, so an edge keeps its contrast. A result is clamped to the bytes' range. The pass stretches the rows across first, then blends four stretched rows for each row of the window.
+2. `sharpen` in `render/game_sharpen.mojo` is contrast-adaptive sharpening, as in AMD's CAS and the last pass of FSR. Each channel of a pixel and its four neighbors gives a least and a greatest value. The room to sharpen is the distance from them to black or to white, as a share of the greatest. A pixel takes its neighbors away by a weight from that room and `sharpness`, and the result is divided by the weights' sum. A flat area does not change, and the result stays within the neighbors' range.
+
+`VillageGame.upscale_ms` holds the time of both passes. At 1280 by 720 pixels from `MEDIUM` it is about 2.4 milliseconds on four cores.
 
 ## Measure a frame
 

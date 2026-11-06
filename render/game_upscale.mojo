@@ -3,23 +3,28 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Stretch a small frame to the window: bilinear, in two passes, on every
-core.
+"""Stretch a small frame to the window: Catmull-Rom, in two passes, on
+every core.
 
 A game draws at a lower resolution and stretches the frame to the window,
-as FSR and DLSS do. `upscale` does it in two passes, the way a GPU's
+as FSR and DLSS do. A bilinear stretch mixes only the two nearest pixels,
+so it smears each edge over a whole small pixel, and a moving edge looks
+soft. `upscale` mixes the four nearest pixels on each axis by the
+Catmull-Rom cubic. The cubic gives the far two a small negative weight,
+so an edge keeps its contrast. It does it in two passes, the way a GPU's
 filter is often split:
 
 1. **Across.** Each row of the small frame is stretched to the window's
    width. There are few rows, so the gathers this needs are cheap.
-2. **Down.** Each row of the window is the mix of the two stretched rows
-   above and below it. Every pixel of a row mixes by the same weight, so
-   this pass is a plain blend of two rows, sixteen channels at a time.
+2. **Down.** Each row of the window is the mix of the four stretched rows
+   nearest it. Every pixel of a row mixes by the same weights, so this
+   pass is a plain blend of four rows, sixteen channels at a time.
 
 Each pixel's sample point is its center, mapped to the small frame's
-pixel centers, as a GPU's bilinear filter places it. The channels are
-mixed as the sRGB bytes are. The depth is not carried: compose anything
-that needs it, such as water, before the frame is stretched.
+pixel centers, as a GPU's filter places it. A tap past an edge reads the
+edge pixel. The channels are mixed as the sRGB bytes are, and each result
+is clamped to the bytes' range. The depth is not carried: compose
+anything that needs it, such as water, before the frame is stretched.
 """
 
 from render.framebuffer import Framebuffer
@@ -31,26 +36,35 @@ comptime ROWS_A_TASK = 32
 """Rows of the window each task of the second pass fills."""
 
 
+@always_inline
+def _weights(t: Float32) -> SIMD[DType.float32, 4]:
+    """Return the Catmull-Rom weights of the four taps around a point
+    that is `t` of the way from the second tap to the third."""
+    var t2 = t * t
+    var t3 = t2 * t
+    return SIMD[DType.float32, 4](
+        -0.5 * t3 + t2 - 0.5 * t,
+        1.5 * t3 - 2.5 * t2 + 1,
+        -1.5 * t3 + 2 * t2 + 0.5 * t,
+        0.5 * t3 - 0.5 * t2,
+    )
+
+
 def _places(source: Int, target: Int) -> Tuple[List[Int], List[Float32]]:
-    """Return, for each target pixel, the source pixel left of or above its
-    sample point and the share of the next one."""
-    var first = List[Int](length=target, fill=0)
-    var share = List[Float32](length=target, fill=0)
+    """Return, for each target pixel, its four source taps and their
+    weights: four indices, clamped to the source, and four weights."""
+    var taps = List[Int](length=target * 4, fill=0)
+    var weights = List[Float32](length=target * 4, fill=0)
     var scale = Float32(source) / Float32(target)
     for i in range(target):  # pragma: no branch
         var at = (Float32(i) + 0.5) * scale - 0.5
         var low = floor(at)
-        var f = at - low
+        var w = _weights(at - low)
         var index = Int(low)
-        if index < 0:
-            index = 0
-            f = 0
-        if index >= source - 1:
-            index = source - 1
-            f = 0
-        first[i] = index
-        share[i] = f
-    return (first^, share^)
+        for k in range(4):  # pragma: no branch
+            taps[i * 4 + k] = min(max(index - 1 + k, 0), source - 1)
+            weights[i * 4 + k] = w[k]
+    return (taps^, weights^)
 
 
 __async def _across_task(
@@ -68,14 +82,16 @@ __async def _across_task(
         var source = pixels.unsafe_offset(y * width * 4)
         var line_out = rows.unsafe_offset(y * target_width * 4)
         for x in range(target_width):  # pragma: no branch
-            var c = columns[unsafe_offset=x]
-            var f = shares[unsafe_offset=x]
-            var a = source.unsafe_offset(c * 4)
-            var b = a.unsafe_offset(4 if c + 1 < width else 0)
             # A pixel's four channels mix at once, each as it would alone.
-            var low = a.unsafe_load[width=4]().cast[DType.float32]()
-            var high = b.unsafe_load[width=4]().cast[DType.float32]()
-            line_out.unsafe_offset(x * 4).unsafe_store(low + (high - low) * f)
+            var mixed = SIMD[DType.float32, 4](0)
+            for k in range(4):  # pragma: no branch
+                var c = columns[unsafe_offset=x * 4 + k]
+                var tap = source.unsafe_offset(c * 4)
+                mixed += (
+                    tap.unsafe_load[width=4]().cast[DType.float32]()
+                    * shares[unsafe_offset=x * 4 + k]
+                )
+            line_out.unsafe_offset(x * 4).unsafe_store(mixed)
 
 
 __async def _down_task(
@@ -83,38 +99,51 @@ __async def _down_task(
     target_width: Int,
     lines: Pointer[Int, ImmutAnyOrigin],
     shares: Pointer[Float32, ImmutAnyOrigin],
-    height: Int,
     target: MutPointer[UInt8, MutAnyOrigin],
     first: Int,
     past: Int,
 ):
     """Fill window rows `first` to `past` from the stretched rows."""
     var channels = target_width * 4
+    comptime F = SIMD[DType.float32, GAME_LANES]
     for y in range(first, past):  # pragma: no branch
-        var line = lines[unsafe_offset=y]
-        var f = shares[unsafe_offset=y]
-        var top = rows.unsafe_offset(line * channels)
-        var bottom = top.unsafe_offset(channels if line + 1 < height else 0)
+        var r0 = rows.unsafe_offset(lines[unsafe_offset=y * 4] * channels)
+        var r1 = rows.unsafe_offset(lines[unsafe_offset=y * 4 + 1] * channels)
+        var r2 = rows.unsafe_offset(lines[unsafe_offset=y * 4 + 2] * channels)
+        var r3 = rows.unsafe_offset(lines[unsafe_offset=y * 4 + 3] * channels)
+        var w0 = shares[unsafe_offset=y * 4]
+        var w1 = shares[unsafe_offset=y * 4 + 1]
+        var w2 = shares[unsafe_offset=y * 4 + 2]
+        var w3 = shares[unsafe_offset=y * 4 + 3]
         var dest = target.unsafe_offset(y * channels)
         var k = 0
         while k + GAME_LANES <= channels:
-            var a = top.unsafe_load[width=GAME_LANES](k)
-            var b = bottom.unsafe_load[width=GAME_LANES](k)
-            var mixed = a + (b - a) * f + 0.5
-            dest.unsafe_store(k, mixed.cast[DType.uint8]())
+            var mixed = (
+                r0.unsafe_load[width=GAME_LANES](k) * w0
+                + r1.unsafe_load[width=GAME_LANES](k) * w1
+                + r2.unsafe_load[width=GAME_LANES](k) * w2
+                + r3.unsafe_load[width=GAME_LANES](k) * w3
+                + 0.5
+            )
+            var held = min(max(mixed, F(0)), F(255.5))
+            dest.unsafe_store(k, held.cast[DType.uint8]())
             k += GAME_LANES
         while k < channels:
-            var a = top[unsafe_offset=k]
-            dest[unsafe_offset=k] = UInt8(
-                Int(a + (bottom[unsafe_offset=k] - a) * f + 0.5)
+            var mixed = (
+                r0[unsafe_offset=k] * w0
+                + r1[unsafe_offset=k] * w1
+                + r2[unsafe_offset=k] * w2
+                + r3[unsafe_offset=k] * w3
+                + 0.5
             )
+            dest[unsafe_offset=k] = UInt8(Int(min(max(mixed, 0), 255.5)))
             k += 1
 
 
 def upscale(
     frame: Framebuffer, width: Int, height: Int, workers: Int
 ) raises -> Framebuffer:
-    """Return a frame stretched to a size, bilinear.
+    """Return a frame stretched to a size, by the Catmull-Rom cubic.
 
     Args:
         frame: The small frame.
@@ -140,7 +169,8 @@ def upscale(
 def upscale_into(
     frame: Framebuffer, mut target: Framebuffer, workers: Int
 ) raises:
-    """Stretch a frame over another frame's pixels, bilinear.
+    """Stretch a frame over another frame's pixels, by the Catmull-Rom
+    cubic.
 
     A game keeps one window-sized frame and stretches each small frame
     over it. This does not allocate the window's eight megabytes again
@@ -204,7 +234,6 @@ def upscale_into(
                 .unsafe_ptr()
                 .unsafe_mut_cast[False]()
                 .unsafe_origin_cast[ImmutAnyOrigin](),
-                frame.height,
                 target.pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 y,
                 past,
