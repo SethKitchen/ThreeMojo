@@ -45,6 +45,7 @@ from extensions.animals.build import (
 )
 from extensions.animals.rig import Pose
 from core.buffer_geometry import BufferGeometry
+from render.framebuffer import Color
 from render.tasks import TaskGroup
 from extensions.animals.gait import is_quadruped, walk_pose, walk_stride
 from extensions.animals.options import CROWD, Quality, animal_options
@@ -220,6 +221,12 @@ def play_rate(stance: Stance, speed: Velocity) -> Float32:
     return 1
 
 
+comptime FLASH_GLOW = Color(255, 244, 228)
+"""The color a body glows as a blow lands on it."""
+comptime FLASH_STRENGTH = Float32(0.12)
+"""How strongly a body glows as a blow lands on it."""
+
+
 def facing_turn(heading: Angle) -> Angle:
     """Return how far to turn a model about +y so it faces a heading.
 
@@ -292,6 +299,12 @@ struct Body(Movable):
     var skirts: List[Int]
     var sway_reach: Float32
     var sway: Sway
+    # Each skinned mesh of the skin and the clothes, its own material,
+    # and a copy of it that glows white: a blow flashes the body.
+    var flashing: List[Int]
+    var rest_looks: List[MaterialId]
+    var flash_looks: List[MaterialId]
+    var flashed: Bool
 
     def __init__(
         out self,
@@ -376,6 +389,9 @@ struct Body(Movable):
         for skin in self.person.skins:  # pragma: no branch
             scene.skinned_meshes[skin].cast_shadow = True
         self.garments = List[Int]()
+        # Every skinned mesh the body wears: its skin, and each part of
+        # each garment.
+        var worn = self.person.skins.copy()
         self.skirts = List[Int]()
         self.sway = Sway()
         self.sway_reach = SWAY_REACH * self.person.rig.stature / Float32(1.8288)
@@ -387,6 +403,7 @@ struct Body(Movable):
             for parts in dressed.parts:  # pragma: no branch
                 for mesh in parts:
                     scene.skinned_meshes[mesh].cast_shadow = True
+                    worn.append(mesh)
             # A skirt's hem swings as the person moves.
             var top = skirt_top(self.person.rig)
             for g in range(len(outfit.garments)):  # pragma: no branch
@@ -397,6 +414,22 @@ struct Body(Movable):
                         scene, assets, dressed.parts[g], top, self.sway_reach
                     )
                 )
+        # A copy of each material that glows, to flash the body by.
+        self.flashing = List[Int]()
+        self.rest_looks = List[MaterialId]()
+        self.flash_looks = List[MaterialId]()
+        self.flashed = False
+        var made = Dict[Int, MaterialId]()
+        for mesh in worn:  # pragma: no branch
+            var rest = scene.skinned_meshes[mesh].material
+            if rest.value not in made:
+                var glow = assets.materials.get(rest)
+                glow.emissive = FLASH_GLOW
+                glow.emissive_intensity = FLASH_STRENGTH
+                made[rest.value] = assets.materials.add(glow)
+            self.flashing.append(mesh)
+            self.rest_looks.append(rest)
+            self.flash_looks.append(made[rest.value])
         ref rig = self.person.rig
         ref bones = self.person.bones
         self.mixer = AnimationMixer()
@@ -476,6 +509,23 @@ struct Body(Movable):
             )
         self.mixer.update(scene, delta)
         self.swing_hem(scene, character, delta)
+
+    def flash(mut self, mut scene: Scene, on: Bool):
+        """Make the body glow white, as a blow lands on it, or stop.
+
+        The skin and each garment wear their glowing copies while `on`
+        holds.
+
+        Args:
+            scene: The scene the body is in.
+            on: Whether the body glows.
+        """
+        if on == self.flashed:
+            return
+        self.flashed = on
+        for k in range(len(self.flashing)):  # pragma: no branch
+            var look = self.flash_looks[k] if on else self.rest_looks[k]
+            scene.skinned_meshes[self.flashing[k]].material = look
 
     def swing_hem(
         mut self, mut scene: Scene, character: Character, delta: Duration

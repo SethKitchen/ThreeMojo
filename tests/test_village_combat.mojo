@@ -138,8 +138,13 @@ def test_the_health_a_blow_took_shows_a_moment_then_drains() raises:
     var most = f.parameters.health
     assert_equal(f.chip, most)
     f.health = most / 2
+    # The body flashes as the blow is seen, and not for long.
+    assert_false(f.struck_lately())
+    f.update(Duration(0.01, SECOND))
+    assert_true(f.struck_lately())
     # It holds a moment after the blow.
     f.update(Duration(CHIP_HOLD / 2, SECOND))
+    assert_false(f.struck_lately())
     assert_equal(f.chip, most)
     # Then it drains, but never under the health.
     f.update(Duration(CHIP_HOLD, SECOND))

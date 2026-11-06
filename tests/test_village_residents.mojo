@@ -404,6 +404,17 @@ def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
     assert_true(body.lift > 0.6 and body.lift < 1.0)
     # An empty outfit leaves the body bare.
     assert_equal(len(body.garments), 0)
+    # A blow flashes the skin white, and it goes back after.
+    assert_equal(len(body.flashing), len(body.person.skins))
+    var skin = body.flashing[0]
+    var rest = scene.skinned_meshes[skin].material
+    body.flash(scene, True)
+    body.flash(scene, True)
+    var glow = scene.skinned_meshes[skin].material
+    assert_true(glow != rest)
+    assert_true(assets.materials.get(glow).emissive_intensity > 0)
+    body.flash(scene, False)
+    assert_true(scene.skinned_meshes[skin].material == rest)
     var walker = Character(
         CharacterParameters(), 2, 3, Angle(0.0, RADIAN), ground
     )

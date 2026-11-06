@@ -182,6 +182,9 @@ comptime COMBO_KEEP = Float32(2.5)
 comptime CHIP_HOLD = Float32(0.45)
 """How long the health a blow took stays shown on a fighter's bar before
 it drains, in seconds."""
+comptime FLASH_SECONDS = Float32(0.08)
+"""How long a fighter's body flashes after a blow takes its health, in
+seconds."""
 comptime CHIP_DRAIN = Float32(0.6)
 """How fast the shown health drains to the health, in shares of the most
 health a second."""
@@ -1706,6 +1709,16 @@ struct Fighter(Copyable, Movable):
         self.over = max(Float32(0), self.over - seconds)
         self.guard_age += seconds
         self._drain_chip(seconds)
+
+    def struck_lately(self) -> Bool:
+        """Return whether a blow took the fighter's health in the last
+        `FLASH_SECONDS`, so its body flashes.
+
+        Returns:
+            True while the shown health has held for less than
+            `FLASH_SECONDS` since the blow.
+        """
+        return self.chip_hold > CHIP_HOLD - FLASH_SECONDS
 
     def _drain_chip(mut self, seconds: Float32):
         """Hold the shown health a moment after a blow, then drain it to

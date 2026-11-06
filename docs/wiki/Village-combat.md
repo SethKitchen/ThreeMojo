@@ -230,6 +230,8 @@ A blow that lands also flashes. A star of light opens where it struck, and a rin
 
 A plain blow's flash is a warm white, and a critical blow's, a finisher's or a pierce break's is gold and larger. A blow on the player flashes red. A blow that a guard blocks or parries gives a small blue flash, as steel strikes steel. `impact_color` and `impact_power` give the flash. `draw_impact` draws it.
 
+The body that a blow hurts glows white for `FLASH_SECONDS`, 0.08 seconds. Each `Body` keeps a copy of each of its materials that glows, at `FLASH_STRENGTH`, 0.12. `Body.flash` puts the copies on its skin and its clothes. `Arms.pose` calls it while `Fighter.struck_lately` holds.
+
 A swing leaves a trail of light: white for the player, gold in a surge, and orange for a bandit. A piercing attack's thrust leaves a red trail. The ultimate's spins leave a wide gold ring. A plunge rings the ground with light where it lands.
 
 Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. Near the blade, a thin white edge runs along its outer side, so the swing reads as a cut. After the active part, it fades away in 0.15 seconds.
