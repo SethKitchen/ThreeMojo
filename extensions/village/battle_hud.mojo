@@ -8,15 +8,18 @@
 
 `draw_battle` draws eight things:
 
-1. **The trails** of the swings, the ground wave's waves, the
+1. **The flashes** where blows land, each a star and a ring of light:
+   see `extensions.village.slashes.draw_impact`.
+   **The trails** of the swings, the ground wave's waves, the
    companion's bolts, the throwers' knives and a plunge's ring, as light
    added to the frame: see `extensions.village.slashes`. A wave dims as
    it runs. A knife is a small orange star. A plunge's
    ring spreads over the ground from the player's feet, and fades. A bolt is a blue
    star, or a gold one for a assist attack.
-2. **The player's gauges**, in the bottom right: the stance, the health,
-   the stamina, the limit gauge, and the special gauge as a row of points. The
-   health turns red below a quarter. In a surge, the limit gauge turns
+2. **The player's gauges**, in the bottom right, on a dark panel: the
+   stance, the health, the stamina, the limit gauge, and the special
+   gauge as a row of points. The health turns red below a quarter. What a
+   blow takes stays pale on the health bar for a moment, then drains. In a surge, the limit gauge turns
    gold, says `SURGE`, and empties as it ends. Through a ultimate
    special's start-up, `ULTIMATE` stands large in the middle of the
    frame, and a gold star grows at the player's sword hand. The
@@ -25,15 +28,18 @@
 3. **The combo**, such as `12 HITS`, on the right, while two blows or more
    have landed and the combo lasts. It fades as the combo ends.
 4. **Each bandit's health and stamina**, over its head, while it fights or is
-   hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy
+   hurt. What a blow takes stays pale on the health bar, then drains. A staggered bandit shows `BREAK`, or `FINISH` when a heavy
    attack would finish it. A bandit that winds up a heavy attack shows a
    red `!`, a warning of a strong blow. A bandit that winds up a piercing
    attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under
    its bars.
 5. **A dummy's stamina**, over its head, while its stamina is not full.
 6. **The lock's mark**: four gold dots around the locked target's chest.
-7. **The numbers and the words** of the blows, which rise and fade. They
-   stand under `TOP_BAND`, so they do not cross the compass.
+7. **The numbers and the words** of the blows, which rise and fade,
+   ringed dark so they read over the sky. A number stands half again as
+   large as a word, a critical one twice as large, and each pops larger
+   as it appears. They stand under `TOP_BAND`, so they do not cross the
+   compass.
 8. **The edges of the frame**, tinted: blue while the player's perfect
    dodge slows the foes; gold through an ultimate; and red below a
    quarter of the player's health. A stamina recovery rings the player's feet
@@ -77,6 +83,7 @@ from extensions.village.effects_hud import draw_effects
 from extensions.village.raid_hud import draw_raid
 from extensions.village.slashes import (
     PIERCE_TRAIL,
+    draw_impact,
     FOE_TRAIL,
     OVER_TRAIL,
     draw_ring,
@@ -88,6 +95,7 @@ from extensions.village.hud import (
     SHADOW,
     WHITE_TEXT,
     Rgb,
+    draw_outlined,
     draw_text,
     fill_box,
     hud_scale,
@@ -143,6 +151,14 @@ the frame's width across and of its height down."""
 comptime HURT_ARC = Float32(0.06)
 """How far apart the squares of a blow's mark stand along its arc, as a
 share of the way from the middle."""
+comptime CHIP_COLOR = Rgb(255, 236, 196)
+"""The color of the health a blow took, behind the health on a bar."""
+comptime PANEL_ALPHA = Float32(0.38)
+"""How dark the panel behind the player's gauges is, from 0 to 1."""
+comptime POP_SECONDS = Float32(0.12)
+"""How long a number stands larger as it appears, in seconds."""
+comptime POPUP_FADE = Float32(0.3)
+"""How long a number or a word takes to fade at its end, in seconds."""
 comptime TOP_BAND = 46
 """How many dots of the heads-up display's font the compass, its caption
 and the target panel take at the top of the frame. The numbers and the
@@ -176,8 +192,13 @@ def draw_bar(
     height: Int,
     share: Float32,
     color: Rgb,
+    chip: Float32 = -1,
 ):
     """Draw a gauge: a dark box, filled from the left by a share.
+
+    A gauge of health shows what a blow just took: past the share, up to
+    `chip`, it is filled pale, and the pale part drains away. The fill's
+    top row is lighter, so the bar reads as raised.
 
     Args:
         frame: The frame.
@@ -187,10 +208,18 @@ def draw_bar(
         height: Its height, in pixels.
         share: How full it is, from 0 to 1.
         color: The fill's color.
+        chip: How full it was a moment ago, from 0 to 1; less than
+            `share` for none.
     """
     var full = Int(Float32(width) * max(Float32(0), min(Float32(1), share)))
+    var was = Int(Float32(width) * max(Float32(0), min(Float32(1), chip)))
     fill_box(frame, x - 1, y - 1, x + width + 1, y + height + 1, SHADOW, 0.6)
+    if was > full:
+        fill_box(frame, x + full, y, x + was, y + height, CHIP_COLOR, 0.9)
     fill_box(frame, x, y, x + full, y + height, color, 1)
+    if height >= 3:
+        var light = Rgb(255, 255, 255)
+        fill_box(frame, x, y, x + full, y + max(1, height // 4), light, 0.3)
 
 
 def on_screen(
@@ -244,6 +273,16 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
     var width = 72 * scale
     var x = frame.width - margin - width
     var y = frame.height - margin - 4 * scale
+    # A dark panel behind the gauges, so they read over a bright sky.
+    fill_box(
+        frame,
+        x - 36 * scale,
+        y - 56 * scale,
+        frame.width - margin + 3 * scale,
+        y + 6 * scale,
+        SHADOW,
+        PANEL_ALPHA,
+    )
     # The special gauge: one box a point, filled by its share.
     var points = Int(f.parameters.special_points + 0.5)
     var pip = 6 * scale
@@ -294,7 +333,8 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
     y -= 12 * scale
     var health = f.health / f.parameters.health
     var hue = HEALTH if health >= 0.25 else WOUNDED
-    draw_bar(frame, x, y, width, 4 * scale, health, hue)
+    var chip = f.chip / f.parameters.health
+    draw_bar(frame, x, y, width, 4 * scale, health, hue, chip)
     draw_text(frame, x - 16 * scale, y - scale, "HP", scale, hue, 1)
     var count = String(Int(f.health + 0.5), "/", Int(f.parameters.health))
     var right = x + width
@@ -531,6 +571,8 @@ def draw_battle(
         _star(frame, camera, look, bolt.at, BOLT_GLOW, color)
     for knife in battle.knives:
         _star(frame, camera, look, knife.at, KNIFE_GLOW, FOE_TRAIL)
+    for impact in battle.impacts:
+        draw_impact(frame, camera, look, impact)
     _ring(frame, battle, scene, camera, look)
     _edges(frame, battle, scene, camera, look)
     _gauges(frame, battle, scale)
@@ -571,7 +613,14 @@ def draw_battle(
         var y = Int(over.value().y)
         ref p = foe.fighter.parameters
         draw_bar(
-            frame, x, y, bar, 2 * scale, foe.fighter.health / p.health, WOUNDED
+            frame,
+            x,
+            y,
+            bar,
+            2 * scale,
+            foe.fighter.health / p.health,
+            WOUNDED,
+            foe.fighter.chip / p.health,
         )
         draw_bar(
             frame,
@@ -654,15 +703,68 @@ def draw_battle(
         var at = on_screen(camera, look, popup.at, w, h)
         if not at:
             continue
-        _centered(
+        var size = popup_scale(popup.text, popup.color, popup.age, scale)
+        var text = popup.text
+        # The outline reaches a stroke above the text: it too stands
+        # under the band.
+        draw_outlined(
             frame,
-            Int(at.value().x),
-            Int(at.value().y) + band - lowest,
-            popup.text,
-            scale,
+            Int(at.value().x) - text_width(text, size) // 2,
+            Int(at.value().y) + band - lowest + max(1, size // 2),
+            text,
+            size,
             popup.color,
-            note_alpha(popup.age, POPUP_SECONDS),
+            popup_alpha(popup.age),
         )
+
+
+def popup_scale(text: String, color: Rgb, age: Float32, scale: Int) -> Int:
+    """Return the pixels a dot of a number or a word over a fighter takes.
+
+    A number stands half again as large as the display's words, and a
+    critical blow's gold number twice as large. Each number stands one
+    dot larger for `POP_SECONDS` as it appears, so it pops.
+
+    Args:
+        text: The number or the word.
+        color: Its color: gold for a critical blow.
+        age: How long it has shown, in seconds.
+        scale: The pixels a dot of the display's font takes.
+
+    Returns:
+        The pixels a dot takes, at least one.
+    """
+    var bytes = text.as_bytes()
+    var first = Int(bytes[0]) if len(bytes) > 0 else 0
+    var number = (first >= ord("0") and first <= ord("9")) or first == ord("+")
+    if not number:
+        return scale
+    var size = scale + (scale + 1) // 2
+    if (
+        color.r == GOLD_TEXT.r
+        and color.g == GOLD_TEXT.g
+        and color.b == GOLD_TEXT.b
+    ):
+        size = 2 * scale
+    if age < POP_SECONDS:
+        size += max(1, scale // 2)
+    return size
+
+
+def popup_alpha(age: Float32) -> Float32:
+    """Return how strongly a number or a word over a fighter shows.
+
+    Args:
+        age: How long it has shown, in seconds.
+
+    Returns:
+        One until `POPUP_FADE` before `POPUP_SECONDS`, then less, to zero
+        at `POPUP_SECONDS` and after.
+    """
+    var left = POPUP_SECONDS - age
+    if left <= 0:
+        return 0
+    return min(Float32(1), left / POPUP_FADE)
 
 
 def target_name(battle: Battle, index: Int) -> String:
@@ -709,7 +811,14 @@ def draw_target(mut frame: Framebuffer, battle: Battle, top: Int):
     ref p = foe.fighter.parameters
     var y = top + 9 * scale
     draw_bar(
-        frame, x, y, width, 3 * scale, foe.fighter.health / p.health, WOUNDED
+        frame,
+        x,
+        y,
+        width,
+        3 * scale,
+        foe.fighter.health / p.health,
+        WOUNDED,
+        foe.fighter.chip / p.health,
     )
     draw_bar(
         frame,

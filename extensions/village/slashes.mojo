@@ -36,6 +36,11 @@ as the red glow of a foe that winds up a piercing attack.
 
 **Sparks.** `Sparks` keeps `SPARKS` bursts of gold rays. A blow puts the
 oldest at the place it lands; it grows and shows for `SPARK_SECONDS`.
+
+**Impacts.** `draw_impact` adds a blow's flash and an expanding ring of
+light where it landed, for `IMPACT_SECONDS`. The ribbons have a thin
+white edge along their outer side near the blade, so a swing reads as a
+cut.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -73,6 +78,20 @@ comptime TRAIL_LINGER = Float32(0.15)
 seconds."""
 comptime TRAIL_TAIL = Float32(0.6)
 """The share of a ribbon behind the blade over which it fades."""
+comptime EDGE_WIDTH = Float32(0.15)
+"""The share of a ribbon's width that its white edge takes."""
+comptime EDGE_LIGHT = Float32(0.8)
+"""How much light a ribbon's white edge adds at the blade. It falls to
+none where the ribbon's own light falls to half."""
+comptime EDGE_COLOR = Vector3(255, 250, 235)
+"""The light of a ribbon's edge at a share of one, as sRGB bytes."""
+comptime IMPACT_SECONDS = Float32(0.22)
+"""How long a blow's flash and ring show, in seconds."""
+comptime IMPACT_SIZE = Float32(0.06)
+"""How far a blow's flash reaches at a power of one, as a share of the
+frame's height."""
+comptime IMPACT_SEGMENTS = 24
+"""How many pieces a blow's ring is drawn in."""
 comptime TRAIL_STEPS = 18
 """How many quads an arc of a half turn takes."""
 comptime NEAREST = Float32(0.2)
@@ -337,10 +356,12 @@ def glow_triangle(
                 continue
             var share = wa * a.z + wb * b.z + wc * c.z
             var at = (y * frame.width + x) * 4
-            var light: List[Float32] = [color.x, color.y, color.z]
-            for k in range(3):  # pragma: no branch
-                var lit = Float32(frame.pixels[at + k]) + light[k] * share
-                frame.pixels[at + k] = UInt8(Int(min(Float32(255), lit)))
+            var r = Float32(frame.pixels[at]) + color.x * share
+            var g = Float32(frame.pixels[at + 1]) + color.y * share
+            var bl = Float32(frame.pixels[at + 2]) + color.z * share
+            frame.pixels[at] = UInt8(Int(min(Float32(255), r)))
+            frame.pixels[at + 1] = UInt8(Int(min(Float32(255), g)))
+            frame.pixels[at + 2] = UInt8(Int(min(Float32(255), bl)))
 
 
 def glow_star(
@@ -564,6 +585,21 @@ def glow_ribbon(
         var d = Vector3(i1.x, i1.y, s1 * 0.5)
         glow_triangle(frame, a, b, c, color)
         glow_triangle(frame, a, c, d, color)
+        # The blade's edge: a thin strip of white light along the outer
+        # side, `EDGE_WIDTH` of the ribbon wide, on the newest half of the
+        # sweep, so the swing reads as a cut and not as a smear.
+        var hot0 = max(Float32(0), 2 * s0 - 1) * EDGE_LIGHT
+        var hot1 = max(Float32(0), 2 * s1 - 1) * EDGE_LIGHT
+        if hot0 <= 0 and hot1 <= 0:
+            continue
+        var e0 = o0 + (i0 - o0) * EDGE_WIDTH
+        var e1 = o1 + (i1 - o1) * EDGE_WIDTH
+        var f = Vector3(e0.x, e0.y, 0)
+        var g = Vector3(o0.x, o0.y, hot0)
+        var h = Vector3(o1.x, o1.y, hot1)
+        var j = Vector3(e1.x, e1.y, 0)
+        glow_triangle(frame, f, g, h, EDGE_COLOR)
+        glow_triangle(frame, f, h, j, EDGE_COLOR)
 
 
 def draw_wave(
@@ -740,3 +776,93 @@ struct Sparks(Movable):
                 continue
             var grow = 0.5 + 1.5 * self.ages[k] / SPARK_SECONDS
             node.set_scale(grow, grow, grow)
+
+
+@fieldwise_init
+struct Impact(Copyable, ImplicitlyCopyable, Movable):
+    """Where a blow landed, and the flash and the ring of light it leaves
+    there for `IMPACT_SECONDS`."""
+
+    var at: Vector3
+    # The light at a share of one, as sRGB bytes.
+    var color: Vector3
+    # How large and how bright: one for a plain blow.
+    var power: Float32
+    # How long it has shown, in seconds.
+    var age: Float32
+
+
+def draw_impact(
+    mut frame: Framebuffer,
+    camera: PerspectiveCamera,
+    look: Vector3,
+    impact: Impact,
+) raises:
+    """Add a blow's flash and its ring to a frame.
+
+    The flash is a star that opens in the first quarter of the impact's
+    time and then fades. The ring grows from half the flash's reach to
+    twice it, and thins and fades as it grows. Both fade as the square of
+    the time left, so the light is sharp at the blow and soft after. An
+    impact less than `NEAREST` before the camera, or done, is not drawn.
+
+    Args:
+        frame: The frame, the camera's size.
+        camera: The camera the frame was drawn from.
+        look: The way the camera looks, of length one.
+        impact: The impact.
+
+    Raises:
+        Error: If the camera or the frame's size is not valid.
+    """
+    var t = impact.age / IMPACT_SECONDS
+    if t >= 1 or t < 0:
+        return
+    var off = impact.at - camera.position
+    if off.x * look.x + off.y * look.y + off.z * look.z < NEAREST:
+        return
+    var middle = camera.project(impact.at, frame.width, frame.height)
+    var fade = (1 - t) * (1 - t)
+    var reach = IMPACT_SIZE * Float32(frame.height) * impact.power
+    var opened = min(Float32(1), 0.4 + 2.4 * t)
+    glow_star(
+        frame,
+        Vector3(middle.x, middle.y, min(Float32(1), fade * impact.power)),
+        reach * opened,
+        impact.color,
+    )
+    var radius = reach * (0.5 + 1.5 * t)
+    var width = max(Float32(1), reach * 0.18 * (1 - t))
+    for k in range(IMPACT_SEGMENTS):  # pragma: no branch
+        var a0 = 2 * Float32(pi) * Float32(k) / Float32(IMPACT_SEGMENTS)
+        var a1 = 2 * Float32(pi) * Float32(k + 1) / Float32(IMPACT_SEGMENTS)
+        var c0 = cos(a0)
+        var s0 = sin(a0)
+        var c1 = cos(a1)
+        var s1 = sin(a1)
+        var inner0 = Vector3(
+            middle.x + (radius - width) * c0,
+            middle.y + (radius - width) * s0,
+            0,
+        )
+        var inner1 = Vector3(
+            middle.x + (radius - width) * c1,
+            middle.y + (radius - width) * s1,
+            0,
+        )
+        var mid0 = Vector3(middle.x + radius * c0, middle.y + radius * s0, fade)
+        var mid1 = Vector3(middle.x + radius * c1, middle.y + radius * s1, fade)
+        var outer0 = Vector3(
+            middle.x + (radius + width) * c0,
+            middle.y + (radius + width) * s0,
+            0,
+        )
+        var outer1 = Vector3(
+            middle.x + (radius + width) * c1,
+            middle.y + (radius + width) * s1,
+            0,
+        )
+        glow_triangle(frame, inner0, mid0, mid1, impact.color)
+        glow_triangle(frame, inner0, mid1, inner1, impact.color)
+        glow_triangle(frame, mid0, outer0, outer1, impact.color)
+        glow_triangle(frame, mid0, outer1, mid1, impact.color)

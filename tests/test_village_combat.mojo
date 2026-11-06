@@ -23,6 +23,8 @@ from extensions.village.combat import (
     OVER_BONUS,
     OVER_SECONDS,
     BLOCKED,
+    CHIP_DRAIN,
+    CHIP_HOLD,
     COMBO_KEEP,
     COMBO_STEP,
     COUNTER_BONUS,
@@ -129,6 +131,27 @@ def _blow(damage: Float32, stamina: Float32) -> Blow:
         Velocity(0.0, METER_PER_SECOND),
         Velocity(0.0, METER_PER_SECOND),
     )
+
+
+def test_the_health_a_blow_took_shows_a_moment_then_drains() raises:
+    var f = Fighter(FighterParameters())
+    var most = f.parameters.health
+    assert_equal(f.chip, most)
+    f.health = most / 2
+    # It holds a moment after the blow.
+    f.update(Duration(CHIP_HOLD / 2, SECOND))
+    assert_equal(f.chip, most)
+    # Then it drains, but never under the health.
+    f.update(Duration(CHIP_HOLD, SECOND))
+    f.update(Duration(0.1, SECOND))
+    assert_true(f.chip < most)
+    assert_true(f.chip > f.health)
+    f.update(Duration(2 / CHIP_DRAIN, SECOND))
+    assert_equal(f.chip, f.health)
+    # Healed, it shows the health at once.
+    f.health = most
+    f.update(Duration(0.01, SECOND))
+    assert_equal(f.chip, most)
 
 
 def test_each_kind_knows_its_values() raises:

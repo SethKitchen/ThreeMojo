@@ -205,15 +205,15 @@ Two straw dummies stand east of the start. A dummy is a post with a crossbar, a 
 The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these over the frame:
 
 - **The companion's assist gauge**, in the bottom left. It says `ASSIST READY` when it is full.
-- **The gauges**, in the bottom right: the stance, the health, the stamina, the limit gauge, and the special gauge as a row of points. The health turns red below a quarter. In a surge, the limit gauge turns gold, says `SURGE`, and empties as the time runs out. Through an ultimate's start-up, its name stands large in the middle of the frame, and a gold star grows at the sword hand.
+- **The gauges**, in the bottom right: the stance, the health, the stamina, the limit gauge, and the special gauge as a row of points. A dark panel stands behind them. The health turns red below a quarter. In a surge, the limit gauge turns gold, says `SURGE`, and empties as the time runs out. Through an ultimate's start-up, its name stands large in the middle of the frame, and a gold star grows at the sword hand.
 - **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
 - **The red edges.** Below `VIGNETTE_HEALTH`, 35 percent, of their health, the edges of the player's frame redden, more the nearer they are to falling. A blow that lands on the player flashes them red for 0.4 seconds. `draw_vignette` draws them.
-- **Each bandit's health and stamina**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a piercing attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under its bars.
+- **Each bandit's health and stamina**, over its head, while it fights or is hurt. On each health bar, the health that a blow took stays pale for `CHIP_HOLD`, 0.45 seconds. Then it drains at `CHIP_DRAIN`, 60 percent of the bar a second. So a hit shows how much it took. The player's health bar and the target panel's show it too. `Fighter.chip` holds the health that the bar shows. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a piercing attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under its bars.
 - **A dummy's stamina**, over its head, while its stamina is not full.
 - **The lock's mark**: four gold dots around the locked target's chest.
 - **The way of each blow on the player**: a red arc near the edge of the frame, toward where the blow came from. It tells the player which way to turn. It fades in `HURT_SECONDS`, 1.2 seconds. A blow that a guard blocks takes no health, so it shows no arc. `hurt_way` gives the way on the frame.
 - **The target panel**, under the compass: the locked foe's name, such as `BANDIT` or `WOLF`, and its health bar. `draw_target` writes it, and `target_name` gives the name. While a warden fights, the panel and the compass stand under the warden's bars: `hud_drop` gives how far down.
-- **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `PIERCE BREAK`. They rise and fade. They stand under `TOP_BAND`, 46 dots of the font, so they do not cross the compass or the target panel. They move down together, so they keep their order.
+- **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `PIERCE BREAK`. They rise and fade. A dark outline rings each one, so it reads over the sky. A number is half again as large as a word, and a critical blow's gold number is twice as large. Each number stands larger for `POP_SECONDS`, 0.12 seconds, as it appears. `popup_scale` gives the size. They stand under `TOP_BAND`, 46 dots of the font, so they do not cross the compass or the target panel. They move down together, so they keep their order.
 - **The edges of the frame**, tinted. They turn blue while the player's perfect dodge slows the foes. They turn gold through an ultimate, and red below a quarter of the player's health. A stamina recovery rings the player's feet with blue light.
 
 For the styles, the combos and the raid, `draw_battle` also writes:
@@ -226,9 +226,13 @@ For the styles, the combos and the raid, `draw_battle` also writes:
 
 The note over the prompt names each special as it starts, and each new stance. It says `SURGE!` when a surge begins, and `ASSIST ATTACK!` when the companion makes one. The companion's bolts are blue stars, and her assist attack's is gold. A thrown knife is a small orange star. A blow that lands bursts in sparks.
 
+A blow that lands also flashes. A star of light opens where it struck, and a ring of light grows from it. Both fade in `IMPACT_SECONDS`, 0.22 seconds.
+
+A plain blow's flash is a warm white, and a critical blow's, a finisher's or a pierce break's is gold and larger. A blow on the player flashes red. A blow that a guard blocks or parries gives a small blue flash, as steel strikes steel. `impact_color` and `impact_power` give the flash. `draw_impact` draws it.
+
 A swing leaves a trail of light: white for the player, gold in a surge, and orange for a bandit. A piercing attack's thrust leaves a red trail. The ultimate's spins leave a wide gold ring. A plunge rings the ground with light where it lands.
 
-Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds.
+Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. Near the blade, a thin white edge runs along its outer side, so the swing reads as a cut. After the active part, it fades away in 0.15 seconds.
 
 The game's renderer draws every surface opaque, so `draw_battle` adds the trails to the finished frame. See `extensions/village/slashes.mojo`.
 

@@ -215,6 +215,61 @@ def draw_text(
                     )
 
 
+def draw_outlined(
+    mut frame: Framebuffer,
+    x: Int,
+    y: Int,
+    text: String,
+    scale: Int,
+    color: Rgb,
+    alpha: Float32,
+):
+    """Draw a line of text ringed by a dark outline, its top left at a
+    pixel, so it reads over a bright sky as over dark grass.
+
+    The outline is the text's shape drawn dark a stroke away in each of
+    the four diagonals; the stroke is half a dot, and one pixel at
+    least. A character that the font does not hold is left as a space.
+
+    Args:
+        frame: The frame.
+        x: The left of the first character, in pixels.
+        y: The top of the line, in pixels.
+        text: The line.
+        scale: The pixels a dot takes.
+        color: The text's color.
+        alpha: How much the text and its outline cover the frame, from 0
+            to 1.
+    """
+    var glyphs = String(GLYPHS)
+    var bytes = text.as_bytes()
+    var stroke = max(1, scale // 2)
+    for pass_ in range(5):
+        var dx = 0
+        var dy = 0
+        var paint = SHADOW
+        if pass_ < 4:
+            dx = stroke if pass_ % 2 == 0 else -stroke
+            dy = stroke if pass_ < 2 else -stroke
+        else:
+            paint = color
+        for k in range(len(bytes)):
+            var at = glyphs.find(chr(Int(bytes[k])))
+            if at < 0:
+                continue
+            var left = x + 6 * scale * k + dx
+            for row in range(7):
+                var bits = _row(at, row)
+                for dot in range(5):
+                    if (bits >> (4 - dot)) & 1 == 0:
+                        continue
+                    var px = left + dot * scale
+                    var py = y + row * scale + dy
+                    fill_box(
+                        frame, px, py, px + scale, py + scale, paint, alpha
+                    )
+
+
 def kind_color(kind: GatherKind) -> Rgb:
     """Return the swatch color of a kind in the satchel.
 

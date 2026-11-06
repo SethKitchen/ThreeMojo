@@ -117,6 +117,7 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     STAMINA_BREAK,
+    StrikeOutcome,
     AIMED_SHOT,
     ARROW_RAIN,
     HEAVY_BUTTON,
@@ -308,8 +309,10 @@ from extensions.village.skills import (
 )
 from extensions.village.slashes import (
     FOE_TRAIL,
+    IMPACT_SECONDS,
     OVER_TRAIL,
     PLAYER_TRAIL,
+    Impact,
     Sparks,
     Trail,
     slash_material,
@@ -699,6 +702,57 @@ struct Hurt(Copyable, Movable):
     var age: Float32
 
 
+comptime HIT_FLASH = Vector3(255, 235, 190)
+"""The light of a plain blow's flash, as sRGB bytes."""
+comptime CRITICAL_FLASH = Vector3(255, 190, 70)
+"""The light of a critical blow's flash."""
+comptime HURT_FLASH = Vector3(255, 80, 55)
+"""The light of the flash of a blow on the player."""
+comptime CLANG_FLASH = Vector3(170, 210, 255)
+"""The light of the flash of a blow that a guard stops."""
+comptime CLANG_POWER = Float32(0.6)
+"""How large the flash of a blow that a guard stops is."""
+
+
+def impact_color(outcome: StrikeOutcome, hurt: Bool) -> Vector3:
+    """Return the light of a landed blow's flash.
+
+    Args:
+        outcome: What the blow did.
+        hurt: Whether it landed on the player.
+
+    Returns:
+        Red on the player, gold for a critical blow, a finisher or a
+        pierce break, and a warm white for any other.
+    """
+    if hurt:
+        return HURT_FLASH
+    if outcome == CRITICAL or outcome == FINISHED or outcome == PIERCE_BREAK:
+        return CRITICAL_FLASH
+    return HIT_FLASH
+
+
+def impact_power(outcome: StrikeOutcome, hurt: Bool) -> Float32:
+    """Return how large and bright a landed blow's flash is.
+
+    Args:
+        outcome: What the blow did.
+        hurt: Whether it landed on the player.
+
+    Returns:
+        1.8 for a blow that fells or finishes, or breaks a pierce; 1.4 for
+        a critical blow or a stamina break; 0.8 for any other blow on the
+        player; and 1 for any other.
+    """
+    if outcome == FINISHED or outcome == DEFEATED or outcome == PIERCE_BREAK:
+        return 1.8
+    if outcome == CRITICAL or outcome == STAMINA_BREAK:
+        return 1.4
+    if hurt:
+        return 0.8
+    return 1
+
+
 @fieldwise_init
 struct Popup(Copyable, Movable):
     """A number or a word over a fighter: what a blow did."""
@@ -997,6 +1051,8 @@ struct Battle(Movable):
     var dummies: List[Practice]
     var sparks: Sparks
     var popups: List[Popup]
+    # The flashes and rings of light where blows landed.
+    var impacts: List[Impact]
     # The ground wave's waves that run.
     var waves: List[Wave]
     # The companion, if any, and her bolts that fly; and whether the assist
@@ -1310,6 +1366,7 @@ struct Battle(Movable):
         self.frame = 0
         self.sparks = Sparks(scene, assets, glow)
         self.popups = List[Popup]()
+        self.impacts = List[Impact]()
         self.waves = List[Wave]()
         self.bolts = List[Bolt]()
         self.called = False
@@ -2297,6 +2354,7 @@ struct Battle(Movable):
         perfect dodge of theirs slows the foes."""
         var outcome = struck.outcome
         var word = outcome_word(outcome)
+        var chest = at + Vector3(0, CHEST, 0)
         if landed_blow(outcome):
             var color = WHITE_TEXT
             if hurt:
@@ -2304,7 +2362,18 @@ struct Battle(Movable):
             elif outcome == CRITICAL:
                 color = GOLD_TEXT
             self._popup(at, String(Int(struck.damage + 0.5)), color)
-            self.sparks.burst(scene, at + Vector3(0, CHEST, 0))
+            self.sparks.burst(scene, chest)
+            self.impacts.append(
+                Impact(
+                    chest,
+                    impact_color(outcome, hurt),
+                    impact_power(outcome, hurt),
+                    0,
+                )
+            )
+        elif outcome == BLOCKED or outcome == PARRIED:
+            # Steel on steel: a small cold flash.
+            self.impacts.append(Impact(chest, CLANG_FLASH, CLANG_POWER, 0))
         if word.byte_length() > 0:
             var tone = GOLD_TEXT if landed_blow(outcome) else CALM_TEXT
             self._popup(at + Vector3(0, 0.35, 0), word, tone)
@@ -3062,6 +3131,18 @@ struct Battle(Movable):
                     )
                 )
         self.popups = kept^
+        var lasting = List[Impact]()
+        for impact in self.impacts:
+            if impact.age + seconds < IMPACT_SECONDS:
+                lasting.append(
+                    Impact(
+                        impact.at,
+                        impact.color,
+                        impact.power,
+                        impact.age + seconds,
+                    )
+                )
+        self.impacts = lasting^
         self.sparks.update(scene, delta)
         self._effects_step(seconds)
         for index in range(len(self.dummies)):

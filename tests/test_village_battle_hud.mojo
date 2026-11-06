@@ -7,12 +7,23 @@
 bars, the lock's mark and the blows' numbers."""
 
 from cameras.perspective_camera import PerspectiveCamera
-from extensions.village.battle import CHEST, Bolt, Knife, Popup, Wave
+from extensions.village.battle import (
+    CHEST,
+    POPUP_SECONDS,
+    Bolt,
+    Knife,
+    Popup,
+    Wave,
+)
 from extensions.village.battle_hud import (
     HURT_TINT,
     TOP_BAND,
+    POP_SECONDS,
+    POPUP_FADE,
     draw_bar,
     draw_battle,
+    popup_alpha,
+    popup_scale,
     on_screen,
     stance_label,
     tint_edges,
@@ -31,7 +42,13 @@ from extensions.village.combat import (
     STAGGER,
 )
 from extensions.village.foes import CIRCLING, POSTED
-from extensions.village.hud import WHITE_TEXT
+from extensions.village.hud import (
+    Rgb,
+    GOLD_TEXT,
+    WHITE_TEXT,
+    draw_outlined,
+    draw_text,
+)
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from std.testing import (
@@ -65,6 +82,9 @@ def _changed(frame: Framebuffer) -> Int:
     return sum
 
 
+comptime WOUNDED_TEST = Rgb(225, 70, 50)
+
+
 def _frame() raises -> Framebuffer:
     """Return a black frame of 320 by 180."""
     return Framebuffer(320, 180, Color(0, 0, 0))
@@ -84,6 +104,44 @@ def test_a_stance_and_a_bar_are_drawn() raises:
     var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
     assert_true(on_screen(camera, look, Vector3(0, 1, -2), 320, 180))
     assert_false(on_screen(camera, look, Vector3(0, 1, 9), 320, 180))
+
+
+def test_a_bar_shows_what_a_blow_took() raises:
+    # Half full, three quarters a moment ago: the quarter between is pale.
+    var plain = _frame()
+    draw_bar(plain, 10, 10, 40, 4, 0.5, WOUNDED_TEST)
+    var chipped = _frame()
+    draw_bar(chipped, 10, 10, 40, 4, 0.5, WOUNDED_TEST, 0.75)
+    assert_true(_changed(chipped) > _changed(plain))
+    var at = (11 * 320 + 10 + 25) * 4
+    assert_true(Int(chipped.pixels[at + 2]) > 150)
+    assert_true(Int(plain.pixels[at + 2]) < 20)
+    # A chip under the share shows nothing more.
+    var under = _frame()
+    draw_bar(under, 10, 10, 40, 4, 0.5, WOUNDED_TEST, 0.25)
+    assert_equal(_changed(under), _changed(plain))
+
+
+def test_a_number_pops_and_outlines() raises:
+    # A word keeps the display's size; a number is half again as large; a
+    # critical number twice as large; each number a dot more as it pops.
+    assert_equal(popup_scale("PARRY", WHITE_TEXT, 0.5, 4), 4)
+    assert_equal(popup_scale("", WHITE_TEXT, 0.5, 4), 4)
+    assert_equal(popup_scale("37", WHITE_TEXT, 0.5, 4), 6)
+    assert_equal(popup_scale("+12", WHITE_TEXT, 0.5, 2), 3)
+    assert_equal(popup_scale("37", GOLD_TEXT, 0.5, 4), 8)
+    assert_equal(popup_scale("37", WHITE_TEXT, POP_SECONDS / 2, 4), 8)
+    assert_equal(popup_scale("37", WHITE_TEXT, 0, 1), 3)
+    # Full until its fade, then less, and gone at its end.
+    assert_equal(popup_alpha(0), 1)
+    assert_true(popup_alpha(POPUP_SECONDS - POPUP_FADE / 2) < 1)
+    assert_equal(popup_alpha(POPUP_SECONDS), 0)
+    # An outline darkens more of a light frame than a shadow does.
+    var shadowed = Framebuffer(64, 32, Color(200, 200, 200))
+    draw_text(shadowed, 4, 4, "8", 2, WHITE_TEXT, 1)
+    var outlined = Framebuffer(64, 32, Color(200, 200, 200))
+    draw_outlined(outlined, 4, 4, "8~", 2, WHITE_TEXT, 1)
+    assert_true(_changed(outlined) < _changed(shadowed))
 
 
 def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:

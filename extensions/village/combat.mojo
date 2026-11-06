@@ -179,6 +179,12 @@ comptime COMBO_CAP = 25
 """The most blows of a combo that add damage."""
 comptime COMBO_KEEP = Float32(2.5)
 """How long a combo lasts after its last blow, in seconds."""
+comptime CHIP_HOLD = Float32(0.45)
+"""How long the health a blow took stays shown on a fighter's bar before
+it drains, in seconds."""
+comptime CHIP_DRAIN = Float32(0.6)
+"""How fast the shown health drains to the health, in shares of the most
+health a second."""
 comptime SPECIAL_PER_HIT = Float32(0.2)
 """The points of the special gauge that each blow that lands gives."""
 comptime LIMIT = Float32(100)
@@ -1164,6 +1170,12 @@ struct Fighter(Copyable, Movable):
     var boost: Float32
     var queued_boost: Float32
     var queued_waived: Bool
+    # The health a bar shows behind the health, which a blow leaves for
+    # `CHIP_HOLD` and which then drains to it; how long it still holds;
+    # and the health at the last update.
+    var chip: Float32
+    var chip_hold: Float32
+    var chip_seen: Float32
 
     def __init__(out self, parameters: FighterParameters) raises:
         """Create a fighter with full health, stamina, special gauge and
@@ -1208,6 +1220,9 @@ struct Fighter(Copyable, Movable):
         self.boost = 1
         self.queued_boost = 1
         self.queued_waived = False
+        self.chip = parameters.health
+        self.chip_hold = 0
+        self.chip_seen = parameters.health
 
     def free(self) -> Bool:
         """Return whether the fighter makes no move, so it can walk.
@@ -1637,7 +1652,8 @@ struct Fighter(Copyable, Movable):
         The move's clock runs. At the chain point a waiting move starts,
         and at its end the move ends. Stamina comes back after the fighter's
         delay, at half pace while it guards. The special gauge and the mana
-        fill. The combo ends `COMBO_KEEP` after its last blow.
+        fill. The combo ends `COMBO_KEEP` after its last blow. The health
+        that a blow took stays shown for `CHIP_HOLD`, then drains.
 
         Args:
             delta: The frame's time.
@@ -1689,6 +1705,20 @@ struct Fighter(Copyable, Movable):
         self.counter = max(Float32(0), self.counter - seconds)
         self.over = max(Float32(0), self.over - seconds)
         self.guard_age += seconds
+        self._drain_chip(seconds)
+
+    def _drain_chip(mut self, seconds: Float32):
+        """Hold the shown health a moment after a blow, then drain it to
+        the health. It never shows less than the health."""
+        if self.health < self.chip_seen:
+            self.chip_hold = CHIP_HOLD
+        self.chip_seen = self.health
+        if self.chip_hold > 0:
+            self.chip_hold = max(Float32(0), self.chip_hold - seconds)
+        else:
+            var drain = CHIP_DRAIN * self.parameters.health * seconds
+            self.chip -= drain
+        self.chip = max(self.chip, self.health)
 
     def swing(self) raises -> Optional[Swing]:
         """Return the part of the move that strikes in the last update.
