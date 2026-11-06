@@ -90,8 +90,8 @@ The bench walks a scripted player through the village. It prints the median, the
 
 | Preset | Frame size | Median frame | 95th percentile | Median frames a second |
 |---|---|---|---|---|
-| `LOW` | 640 by 360 | 24.6 ms | 31.2 ms | 41 |
-| `MEDIUM` | 960 by 540 | 59.2 ms | 78.3 ms | 17 |
+| `LOW` | 864 by 486 | 55.2 ms | 65.9 ms | 18 |
+| `MEDIUM` | 960 by 540 | 84.1 ms | 105.6 ms | 12 |
 
 `GameRenderer.timings` holds the time of each stage of the last frame, in milliseconds. The stages are the shadow maps, the gathering, the vertices, the setup, the bins, the raster, the sky and the resolve. The bench prints the median of each of these stages under `draw_stages`. It also prints the triangles, the vertices and the draws of the median frame.
 
