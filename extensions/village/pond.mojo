@@ -72,9 +72,14 @@ def water_mask(image: Framebuffer, before: List[Float32]) raises -> List[Bool]:
     if len(before) != count or len(image.depth) != count:
         raise Error("A frame needs a depth for each pixel")
     var mask = List[Bool](length=count, fill=False)
+    var now = image.depth.unsafe_ptr()
+    var was = before.unsafe_ptr()
+    var out = mask.unsafe_ptr()
     # A frame has a pixel or more.
     for k in range(count):  # pragma: no branch
-        mask[k] = image.depth[k] != before[k]
+        out[unsafe_offset=k] = now[unsafe_offset=k] != was[unsafe_offset=k]
+    _ = len(image.depth)
+    _ = len(before)
     return mask^
 
 
@@ -164,6 +169,10 @@ struct PondLook(Copyable, Movable):
         # offer at once. See `_mirror_key`.
         var keys = List[UInt64](length=w * h, fill=UInt64.MAX)
         var shake = TREMBLE * Float32(h) / 720
+        # Each row of the water trembles sideways by its own amount.
+        var wobbles = List[Float32](capacity=h)
+        for row in range(h):  # pragma: no branch
+            wobbles.append(shake * sin(Float32(row) * 0.35 + self.clock * 2.1))
         var tasks = max(1, min(available_workers() * 2, h))
         var scatter = TaskGroup()
         for t in range(tasks):  # pragma: no branch
@@ -185,17 +194,14 @@ struct PondLook(Copyable, Movable):
                     .unsafe_mut_cast[False]()
                     .unsafe_origin_cast[ImmutAnyOrigin](),
                     water,
-                    shake,
-                    self.clock,
+                    wobbles.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
                     t * h // tasks,
                     (t + 1) * h // tasks,
                 )
             )
         scatter.wait()
-        var found = List[Int](length=w * h, fill=-1)
-        for t in range(w * h):  # pragma: no branch
-            if keys[t] != UInt64.MAX:
-                found[t] = Int(keys[t] & 0xFFFFFFFF)
         var mixed = image.pixels.copy()
         var linear = linear_table()
         var bytes = SrgbBytes()
@@ -211,7 +217,7 @@ struct PondLook(Copyable, Movable):
                     mask.unsafe_ptr()
                     .unsafe_mut_cast[False]()
                     .unsafe_origin_cast[ImmutAnyOrigin](),
-                    found.unsafe_ptr()
+                    keys.unsafe_ptr()
                     .unsafe_mut_cast[False]()
                     .unsafe_origin_cast[ImmutAnyOrigin](),
                     w,
@@ -236,7 +242,8 @@ struct PondLook(Copyable, Movable):
         var shown = 0
         for c in counts:  # pragma: no branch
             shown += c
-        _ = len(found)
+        _ = len(keys)
+        _ = len(wobbles)
         _ = len(mask)
         _ = len(linear)
         _ = bytes.byte(0)
@@ -310,7 +317,7 @@ __async def _blend_task(
     pixels: Pointer[UInt8, ImmutAnyOrigin],
     mixed: MutPointer[UInt8, MutAnyOrigin],
     mask: Pointer[Bool, ImmutAnyOrigin],
-    found: Pointer[Int, ImmutAnyOrigin],
+    keys: Pointer[UInt64, ImmutAnyOrigin],
     w: Int,
     h: Int,
     inverse: Pointer[Matrix4, ImmutAnyOrigin],
@@ -330,14 +337,14 @@ __async def _blend_task(
             var t = y * w + x
             if not mask[unsafe_offset=t]:
                 continue
-            var source = found[unsafe_offset=t]
+            var source = _source(keys, t)
             # A stretched mirror image leaves rows between its own.
             var step = 1
             while source < 0 and step <= MIRROR_FILL:
-                if y - step >= 0 and found[unsafe_offset=t - step * w] >= 0:
-                    source = found[unsafe_offset=t - step * w]
-                elif y + step < h and found[unsafe_offset=t + step * w] >= 0:
-                    source = found[unsafe_offset=t + step * w]
+                if y - step >= 0 and _source(keys, t - step * w) >= 0:
+                    source = _source(keys, t - step * w)
+                elif y + step < h and _source(keys, t + step * w) >= 0:
+                    source = _source(keys, t + step * w)
                 step += 1
             if source < 0:
                 continue
@@ -436,6 +443,16 @@ __async def _sky_task(
             pixels[unsafe_offset=p + 2] = bytes[].byte(c.z)
 
 
+@always_inline
+def _source(keys: Pointer[UInt64, ImmutAnyOrigin], t: Int) -> Int:
+    """Return the pixel whose mirror image a water pixel keeps, from its
+    key, or -1 for none."""
+    var key = keys[unsafe_offset=t]
+    if key == UInt64.MAX:
+        return -1
+    return Int(key & 0xFFFFFFFF)
+
+
 def _mirror_key(depth: Float32, source: Int) -> UInt64:
     """Return the key by which a water pixel keeps one mirror image: the
     least depth, and of equal depths the first source, as a walk over the
@@ -472,8 +489,7 @@ __async def _scatter_task(
     clip: Pointer[Matrix4, ImmutAnyOrigin],
     inverse: Pointer[Matrix4, ImmutAnyOrigin],
     water: Float32,
-    shake: Float32,
-    clock: Float32,
+    wobbles: Pointer[Float32, ImmutAnyOrigin],
     first: Int,
     past: Int,
 ):
@@ -496,7 +512,7 @@ __async def _scatter_task(
             var ty = Int(floor((1 - image_at.y) * 0.5 * Float32(h)))
             if ty < 0 or ty >= h:
                 continue
-            var wobble = shake * sin(Float32(ty) * 0.35 + clock * 2.1)
+            var wobble = wobbles[unsafe_offset=ty]
             var tx = Int(floor((image_at.x + 1) * 0.5 * Float32(w) + wobble))
             if tx < 0 or tx >= w:
                 continue
