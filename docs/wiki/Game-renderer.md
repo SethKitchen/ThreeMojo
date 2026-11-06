@@ -27,7 +27,7 @@ mojo run -I . examples/village_walk.mojo --play 1920 1080 low
 | `plants` | `FEWEST_PLANTS` | `FEWER_PLANTS` | `MANY_PLANTS` | `ALL_PLANTS` |
 | `grass_wind_every` | 4 frames | 2 frames | 1 frame | 1 frame |
 | `sky_step` | 3 pixels | 2 pixels | 2 pixels | 1 pixel |
-| `water_step` | 4 pixels | 4 pixels | 2 pixels | 1 pixel |
+| `water_step` | 6 pixels | 4 pixels | 2 pixels | 1 pixel |
 | `water_refresh_every` | 4 frames | 2 frames | 1 frame | 1 frame |
 | `animal_coarseness` | 3 | 2 | 1.5 | 1 |
 | `shadows` | `CACHED_SHADOWS` | `CACHED_SHADOWS` | `CACHED_SHADOWS` | `FULL_SHADOWS` |
