@@ -750,19 +750,47 @@ def draw_battle(
             h,
         )
         if mark:
-            var x = Int(mark.value().x)
-            var y = Int(mark.value().y)
-            var r = 7 * scale
-            var d = scale + 1
-            for corner in [
-                (-r, 0),
-                (r, 0),
-                (0, -r),
-                (0, r),
+            var x = mark.value().x
+            var y = mark.value().y
+            # Four outlined points round the chest, each aimed at it.
+            var r = Float32(5 * scale)
+            var long = Float32(4 * scale)
+            var half = Float32(2.5) * Float32(scale)
+            for way in [
+                (Float32(-1), Float32(0)),
+                (Float32(1), Float32(0)),
+                (Float32(0), Float32(-1)),
+                (Float32(0), Float32(1)),
             ]:  # pragma: no branch
-                var cx = x + corner[0]
-                var cy = y + corner[1]
-                fill_box(frame, cx - d, cy - d, cx + d, cy + d, GOLD_TEXT, 1)
+                var dx = way[0]
+                var dy = way[1]
+                var tip_x = x + dx * r
+                var tip_y = y + dy * r
+                var back_x = x + dx * (r + long)
+                var back_y = y + dy * (r + long)
+                var edge = Float32(scale) * 0.75 + 0.5
+                fill_triangle(
+                    frame,
+                    tip_x - dx * edge * 1.6,
+                    tip_y - dy * edge * 1.6,
+                    back_x + dx * edge - dy * (half + edge),
+                    back_y + dy * edge + dx * (half + edge),
+                    back_x + dx * edge + dy * (half + edge),
+                    back_y + dy * edge - dx * (half + edge),
+                    SHADOW,
+                    0.75,
+                )
+                fill_triangle(
+                    frame,
+                    tip_x,
+                    tip_y,
+                    back_x - dy * half,
+                    back_y + dx * half,
+                    back_x + dy * half,
+                    back_y - dx * half,
+                    GOLD_TEXT,
+                    1,
+                )
     draw_raid(frame, battle, camera, look, scale)
     draw_effects(frame, battle, camera, look)
     # The numbers' boxes on the frame, the oldest first.
@@ -808,6 +836,51 @@ def draw_battle(
             popup.color,
             popup_alpha(popup.age),
         )
+
+
+def fill_triangle(
+    mut frame: Framebuffer,
+    ax: Float32,
+    ay: Float32,
+    bx: Float32,
+    by: Float32,
+    cx: Float32,
+    cy: Float32,
+    color: Rgb,
+    alpha: Float32,
+):
+    """Blend a color over each pixel whose middle lies in a triangle.
+
+    Args:
+        frame: The frame.
+        ax: The first corner's x, in pixels.
+        ay: The first corner's y, in pixels.
+        bx: The second corner's x, either way round.
+        by: The second corner's y.
+        cx: The third corner's x.
+        cy: The third corner's y.
+        color: The color.
+        alpha: How much of it shows, from 0 to 1.
+    """
+    var area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+    if area == 0:
+        return
+    # Each edge's test, turned so that the inside is not negative.
+    var turn = Float32(1) if area > 0 else Float32(-1)
+    var x0 = max(0, Int(min(ax, min(bx, cx))))
+    var x1 = min(frame.width - 1, Int(max(ax, max(bx, cx))))
+    var y0 = max(0, Int(min(ay, min(by, cy))))
+    var y1 = min(frame.height - 1, Int(max(ay, max(by, cy))))
+    for y in range(y0, y1 + 1):
+        var py = Float32(y) + 0.5
+        for x in range(x0, x1 + 1):
+            var px = Float32(x) + 0.5
+            var e0 = ((bx - ax) * (py - ay) - (by - ay) * (px - ax)) * turn
+            var e1 = ((cx - bx) * (py - by) - (cy - by) * (px - bx)) * turn
+            var e2 = ((ax - cx) * (py - cy) - (ay - cy) * (px - cx)) * turn
+            if min(e0, min(e1, e2)) < 0:
+                continue
+            fill_box(frame, x, y, x + 1, y + 1, color, alpha)
 
 
 def stack_boxes(

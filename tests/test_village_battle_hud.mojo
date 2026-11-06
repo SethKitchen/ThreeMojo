@@ -23,6 +23,7 @@ from extensions.village.battle_hud import (
     POPUP_FADE,
     draw_bar,
     draw_battle,
+    fill_triangle,
     popup_alpha,
     popup_scale,
     on_screen,
@@ -149,6 +150,32 @@ def test_a_number_pops_and_outlines() raises:
     var before = _changed(blank)
     draw_outlined(blank, 4, 4, "", 2, WHITE_TEXT, 1)
     assert_equal(_changed(blank), before)
+
+
+def test_a_triangle_fills_the_pixels_inside_it_either_way_round() raises:
+    var one = _frame()
+    fill_triangle(one, 10, 10, 30, 10, 10, 30, GOLD_TEXT, 1)
+    var other = _frame()
+    fill_triangle(other, 10, 10, 10, 30, 30, 10, GOLD_TEXT, 1)
+    assert_true(_changed(one) > 0)
+    assert_equal(_changed(one), _changed(other))
+    # A pixel inside is gold, and one past the long edge is not.
+    var inside = (12 * 320 + 12) * 4
+    assert_equal(Int(one.pixels[inside]), Int(GOLD_TEXT.r))
+    var past = (28 * 320 + 28) * 4
+    assert_equal(Int(one.pixels[past]), 0)
+    # A flat triangle fills nothing; one past the edge is clipped.
+    var flat = _frame()
+    fill_triangle(flat, 10, 10, 20, 20, 30, 30, GOLD_TEXT, 1)
+    assert_equal(_changed(flat), 0)
+    var edge = _frame()
+    fill_triangle(edge, -20, -20, 400, 10, 10, 400, GOLD_TEXT, 1)
+    assert_true(_changed(edge) > 0)
+    # One wholly off the frame, above it or to its left, fills nothing.
+    var off = _frame()
+    fill_triangle(off, 10, -40, 30, -40, 10, -20, GOLD_TEXT, 1)
+    fill_triangle(off, -40, 10, -40, 30, -20, 10, GOLD_TEXT, 1)
+    assert_equal(_changed(off), 0)
 
 
 def test_numbers_that_would_cover_each_other_stand_one_over_another() raises:
