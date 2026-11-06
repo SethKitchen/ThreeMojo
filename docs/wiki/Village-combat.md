@@ -234,7 +234,7 @@ The body that a blow hurts glows white for `FLASH_SECONDS`, 0.08 seconds. Each `
 
 A swing leaves a trail of light: white for the player, gold in a surge, and orange for a bandit. A piercing attack's thrust leaves a red trail. The ultimate's spins leave a wide gold ring. A plunge rings the ground with light where it lands.
 
-Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. Near the blade, a thin white edge runs along its outer side, so the swing reads as a cut. After the active part, it fades away in 0.15 seconds.
+Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade. Behind it, it fades as the square of the distance, so it is a bright streak with a faint wake. It is brightest along the path of the blade's tip, and faint by the hand. Near the blade, a thin white edge runs along its outer side, so the swing reads as a cut. After the active part, it fades away in 0.15 seconds.
 
 The game's renderer draws every surface opaque, so `draw_battle` adds the trails to the finished frame. See `extensions/village/slashes.mojo`.
 

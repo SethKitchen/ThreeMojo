@@ -78,6 +78,9 @@ comptime TRAIL_LINGER = Float32(0.15)
 seconds."""
 comptime TRAIL_TAIL = Float32(0.6)
 """The share of a ribbon behind the blade over which it fades."""
+comptime TRAIL_INNER = Float32(0.12)
+"""The share of a trail's light at its outer side that its inner side,
+by the hand, adds: the swing is brightest where the blade's tip runs."""
 comptime EDGE_WIDTH = Float32(0.15)
 """The share of a ribbon's width that its white edge takes."""
 comptime EDGE_LIGHT = Float32(0.8)
@@ -502,8 +505,9 @@ struct Trail(Movable):
     ) raises:
         """Add the ribbon that shows to a finished frame.
 
-        Each quad behind the blade adds less light, down to none
-        `TRAIL_TAIL` of the ribbon behind it. A quad with a corner less
+        Each quad behind the blade adds less light, as the square of how
+        near the blade it is, down to none `TRAIL_TAIL` of the ribbon
+        behind it. A quad with a corner less
         than `NEAREST` before the camera is not drawn.
 
         Args:
@@ -531,13 +535,15 @@ struct Trail(Movable):
             if t > self.sweep + 1.0e-4:
                 break
             var share = max(Float32(0), 1 - (self.sweep - t) / TRAIL_TAIL)
-            light.append(share * self.glow)
+            # The light falls as the square, so the ribbon is a bright
+            # streak at the blade and a faint wake behind it.
+            light.append(share * share * self.glow)
         var color = self.color
         if self.shown == PIERCE.value:
             color = PIERCE_TRAIL
         elif self.shown == ULTIMATE.value:
             color = ULTIMATE_TRAIL
-        glow_ribbon(frame, camera, look, placed, light, color)
+        glow_ribbon(frame, camera, look, placed, light, color, TRAIL_INNER)
 
 
 def glow_ribbon(
@@ -547,6 +553,7 @@ def glow_ribbon(
     corners: List[Vector3],
     light: List[Float32],
     color: Vector3,
+    inner: Float32 = 0.5,
 ) raises:
     """Add a ribbon's light to a frame, quad by quad.
 
@@ -557,9 +564,10 @@ def glow_ribbon(
         corners: The ribbon's corners in world space: an inner corner and
             an outer one for each step, as `arc_points` gives them.
         light: How much light the outer corners of each step add, from 0
-            to 1; the inner corners add half as much. The ribbon is drawn
-            as far as the steps that this lists.
+            to 1. The ribbon is drawn as far as the steps that this lists.
         color: The light at a share of one, as sRGB bytes.
+        inner: The share of an outer corner's light that the inner corner
+            of its step adds. The default is half.
 
     Raises:
         Error: If the camera or the frame's size is not valid. A ribbon
@@ -579,10 +587,10 @@ def glow_ribbon(
         var o0 = pixels[2 * k + 1]
         var i1 = pixels[2 * k + 2]
         var o1 = pixels[2 * k + 3]
-        var a = Vector3(i0.x, i0.y, s0 * 0.5)
+        var a = Vector3(i0.x, i0.y, s0 * inner)
         var b = Vector3(o0.x, o0.y, s0)
         var c = Vector3(o1.x, o1.y, s1)
-        var d = Vector3(i1.x, i1.y, s1 * 0.5)
+        var d = Vector3(i1.x, i1.y, s1 * inner)
         glow_triangle(frame, a, b, c, color)
         glow_triangle(frame, a, c, d, color)
         # The blade's edge: a thin strip of white light along the outer
