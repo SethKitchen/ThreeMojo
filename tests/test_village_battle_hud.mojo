@@ -10,6 +10,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from extensions.village.slashes import Impact
 from extensions.village.battle import (
     CHEST,
+    HEAD,
     POPUP_SECONDS,
     Bolt,
     Knife,
@@ -235,6 +236,32 @@ def test_a_nearer_foes_bar_keeps_its_place_over_a_crowd() raises:
             assert_equal(crowd.pixels[k], alone.pixels[k])
     assert_true(drawn > 0)
     assert_true(_changed(crowd) > _changed(alone))
+
+
+def test_a_number_over_a_foe_stands_over_its_bar() raises:
+    var arena = Arena(arena_parameters(1, 0, 5))
+    # A camera high over the foe, so its head stands well under the band.
+    var camera = _camera()
+    camera.place(Vector3(0, 5, 4), Vector3(0, 1, -2))
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    ref foe = arena.battle.foes[0]
+    foe.character.position = Vector3(0, 0, -1)
+    foe.brain.state = CIRCLING
+    var bar = _frame()
+    draw_battle(bar, arena.battle, arena.scene, camera, look)
+    # A number where the bar stands, over the foe's head.
+    arena.battle.popups.append(
+        Popup(Vector3(0, HEAD + 0.2, -1), "88", WHITE_TEXT, 0.5)
+    )
+    var both = _frame()
+    draw_battle(both, arena.battle, arena.scene, camera, look)
+    var drawn = 0
+    for k in range(len(bar.pixels)):
+        if bar.pixels[k] != 0 and k % 4 != 3:
+            drawn += 1
+            assert_equal(both.pixels[k], bar.pixels[k])
+    assert_true(drawn > 0)
+    assert_true(_changed(both) > _changed(bar))
 
 
 def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:

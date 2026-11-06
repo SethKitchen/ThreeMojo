@@ -816,8 +816,15 @@ def draw_battle(
         widths.append(wide)
         heights.append((8 + POPUP_GAP) * size)
     # A newer number keeps its place. An older one that would cover it
-    # moves up over it.
+    # moves up over it. The foes' bars are placed after the newest, so
+    # they keep their places, and a number moves up over a bar.
+    var count = len(tops)
+    lefts.extend(bar_lefts.copy())
+    tops.extend(bar_tops.copy())
+    widths.extend(bar_widths.copy())
+    heights.extend(bar_heights.copy())
     tops = stack_boxes(lefts, tops, widths, heights)
+    tops.resize(count, 0)
     # Numbers over a head high in the frame stand under the compass and
     # the target panel, so they do not cross them. They move down
     # together, so they keep their order and do not cover each other.
