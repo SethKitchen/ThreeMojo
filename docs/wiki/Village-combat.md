@@ -242,7 +242,9 @@ The sword hangs at the hip until the fight starts. It is in the hand while a ban
 
 ### How a blow feels
 
-A blow that takes `HITSTOP_BLOW`, 40, of a foe's health or more all but stops the world for `HITSTOP`, 0.07 seconds. A foe is a bandit, a wolf or a warden. The world then moves at `HITSTOP_PACE`, 0.15, of its speed. A knock sounds as each blow lands, on a foe or on a dummy: see [Village walk](Village-walk#sound). `Battle.foes_health` gives the health that the foes have left, all told. A hard landing and a roll kick up dust from the ground, which settles in a second.
+A blow that takes `HITSTOP_BLOW`, 40, of a foe's health or more all but stops the world for `HITSTOP`, 0.07 seconds. A foe is a bandit, a wolf or a warden. The world then moves at `HITSTOP_PACE`, 0.15, of its speed. A knock sounds as each blow lands, on a foe or on a dummy: see [Village walk](Village-walk#sound).
+
+A strong blow shakes the camera, and narrows its field of view a moment: by `PUNCH`, 6 percent, at a finisher's shake. The view eases back as the shake dies. `Battle.foes_health` gives the health that the foes have left, all told. A hard landing and a roll kick up dust from the ground, which settles in a second.
 
 ## One frame of the fight
 

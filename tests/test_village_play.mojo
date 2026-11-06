@@ -286,10 +286,20 @@ def test_a_player_walks_jumps_and_is_followed() raises:
         _ = game.tick(scene, assets, no_input(), step)
     assert_true(game.player.stance == STANDING)
     assert_almost_equal(game.clock, 3.2, atol=1e-4)
-    # The frame is drawn at a third of the window and stretched to it.
+    # A strong blow tightens the view, and it eases back as the shake dies.
+    assert_almost_equal(game.camera.fov.to(DEGREE), game.wide.to(DEGREE))
+    game.battle.shake = 0.2
+    _ = game.tick(scene, assets, no_input(), Duration(0.01, SECOND))
+    assert_true(game.camera.fov.to(DEGREE) < game.wide.to(DEGREE) * 0.95)
+    for _ in range(20):
+        _ = game.tick(scene, assets, no_input(), step)
+    assert_almost_equal(
+        game.camera.fov.to(DEGREE), game.wide.to(DEGREE), atol=0.05
+    )
+    # The frame is drawn at 45 percent of the window and stretched to it.
     game.render(scene, assets)
-    assert_equal(game.fast.width, 16)
-    assert_equal(game.fast.height, 9)
+    assert_equal(game.fast.width, 22)
+    assert_equal(game.fast.height, 12)
     assert_equal(game.window.width, 48)
     assert_equal(game.window.height, 27)
     assert_true(game.upscale_ms > 0)

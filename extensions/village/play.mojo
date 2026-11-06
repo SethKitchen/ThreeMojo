@@ -272,6 +272,12 @@ comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
 comptime SHAKEN = Float32(1.0e-3)
 """A camera's shake of less than this, in meters, is not seen."""
+comptime PUNCH = Float32(0.06)
+"""The share by which a finisher's shake narrows the camera's field of
+view."""
+comptime PUNCH_SHAKE = Float32(0.12)
+"""The shake, in meters, at which the view narrows by `PUNCH` in full: a
+finisher's."""
 comptime SPECIALTY_MIGHT = Float32(0.1)
 """How much stronger the player's blows are in the style they specialize
 in."""
@@ -650,6 +656,8 @@ struct VillageGame(Movable):
     var player: Character
     var view: ThirdPersonControls
     var camera: PerspectiveCamera
+    # The camera's field of view while no blow tightens it.
+    var wide: Angle
     var trees: List[Obstacle]
     # The ground, the houses' walls and floors, and the solid lots.
     var terrain: Terrain
@@ -855,6 +863,7 @@ struct VillageGame(Movable):
         self.face_reach = face_reach(size[1], parameters.field_of_view)
         self.talker = -1
         self.view = ThirdPersonControls(parameters.heading)
+        self.wide = parameters.field_of_view
         self.camera = PerspectiveCamera(
             parameters.field_of_view,
             Float32(width) / Float32(height),
@@ -1223,6 +1232,10 @@ struct VillageGame(Movable):
             var t = self.clock * 47
             var off = Vector3(sin(t) * jolt, cos(t * 1.3) * jolt * 0.7, 0)
             self.camera.place(self.camera.position + off, self.view.focus + off)
+        # It tightens the view a moment too, and the view eases back as the
+        # shake dies: a finisher's shake narrows it by `PUNCH` in full.
+        var punch = min(Float32(1), jolt / PUNCH_SHAKE) * PUNCH
+        self.camera.fov = Angle(self.wide.to(DEGREE) * (1 - punch), DEGREE)
         # The player's face shows the fight, and each face near the camera
         # moves.
         player_mood(self.body.life, self.battle.fighter)
