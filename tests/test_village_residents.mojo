@@ -782,6 +782,19 @@ def test_a_person_with_no_house_and_none_to_go_to_stays_out() raises:
     assert_true(residents.sheltering)
     var home = home_route(_homes()[0])
     assert_equal(len(home.points), 3)
+    # With stairs, the way home goes on up them to bed.
+    var climb: List[Vector3] = [Vector3(1, 0, 1), Vector3(3, 2.8, 1)]
+    var up = home_route(_homes()[0], climb)
+    assert_equal(len(up.points), 5)
+    assert_almost_equal(up.points[4].x, 3, atol=1e-6)
+    # A person whose home has stairs is sent home up them.
+    var q = _small()
+    q.villagers.append(_villager(NO_HOUSE))
+    var climbs: List[List[Vector3]] = [climb.copy()]
+    var climbing = Residents(
+        scene, assets, q, ground, List[Lot](), _homes(), List[Stop](), climbs
+    )
+    assert_equal(len(climbing.homeward[0].points), 5)
 
 
 def test_a_dog_follows_and_a_shy_animal_runs_from_a_foe() raises:

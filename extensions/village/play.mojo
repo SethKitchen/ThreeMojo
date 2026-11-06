@@ -824,8 +824,11 @@ struct VillageGame(Movable):
         self.reach = 1
         # Each house's front door: the villagers' homes.
         var homes = List[Doorway]()
+        # And the way up each one's stairs, to bed by night.
+        var climbs = List[List[Vector3]]()
         for index in range(len(self.village.houses)):
             homes.append(self.village.houses[index].interior.front_door())
+            climbs.append(self.village.houses[index].interior.climb.copy())
         # The residents' points keep off the buildings and the props.
         var keep_off = field.lots.copy()
         keep_off.extend(self.village.props.lots.copy())
@@ -837,6 +840,7 @@ struct VillageGame(Movable):
             keep_off,
             homes,
             prop_stops(parameters.village.props),
+            climbs,
         )
         self.body = Body(
             scene,

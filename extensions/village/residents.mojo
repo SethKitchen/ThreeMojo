@@ -782,12 +782,17 @@ struct Route(Copyable, Movable):
         return IDLE
 
 
-def home_route(door: Doorway) raises -> Route:
-    """Return a route home: up to the front door, over the threshold,
-    and in, where the person stays.
+def home_route(
+    door: Doorway, climb: List[Vector3] = List[Vector3]()
+) raises -> Route:
+    """Return a route home: up to the front door, over the threshold, in,
+    and up the stairs to bed, where the person stays.
 
     Args:
         door: The home's front door.
+        climb: The way up the home's stairs, from the hall to the top
+            story, as `HouseInterior.climb` gives it; empty to stay in the
+            hall.
 
     Returns:
         The route, at its first point. A person on it stays at the last
@@ -801,6 +806,7 @@ def home_route(door: Doorway) raises -> Route:
     var points = List[Vector3]()
     for reach in [-APPROACH, -THRESHOLD, INDOORS]:  # pragma: no branch
         points.append(middle + into * reach)
+    points.extend(climb.copy())
     return Route(points^, Duration(0.2, SECOND))
 
 
@@ -1408,6 +1414,7 @@ struct Residents(Movable):
         lots: List[Lot],
         homes: List[Doorway],
         stops: List[Stop] = List[Stop](),
+        climbs: List[List[Vector3]] = List[List[Vector3]](),
     ) raises:
         """Build the residents into a scene, each at its first place.
 
@@ -1422,6 +1429,10 @@ struct Residents(Movable):
             stops: The benches to sit on and the places to work. A person
                 stops at each one within `STOP_REACH` of the middle of
                 where they wander.
+            climbs: The way up each home's stairs, in the order of
+                `homes`, as `HouseInterior.climb` gives it: by night a
+                person goes up to bed. Empty, or shorter than `homes`,
+                for homes where they stay in the hall.
 
         Raises:
             Error: If `parameters.check` refuses a value, a villager's
@@ -1478,7 +1489,11 @@ struct Residents(Movable):
                 visit(route, homes[home])
             # A person with no home of their own shelters in the first.
             if home >= 0 or len(homes) > 0:
-                self.homeward.append(home_route(homes[max(0, home)]))
+                var at = max(0, home)
+                var climb = List[Vector3]()
+                if at < len(climbs):
+                    climb = climbs[at].copy()
+                self.homeward.append(home_route(homes[at], climb))
             else:
                 self.homeward.append(route.copy())
             self.people.append(

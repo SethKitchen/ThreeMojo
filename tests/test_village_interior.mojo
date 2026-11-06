@@ -10,7 +10,7 @@ doorways, all read from the house's building model."""
 from extensions.building.kinds import COLUMN, DOOR, WALL
 from extensions.building.material import brick
 from extensions.building.model import Element, Opening
-from extensions.vegetation.ground import Ground
+from extensions.vegetation.ground import Ground, Lot
 from extensions.village.house import (
     BREAST_DEPTH,
     BREAST_WIDTH,
@@ -31,7 +31,7 @@ from extensions.village.interior import (
     STEP_DEPTH,
     house_interior,
 )
-from extensions.village.terrain import OPEN_SKY
+from extensions.village.terrain import OPEN_SKY, Terrain
 from extensions.building.ids import ElementId
 from std.testing import (
     TestSuite,
@@ -302,6 +302,8 @@ def test_a_stair_climbs_to_the_floor_above() raises:
     # The ground floor, a floor for each of the fourteen treads, and the
     # upper floor before the well, beside its foot and past its top.
     assert_equal(len(inside.floors), 1 + 14 + 3)
+    # The way up: to the landing, past the top, and aside into the room.
+    assert_equal(len(inside.climb), 3)
     assert_equal(inside.steps, 0)
     var top = Float32(stair.height())
     var over = top + 2.8 - 0.2
@@ -370,6 +372,22 @@ def test_a_house_of_three_stories_climbs_to_each() raises:
     # floor above around the well.
     assert_equal(len(inside.floors), 1 + 2 * (14 + 3))
     ref first = stairs[0]
+    # The way up: the first flight's landing, past its top, aside, back
+    # along the well to the second's landing, then past its top and aside.
+    assert_equal(len(inside.climb), 7)
+    assert_almost_equal(inside.climb[0].y, 0, atol=1e-5)
+    assert_almost_equal(inside.climb[1].y, 2.8, atol=1e-5)
+    assert_almost_equal(inside.climb[3].y, 2.8, atol=1e-5)
+    assert_almost_equal(inside.climb[6].y, 5.6, atol=1e-5)
+    # The second landing stands over the first, a story up.
+    assert_almost_equal(inside.climb[4].x, inside.climb[0].x, atol=1e-5)
+    assert_almost_equal(inside.climb[4].z, inside.climb[0].z, atol=1e-5)
+    # Each point stands on a floor at its own height.
+    var terrain = Terrain(
+        _flat(), List[Lot](), inside.walls.copy(), inside.floors.copy()
+    )
+    for p in inside.climb:
+        assert_almost_equal(terrain.height_at(p.x, p.z, p.y), p.y, atol=1e-4)
     var rise = Float32(first.rise)
     var second = Float32(first.top())
     var third = Float32(stairs[1].top())
