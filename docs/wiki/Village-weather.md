@@ -68,6 +68,8 @@ Each frame, `Village.weather_surfaces` sets the materials of the walls, the wood
 1. **Ground mist.** `ground_mist` veils each pixel by how low and how far its point is. The mist thins to a third over `MIST_HEIGHT`, 2.5 meters, above the pond's water. It comes in over distance, to two thirds at `MIST_NEAR`, 25 meters. It lies in the fog's color. Fog thickens it, and it lies on the ground at dawn, thickest at 6:30.
 2. **Bloom.** `bloom` blurs the light brighter than a threshold, over a frame a quarter of the size, and adds it back. By day only the brightest light glows. At night the threshold is lower and the glow stronger, so the lamps and the windows glow into the dark.
 
+Both share the frame's rows over every core. They decode each byte by a table and encode it by `SrgbBytes`, so they give the same bytes as a power each way. On four cores, the bloom of a bright 640 by 360 frame takes 2.6 milliseconds, and the mist 2.3. A pixel at a time, they took 46 and 28.
+
 ## The clouds
 
 The layer of cloud is a plane 1,500 meters up. Each sky pixel looks along its direction to the plane. The point there gives the cloud's thickness, `cloud_cover`:
