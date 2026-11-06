@@ -31,6 +31,7 @@ from extensions.village.hud import (
     Rgb,
     SHADOW,
     WHITE_TEXT,
+    draw_outlined,
     draw_text,
     fill_box,
     hud_scale,
@@ -201,7 +202,8 @@ def draw_compass(
         )
     if caption.byte_length() > 0:
         var width = text_width(caption, scale)
-        draw_text(
+        # The caption stands over the sky: an outline keeps it clear.
+        draw_outlined(
             frame,
             middle - width // 2,
             top + height + 4 * scale,

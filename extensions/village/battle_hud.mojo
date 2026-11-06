@@ -260,8 +260,9 @@ def _centered(
     color: Rgb,
     alpha: Float32,
 ):
-    """Draw a line of text centered on a pixel's x."""
-    draw_text(
+    """Draw a line of text centered on a pixel's x, outlined so that it
+    reads over the sky."""
+    draw_outlined(
         frame, x - text_width(text, scale) // 2, y, text, scale, color, alpha
     )
 

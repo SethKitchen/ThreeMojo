@@ -7,6 +7,7 @@
 on every core."""
 
 from render.framebuffer import Framebuffer
+from render.game_sharpen import sharpen
 from render.game_upscale import upscale, upscale_into
 from std.math import inf
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
@@ -68,6 +69,34 @@ def test_an_overshoot_is_clamped_to_the_bytes() raises:
     for x in range(16):
         assert_true(Int(big.pixels[x * 4 + 3]) == 255)
     assert_equal(Int(big.pixels[0]), 0)
+
+
+def _noise(width: Int, height: Int) raises -> Framebuffer:
+    """Return a frame of busy, repeatable colors."""
+    var pixels = List[UInt8]()
+    for k in range(width * height * 4):
+        pixels.append(UInt8((k * 37 + k // 7 * 11) % 256))
+    return Framebuffer(width, height, pixels^)
+
+
+def test_a_sharpened_stretch_is_the_stretch_then_sharpened() raises:
+    var small = _noise(23, 11)
+    # Tall enough for several tasks of rows, and every row's border.
+    for sharpness in [Float32(0.6), Float32(1)]:
+        var fused = Framebuffer(61, 70, List[UInt8](length=61 * 70 * 4, fill=0))
+        upscale_into(small, fused, 3, sharpness)
+        var apart = upscale(small, 61, 70, 3)
+        sharpen(apart, sharpness)
+        assert_equal(fused.pixels, apart.pixels)
+    # A window two pixels wide has no inside to sharpen.
+    var thin = Framebuffer(2, 40, List[UInt8](length=2 * 40 * 4, fill=0))
+    upscale_into(small, thin, 2, 1)
+    assert_equal(thin.pixels, upscale(small, 2, 40, 2).pixels)
+    var target = Framebuffer(8, 8, List[UInt8](length=256, fill=0))
+    with assert_raises(contains="from 0 to 1"):
+        upscale_into(small, target, 1, 1.5)
+    with assert_raises(contains="from 0 to 1"):
+        upscale_into(small, target, 1, -0.5)
 
 
 def test_a_bad_size_is_refused() raises:

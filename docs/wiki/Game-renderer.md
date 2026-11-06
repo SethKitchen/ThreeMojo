@@ -75,7 +75,9 @@ A frame drawn at a third of the window must be stretched three times. A bilinear
 1. `upscale_into` in `render/game_upscale.mojo` mixes the four nearest pixels on each axis by the Catmull-Rom cubic. The two far pixels get a small negative weight, so an edge keeps its contrast. A result is clamped to the bytes' range. The pass stretches the rows across first, then blends four stretched rows for each row of the window.
 2. `sharpen` in `render/game_sharpen.mojo` is contrast-adaptive sharpening, as in AMD's CAS and the last pass of FSR. Each channel of a pixel and its four neighbors gives a least and a greatest value. The room to sharpen is the distance from them to black or to white, as a share of the greatest. A pixel takes its neighbors away by a weight from that room and `sharpness`, and the result is divided by the weights' sum. A flat area does not change, and the result stays within the neighbors' range.
 
-`VillageGame.upscale_ms` holds the time of both passes. At 1280 by 720 pixels from `MEDIUM` it is about 2.4 milliseconds on four cores.
+The game does both in one pass over the window. `upscale_into(frame, window, workers, sharpness)` gives each task a band of rows. The task stretches its rows, and one more above and below, into a buffer of its own. It then sharpens from that buffer into the window. So the window is written once, and no copy of it is made. The result is the same, to the byte, as the stretch and then `sharpen`.
+
+`VillageGame.upscale_ms` holds the time of the pass. At 1280 by 720 pixels from `MEDIUM` it is about 2.4 milliseconds on four cores.
 
 ## Measure a frame
 

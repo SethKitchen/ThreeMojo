@@ -215,7 +215,6 @@ from extensions.water.pebbles import PebbleBed
 from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
 from render.game_smooth import smooth_edges
-from render.game_sharpen import sharpen
 from render.game_upscale import upscale_into
 from renderers.game_renderer import FULL_SHADOWS, GameRenderer
 from renderers.renderer import Renderer, available_workers
@@ -1659,9 +1658,11 @@ struct VillageGame(Movable):
             swap(self.window, image)
         else:
             var smoothed = perf_counter_ns()
-            upscale_into(image, self.window, available_workers())
-            # The stretch softens each edge: sharpen back what it took.
-            sharpen(self.window, self.quality.sharpness)
+            # The stretch softens each edge: it sharpens back what it
+            # took as it writes the window.
+            upscale_into(
+                image, self.window, available_workers(), self.quality.sharpness
+            )
             self.upscale_ms = Float64(perf_counter_ns() - smoothed) / 1.0e6
         var raining = perf_counter_ns()
         # No rain falls before an eye under a roof.

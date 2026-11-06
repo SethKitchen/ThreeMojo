@@ -28,6 +28,7 @@ anything that needs it, such as water, before the frame is stretched.
 """
 
 from render.framebuffer import Framebuffer
+from render.game_sharpen import MOST_WEIGHT, sharpen_row
 from render.game_math import GAME_LANES
 from render.tasks import TaskGroup
 from std.math import floor, max, min
@@ -94,50 +95,133 @@ __async def _across_task(
             line_out.unsafe_offset(x * 4).unsafe_store(mixed)
 
 
+@always_inline
+def _blend_row(
+    rows: Pointer[Float32, ImmutAnyOrigin],
+    channels: Int,
+    lines: Pointer[Int, ImmutAnyOrigin],
+    shares: Pointer[Float32, ImmutAnyOrigin],
+    y: Int,
+    dest: MutPointer[UInt8, MutAnyOrigin],
+):
+    """Write window row `y`: the mix of the four stretched rows nearest
+    it."""
+    comptime F = SIMD[DType.float32, GAME_LANES]
+    var r0 = rows.unsafe_offset(lines[unsafe_offset=y * 4] * channels)
+    var r1 = rows.unsafe_offset(lines[unsafe_offset=y * 4 + 1] * channels)
+    var r2 = rows.unsafe_offset(lines[unsafe_offset=y * 4 + 2] * channels)
+    var r3 = rows.unsafe_offset(lines[unsafe_offset=y * 4 + 3] * channels)
+    var w0 = shares[unsafe_offset=y * 4]
+    var w1 = shares[unsafe_offset=y * 4 + 1]
+    var w2 = shares[unsafe_offset=y * 4 + 2]
+    var w3 = shares[unsafe_offset=y * 4 + 3]
+    var k = 0
+    while k + GAME_LANES <= channels:
+        var mixed = (
+            r0.unsafe_load[width=GAME_LANES](k) * w0
+            + r1.unsafe_load[width=GAME_LANES](k) * w1
+            + r2.unsafe_load[width=GAME_LANES](k) * w2
+            + r3.unsafe_load[width=GAME_LANES](k) * w3
+            + 0.5
+        )
+        var held = min(max(mixed, F(0)), F(255.5))
+        dest.unsafe_store(k, held.cast[DType.uint8]())
+        k += GAME_LANES
+    while k < channels:
+        var mixed = (
+            r0[unsafe_offset=k] * w0
+            + r1[unsafe_offset=k] * w1
+            + r2[unsafe_offset=k] * w2
+            + r3[unsafe_offset=k] * w3
+            + 0.5
+        )
+        dest[unsafe_offset=k] = UInt8(Int(min(max(mixed, 0), 255.5)))
+        k += 1
+
+
+@always_inline
+def _copy_bytes(
+    source: Pointer[UInt8, ImmutAnyOrigin],
+    dest: MutPointer[UInt8, MutAnyOrigin],
+    count: Int,
+):
+    """Copy `count` bytes."""
+    var k = 0
+    while k + GAME_LANES <= count:
+        dest.unsafe_store(k, source.unsafe_load[width=GAME_LANES](k))
+        k += GAME_LANES
+    while k < count:
+        dest[unsafe_offset=k] = source[unsafe_offset=k]
+        k += 1
+
+
 __async def _down_task(
     rows: Pointer[Float32, ImmutAnyOrigin],
     target_width: Int,
+    target_height: Int,
     lines: Pointer[Int, ImmutAnyOrigin],
     shares: Pointer[Float32, ImmutAnyOrigin],
+    peak: Float32,
     target: MutPointer[UInt8, MutAnyOrigin],
     first: Int,
     past: Int,
 ):
-    """Fill window rows `first` to `past` from the stretched rows."""
+    """Fill window rows `first` to `past` from the stretched rows, and
+    sharpen them by `peak` if it is not zero.
+
+    To sharpen, the task stretches its rows and one more above and below
+    into a band of its own, and sharpens from the band into the window.
+    So the window is written once, and no copy of it is made."""
     var channels = target_width * 4
-    comptime F = SIMD[DType.float32, GAME_LANES]
+    if peak == 0:
+        for y in range(first, past):  # pragma: no branch
+            _blend_row(
+                rows,
+                channels,
+                lines,
+                shares,
+                y,
+                target.unsafe_offset(y * channels),
+            )
+        return
+    var low = max(0, first - 1)
+    var high = min(target_height, past + 1)
+    var band = List[UInt8]()
+    band.resize(unsafe_uninit_length=(high - low) * channels)
+    var held = band.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()
+    for y in range(low, high):  # pragma: no branch
+        _blend_row(
+            rows,
+            channels,
+            lines,
+            shares,
+            y,
+            held.unsafe_offset((y - low) * channels),
+        )
+    var read = held.unsafe_mut_cast[False]().unsafe_origin_cast[
+        ImmutAnyOrigin
+    ]()
+    var edge = target_height - 1
     for y in range(first, past):  # pragma: no branch
-        var r0 = rows.unsafe_offset(lines[unsafe_offset=y * 4] * channels)
-        var r1 = rows.unsafe_offset(lines[unsafe_offset=y * 4 + 1] * channels)
-        var r2 = rows.unsafe_offset(lines[unsafe_offset=y * 4 + 2] * channels)
-        var r3 = rows.unsafe_offset(lines[unsafe_offset=y * 4 + 3] * channels)
-        var w0 = shares[unsafe_offset=y * 4]
-        var w1 = shares[unsafe_offset=y * 4 + 1]
-        var w2 = shares[unsafe_offset=y * 4 + 2]
-        var w3 = shares[unsafe_offset=y * 4 + 3]
+        var row = read.unsafe_offset((y - low) * channels)
         var dest = target.unsafe_offset(y * channels)
-        var k = 0
-        while k + GAME_LANES <= channels:
-            var mixed = (
-                r0.unsafe_load[width=GAME_LANES](k) * w0
-                + r1.unsafe_load[width=GAME_LANES](k) * w1
-                + r2.unsafe_load[width=GAME_LANES](k) * w2
-                + r3.unsafe_load[width=GAME_LANES](k) * w3
-                + 0.5
-            )
-            var held = min(max(mixed, F(0)), F(255.5))
-            dest.unsafe_store(k, held.cast[DType.uint8]())
-            k += GAME_LANES
-        while k < channels:
-            var mixed = (
-                r0[unsafe_offset=k] * w0
-                + r1[unsafe_offset=k] * w1
-                + r2[unsafe_offset=k] * w2
-                + r3[unsafe_offset=k] * w3
-                + 0.5
-            )
-            dest[unsafe_offset=k] = UInt8(Int(min(max(mixed, 0), 255.5)))
-            k += 1
+        # The border's rows and pixels are kept as stretched.
+        if y == 0 or y == edge or target_width < 3:
+            _copy_bytes(row, dest, channels)
+            continue
+        sharpen_row(
+            row,
+            row.unsafe_offset(-channels),
+            row.unsafe_offset(channels),
+            dest,
+            target_width,
+            peak,
+        )
+        _copy_bytes(row, dest, 4)
+        _copy_bytes(
+            row.unsafe_offset(channels - 4), dest.unsafe_offset(channels - 4), 4
+        )
+    _ = len(band)
 
 
 def upscale(
@@ -167,27 +251,38 @@ def upscale(
 
 
 def upscale_into(
-    frame: Framebuffer, mut target: Framebuffer, workers: Int
+    frame: Framebuffer,
+    mut target: Framebuffer,
+    workers: Int,
+    sharpness: Float32 = 0,
 ) raises:
     """Stretch a frame over another frame's pixels, by the Catmull-Rom
-    cubic.
+    cubic, and sharpen it as it is written.
 
     A game keeps one window-sized frame and stretches each small frame
     over it. This does not allocate the window's eight megabytes again
-    each frame. The target's depth is not changed.
+    each frame. The target's depth is not changed. With a sharpness, the
+    frame is the one that the stretch and then
+    `render.game_sharpen.sharpen` give, to the byte, in one pass over the
+    window.
 
     Args:
         frame: The small frame.
         target: The window-sized frame. Its pixels are written.
         workers: How many tasks share each pass; at least one.
+        sharpness: How strongly to sharpen, from 0 to 1; 0 leaves the
+            stretch as it is.
 
     Raises:
-        Error: If the target's pixels do not match its size.
+        Error: If the target's pixels do not match its size, or the
+            sharpness is not from 0 to 1.
     """
     var width = target.width
     var height = target.height
     if len(target.pixels) != width * height * 4:
         raise Error("An upscale target's pixels must match its size")
+    if not (sharpness >= 0 and sharpness <= 1):
+        raise Error("A sharpening strength must be from 0 to 1")
     var across = _places(frame.width, width)
     var down = _places(frame.height, height)
     var rows = List[Float32]()
@@ -226,6 +321,7 @@ def upscale_into(
                 .unsafe_mut_cast[False]()
                 .unsafe_origin_cast[ImmutAnyOrigin](),
                 width,
+                height,
                 down[0]
                 .unsafe_ptr()
                 .unsafe_mut_cast[False]()
@@ -234,6 +330,7 @@ def upscale_into(
                 .unsafe_ptr()
                 .unsafe_mut_cast[False]()
                 .unsafe_origin_cast[ImmutAnyOrigin](),
+                MOST_WEIGHT * sharpness,
                 target.pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 y,
                 past,

@@ -38,6 +38,62 @@ comptime MOST_WEIGHT = Float32(-1.0 / 5)
 weights' sum positive with room to spare."""
 
 
+@always_inline
+def sharpen_row(
+    row: Pointer[UInt8, ImmutAnyOrigin],
+    up: Pointer[UInt8, ImmutAnyOrigin],
+    down: Pointer[UInt8, ImmutAnyOrigin],
+    dest: MutPointer[UInt8, MutAnyOrigin],
+    width: Int,
+    peak: Float32,
+):
+    """Sharpen one row of pixels inside its first and last pixel.
+
+    The first and the last pixel of `dest` are not written.
+
+    Args:
+        row: The row's bytes, four a pixel.
+        up: The bytes of the row above it.
+        down: The bytes of the row below it.
+        dest: Where the sharpened row's bytes go.
+        width: The row's pixels.
+        peak: The neighbors' weight at full room: `MOST_WEIGHT` times the
+            strength.
+    """
+    comptime F = SIMD[DType.float32, GAME_LANES]
+    var last = width * 4 - 4
+    var k = 4
+    while k + GAME_LANES <= last:
+        var c = row.unsafe_load[width=GAME_LANES](k).cast[DType.float32]()
+        var w = row.unsafe_load[width=GAME_LANES](k - 4).cast[DType.float32]()
+        var e = row.unsafe_load[width=GAME_LANES](k + 4).cast[DType.float32]()
+        var n = up.unsafe_load[width=GAME_LANES](k).cast[DType.float32]()
+        var s = down.unsafe_load[width=GAME_LANES](k).cast[DType.float32]()
+        var low = min(min(min(c, w), min(e, n)), s)
+        var high = max(max(max(c, w), max(e, n)), s)
+        var room = min(low, F(255) - high) / max(high, F(1))
+        var amount = sqrt(min(max(room, F(0)), F(1)))
+        var weight = amount * peak
+        var mixed = (c + (w + e + n + s) * weight) / (weight * 4 + 1)
+        var held = min(max(mixed + 0.5, F(0)), F(255.5))
+        dest.unsafe_store(k, held.cast[DType.uint8]())
+        k += GAME_LANES
+    while k < last:
+        var c = Float32(row[unsafe_offset=k])
+        var w = Float32(row[unsafe_offset=k - 4])
+        var e = Float32(row[unsafe_offset=k + 4])
+        var n = Float32(up[unsafe_offset=k])
+        var s = Float32(down[unsafe_offset=k])
+        var low = min(min(min(c, w), min(e, n)), s)
+        var high = max(max(max(c, w), max(e, n)), s)
+        var room = min(low, 255 - high) / max(high, 1)
+        var amount = sqrt(min(max(room, 0), 1))
+        var weight = amount * peak
+        var mixed = (c + (w + e + n + s) * weight) / (weight * 4 + 1)
+        dest[unsafe_offset=k] = UInt8(Int(min(max(mixed + 0.5, 0), 255.5)))
+        k += 1
+
+
 __async def _sharpen_task(
     source: Pointer[UInt8, ImmutAnyOrigin],
     width: Int,
@@ -47,48 +103,16 @@ __async def _sharpen_task(
     past: Int,
 ):
     """Sharpen rows `first` to `past`, inside the border."""
-    comptime F = SIMD[DType.float32, GAME_LANES]
     var stride = width * 4
-    var last = stride - 4
     for y in range(first, past):  # pragma: no branch
-        var row = source.unsafe_offset(y * stride)
-        var up = source.unsafe_offset((y - 1) * stride)
-        var down = source.unsafe_offset((y + 1) * stride)
-        var dest = target.unsafe_offset(y * stride)
-        var k = 4
-        while k + GAME_LANES <= last:
-            var c = row.unsafe_load[width=GAME_LANES](k).cast[DType.float32]()
-            var w = row.unsafe_load[width=GAME_LANES](k - 4).cast[
-                DType.float32
-            ]()
-            var e = row.unsafe_load[width=GAME_LANES](k + 4).cast[
-                DType.float32
-            ]()
-            var n = up.unsafe_load[width=GAME_LANES](k).cast[DType.float32]()
-            var s = down.unsafe_load[width=GAME_LANES](k).cast[DType.float32]()
-            var low = min(min(min(c, w), min(e, n)), s)
-            var high = max(max(max(c, w), max(e, n)), s)
-            var room = min(low, F(255) - high) / max(high, F(1))
-            var amount = sqrt(min(max(room, F(0)), F(1)))
-            var weight = amount * peak
-            var mixed = (c + (w + e + n + s) * weight) / (weight * 4 + 1)
-            var held = min(max(mixed + 0.5, F(0)), F(255.5))
-            dest.unsafe_store(k, held.cast[DType.uint8]())
-            k += GAME_LANES
-        while k < last:
-            var c = Float32(row[unsafe_offset=k])
-            var w = Float32(row[unsafe_offset=k - 4])
-            var e = Float32(row[unsafe_offset=k + 4])
-            var n = Float32(up[unsafe_offset=k])
-            var s = Float32(down[unsafe_offset=k])
-            var low = min(min(min(c, w), min(e, n)), s)
-            var high = max(max(max(c, w), max(e, n)), s)
-            var room = min(low, 255 - high) / max(high, 1)
-            var amount = sqrt(min(max(room, 0), 1))
-            var weight = amount * peak
-            var mixed = (c + (w + e + n + s) * weight) / (weight * 4 + 1)
-            dest[unsafe_offset=k] = UInt8(Int(min(max(mixed + 0.5, 0), 255.5)))
-            k += 1
+        sharpen_row(
+            source.unsafe_offset(y * stride),
+            source.unsafe_offset((y - 1) * stride),
+            source.unsafe_offset((y + 1) * stride),
+            target.unsafe_offset(y * stride),
+            width,
+            peak,
+        )
 
 
 def sharpen(mut frame: Framebuffer, strength: Float32) raises:
