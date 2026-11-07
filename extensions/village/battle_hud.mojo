@@ -171,7 +171,12 @@ font."""
 comptime CHIP_COLOR = Rgb(255, 236, 196)
 """The color of the health a blow took, behind the health on a bar."""
 comptime POP_SECONDS = Float32(0.12)
-"""How long a number stands larger as it appears, in seconds."""
+"""How long a number's box stands larger as it appears, in seconds."""
+comptime POP_EASE = Float32(0.25)
+"""How long a number takes to ease back to its size as it appears, in
+seconds."""
+comptime POP_GROW = Float32(0.4)
+"""How much larger a number stands as it appears: 0.4 is 40 percent."""
 comptime POPUP_FADE = Float32(0.3)
 """How long a number or a word takes to fade at its end, in seconds."""
 comptime BAR_GAP = 2
@@ -869,13 +874,23 @@ def draw_battle(
         if not kept[k]:
             continue
         ref popup = battle.popups[shown[k]]
+        # The number's size without its pop, grown by the pop's ease about
+        # the middle of its box's top, so that it keeps under the band.
+        var base = popup_scale(popup.text, popup.color, POP_EASE, scale)
         var style = popup_style(
-            popup.text, popup.color, popup_alpha(popup.age), sizes[k]
+            popup.text, popup.color, popup_alpha(popup.age), base
         )
-        # The ring stands a stroke above the letters: the box's top.
+        # A word does not pop: its size is the display's.
+        if base != scale:
+            var grow = pop_grow(popup.age)
+            style.size *= grow
+            style.outline *= grow
+            style.shadow *= grow
+            style.weight *= grow
+        var middle = Float32(lefts[k]) + Float32(widths[k]) / 2
         draw_styled(
             frame,
-            Float32(lefts[k]),
+            middle - styled_width(popup.text, style.size) / 2,
             Float32(tops[k] + drop) + style.outline + 1,
             popup.text,
             style,
@@ -1030,6 +1045,20 @@ def popup_style(
     if not number:
         return TextStyle(size, color, alpha, ring, size * 0.08, 0, 0)
     return TextStyle(size, color, alpha, ring, size * 0.1, size * 0.05, 0.14)
+
+
+def pop_grow(age: Float32) -> Float32:
+    """Return how much larger a number stands as it appears: `POP_GROW`
+    more at once, easing back to its size over `POP_EASE`.
+
+    Args:
+        age: How long it has shown, in seconds.
+
+    Returns:
+        From `1 + POP_GROW` down to 1.
+    """
+    var left = max(Float32(0), 1 - age / POP_EASE)
+    return 1 + POP_GROW * left * left
 
 
 def popup_alpha(age: Float32) -> Float32:

@@ -20,6 +20,9 @@ from extensions.village.battle import (
 from extensions.village.styles import MAGIC, SWORD
 from extensions.village.battle_hud import (
     popup_style,
+    pop_grow,
+    POP_EASE,
+    POP_GROW,
     HURT_TINT,
     TOP_BAND,
     POP_SECONDS,
@@ -59,6 +62,7 @@ from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from std.testing import (
     TestSuite,
+    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_true,
@@ -348,6 +352,7 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
         )
     )
     b.popups.append(Popup(Vector3(0, 2, 9), "99", WHITE_TEXT, 0.1))
+    b.popups.append(Popup(Vector3(1, 2, -3), "PARRY", WHITE_TEXT, 0.1))
     # And a blow's flash.
     b.impacts.append(Impact(Vector3(0, 1.2, -3), Vector3(255, 235, 190), 1, 0))
     # And a swing's trail.
@@ -543,6 +548,14 @@ def test_the_edges_tint_and_a_ki_pulse_rings() raises:
     tint_edges(full, HURT_TINT, 1)
     assert_equal(Int(full.pixels[(90 * 320 + 160) * 4]), 0)
     assert_true(Int(full.pixels[0]) > 150)
+
+
+def test_a_number_pops_and_eases_back() raises:
+    assert_almost_equal(pop_grow(0), 1 + POP_GROW, atol=1e-6)
+    assert_true(pop_grow(POP_EASE / 2) < pop_grow(0))
+    assert_true(pop_grow(POP_EASE / 2) > 1)
+    assert_equal(pop_grow(POP_EASE), 1)
+    assert_equal(pop_grow(5), 1)
 
 
 def test_a_number_leans_and_a_word_stands_upright() raises:
