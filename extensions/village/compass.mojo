@@ -28,6 +28,11 @@ This is not a three.js port. See Extensions.
 """
 
 from extensions.village.hud import (
+    GOLD_TEXT,
+    draw_pill,
+    TextStyle,
+    draw_styled,
+    styled_width,
     Rgb,
     SHADOW,
     WHITE_TEXT,
@@ -46,6 +51,8 @@ comptime COMPASS_SPAN = Float32(pi * 2 / 3)
 """How much of the turn the strip shows, in radians: 120 degrees."""
 comptime COMPASS_SHARE = Float32(0.36)
 """How much of the frame's width the strip spans."""
+comptime COMPASS_FADE = Float32(0.18)
+"""How much of the strip's width, at each end, fades out."""
 comptime TICK = Float32(pi / 12)
 """How far apart the strip's ticks are, in radians: 15 degrees."""
 
@@ -133,35 +140,45 @@ def draw_compass(
     var middle = frame.width // 2
     var top = (6 + drop) * scale
     var height = 9 * scale
-    fill_box(
-        frame,
-        middle - half,
-        top,
-        middle + half,
-        top + height,
-        SHADOW,
-        0.45,
-    )
+    # The strip: dark at its middle, fading out to each end, with a light
+    # line along its foot.
+    var span = 2 * half
+    for x in range(
+        max(0, middle - half), min(frame.width, middle + half)
+    ):  # pragma: no branch
+        var t = Float32(x - middle + half) / Float32(span)
+        var fade = min(Float32(1), min(t, 1 - t) / COMPASS_FADE)
+        fill_box(frame, x, top, x + 1, top + height, SHADOW, 0.4 * fade)
+        fill_box(
+            frame,
+            x,
+            top + height - 1,
+            x + 1,
+            top + height,
+            WHITE_TEXT,
+            0.35 * fade,
+        )
     var per = Float32(2 * half) / COMPASS_SPAN
     var turn = Float32(yaw.to(RADIAN))
-    # A tick each `TICK`, and a letter at each point.
+    # A tick each `TICK`, and a letter at each point: the north gold.
     var letters: List[String] = ["N", "W", "S", "E"]
+    var size = Float32(scale) * 5
     for k in range(24):  # pragma: no branch
         var at = _wrap(Float32(k) * TICK - turn)
         if abs(at) > COMPASS_SPAN / 2:
             continue
         var x = middle - Int(at * per)
+        var t = Float32(x - middle + half) / Float32(span)
+        var fade = min(Float32(1), min(t, 1 - t) / COMPASS_FADE)
         if k % 6 == 0:
             var letter = letters[k // 6]
-            var width = text_width(letter, scale)
-            draw_text(
+            var color = GOLD_TEXT if k == 0 else WHITE_TEXT
+            draw_styled(
                 frame,
-                x - width // 2,
-                top + scale,
+                Float32(x) - styled_width(letter, size) / 2,
+                Float32(top) + (Float32(height) - size) / 2,
                 letter,
-                scale,
-                WHITE_TEXT,
-                1,
+                TextStyle(size, color, fade, 0, size * 0.1, 0.3 * size / 7, 0),
             )
         else:
             var tall = 3 * scale if k % 2 == 0 else 2 * scale
@@ -169,21 +186,24 @@ def draw_compass(
                 frame,
                 x,
                 top + height - tall - scale,
-                x + max(1, scale // 2),
+                x + max(1, scale // 3),
                 top + height - scale,
                 WHITE_TEXT,
-                0.7,
+                0.55 * fade,
             )
-    # The way the camera looks.
-    fill_box(
-        frame,
-        middle - max(1, scale // 2),
-        top + height,
-        middle + max(1, scale // 2) + 1,
-        top + height + 2 * scale,
-        WHITE_TEXT,
-        0.9,
-    )
+    # The way the camera looks: a small gold wedge under the strip.
+    var tip = 2 * scale
+    for row in range(tip):  # pragma: no branch
+        var w = tip - row
+        fill_box(
+            frame,
+            middle - w,
+            top + height + row,
+            middle + w + 1,
+            top + height + row + 1,
+            GOLD_TEXT,
+            0.95,
+        )
     for mark in marks:
         var at = bearing(origin, mark.at, yaw)
         var bright = Float32(1)
@@ -191,24 +211,35 @@ def draw_compass(
             at = COMPASS_SPAN / 2 if at > 0 else -COMPASS_SPAN / 2
             bright = 0.5
         var x = middle - Int(at * per)
-        fill_box(
-            frame,
-            x - scale,
-            top + 2 * scale,
-            x + 2 * scale,
-            top + height - 2 * scale,
-            mark.color,
-            bright,
-        )
+        # A diamond, ringed dark.
+        var r = 2 * scale
+        var y = top + height // 2
+        for dy in range(-r - 1, r + 2):  # pragma: no branch
+            var w = r + 1 - abs(dy)
+            fill_box(frame, x - w, y + dy, x + w + 1, y + dy + 1, SHADOW, 0.6)
+        for dy in range(-r, r + 1):  # pragma: no branch
+            var w = r - abs(dy)
+            fill_box(
+                frame, x - w, y + dy, x + w + 1, y + dy + 1, mark.color, bright
+            )
     if caption.byte_length() > 0:
-        var width = text_width(caption, scale)
-        # The caption stands over the sky: an outline keeps it clear.
-        draw_outlined(
+        # The caption stands over the sky: a dark pill keeps it clear.
+        var small = Float32(scale) * 4.5
+        var wide = styled_width(caption, small)
+        var y = top + height + 4 * scale
+        var pill = Int(small) + 4 * scale
+        draw_pill(
             frame,
-            middle - width // 2,
-            top + height + 4 * scale,
+            middle - Int(wide / 2) - 4 * scale,
+            y - 2 * scale,
+            middle + Int(wide / 2) + 4 * scale,
+            y - 2 * scale + pill,
+            0.42,
+        )
+        draw_styled(
+            frame,
+            Float32(middle) - wide / 2,
+            Float32(y),
             caption,
-            scale,
-            WHITE_TEXT,
-            0.85,
+            TextStyle(small, WHITE_TEXT, 1, 0, small * 0.1, 0, 0),
         )

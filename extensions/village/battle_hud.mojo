@@ -16,9 +16,11 @@
    it runs. A knife is a small orange star. A plunge's
    ring spreads over the ground from the player's feet, and fades. A bolt is a blue
    star, or a gold one for a assist attack.
-2. **The player's gauges**, in the bottom right, on a dark panel: the
-   stance, the health, the stamina, the limit gauge, and the special
-   gauge as a row of points. The health turns red below a quarter. What a
+2. **The player's gauges**, in the bottom right, on a panel of frosted
+   glass: the style and the stance, the health as a number, and the
+   health, the stamina, the mana for magic, the limit gauge, and the
+   special gauge as a row of points. Each is a leaning bar: see
+   `extensions.village.hud.draw_gauge`. The health turns red below a quarter. What a
    blow takes stays pale on the health bar for a moment, then drains. In a surge, the limit gauge turns
    gold, says `SURGE`, and empties as it ends. Through a ultimate
    special's start-up, `ULTIMATE` stands large in the middle of the
@@ -80,7 +82,8 @@ from extensions.village.combat import (
 from extensions.village.companion import ASSIST_FULL
 from extensions.village.foes import POSTED, bandit_fighter
 from extensions.village.effects_hud import draw_effects
-from extensions.village.raid_hud import draw_raid
+from extensions.village.raid_hud import DIM_TEXT, MANA_COLOR, draw_raid
+from extensions.village.styles import MAGIC, style_name
 from extensions.village.slashes import (
     PIERCE_TRAIL,
     draw_impact,
@@ -91,7 +94,12 @@ from extensions.village.slashes import (
     glow_star,
 )
 from extensions.village.hud import (
-    PANEL_ALPHA,
+    TextStyle,
+    text_size,
+    draw_gauge,
+    draw_panel,
+    draw_styled,
+    styled_width,
     clear_span,
     GOLD_TEXT,
     SHADOW,
@@ -208,15 +216,11 @@ def draw_bar(
     color: Rgb,
     chip: Float32 = -1,
 ):
-    """Draw a gauge: a dark box, filled from the left by a share.
-
-    A gauge of health shows what a blow just took: past the share, up to
-    `chip`, it is filled pale, and the pale part drains away. The fill's
-    top row is lighter, so the bar reads as raised.
+    """Draw a gauge, as `extensions.village.hud.draw_gauge` does.
 
     Args:
         frame: The frame.
-        x: The left of the box, in pixels.
+        x: The left of the bar's foot, in pixels.
         y: Its top, in pixels.
         width: Its width, in pixels.
         height: Its height, in pixels.
@@ -225,15 +229,7 @@ def draw_bar(
         chip: How full it was a moment ago, from 0 to 1; less than
             `share` for none.
     """
-    var full = Int(Float32(width) * max(Float32(0), min(Float32(1), share)))
-    var was = Int(Float32(width) * max(Float32(0), min(Float32(1), chip)))
-    fill_box(frame, x - 1, y - 1, x + width + 1, y + height + 1, SHADOW, 0.6)
-    if was > full:
-        fill_box(frame, x + full, y, x + was, y + height, CHIP_COLOR, 0.9)
-    fill_box(frame, x, y, x + full, y + height, color, 1)
-    if height >= 3:
-        var light = Rgb(255, 255, 255)
-        fill_box(frame, x, y, x + full, y + max(1, height // 4), light, 0.3)
+    draw_gauge(frame, x, y, width, height, share, color, chip)
 
 
 def on_screen(
@@ -281,88 +277,131 @@ def _centered(
     )
 
 
-def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
-    """Draw the player's stance, health, stamina and special gauge."""
+def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
+    """Draw the player's style and stance, health, stamina, mana, limit
+    and special gauges, in the bottom right, on a panel of frosted glass.
+    """
     ref f = battle.fighter
+    var unit = Float32(scale)
     var margin = 6 * scale
-    var width = 72 * scale
-    var x = frame.width - margin - width
-    var y = frame.height - margin - 4 * scale
-    # A dark panel behind the gauges, so they read over a bright sky. It
-    # holds the style's name over them too: see `draw_raid`.
-    fill_box(
+    var width = 100 * scale
+    var right = frame.width - margin
+    var x = right - width
+    var base = frame.height - margin
+    var magic = f.style == MAGIC
+    # From the foot up: the special points, the limit, the stamina, the
+    # mana for magic, the health, and the words over it.
+    var pips = base - 2 * scale
+    var limit = pips - 3 * scale
+    var stamina = limit - 4 * scale
+    var mana = stamina - 3 * scale
+    var health = (mana if magic else stamina) - 6 * scale
+    var words = health - 9 * scale
+    draw_panel(
         frame,
-        x - 36 * scale,
-        y - 64 * scale,
-        frame.width - margin + 4 * scale,
-        y + 6 * scale,
-        SHADOW,
-        PANEL_ALPHA,
+        x - 6 * scale,
+        words - 5 * scale,
+        right + 4 * scale,
+        base + 4 * scale,
+        scale,
     )
-    # The special gauge: one box a point, filled by its share.
+    # The special points: one leaning pip a point, filled by its share.
     var points = Int(f.parameters.special_points + 0.5)
-    var pip = 6 * scale
+    var pip = 7 * scale
     for k in range(points):
-        var share = f.special - Float32(k)
-        draw_bar(
+        var at = right - (points - k) * (pip + 2 * scale)
+        draw_gauge(
             frame,
-            x + width - (points - k) * (pip + 2 * scale),
-            y,
+            at,
+            pips,
             pip,
-            3 * scale,
-            share,
+            2 * scale,
+            f.special - Float32(k),
             SPECIAL_COLOR,
         )
-    if points > 0:
-        draw_text(frame, x, y - 2 * scale, "SP", scale, SPECIAL_COLOR, 1)
-    y -= 7 * scale
     var share = f.limit / LIMIT
     var color = LIMIT_COLOR
-    var label = String("SG")
     if f.over > 0:
         share = f.over / OVER_SECONDS
         color = GOLD_TEXT
-        label = "SURGE"
-    draw_bar(frame, x, y, width, 2 * scale, share, color)
-    draw_text(
-        frame,
-        x - text_width(label, scale) - 4 * scale,
-        y - 2 * scale,
-        label,
-        scale,
-        color,
-        1,
-    )
-    y -= 10 * scale
-    draw_bar(
+        draw_styled(
+            frame,
+            Float32(x),
+            Float32(pips - scale // 2),
+            "SURGE",
+            _label(scale, GOLD_TEXT),
+        )
+    draw_gauge(frame, x, limit, width, scale, share, color)
+    draw_gauge(
         frame,
         x,
-        y,
+        stamina,
         width,
-        3 * scale,
+        2 * scale,
         f.stamina / f.parameters.stamina,
         STAMINA_COLOR,
     )
-    draw_text(
-        frame, x - 16 * scale, y - 2 * scale, "ST", scale, STAMINA_COLOR, 1
+    if magic:
+        draw_gauge(
+            frame,
+            x,
+            mana,
+            width,
+            scale + scale // 2,
+            f.mana / f.parameters.mana,
+            MANA_COLOR,
+        )
+    var whole = f.health / f.parameters.health
+    var hue = HEALTH if whole >= 0.25 else WOUNDED
+    draw_gauge(
+        frame,
+        x,
+        health,
+        width,
+        4 * scale,
+        whole,
+        hue,
+        f.chip / f.parameters.health,
     )
-    y -= 12 * scale
-    var health = f.health / f.parameters.health
-    var hue = HEALTH if health >= 0.25 else WOUNDED
-    var chip = f.chip / f.parameters.health
-    draw_bar(frame, x, y, width, 4 * scale, health, hue, chip)
-    draw_text(frame, x - 16 * scale, y - scale, "HP", scale, hue, 1)
-    var count = String(Int(f.health + 0.5), "/", Int(f.parameters.health))
-    var right = x + width
-    y -= 10 * scale
-    draw_text(
-        frame, right - text_width(count, scale), y, count, scale, WHITE_TEXT, 1
+    # The health as a number, large, and its most, small and dim.
+    var most = String(" / ", Int(f.parameters.health))
+    var small = _label(scale, DIM_TEXT)
+    var tail = styled_width(most, small.size)
+    draw_styled(
+        frame,
+        Float32(right) - tail,
+        Float32(words) + 7 * unit - small.size,
+        most,
+        small,
     )
-    var stance = stance_label(f.stance)
-    y -= 10 * scale
-    draw_text(
-        frame, right - text_width(stance, scale), y, stance, scale, GOLD_TEXT, 1
+    var count = String(Int(f.health + 0.5))
+    var big = TextStyle(7 * unit, WHITE_TEXT, 1, 0, 0.8 * unit, 0.25 * unit, 0)
+    draw_styled(
+        frame,
+        Float32(right) - tail - styled_width(count, big.size),
+        Float32(words),
+        count,
+        big,
     )
+    # The style and the stance, small, on the line's foot.
+    var name = style_name(f.style)
+    var label = _label(scale, WHITE_TEXT)
+    var foot = Float32(words) + 7 * unit - label.size
+    draw_styled(frame, Float32(x), foot, name, label)
+    draw_styled(
+        frame,
+        Float32(x) + styled_width(name + "  ", label.size),
+        foot,
+        stance_label(f.stance),
+        _label(scale, GOLD_TEXT),
+    )
+
+
+def _label(scale: Int, color: Rgb) -> TextStyle:
+    """Return the style of the display's small words: two thirds the size
+    of its text, with a soft shadow."""
+    var size = Float32(scale) * 4.5
+    return TextStyle(size, color, 1, 0, size * 0.12, 0, 0)
 
 
 def _ring(
@@ -528,11 +567,17 @@ def _assist(mut frame: Framebuffer, battle: Battle, scale: Int):
             margin,
             y,
             48 * scale,
-            3 * scale,
+            2 * scale,
             mind.assist / ASSIST_FULL,
             color,
         )
-        draw_text(frame, margin, y - 9 * scale, label, scale, color, 1)
+        draw_styled(
+            frame,
+            Float32(margin),
+            Float32(y - 7 * scale),
+            label,
+            _label(scale, color),
+        )
 
 
 def _glow(
@@ -575,15 +620,13 @@ def _ultimate(
         return
     var share = f.clock / startup
     var title = String("ULTIMATE")
-    var big = scale * 3
-    draw_text(
+    var big = text_size(scale * 3)
+    draw_styled(
         frame,
-        (frame.width - text_width(title, big)) // 2,
-        frame.height // 4,
+        (Float32(frame.width) - styled_width(title, big)) / 2,
+        Float32(frame.height // 4),
         title,
-        big,
-        GOLD_TEXT,
-        1,
+        TextStyle(big, GOLD_TEXT, 1, big * 0.08, big * 0.1, big * 0.03, 0.14),
     )
     var at = on_screen(
         camera,
@@ -645,16 +688,22 @@ def draw_battle(
         _ultimate(frame, battle, scene, camera, look, scale)
     if f.combo >= 2:
         var alpha = note_alpha(f.combo_age, COMBO_KEEP)
-        var hits = String(f.combo, " HITS")
-        draw_text(
+        var count = String(f.combo)
+        var big = text_size(2 * scale)
+        var word = _label(scale, GOLD_TEXT)
+        word.alpha = alpha
+        var right = Float32(w - 6 * scale) - styled_width(" HITS", word.size)
+        var y = Float32(h * 2 // 5)
+        draw_styled(
             frame,
-            w - 6 * scale - text_width(hits, scale * 2),
-            h * 2 // 5,
-            hits,
-            scale * 2,
-            GOLD_TEXT,
-            alpha,
+            right - styled_width(count, big),
+            y,
+            count,
+            TextStyle(
+                big, GOLD_TEXT, alpha, big * 0.1, big * 0.08, big * 0.04, 0.14
+            ),
         )
+        draw_styled(frame, right, y + big - word.size, " HITS", word)
     var bar = 30 * scale
     # The bars' boxes, the farthest foe first, so that a nearer foe's bar
     # keeps its place and a farther one's stands over it.
@@ -848,14 +897,16 @@ def draw_battle(
         if not kept[k]:
             continue
         ref popup = battle.popups[shown[k]]
-        draw_outlined(
+        var style = popup_style(
+            popup.text, popup.color, popup_alpha(popup.age), sizes[k]
+        )
+        # The ring stands a stroke above the letters: the box's top.
+        draw_styled(
             frame,
-            lefts[k],
-            tops[k] + drop + max(1, sizes[k] // 2),
+            Float32(lefts[k]),
+            Float32(tops[k] + drop) + style.outline + 1,
             popup.text,
-            sizes[k],
-            popup.color,
-            popup_alpha(popup.age),
+            style,
         )
 
 
@@ -981,6 +1032,34 @@ def popup_scale(text: String, color: Rgb, age: Float32, scale: Int) -> Int:
     return size
 
 
+def popup_style(
+    text: String, color: Rgb, alpha: Float32, scale: Int
+) -> TextStyle:
+    """Return how a number or a word over a fighter is drawn.
+
+    A number is bold and leans, as a blow's numbers do in a game of
+    today. A word stands upright. Each is ringed dark, so that it reads
+    over the sky.
+
+    Args:
+        text: The number or the word.
+        color: Its color.
+        alpha: How strongly it shows.
+        scale: Its size: a capital stands 7 times this tall, in pixels.
+
+    Returns:
+        The style.
+    """
+    var size = text_size(scale)
+    var bytes = text.as_bytes()
+    var first = Int(bytes[0]) if len(bytes) > 0 else 0
+    var number = (first >= ord("0") and first <= ord("9")) or first == ord("+")
+    var ring = size * 0.12
+    if not number:
+        return TextStyle(size, color, alpha, ring, size * 0.08, 0, 0)
+    return TextStyle(size, color, alpha, ring, size * 0.1, size * 0.05, 0.14)
+
+
 def popup_alpha(age: Float32) -> Float32:
     """Return how strongly a number or a word over a fighter shows.
 
@@ -1020,7 +1099,7 @@ def target_name(battle: Battle, index: Int) -> String:
 
 def draw_target(mut frame: Framebuffer, battle: Battle, top: Int):
     """Draw the foe the player is locked on to, under the compass: its
-    name, and its health and stamina as wide bars, on a dark panel.
+    name, and its health and stamina as wide bars.
 
     Nothing is drawn while the player is locked on to no foe, as on a
     dummy or the warden, whose own bar is drawn apart.
@@ -1037,25 +1116,23 @@ def draw_target(mut frame: Framebuffer, battle: Battle, top: Int):
     var name = target_name(battle, battle.lock)
     var width = frame.width // 4
     var x = (frame.width - width) // 2
-    # A dark panel behind the name and the bars, as behind the gauges.
-    fill_box(
+    var label = _label(scale, WHITE_TEXT)
+    label.outline = label.size * 0.1
+    draw_styled(
         frame,
-        x - 4 * scale,
-        top - 2 * scale,
-        x + width + 4 * scale,
-        top + 17 * scale,
-        SHADOW,
-        PANEL_ALPHA,
+        Float32(frame.width) / 2 - styled_width(name, label.size) / 2,
+        Float32(top),
+        name,
+        label,
     )
-    _centered(frame, frame.width // 2, top, name, scale, WHITE_TEXT, 1)
     ref p = foe.fighter.parameters
-    var y = top + 9 * scale
+    var y = top + 7 * scale
     draw_bar(
         frame,
         x,
         y,
         width,
-        3 * scale,
+        2 * scale + scale // 2,
         foe.fighter.health / p.health,
         WOUNDED,
         foe.fighter.chip / p.health,
@@ -1065,7 +1142,7 @@ def draw_target(mut frame: Framebuffer, battle: Battle, top: Int):
         x,
         y + 4 * scale,
         width,
-        scale,
+        max(2, scale // 2),
         foe.fighter.stamina / p.stamina,
         STAMINA_COLOR,
     )

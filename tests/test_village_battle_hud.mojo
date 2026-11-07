@@ -17,7 +17,9 @@ from extensions.village.battle import (
     Popup,
     Wave,
 )
+from extensions.village.styles import MAGIC, SWORD
 from extensions.village.battle_hud import (
+    popup_style,
     HURT_TINT,
     TOP_BAND,
     POP_SECONDS,
@@ -303,6 +305,12 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     draw_battle(rest, arena.battle, arena.scene, camera, look)
     var gauges = _changed(rest)
     assert_true(gauges > 0)
+    # Magic's gauges show its mana too.
+    _ = arena.battle.fighter.set_style(MAGIC)
+    var magic = _frame()
+    draw_battle(magic, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(magic) > gauges)
+    _ = arena.battle.fighter.set_style(SWORD)
     # A number over a head high in the frame stands under the top band.
     var high = Vector3(0, 6, -6)
     assert_true(on_screen(camera, look, high, 320, 180).value().y < TOP_BAND)
@@ -535,6 +543,16 @@ def test_the_edges_tint_and_a_ki_pulse_rings() raises:
     tint_edges(full, HURT_TINT, 1)
     assert_equal(Int(full.pixels[(90 * 320 + 160) * 4]), 0)
     assert_true(Int(full.pixels[0]) > 150)
+
+
+def test_a_number_leans_and_a_word_stands_upright() raises:
+    var number = popup_style("42", WHITE_TEXT, 1, 2)
+    var word = popup_style("PARRY", WHITE_TEXT, 1, 2)
+    var empty = popup_style("", WHITE_TEXT, 1, 2)
+    assert_true(number.slant > 0 and number.weight > 0)
+    assert_equal(word.slant, 0)
+    assert_equal(empty.slant, 0)
+    assert_true(word.outline > 0 and number.outline > 0)
 
 
 def main() raises:

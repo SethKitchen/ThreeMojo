@@ -20,16 +20,15 @@ font of `extensions.village.hud`. `extensions.village.battle_hud` calls
 4. **The party.** On the left: each raider who joined, their role and
    their health. A fallen raider shows `DOWN`, and how far a revive has
    gone.
-5. **The style.** Over the player's gauges: the style's name, and for
-   magic, the mana.
-6. **The routes.** Over the combo counter: each combo the player is on
-   the way to, with its keys done in gold, the next in white and the rest
-   in gray; a key that must be on the beat has a dot under it. A press on
-   the beat flashes `ON BEAT`.
-7. **The book.** While the book shows: each combo of the style, its tier,
+5. **The routes.** Over the combo counter: each combo the player is on
+   the way to, its name leaning, and a key's chip for each of its keys:
+   done in gold, the next in white and the rest in gray; a key that must
+   be on the beat has a dot under it. A press on the beat flashes
+   `ON BEAT`.
+6. **The book.** While the book shows: each combo of the style, its tier,
    its effect, its keys and its rank; or the level that teaches it, or
    `SPECIALTY`.
-8. **The missiles.** Each arrow, spell bolt and orb as a star of light.
+7. **The missiles.** Each arrow, spell bolt and orb as a star of light.
    An arrow streaks back along its flight; a bolt or an orb trails fading
    stars.
 """
@@ -54,7 +53,12 @@ from extensions.village.combos import (
     tier_name,
 )
 from extensions.village.hud import (
-    PANEL_ALPHA,
+    TextStyle,
+    draw_panel,
+    draw_chip,
+    draw_styled,
+    styled_width,
+    draw_gauge,
     GOLD_TEXT,
     SHADOW,
     WHITE_TEXT,
@@ -242,10 +246,8 @@ def _bar(
     share: Float32,
     color: Rgb,
 ):
-    """Draw a gauge: a dark box, filled from the left by a share."""
-    var full = Int(Float32(width) * max(Float32(0), min(Float32(1), share)))
-    fill_box(frame, x - 1, y - 1, x + width + 1, y + height + 1, SHADOW, 0.6)
-    fill_box(frame, x, y, x + full, y + height, color, 1)
+    """Draw a gauge, as `extensions.village.hud.draw_gauge` does."""
+    draw_gauge(frame, x, y, width, height, share, color)
 
 
 def _boss_bar(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
@@ -311,25 +313,24 @@ def _boss_bar(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
 
 
 def _party(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
-    """Draw each raider who joined, on a dark panel: their role and their
+    """Draw each raider who joined, on a glass panel: their role and their
     health, or `DOWN` and the revive."""
     var x = 6 * scale
     var y = frame.height // 3
     var width = 48 * scale
-    # A dark panel behind the raiders who joined, as behind the gauges.
+    # A glass panel behind the raiders who joined, as behind the gauges.
     var joined = 0
     for k in range(len(battle.members)):
         if battle.members[k].joined:
             joined += 1
     if joined > 0:
-        fill_box(
+        draw_panel(
             frame,
-            x - 3 * scale,
-            y - 3 * scale,
-            x + width + 3 * scale,
-            y + joined * 16 * scale + scale,
-            SHADOW,
-            PANEL_ALPHA,
+            x - 4 * scale,
+            y - 4 * scale,
+            x + width + 6 * scale,
+            y + joined * 16 * scale + 2 * scale,
+            scale,
         )
     for k in range(len(battle.members)):
         ref member = battle.members[k]
@@ -358,56 +359,30 @@ def _party(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
         y += 8 * scale
 
 
-def _style(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
-    """Draw the style's name over the player's gauges, and the mana for
-    magic."""
-    ref f = battle.fighter
-    var name = style_name(f.style)
-    var margin = 6 * scale
-    var width = 72 * scale
-    var x = frame.width - margin - width
-    var y = frame.height - margin - 64 * scale
-    draw_text(
-        frame,
-        x + width - text_width(name, scale),
-        y,
-        name,
-        scale,
-        WHITE_TEXT,
-        1,
-    )
-    if f.style == MAGIC:
-        y += 8 * scale
-        _bar(
-            frame,
-            x,
-            y,
-            width,
-            2 * scale,
-            f.mana / f.parameters.mana,
-            MANA_COLOR,
-        )
-        draw_text(
-            frame, x - 16 * scale, y - 2 * scale, "MP", scale, MANA_COLOR, 1
-        )
-
-
 def _routes(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
-    """List the combos the player's string is on the way to, and flash a
-    press on the beat."""
+    """List the combos the player's string is on the way to, each a name
+    and a key a press, and flash a press on the beat."""
     var routes = battle.book.routes(battle.tracker, battle.fighter.style)
     var y = frame.height * 2 // 5 - 30 * scale
     var right = frame.width - 6 * scale
+    var size = Float32(5 * scale)
+    var key = 8 * scale
     if battle.beat >= 0 and battle.beat < BEAT_FLASH:
         var word = String("ON BEAT")
-        draw_text(
+        draw_styled(
             frame,
-            right - text_width(word, scale),
-            y - 10 * scale,
+            Float32(right) - styled_width(word, size),
+            Float32(y - 10 * scale),
             word,
-            scale,
-            BEAT_TEXT,
-            1 - battle.beat / BEAT_FLASH,
+            TextStyle(
+                size,
+                BEAT_TEXT,
+                1 - battle.beat / BEAT_FLASH,
+                0,
+                size * 0.1,
+                size * 0.05,
+                0.14,
+            ),
         )
     var shown = 0
     for index in routes:
@@ -416,29 +391,43 @@ def _routes(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
         shown += 1
         ref combo = battle.book.combos[index]
         var done = battle.tracker.progress(combo)
-        var line = combo.name + "  "
-        var x = right - text_width(line, scale) - 12 * scale * len(combo.keys)
-        draw_text(frame, x, y, line, scale, GOLD_TEXT, 1)
-        x += text_width(line, scale)
-        for k in range(len(combo.keys)):  # pragma: no branch
+        var keys = len(combo.keys)
+        var x = right - keys * (key + 2 * scale) + 2 * scale
+        var name = TextStyle(size, GOLD_TEXT, 1, 0, size * 0.12, 0, 0.14)
+        draw_styled(
+            frame,
+            Float32(x - 4 * scale) - styled_width(combo.name, size),
+            Float32(y + (key - Int(size)) // 2),
+            combo.name,
+            name,
+        )
+        for k in range(keys):  # pragma: no branch
             var color = DIM_TEXT
             if k < done:
                 color = GOLD_TEXT
             elif k == done:
                 color = WHITE_TEXT
+            draw_chip(frame, x, y, x + key, y + key, color, 0.9)
             var letter = key_name(combo.keys[k])
-            draw_text(frame, x, y, letter, scale, color, 1)
+            var small = Float32(4 * scale)
+            draw_styled(
+                frame,
+                Float32(x) + (Float32(key) - styled_width(letter, small)) / 2,
+                Float32(y) + (Float32(key) - small) / 2,
+                letter,
+                TextStyle(small, color, 1, 0, 0, 0, 0),
+            )
             if combo.beats[k]:
                 fill_box(
                     frame,
-                    x + scale,
-                    y + 8 * scale,
-                    x + 4 * scale,
-                    y + 9 * scale,
+                    x + key // 2 - scale,
+                    y + key + scale,
+                    x + key // 2 + scale,
+                    y + key + 2 * scale,
                     BEAT_TEXT,
                     1,
                 )
-            x += 12 * scale
+            x += key + 2 * scale
         y += 11 * scale
 
 
@@ -450,6 +439,14 @@ def _book(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
     var x = frame.width // 8
     var y = frame.height // 6
     var title = style_name(style) + " COMBOS"
+    draw_panel(
+        frame,
+        x - 8 * scale,
+        y - 6 * scale,
+        frame.width * 7 // 8 + 8 * scale,
+        frame.height * 5 // 6,
+        scale,
+    )
     fill_box(
         frame,
         x - 8 * scale,
@@ -457,7 +454,7 @@ def _book(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
         frame.width * 7 // 8 + 8 * scale,
         frame.height * 5 // 6,
         SHADOW,
-        0.7,
+        0.3,
     )
     draw_text(frame, x, y, title, scale * 2, GOLD_TEXT, 1)
     y += 20 * scale
@@ -579,7 +576,6 @@ def draw_raid(
     _missiles(frame, battle, camera, look)
     _boss_bar(frame, battle, scale)
     _party(frame, battle, scale)
-    _style(frame, battle, scale)
     _routes(frame, battle, scale)
     if battle.reading:
         _book(frame, battle, scale)

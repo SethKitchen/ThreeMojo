@@ -35,7 +35,7 @@ from extensions.village.battle_hud import (
     target_name,
 )
 from extensions.village.raid_hud import draw_raid, draw_zone, zone_corners
-from extensions.village.styles import AXE, MAGIC, SWORD
+from extensions.village.styles import AXE, SWORD
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from std.testing import (
@@ -119,11 +119,12 @@ def test_the_raid_writes_its_bars_party_mark_and_zones() raises:
     var arena = Arena(arena_parameters(0, 0, 6, raid=True, raiders=2))
     var camera = _camera()
     var look = _look()
-    # Out of the fight, nothing of the raid shows but the style.
+    # Out of the fight, nothing of the raid shows: the style is with the
+    # gauges.
     var calm = _frame()
     draw_raid(calm, arena.battle, camera, look, 1)
     var style = _changed(calm)
-    assert_true(style > 0)
+    assert_equal(style, 0)
     ref warden = arena.battle.wardens[0]
     warden.character.position = Vector3(0, 0, -4)
     ref boss = warden.boss
@@ -308,12 +309,6 @@ def test_the_style_routes_beat_and_book_show() raises:
     var axe = _frame()
     draw_raid(axe, battle, camera, look, 1)
     assert_true(_changed(axe) > 0)
-    # Magic shows its mana.
-    battle.reading = False
-    _ = battle.fighter.set_style(MAGIC)
-    var magic = _frame()
-    draw_raid(magic, battle, camera, look, 1)
-    assert_true(_changed(magic) > 0)
 
 
 def test_each_missile_shows_as_a_star() raises:

@@ -79,14 +79,18 @@ The player's skills change three settings of `Gathering`: `ore_strikes`, `forage
 
 | Part | Where | What it says |
 |---|---|---|
-| The satchel | The bottom left | A swatch and a count for each kind the player holds |
+| The satchel | The bottom left, on a glass panel | A round swatch and a count for each kind the player holds |
 | The prompt | The bottom middle | What the use button does at the focus, such as `E  MINE ORE 1/3` |
 | The note | Over the prompt | What the player gathered, such as `+3 BERRIES`, for 2 seconds. It fades over its last half second. |
 | The speech | Over the note | What a villager said, for 5 seconds. The words show as far as the villager's mouth has said them, and keep their width as they show. See [Village errands](Village-errands). |
 | The errands | The top right | Each errand taken and not done |
 | The skills | The top left | Each skill's level and experience. See [Village skills](Village-skills). |
 
-The font has 5 by 7 dots and needs no font file. It draws capitals, small letters, digits, and `+ / : . , ! ? ' -`. A dot is `hud_scale` pixels on a side: one pixel for each 270 pixels of the frame's height. So the text keeps its size on the screen. Each line has a dark shadow, so it reads over the sky and the grass.
+The font is Barlow Semi Condensed SemiBold, under the SIL Open Font License. `extensions/village/hud_font.mojo` holds it as a signed distance field: each glyph is 32 by 32 samples of how far each sample is from the glyph's edge. `assets/fonts/make_hud_font.py` writes that file from the font. The font draws capitals, small letters, digits, and `+ / : . , ! ? ' -`.
+
+A pixel of a letter takes the share of it that the letter covers, so the edges are smooth at every size. The same field gives each line its soft shadow, a dark ring round the letters, a bolder weight or a lean. `draw_styled` draws a line in a `TextStyle`. A capital stands `TEXT_SIZE`, 5.5, times `hud_scale` pixels tall, and `hud_scale` is one pixel for each 270 pixels of the frame's height. So the text keeps its size on the screen.
+
+The panels are frosted glass. `draw_panel` blurs what is behind a panel and darkens it, more toward its foot. Its corners are round, and its top edge catches the light. The prompt stands on a dark pill, with its button on a key's chip, such as `[E] GATHER HERBS`.
 
 `draw_compass`, in `extensions/village/compass.mojo`, writes a compass at the top middle:
 
@@ -94,7 +98,9 @@ The font has 5 by 7 dots and needs no font file. It draws capitals, small letter
 - A gold mark at each villager with an errand to offer, and a silver mark at each villager whose errand is taken.
 - A red mark at the nearest foe that stands, within `FOE_SIGHT`, 60 meters.
 - A mark past the strip's end stands at that end, half as bright, so the player knows which way to turn.
-- Under the strip, the hour as a twelve-hour clock and the weather, such as `2:00 PM  CLEAR`.
+- Under the strip, on a dark pill, the hour as a twelve-hour clock and the weather, such as `2:00 PM  CLEAR`.
+
+The strip fades out toward each end, and a light line runs along its foot. North is gold. A gold wedge under the strip shows the way the camera looks, and each mark is a diamond.
 
 While a warden fights, its bars take the top of the frame. The compass then stands `BOSS_ROOM`, 40 dots of the font, lower, under the bars. It shows no hour and no weather then, so the numbers of the blows over the warden do not cross them.
 
