@@ -288,12 +288,13 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
     var width = 72 * scale
     var x = frame.width - margin - width
     var y = frame.height - margin - 4 * scale
-    # A dark panel behind the gauges, so they read over a bright sky.
+    # A dark panel behind the gauges, so they read over a bright sky. It
+    # holds the style's name over them too: see `draw_raid`.
     fill_box(
         frame,
         x - 36 * scale,
-        y - 56 * scale,
-        frame.width - margin + 3 * scale,
+        y - 64 * scale,
+        frame.width - margin + 4 * scale,
         y + 6 * scale,
         SHADOW,
         PANEL_ALPHA,
