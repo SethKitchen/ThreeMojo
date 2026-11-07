@@ -50,8 +50,9 @@ from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 comptime HEM_GAP = Float32(0.04)
 """How far outside a leg's capsule the cloth is kept, in meters."""
 comptime HEM_PASSES = 3
-"""How many times the moves out of the legs' capsules are made: a move out
-of one capsule can end in the next."""
+"""How many times, at the most, the moves out of the legs' capsules are
+made: a move out of one capsule can end in the next. A pass that moves
+nothing ends them."""
 comptime HEM_TARGET_NAME = "hem-push"
 """The name of the target that holds the push."""
 comptime LEG_COLLIDERS = 4
@@ -129,6 +130,9 @@ struct HemPush(Movable):
             # out of one can end in the other, so the moves are made
             # `HEM_PASSES` times.
             for _ in range(HEM_PASSES):  # pragma: no branch
+                # A pass that moves the vertex out of no capsule ends them:
+                # the next would move it no more.
+                var still = True
                 for c in range(len(self.legs)):  # pragma: no branch
                     var near = nearest_on_segment(
                         moved, ends[2 * c], ends[2 * c + 1]
@@ -142,6 +146,9 @@ struct HemPush(Movable):
                         moved = near + away * (
                             keep / max(reach, Float32(1.0e-6))
                         )
+                        still = False
+                if still:
+                    break
             var shift = moved - at
             if shift.length() == 0:
                 continue
@@ -243,6 +250,9 @@ def _rest(
     var rest = points.vector3(v)
     # A piece with a push has its sway's targets, at the least.
     for k in range(len(weights)):  # pragma: no branch
+        # A target at no weight moves nothing.
+        if weights[k] == 0:
+            continue
         rest = rest + piece.morph_positions[k].vector3(v) * weights[k]
     return rest
 
