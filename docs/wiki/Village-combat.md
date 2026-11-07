@@ -194,6 +194,8 @@ When the player goes into a house and she is outside, she goes to its front door
 
 When the player stands more than `CLIMB_RISE`, 1.5 meters, above her indoors, she climbs the house's stairs to them. She walks the house's way up point by point, from the foot of her own story's flight: `climb_step` gives the point. Once she climbs, she climbs on until she is within `CLIMB_REACH`, half a meter, of their height. She comes down the same way when the player stands that far below her. When the player goes out, she comes down to the foot of the stairs and out by the front door. `ally_goal` gives her goal, and `Climb` holds where she is on the stairs.
 
+Out of a fight, a raider of the party follows the player into a house, and up and down its stairs, the same way.
+
 She never strays more than 10 meters from the player. She casts at the locked target. With no lock, she casts at the nearest foe that fights within 15 meters of the player.
 
 Every 2.6 seconds, she points her sword and casts a bolt of light at a foe within 14 meters. The bolt flies at 16 meters a second, and follows its foe. It does 28 damage and 10 stamina damage. When the player's health falls below 40 percent, she heals 15 percent of it. Then she waits 15 seconds before she heals again.

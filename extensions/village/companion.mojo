@@ -179,6 +179,7 @@ def follow_point(
     player_inside: Bool,
     ally_inside: Bool,
     doors: List[Doorway],
+    keep: Float32 = FOLLOW,
 ) -> Vector3:
     """Return the point the companion follows out of a fight.
 
@@ -193,9 +194,11 @@ def follow_point(
         player_inside: Whether the player is under a roof.
         ally_inside: Whether she is.
         doors: The houses' front doors.
+        keep: How far from what she follows she stops, in meters: `FOLLOW`
+            for the companion.
 
     Returns:
-        The player's place. Or, `FOLLOW` beyond it on her way, a spot
+        The player's place. Or, `keep` beyond it on her way, a spot
         `DOOR_OUTSIDE` before the nearest door; and once she is within
         `DOOR_REACH` of the door, a spot `DOOR_INSIDE` past it.
     """
@@ -208,9 +211,9 @@ def follow_point(
     var spot = middle - into * DOOR_OUTSIDE
     if _flat_gap(at, middle) < DOOR_REACH:
         spot = middle + into * DOOR_INSIDE
-    # She stops `FOLLOW` from what she follows: the point lies that far
-    # past the spot, so she stops at the spot.
-    return spot + _toward(at, spot) * FOLLOW
+    # She stops `keep` from what she follows: the point lies that far past
+    # the spot, so she stops at the spot.
+    return spot + _toward(at, spot) * keep
 
 
 @fieldwise_init
@@ -241,6 +244,7 @@ def ally_goal(
     doors: List[Doorway],
     climbs: List[List[Vector3]],
     climb: Climb,
+    keep: Float32 = FOLLOW,
 ) -> Tuple[Vector3, Climb]:
     """Return the point the companion follows out of a fight, and where she
     is on a house's stairs.
@@ -266,12 +270,14 @@ def ally_goal(
         doors: The houses' front doors.
         climbs: The way up each house's stairs, in the doors' order.
         climb: Where she was on the stairs last frame.
+        keep: How far from what she follows she stops, in meters: `FOLLOW`
+            for the companion, `FOLLOW_GAP` for a raider.
 
     Returns:
-        The point she follows, `FOLLOW` past a spot on her way so that she
+        The point she follows, `keep` past a spot on her way so that she
         stops at the spot; and where she is on the stairs.
     """
-    var goal = follow_point(at, player, player_inside, ally_inside, doors)
+    var goal = follow_point(at, player, player_inside, ally_inside, doors, keep)
     if not ally_inside or len(doors) == 0:
         return (goal, no_climb())
     var leaving = not player_inside
@@ -302,7 +308,7 @@ def ally_goal(
         var step = climb.step if climb.down == down else -1
         var next = climb_step(at, way, step)
         ref to = way[next]
-        return (to + _toward(at, to) * FOLLOW, Climb(next, down))
+        return (to + _toward(at, to) * keep, Climb(next, down))
     if not leaving:
         return (goal, no_climb())
     ref door = doors[house]
@@ -311,7 +317,7 @@ def ally_goal(
     var spot = middle + into * DOOR_INSIDE
     if _flat_gap(at, middle) < DOOR_REACH:
         spot = middle - into * DOOR_OUTSIDE
-    return (spot + _toward(at, spot) * FOLLOW, no_climb())
+    return (spot + _toward(at, spot) * keep, no_climb())
 
 
 def flank_spot(target: Vector3, player: Vector3, at: Vector3) -> Vector3:

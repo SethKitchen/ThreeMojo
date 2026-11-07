@@ -79,6 +79,7 @@ from extensions.village.combat import (
     FighterParameters,
     move_data,
 )
+from extensions.village.companion import Climb
 from extensions.village.party import (
     ARCHER,
     HEALER,
@@ -448,3 +449,6 @@ struct Member(Movable):
     # goes.
     var shove: Vector3
     var dodge_way: Vector3
+    # Where it is on a house's stairs as it follows the player: see
+    # `ally_goal`.
+    var climb: Climb

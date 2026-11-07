@@ -320,6 +320,9 @@ def test_indoors_she_climbs_up_and_down_and_goes_out_by_the_door() raises:
         foot, Vector3(0.5, 0, -6), False, True, doors, climbs, Climb(1, True)
     )
     assert_equal(done[1].step, -1)
+    # A raider that keeps further off aims further past the spot.
+    var far_keep = ally_goal(below, above, True, True, doors, climbs, still, 5)
+    assert_almost_equal(far_keep[0].z, 3 - 5, atol=1e-5)
     # Outdoors, no climb.
     assert_equal(
         ally_goal(below, above, False, False, doors, climbs, going)[1].step, -1

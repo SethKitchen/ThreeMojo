@@ -243,6 +243,7 @@ from extensions.village.boss import (
     rock_blow,
 )
 from extensions.village.party import (
+    FOLLOW_GAP,
     HEALER,
     MEND_BELOW,
     TANK,
@@ -1543,6 +1544,7 @@ struct Battle(Movable):
                     0,
                     Vector3(0, 0, 0),
                     Vector3(0, 0, 1),
+                    no_climb(),
                 )
             )
 
@@ -3663,6 +3665,25 @@ struct Battle(Movable):
             var joined = mine.joined
             if not joined:
                 sight.leader = mine.post
+                mine.climb = no_climb()
+            elif target < 0:
+                # Out of a fight, it follows the player into a house by its
+                # door, and up and down its stairs.
+                ref at = mine.character.position
+                var aim_at = ally_goal(
+                    at,
+                    feet,
+                    terrain.ceiling_over(feet.x, feet.z, feet.y) < OPEN_SKY,
+                    terrain.ceiling_over(at.x, at.z, at.y) < OPEN_SKY,
+                    self.doors,
+                    self.climbs,
+                    mine.climb,
+                    FOLLOW_GAP,
+                )
+                sight.leader = aim_at[0]
+                mine.climb = aim_at[1]
+            else:
+                mine.climb = no_climb()
             if target >= 0 and joined:
                 ref warden = self.wardens[target - self.first_warden()]
                 sight.target = warden.character.position
