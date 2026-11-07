@@ -708,6 +708,52 @@ __async def _glass_task(
                 )
 
 
+def draw_arcs(
+    mut frame: Framebuffer,
+    x: Float32,
+    y: Float32,
+    radius: Float32,
+    thick: Float32,
+    gap: Float32,
+    color: Rgb,
+    alpha: Float32,
+):
+    """Draw a ring of four arcs round a point, with smooth edges, such as
+    the mark of a locked target.
+
+    Args:
+        frame: The frame.
+        x: The ring's middle, in pixels.
+        y: The ring's middle, in pixels.
+        radius: The radius of the ring's middle line, in pixels.
+        thick: How thick the ring is, in pixels.
+        gap: How wide the gap between two arcs is, in pixels along the
+            ring, at the top, the foot and the two sides; 0 for a whole
+            ring.
+        color: The ring's color.
+        alpha: How much it covers the frame, from 0 to 1.
+    """
+    var reach = radius + thick / 2 + 1
+    for py in range(
+        max(0, Int(floor(y - reach))), min(frame.height, Int(ceil(y + reach)))
+    ):
+        var dy = Float32(py) + 0.5 - y
+        for px in range(
+            max(0, Int(floor(x - reach))),
+            min(frame.width, Int(ceil(x + reach))),
+        ):
+            var dx = Float32(px) + 0.5 - x
+            var d = sqrt(dx * dx + dy * dy)
+            var cover = min(Float32(1), thick / 2 + 0.5 - abs(d - radius))
+            # How far the pixel is along the ring from the nearest of the
+            # four points: the smaller of its two offsets.
+            if gap > 0:
+                var along = min(abs(dx), abs(dy))
+                cover = min(cover, along - gap / 2 + 0.5)
+            if cover > 0:
+                _blend(frame, px, py, color, alpha * cover)
+
+
 def draw_pill(
     mut frame: Framebuffer, x0: Int, y0: Int, x1: Int, y1: Int, alpha: Float32
 ):

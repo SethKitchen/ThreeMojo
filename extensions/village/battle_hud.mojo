@@ -36,7 +36,8 @@
    attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under
    its bars.
 5. **A dummy's stamina**, over its head, while its stamina is not full.
-6. **The lock's mark**: four gold dots around the locked target's chest.
+6. **The lock's mark**: a thin gold ring of four arcs, and a dot, around
+   the locked target's chest.
 7. **The numbers and the words** of the blows, which rise and fade,
    ringed dark so they read over the sky. A number stands half again as
    large as a word, a critical one twice as large, and each pops larger
@@ -95,6 +96,7 @@ from extensions.village.slashes import (
 )
 from extensions.village.hud import (
     TextStyle,
+    draw_arcs,
     text_size,
     draw_gauge,
     draw_panel,
@@ -805,45 +807,15 @@ def draw_battle(
         if mark:
             var x = mark.value().x
             var y = mark.value().y
-            # Four outlined points round the chest, each aimed at it.
-            var r = Float32(5 * scale)
-            var long = Float32(4 * scale)
-            var half = Float32(2.5) * Float32(scale)
-            for way in [
-                (Float32(-1), Float32(0)),
-                (Float32(1), Float32(0)),
-                (Float32(0), Float32(-1)),
-                (Float32(0), Float32(1)),
-            ]:  # pragma: no branch
-                var dx = way[0]
-                var dy = way[1]
-                var tip_x = x + dx * r
-                var tip_y = y + dy * r
-                var back_x = x + dx * (r + long)
-                var back_y = y + dy * (r + long)
-                var edge = Float32(scale) * 0.75 + 0.5
-                fill_triangle(
-                    frame,
-                    tip_x - dx * edge * 1.6,
-                    tip_y - dy * edge * 1.6,
-                    back_x + dx * edge - dy * (half + edge),
-                    back_y + dy * edge + dx * (half + edge),
-                    back_x + dx * edge + dy * (half + edge),
-                    back_y + dy * edge - dx * (half + edge),
-                    SHADOW,
-                    0.75,
-                )
-                fill_triangle(
-                    frame,
-                    tip_x,
-                    tip_y,
-                    back_x - dy * half,
-                    back_y + dx * half,
-                    back_x + dy * half,
-                    back_y - dx * half,
-                    GOLD_TEXT,
-                    1,
-                )
+            # A thin gold ring of four arcs round the chest, on a dark
+            # ring, with a dot at its middle.
+            var unit = Float32(scale)
+            var r = 6 * unit
+            var thin = max(Float32(1.5), 0.55 * unit)
+            draw_arcs(frame, x, y, r, thin + 2, 2 * unit, SHADOW, 0.55)
+            draw_arcs(frame, x, y, r, thin, 2 * unit + 1, GOLD_TEXT, 1)
+            draw_arcs(frame, x, y, 0, 1.6 * unit, 0, SHADOW, 0.5)
+            draw_arcs(frame, x, y, 0, 1.1 * unit, 0, GOLD_TEXT, 1)
     draw_raid(frame, battle, camera, look, scale)
     draw_effects(frame, battle, camera, look)
     # The numbers' boxes on the frame, the oldest first.

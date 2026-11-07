@@ -23,6 +23,7 @@ from extensions.village.gathering import (
 )
 from extensions.village.hud import (
     CHIP,
+    draw_arcs,
     TextStyle,
     draw_chip,
     draw_gauge,
@@ -229,6 +230,29 @@ def test_a_gauge_leans_and_shows_what_a_blow_took() raises:
     var low = _frame(200, 20)
     draw_gauge(low, 4, 16, 160, 8, 1, green)
     assert_true(_changed(low) > 0)
+
+
+def test_a_ring_of_arcs_leaves_gaps_at_its_four_points() raises:
+    var whole = _frame(60, 60)
+    draw_arcs(whole, 30, 30, 20, 3, 0, WHITE_TEXT, 1)
+    var arcs = _frame(60, 60)
+    draw_arcs(arcs, 30, 30, 20, 3, 8, WHITE_TEXT, 1)
+    assert_true(_changed(arcs) > 0)
+    assert_true(_changed(arcs) < _changed(whole))
+    # The top point is in a gap; the middle and far corners are untouched.
+    assert_equal(Int(arcs.pixels[4 * (10 * 60 + 29)]), 100)
+    assert_true(Int(whole.pixels[4 * (10 * 60 + 29)]) > 100)
+    assert_equal(Int(whole.pixels[4 * (30 * 60 + 30)]), 100)
+    # A dot of no radius, and a ring past the frame's edge, are clipped.
+    var dot = _frame(60, 60)
+    draw_arcs(dot, 0, 0, 0, 6, 0, WHITE_TEXT, 1)
+    draw_arcs(dot, 60, 60, 10, 2, 4, WHITE_TEXT, 1)
+    assert_true(Int(dot.pixels[0]) > 100)
+    # A ring off the frame, above it or beside it, draws nothing.
+    var none = _frame(60, 60)
+    draw_arcs(none, 30, -100, 10, 2, 4, WHITE_TEXT, 1)
+    draw_arcs(none, -100, 30, 10, 2, 4, WHITE_TEXT, 1)
+    assert_equal(_changed(none), 0)
 
 
 def test_glass_chips_and_pills_round_their_corners() raises:
