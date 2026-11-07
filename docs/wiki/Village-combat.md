@@ -192,7 +192,7 @@ Out of a fight, she follows the player. She walks to them from more than 3 meter
 
 When the player goes into a house and she is outside, she goes to its front door and in through it, then follows them inside. `follow_point` gives the point she walks to, and `Battle.doors` holds the houses' front doors.
 
-When the player stands more than `CLIMB_RISE`, 1.5 meters, above her indoors, she climbs the house's stairs to them. She walks the house's way up point by point, from the foot of her own story's flight: `climb_step` gives the point. Once she climbs, she climbs on until she is within `CLIMB_REACH`, half a meter, of their height.
+When the player stands more than `CLIMB_RISE`, 1.5 meters, above her indoors, she climbs the house's stairs to them. She walks the house's way up point by point, from the foot of her own story's flight: `climb_step` gives the point. Once she climbs, she climbs on until she is within `CLIMB_REACH`, half a meter, of their height. She comes down the same way when the player stands that far below her. When the player goes out, she comes down to the foot of the stairs and out by the front door. `ally_goal` gives her goal, and `Climb` holds where she is on the stairs.
 
 She never strays more than 10 meters from the player. She casts at the locked target. With no lock, she casts at the nearest foe that fights within 15 meters of the player.
 

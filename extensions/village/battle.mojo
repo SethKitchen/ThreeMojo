@@ -275,8 +275,10 @@ from extensions.village.companion import (
     Companion,
     MEND_SHARE,
     assist_blow,
+    Climb,
     ally_goal,
     default_allies,
+    no_climb,
 )
 from extensions.village.interior import Doorway
 from extensions.village.foes import (
@@ -1000,9 +1002,8 @@ struct Ally(Movable):
     var assisting: Bool
     var down: Float32
     """How long she has lain fallen, in seconds, or -1 while she stands."""
-    var step: Int
-    """The point of a house's way up she walks to as she climbs to the
-    player, or -1: see `climb_step`."""
+    var climb: Climb
+    """Where she is on a house's stairs: see `ally_goal`."""
 
 
 @fieldwise_init
@@ -1314,7 +1315,7 @@ struct Battle(Movable):
                     -1,
                     False,
                     -1,
-                    -1,
+                    no_climb(),
                 )
             )
         var paints = animal_paints(assets)
@@ -3033,7 +3034,7 @@ struct Battle(Movable):
             ref at = ally.character.position
             var goal = player.position
             if self.drawn:
-                ally.step = -1
+                ally.climb = no_climb()
             else:
                 ref feet = player.position
                 var aim_at = ally_goal(
@@ -3043,10 +3044,10 @@ struct Battle(Movable):
                     terrain.ceiling_over(at.x, at.z, at.y) < OPEN_SKY,
                     self.doors,
                     self.climbs,
-                    ally.step,
+                    ally.climb,
                 )
                 goal = aim_at[0]
-                ally.step = aim_at[1]
+                ally.climb = aim_at[1]
             var sight = AllySight(
                 ally.character.position,
                 goal,

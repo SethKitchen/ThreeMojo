@@ -23,7 +23,9 @@ from extensions.village.companion import (
     DOOR_OUTSIDE,
     flank_spot,
     follow_point,
+    Climb,
     ally_goal,
+    no_climb,
     climb_step,
     CLIMB_RISE,
 )
@@ -242,33 +244,86 @@ def test_she_climbs_a_houses_stairs_point_by_point() raises:
     assert_equal(climb_step(Vector3(0, 0, 2), way, 7), 0)
 
 
-def test_indoors_she_climbs_to_the_player_on_the_story_above() raises:
+def test_indoors_she_climbs_up_and_down_and_goes_out_by_the_door() raises:
+    # A door into the house along +z; the way up from its foot to the top.
     var doors: List[Doorway] = [Doorway(0, 0, 1, 0, 0, 1, 1, 2.1, 0, True)]
     var way: List[Vector3] = [Vector3(0.5, 0, 3), Vector3(0.5, 3, -1)]
     var climbs: List[List[Vector3]] = [way.copy()]
-    var at = Vector3(0.5, 0, 6)
+    var below = Vector3(0.5, 0, 6)
     var above = Vector3(0.5, 3, 2)
-    var goal = ally_goal(at, above, True, True, doors, climbs, -1)
-    assert_equal(goal[1], 0)
-    assert_almost_equal(goal[0].z, 3 - FOLLOW, atol=1e-5)
-    # Outdoors, on one story, or with no doors or no way up, she does not
-    # climb.
+    var still = no_climb()
+    # Up to the player above her: to the foot of the stairs.
+    var up = ally_goal(below, above, True, True, doors, climbs, still)
+    assert_equal(up[1].step, 0)
+    assert_false(up[1].down)
+    assert_almost_equal(up[0].z, 3 - FOLLOW, atol=1e-5)
+    # Outdoors she does not climb; on one story, nor with no doors or no
+    # way up.
     var none = List[Doorway]()
     var bare = List[List[Vector3]]()
     var flat: List[List[Vector3]] = [List[Vector3]()]
-    assert_equal(ally_goal(at, above, False, True, doors, climbs, -1)[1], -1)
-    assert_equal(ally_goal(at, above, True, False, doors, climbs, -1)[1], -1)
     var level = Vector3(0.5, 0, 2)
-    assert_equal(ally_goal(at, level, True, True, doors, climbs, -1)[1], -1)
-    assert_equal(ally_goal(at, above, True, True, none, climbs, -1)[1], -1)
-    assert_equal(ally_goal(at, above, True, True, doors, bare, -1)[1], -1)
-    assert_equal(ally_goal(at, above, True, True, doors, flat, -1)[1], -1)
-    # A player a meter above her: too little to start a climb, but enough
-    # to go on with one.
+    assert_equal(
+        ally_goal(below, above, True, False, doors, climbs, still)[1].step, -1
+    )
+    assert_equal(
+        ally_goal(below, level, True, True, doors, climbs, still)[1].step, -1
+    )
+    assert_equal(
+        ally_goal(below, above, True, True, none, climbs, still)[1].step, -1
+    )
+    assert_equal(
+        ally_goal(below, above, True, True, doors, bare, still)[1].step, -1
+    )
+    assert_equal(
+        ally_goal(below, above, True, True, doors, flat, still)[1].step, -1
+    )
+    # A meter above her: too little to start a climb, but enough to go on.
     var near = Vector3(0.5, 1, 2)
     assert_true(Float32(1) < CLIMB_RISE)
-    assert_equal(ally_goal(at, near, True, True, doors, climbs, -1)[1], -1)
-    assert_equal(ally_goal(at, near, True, True, doors, climbs, 0)[1], 0)
+    assert_equal(
+        ally_goal(below, near, True, True, doors, climbs, still)[1].step, -1
+    )
+    var going = Climb(0, False)
+    assert_equal(
+        ally_goal(below, near, True, True, doors, climbs, going)[1].step, 0
+    )
+    # Down to a player below her: the way from the top.
+    var top = Vector3(0.5, 3, -1)
+    var down = ally_goal(top, below, True, True, doors, climbs, still)
+    assert_true(down[1].down)
+    assert_equal(down[1].step, 1)
+    # The player gone out: down the stairs, then out by the door.
+    var leave = ally_goal(
+        top, Vector3(0.5, 0, -6), False, True, doors, climbs, still
+    )
+    assert_true(leave[1].down)
+    var hall = Vector3(0.5, 0, 4)
+    var inner = ally_goal(
+        hall, Vector3(0.5, 0, -6), False, True, doors, climbs, still
+    )
+    assert_equal(inner[1].step, -1)
+    assert_almost_equal(inner[0].z, DOOR_INSIDE - FOLLOW, atol=1e-5)
+    var sill = Vector3(0.5, 0, 0.5)
+    var past = ally_goal(
+        sill, Vector3(0.5, 0, -6), False, True, doors, climbs, still
+    )
+    assert_almost_equal(past[0].z, -DOOR_OUTSIDE - FOLLOW, atol=1e-5)
+    # On the way down, she goes on to the foot even below the top's reach.
+    var low = Vector3(0.5, 0.4, 2)
+    var on = ally_goal(
+        low, Vector3(0.5, 0, -6), False, True, doors, climbs, Climb(1, True)
+    )
+    assert_true(on[1].down)
+    var foot = Vector3(0.5, 0, 3)
+    var done = ally_goal(
+        foot, Vector3(0.5, 0, -6), False, True, doors, climbs, Climb(1, True)
+    )
+    assert_equal(done[1].step, -1)
+    # Outdoors, no climb.
+    assert_equal(
+        ally_goal(below, above, False, False, doors, climbs, going)[1].step, -1
+    )
 
 
 def main() raises:
