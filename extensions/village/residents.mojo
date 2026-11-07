@@ -579,7 +579,8 @@ struct Body(Movable):
 
     def push_hems(self, scene: Scene, mut assets: Assets) raises -> Int:
         """Push the person's skirts out of the legs as the bones stand
-        now. A person with no pushes is left as they are.
+        now. A person with no pushes is left as they are. The pushes show
+        while their weights are one: see `show_hems` and `rest_hems`.
 
         Args:
             scene: The scene, updated.
@@ -595,6 +596,34 @@ struct Body(Movable):
         for k in range(len(self.hems)):
             pushed += self.hems[k].push(scene, assets)
         return pushed
+
+    def show_hems(self, mut scene: Scene) raises:
+        """Show the pushes of the person's skirts, at full weight. A
+        weight set marks the scene changed: push first, then show.
+
+        Args:
+            scene: The scene the body is in.
+
+        Raises:
+            Error: If a skirt's mesh is not in the scene.
+        """
+        for k in range(len(self.hems)):
+            ref hem = self.hems[k]
+            scene.skinned_meshes[hem.mesh].set_morph_influence(hem.target, 1)
+
+    def rest_hems(self, mut scene: Scene) raises:
+        """Stop showing the pushes of the person's skirts: a person far
+        from the camera wears their skirts as they are skinned.
+
+        Args:
+            scene: The scene the body is in.
+
+        Raises:
+            Error: If a skirt's mesh is not in the scene.
+        """
+        for k in range(len(self.hems)):
+            ref hem = self.hems[k]
+            scene.skinned_meshes[hem.mesh].set_morph_influence(hem.target, 0)
 
     def head(self, scene: Scene) raises -> Vector3:
         """Return about where the person's eyes are, in the world.

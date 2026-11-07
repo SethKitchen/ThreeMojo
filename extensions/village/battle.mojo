@@ -420,6 +420,9 @@ comptime POPUP_SECONDS = Float32(0.9)
 comptime WORD_REPEAT = Float32(0.4)
 """How long, in seconds, a blow's word that shows keeps the same word from
 showing again."""
+comptime HEM_NEAR = Float32(6)
+"""How near the camera, in meters, a fighter must be to keep their skirt
+out of their legs."""
 comptime POPUP_RISE = Float32(0.9)
 """How fast a number or a word rises, in meters a second."""
 comptime ENGAGE = Float32(10)
@@ -1645,6 +1648,62 @@ struct Battle(Movable):
             if self.standing(index):
                 out.append(self.target_at(index))
         return out^
+
+    def keep_hems(mut self, mut scene: Scene, mut assets: Assets) raises:
+        """Give each fighter's skirts the pushes that keep them out of the
+        legs: see `extensions.village.hem_push`. They show only near the
+        camera: see `push_hems`.
+
+        Args:
+            scene: The scene the fighters are in.
+            assets: The stores of the skirts' geometries.
+
+        Raises:
+            Error: If a skirt's mesh is not in the scene.
+        """
+        for k in range(len(self.people)):
+            self.people[k].body.keep_hems(scene, assets)
+
+    def push_hems(
+        self, mut scene: Scene, mut assets: Assets, eye: Vector3
+    ) raises -> Int:
+        """Keep the skirts of the fighters within `HEM_NEAR` of the eye, and
+        shown, out of their legs. The others wear their skirts as they are
+        skinned. Few fighters wear skirts, and fewer stand that near.
+
+        Args:
+            scene: The scene, updated.
+            assets: The stores of the skirts' geometries.
+            eye: Where the camera is.
+
+        Returns:
+            How many vertices were pushed.
+
+        Raises:
+            Error: If the scene is stale.
+        """
+        # Each push reads the bones' world matrices, and a weight set marks
+        # the scene changed: every fighter is weighed before any weight is
+        # set.
+        var near = List[Bool](capacity=len(self.people))
+        for k in range(len(self.people)):
+            ref body = self.people[k].body
+            var place = scene.world_matrix(body.carrier).transform_point(
+                Vector3(0, 0, 0)
+            )
+            var close = (place - eye).length() <= HEM_NEAR
+            near.append(close and scene.get(body.carrier).visible)
+        var pushed = 0
+        for k in range(len(self.people)):
+            if near[k]:
+                pushed += self.people[k].body.push_hems(scene, assets)
+        for k in range(len(self.people)):
+            ref body = self.people[k].body
+            if near[k]:
+                body.show_hems(scene)
+            else:
+                body.rest_hems(scene)
+        return pushed
 
     def obstacles(self) -> List[Obstacle]:
         """Return the circle each standing bandit, each dummy and the

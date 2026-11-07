@@ -403,7 +403,7 @@ A skirt is skinned half to each thigh at the middle of its front. As one knee ri
 3. A vertex within `HEM_GAP`, 4 cm, of a capsule round a thigh or a shin moves out along the capsule's normal to that distance. The capsules are `body_colliders`'s. The thigh's and the shin's capsules meet at the knee, so the moves are made `HEM_PASSES`, three, times.
 4. The move is turned back through the vertex's blend of its bones and the bind matrix, and written into the target. So the renderer carries the vertex to its new place.
 
-The push costs about 0.9 ms a frame for one person, so only the player has it. The people further from the camera keep their skirts as they are skinned.
+The push costs about 0.9 ms a frame for one person. The player has it, and so does each fighter within `HEM_NEAR`, 6 meters, of the camera: `Battle.push_hems` pushes them. A fighter further off, or hidden, wears the skirt as it is skinned: `Body.rest_hems` sets the target's weight to zero. Each push reads the bones before any weight is set.
 
 ## The lighter village
 

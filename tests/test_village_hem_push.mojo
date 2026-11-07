@@ -14,6 +14,7 @@ from extensions.humanoid.rig.joints import RIGHT_THIGH
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.village.clothes import MADDER, WALNUT, WELD, village_outfit
+from extensions.village.battle import HEM_NEAR
 from extensions.village.hem_push import (
     HEM_GAP,
     HEM_TARGET_NAME,
@@ -28,6 +29,7 @@ from std.testing import (
     assert_false,
     assert_true,
 )
+from tests._village_arena import Arena, arena_parameters
 from units.si import DEGREE, INCH, Angle, Length
 
 
@@ -140,6 +142,44 @@ def test_a_piece_with_no_skirt_or_no_relative_targets_takes_no_push() raises:
             )
         )
         assert_false(add_hem_push(scene, assets, at, body.person, top))
+
+
+def test_a_fighter_near_the_camera_keeps_their_skirt_out_of_their_legs() raises:
+    var arena = Arena(arena_parameters(1, 0, 5, ally=True))
+    arena.battle.keep_hems(arena.scene, arena.assets)
+    # The companion wears a skirt; the bandit does not.
+    var skirted = -1
+    for k in range(len(arena.battle.people)):
+        if len(arena.battle.people[k].body.hems) > 0:
+            skirted = k
+    assert_true(skirted >= 0)
+    ref body = arena.battle.people[skirted].body
+    ref hem = body.hems[0]
+    arena.scene.update()
+    var at = arena.scene.world_matrix(body.carrier).transform_point(
+        Vector3(0, 0, 0)
+    )
+    var shown = arena.battle.push_hems(
+        arena.scene, arena.assets, at + Vector3(0, 1, HEM_NEAR / 2)
+    )
+    assert_true(shown >= 0)
+    assert_equal(
+        arena.scene.skinned_meshes[hem.mesh].morph_influence(hem.target), 1
+    )
+    # Far from the camera, or hidden, the skirt is as it is skinned.
+    arena.scene.update()
+    _ = arena.battle.push_hems(
+        arena.scene, arena.assets, at + Vector3(0, 0, 3 * HEM_NEAR)
+    )
+    assert_equal(
+        arena.scene.skinned_meshes[hem.mesh].morph_influence(hem.target), 0
+    )
+    arena.scene.node(body.carrier).visible = False
+    arena.scene.update()
+    _ = arena.battle.push_hems(arena.scene, arena.assets, at)
+    assert_equal(
+        arena.scene.skinned_meshes[hem.mesh].morph_influence(hem.target), 0
+    )
 
 
 def main() raises:

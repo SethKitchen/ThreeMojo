@@ -894,6 +894,9 @@ struct VillageGame(Movable):
             parameters.residents.triangles,
             parameters.residents.detail,
         )
+        # The fighters near the camera keep their skirts out of their
+        # legs too.
+        self.battle.keep_hems(scene, assets)
         self.village.meadow.grass_wind_every = self.quality.grass_wind_every
         # A still shadow map is drawn once, and the grass changes as the
         # player walks, so only full shadows take the grass.
@@ -1343,8 +1346,10 @@ struct VillageGame(Movable):
             var near = house.radius + INSIDE_REACH
             scene.node(house.inside).visible = dx * dx + dz * dz < near * near
         scene.update()
-        # The player's skirt rides over their legs as the bones now stand.
+        # The player's skirt rides over their legs as the bones now stand,
+        # and so do the skirts of the fighters nearest the camera.
         _ = self.body.push_hems(scene, assets)
+        _ = self.battle.push_hems(scene, assets, self.camera.position)
         self.clock += delta.to(SECOND)
         self.ripple_pond(scene, delta)
         self.hear(delta)
