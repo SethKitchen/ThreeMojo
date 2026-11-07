@@ -64,6 +64,17 @@ comptime DOOR_INSIDE = Float32(1.8)
 comptime DOOR_REACH = Float32(2.2)
 """How near a door's middle, in meters, she must be to go in through it:
 more than `DOOR_OUTSIDE`, so she goes in once she is before it."""
+comptime DOOR_LANE = Float32(0.06)
+"""How far from a door's axis, in meters, she may stand and still walk
+straight through it. The jambs' round ends and her body leave a door
+1 meter wide 8 centimeters each side of its axis. Farther off it, she
+walks to the axis first."""
+comptime DOOR_CLEAR = Float32(1.2)
+"""How near a door's middle, in meters, she does not stop indoors: she
+walks on in, so that those behind her come in too."""
+comptime POND_MARGIN = Float32(1)
+"""How far outside a pond's edge, in meters, a follower's way goes round
+it."""
 comptime CLIMB_REACH = Float32(0.5)
 """How near a point of the way up the stairs, in meters, on the ground and
 in height, the companion must be to walk on to the next one."""
@@ -108,6 +119,28 @@ def _flat_gap(a: Vector3, b: Vector3) -> Float32:
     var dx = b.x - a.x
     var dz = b.z - a.z
     return sqrt(dx * dx + dz * dz)
+
+
+def _through(at: Vector3, door: Doorway, depth: Float32) -> Vector3:
+    """Return the spot she walks to through a door: `depth` past its
+    middle, positive inward.
+
+    Off the door's axis by more than `DOOR_LANE`, she walks to the axis at
+    45 degrees to it, a point of the axis as far ahead of her as she is
+    beside it. A straight way to the spot from there would end square in
+    the wall beside the door. At 45 degrees, a wall in her way turns her
+    along it to the door."""
+    var middle = door.middle()
+    var into = Vector3(door.swing_x, 0, door.swing_z)
+    var dx = at.x - middle.x
+    var dz = at.z - middle.z
+    var side = abs(dz * into.x - dx * into.z)
+    if side <= DOOR_LANE:
+        return middle + into * depth
+    # Her depth, and the spot's, the way she goes.
+    var sense = Float32(1) if depth > 0 else Float32(-1)
+    var deep = (dx * into.x + dz * into.z) * sense
+    return middle + into * (min(abs(depth), deep + side) * sense)
 
 
 def _toward(a: Vector3, b: Vector3) -> Vector3:
@@ -200,7 +233,9 @@ def follow_point(
     Returns:
         The player's place. Or, `keep` beyond it on her way, a spot
         `DOOR_OUTSIDE` before the nearest door; and once she is within
-        `DOOR_REACH` of the door, a spot `DOOR_INSIDE` past it.
+        `DOOR_REACH` of the door, a spot `DOOR_INSIDE` past it. Off the
+        door's axis by more than `DOOR_LANE`, the spot is on the axis,
+        at 45 degrees from her, so that she comes onto it first.
     """
     if not player_inside or ally_inside or len(doors) == 0:
         return player
@@ -210,7 +245,7 @@ def follow_point(
     var into = Vector3(door.swing_x, 0, door.swing_z)
     var spot = middle - into * DOOR_OUTSIDE
     if _flat_gap(at, middle) < DOOR_REACH:
-        spot = middle + into * DOOR_INSIDE
+        spot = _through(at, door, DOOR_INSIDE)
     # She stops `keep` from what she follows: the point lies that far past
     # the spot, so she stops at the spot.
     return spot + _toward(at, spot) * keep
@@ -251,6 +286,8 @@ def ally_goal(
 
     - Outdoors, she follows the player, and goes in by the door nearest
       them as `follow_point` says.
+    - Indoors, she does not stop within `DOOR_CLEAR` of the door: she
+      walks on to `DOOR_INSIDE` past it, out of the way of those behind.
     - Indoors, when the player stands more than `CLIMB_RISE` above her,
       she climbs the stairs to them, by `climb_step`; and down them when
       they stand that far below her. Once she climbs, she climbs on until
@@ -309,15 +346,63 @@ def ally_goal(
         var next = climb_step(at, way, step)
         ref to = way[next]
         return (to + _toward(at, to) * keep, Climb(next, down))
-    if not leaving:
-        return (goal, no_climb())
     ref door = doors[house]
     var middle = door.middle()
     var into = Vector3(door.swing_x, 0, door.swing_z)
+    if not leaving:
+        if _flat_gap(at, middle) < DOOR_CLEAR:
+            var clear = middle + into * DOOR_INSIDE
+            return (clear + _toward(at, clear) * keep, no_climb())
+        return (goal, no_climb())
     var spot = middle + into * DOOR_INSIDE
     if _flat_gap(at, middle) < DOOR_REACH:
-        spot = middle - into * DOOR_OUTSIDE
+        spot = _through(at, door, -DOOR_OUTSIDE)
     return (spot + _toward(at, spot) * keep, no_climb())
+
+
+def around_pond(
+    at: Vector3,
+    goal: Vector3,
+    middle: Vector3,
+    radius: Float32,
+    keep: Float32 = FOLLOW,
+) -> Vector3:
+    """Return the point a follower walks to so that its way goes round a
+    pond: its water is too deep to wade at the middle.
+
+    Where the straight way from `at` to `goal` passes within
+    `POND_MARGIN` of the pond's edge, the follower walks first to a point
+    that far outside the edge, on the side of the pond nearest the way,
+    `keep` past it so that it stops there. Its way then clears the pond.
+
+    Args:
+        at: Where the follower stands.
+        goal: The point it follows.
+        middle: The pond's middle; its height is not read.
+        radius: The pond's radius, in meters; zero or less for no pond.
+        keep: How far from what it follows the follower stops.
+
+    Returns:
+        `goal` where the way clears the pond; else the point round it.
+    """
+    if radius <= 0:
+        return goal
+    var way = Vector3(goal.x - at.x, 0, goal.z - at.z)
+    var long = way.length()
+    var reach = radius + POND_MARGIN
+    var to = Vector3(middle.x - at.x, 0, middle.z - at.z)
+    var t = (to.x * way.x + to.z * way.z) / max(long * long, Float32(1.0e-6))
+    # The way's point nearest the middle, and how near it comes.
+    var nearest = Vector3(at.x + way.x * t, 0, at.z + way.z * t)
+    var off = Vector3(nearest.x - middle.x, 0, nearest.z - middle.z)
+    var gap = off.length()
+    if t <= 0 or t >= 1 or gap >= reach:
+        return goal
+    # Round the side the way passes, or its left where it crosses the
+    # middle.
+    var side = off / gap if gap > 1.0e-4 else Vector3(-way.z, 0, way.x) / long
+    var round = Vector3(middle.x, at.y, middle.z) + side * (reach + POND_MARGIN)
+    return round + _toward(at, round) * keep
 
 
 def flank_spot(target: Vector3, player: Vector3, at: Vector3) -> Vector3:

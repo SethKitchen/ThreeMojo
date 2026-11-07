@@ -123,6 +123,10 @@ def test_a_raid_raises_its_warden_stones_and_raiders() raises:
     assert_almost_equal(battle.target_at(1).z, 10, atol=1e-4)
     assert_equal(len(battle.obstacles()), 6)
     assert_equal(len(battle.movers()), 6)
+    # The doors open for the raiders that stand.
+    assert_equal(len(battle.friends()), 4)
+    battle.members[0].down = 0
+    assert_equal(len(battle.friends()), 3)
 
 
 def test_a_raid_on_a_lot_or_in_the_water_is_left_out() raises:

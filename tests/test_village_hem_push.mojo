@@ -147,6 +147,8 @@ def test_a_piece_with_no_skirt_or_no_relative_targets_takes_no_push() raises:
 def test_a_fighter_near_the_camera_keeps_their_skirt_out_of_their_legs() raises:
     var arena = Arena(arena_parameters(1, 0, 5, ally=True))
     arena.battle.keep_hems(arena.scene, arena.assets)
+    # The doors open for the companion.
+    assert_equal(len(arena.battle.friends()), 1)
     # The companion wears a skirt; the bandit does not.
     var skirted = -1
     for k in range(len(arena.battle.people)):

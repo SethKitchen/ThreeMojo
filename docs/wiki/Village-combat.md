@@ -192,9 +192,13 @@ Out of a fight, she follows the player. She walks to them from more than 3 meter
 
 When the player goes into a house and she is outside, she goes to its front door and in through it, then follows them inside. `follow_point` gives the point she walks to, and `Battle.doors` holds the houses' front doors.
 
+The door's jambs leave her 8 centimeters each side of its axis. When she stands farther off the axis, she walks onto it at 45 degrees first. `DOOR_LANE` is that width. A wall in her way then turns her along it to the door. Indoors, she does not stop within `DOOR_CLEAR`, 1.2 meters, of the door. She walks on in, so that the raiders behind her can come in too.
+
 When the player stands more than `CLIMB_RISE`, 1.5 meters, above her indoors, she climbs the house's stairs to them. She walks the house's way up point by point, from the foot of her own story's flight: `climb_step` gives the point. Once she climbs, she climbs on until she is within `CLIMB_REACH`, half a meter, of their height. She comes down the same way when the player stands that far below her. When the player goes out, she comes down to the foot of the stairs and out by the front door. `ally_goal` gives her goal, and `Climb` holds where she is on the stairs.
 
 Out of a fight, a raider of the party follows the player into a house, and up and down its stairs, the same way.
+
+The pond is too deep to wade at its middle. When her straight way to her goal passes within `POND_MARGIN`, 1 meter, of the pond's edge, she walks round it. She goes first to a point that far outside the margin, on the side of the pond nearest her way. `around_pond` gives that point, and a raider walks round the pond the same way.
 
 She never strays more than 10 meters from the player. She casts at the locked target. With no lock, she casts at the nearest foe that fights within 15 meters of the player.
 

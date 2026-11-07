@@ -278,6 +278,7 @@ from extensions.village.companion import (
     assist_blow,
     Climb,
     ally_goal,
+    around_pond,
     default_allies,
     no_climb,
 )
@@ -1677,6 +1678,21 @@ struct Battle(Movable):
                 out.append(self.target_at(index))
         return out^
 
+    def friends(self) -> List[Vector3]:
+        """Return where the player's side stands: the companion and each
+        raider that has not fallen. The village's doors open for them.
+
+        Returns:
+            The feet of the companion, then of each standing raider.
+        """
+        var out = List[Vector3]()
+        for index in range(len(self.allies)):
+            out.append(self.allies[index].character.position)
+        for index in range(len(self.members)):
+            if self.members[index].down < 0:
+                out.append(self.members[index].character.position)
+        return out^
+
     def set_doors(
         mut self,
         var doors: List[Doorway],
@@ -3048,8 +3064,14 @@ struct Battle(Movable):
                     self.climbs,
                     ally.climb,
                 )
-                goal = aim_at[0]
                 ally.climb = aim_at[1]
+                ref pond = terrain.ground.pond
+                goal = around_pond(
+                    at,
+                    aim_at[0],
+                    Vector3(pond.x.to(METER), 0, pond.z.to(METER)),
+                    pond.radius.to(METER),
+                )
             var sight = AllySight(
                 ally.character.position,
                 goal,
@@ -3680,8 +3702,15 @@ struct Battle(Movable):
                     mine.climb,
                     FOLLOW_GAP,
                 )
-                sight.leader = aim_at[0]
                 mine.climb = aim_at[1]
+                ref pond = terrain.ground.pond
+                sight.leader = around_pond(
+                    at,
+                    aim_at[0],
+                    Vector3(pond.x.to(METER), 0, pond.z.to(METER)),
+                    pond.radius.to(METER),
+                    FOLLOW_GAP,
+                )
             else:
                 mine.climb = no_climb()
             if target >= 0 and joined:

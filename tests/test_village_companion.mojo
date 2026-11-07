@@ -28,6 +28,8 @@ from extensions.village.companion import (
     no_climb,
     climb_step,
     CLIMB_RISE,
+    POND_MARGIN,
+    around_pond,
 )
 from extensions.village.interior import Doorway
 from math.vector3 import Vector3
@@ -216,6 +218,24 @@ def test_she_goes_into_a_house_by_its_door() raises:
     var at = Vector3(0.5, 0, -1)
     var inside = follow_point(at, player, True, False, doors)
     assert_almost_equal(inside.z, DOOR_INSIDE + FOLLOW, atol=1e-5)
+    # Beside the door's axis, she comes onto it at 45 degrees first: a
+    # point of the axis as far ahead of her as she is off it.
+    var beside = follow_point(Vector3(1, 0, -1), player, True, False, doors, 0)
+    assert_almost_equal(beside.x, 0.5, atol=1e-5)
+    assert_almost_equal(beside.z, -0.5, atol=1e-5)
+    # So far beside it, the axis point is no deeper than the spot.
+    var close = follow_point(
+        Vector3(2.5, 0, -0.1), player, True, False, doors, 0
+    )
+    assert_almost_equal(close.z, DOOR_INSIDE, atol=1e-5)
+    # Indoors, she does not stop in the doorway: she walks on in.
+    var within = Vector3(0.5, 0, 0.5)
+    var on = ally_goal(within, player, True, True, doors, [], no_climb(), 0)
+    assert_almost_equal(on[0].z, DOOR_INSIDE, atol=1e-5)
+    var clear = ally_goal(
+        Vector3(0.5, 0, 2), player, True, True, doors, [], no_climb(), 0
+    )
+    assert_almost_equal((clear[0] - player).length(), 0, atol=1e-5)
     # The door nearest the player is the one she goes to.
     var other = follow_point(far, Vector3(50.5, 0, 5), True, False, doors)
     assert_true(other.x > 40)
@@ -309,6 +329,19 @@ def test_indoors_she_climbs_up_and_down_and_goes_out_by_the_door() raises:
         sill, Vector3(0.5, 0, -6), False, True, doors, climbs, still
     )
     assert_almost_equal(past[0].z, -DOOR_OUTSIDE - FOLLOW, atol=1e-5)
+    # Beside the axis on the way out, she comes onto it first too.
+    var aside = ally_goal(
+        Vector3(1, 0, 1),
+        Vector3(0.5, 0, -6),
+        False,
+        True,
+        doors,
+        climbs,
+        still,
+        0,
+    )
+    assert_almost_equal(aside[0].x, 0.5, atol=1e-5)
+    assert_almost_equal(aside[0].z, 0.5, atol=1e-5)
     # On the way down, she goes on to the foot even below the top's reach.
     var low = Vector3(0.5, 0.4, 2)
     var on = ally_goal(
@@ -327,6 +360,30 @@ def test_indoors_she_climbs_up_and_down_and_goes_out_by_the_door() raises:
     assert_equal(
         ally_goal(below, above, False, False, doors, climbs, going)[1].step, -1
     )
+
+
+def test_a_follower_walks_round_a_pond() raises:
+    var middle = Vector3(0, 0, 0)
+    var goal = Vector3(0, 0, 20)
+    var at = Vector3(0.5, 0, -20)
+    # No pond, a pond behind it or past the goal, or a way that clears the
+    # pond: it walks to the goal.
+    assert_true(around_pond(at, goal, middle, 0) == goal)
+    assert_true(around_pond(at, goal, Vector3(0, 0, -30), 5) == goal)
+    assert_true(around_pond(at, goal, Vector3(0, 0, 30), 5) == goal)
+    assert_true(around_pond(at, goal, Vector3(20, 0, 0), 5) == goal)
+    # A way through the pond goes round the side it passes, `keep` past
+    # the point `POND_MARGIN` outside the margin.
+    var round = around_pond(at, goal, middle, 5, 0)
+    assert_almost_equal(round.x, 5 + 2 * POND_MARGIN, atol=0.1)
+    assert_almost_equal(round.z, 0, atol=0.3)
+    var past = around_pond(at, goal, middle, 5, 2)
+    assert_almost_equal((past - round).length(), 2, atol=1.0e-4)
+    assert_true((past - at).length() > (round - at).length())
+    # A way over the middle goes round on its left.
+    var left = around_pond(Vector3(0, 0, -20), goal, middle, 5, 0)
+    assert_almost_equal(left.x, -(5 + 2 * POND_MARGIN), atol=1.0e-4)
+    assert_almost_equal(left.z, 0, atol=1.0e-4)
 
 
 def main() raises:

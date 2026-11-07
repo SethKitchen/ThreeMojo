@@ -147,7 +147,7 @@ A wall closes the space under the first flight's top. Under a higher flight's to
 
 `stand_house` draws each flight's oak treads and risers, a stringer, a handrail on balusters, a newel post and a balustrade. A plaster soffit closes the underside of each flight, so the flight below sees a smooth slope. It cuts the well out of each ceiling that a flight rises through, and out of each floor that a flight arrives in. Oak trimmers go around each cut.
 
-`Doors` opens each door while someone stands within 1.8 meters of its middle, on its floor. The leaf turns at 2.5 radians a second, to a little over a right angle. It closes when nobody is near. A leaf is not solid: the gap in the wall is where a character walks through.
+`Doors` opens each door while someone stands within 1.8 meters of its middle, on its floor. Someone is the player, a villager, an animal, the companion or a raider of the party. The leaf turns at 2.5 radians a second, to a little over a right angle. It closes when nobody is near. A leaf is not solid: the gap in the wall is where a character walks through.
 
 ## The barn
 

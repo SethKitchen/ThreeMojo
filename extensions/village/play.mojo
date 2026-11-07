@@ -1204,6 +1204,8 @@ struct VillageGame(Movable):
             people.append(self.residents.people[index].position)
         for index in range(len(self.residents.beasts)):
             people.append(self.residents.beasts[index].character.position)
+        # The companion and the raiders open the doors too.
+        people.extend(self.battle.friends())
         # A door the camera looks through stays open too: points along the
         # last frame's sight hold it, at the height of the player's feet.
         var sight = self.camera.position
