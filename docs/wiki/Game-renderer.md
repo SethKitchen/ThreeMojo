@@ -23,7 +23,7 @@ mojo run -I . examples/village_walk.mojo --play 1920 1080 low
 
 | Setting | `LOW` | `MEDIUM` | `HIGH` | `ULTRA` |
 |---|---|---|---|---|
-| `render_scale` | 45 percent | A half | Two thirds | One |
+| `render_scale` | 48 percent | A half | Two thirds | One |
 | `plants` | `FEWEST_PLANTS` | `FEWER_PLANTS` | `MANY_PLANTS` | `ALL_PLANTS` |
 | `grass_wind_every` | 4 frames | 2 frames | 1 frame | 1 frame |
 | `sky_step` | 3 pixels | 2 pixels | 2 pixels | 1 pixel |
@@ -71,7 +71,7 @@ Each sample is bilinear between pixel centers. The brightness is the luma of the
 
 ## Stretch and sharpen
 
-A frame drawn at 45 percent of the window must be stretched more than twice. A bilinear stretch mixes only the two nearest pixels on each axis. It smears each edge over a whole small pixel, so a moving fighter looks soft. Two passes keep the edges hard:
+A frame drawn at 48 percent of the window must be stretched more than twice. A bilinear stretch mixes only the two nearest pixels on each axis. It smears each edge over a whole small pixel, so a moving fighter looks soft. Two passes keep the edges hard:
 
 1. `upscale_into` in `render/game_upscale.mojo` mixes the four nearest pixels on each axis by the Catmull-Rom cubic. The two far pixels get a small negative weight, so an edge keeps its contrast. A result is clamped to the bytes' range. The pass stretches the rows across first, then blends four stretched rows for each row of the window.
 2. `sharpen` in `render/game_sharpen.mojo` is contrast-adaptive sharpening, as in AMD's CAS and the last pass of FSR. Each channel of a pixel and its four neighbors gives a least and a greatest value. The room to sharpen is the distance from them to black or to white, as a share of the greatest. A pixel takes its neighbors away by a weight from that room and `sharpness`, and the result is divided by the weights' sum. A flat area does not change, and the result stays within the neighbors' range.
@@ -90,7 +90,7 @@ The bench walks a scripted player through the village. It prints the median, the
 
 | Preset | Frame size | Median frame | 95th percentile | Median frames a second |
 |---|---|---|---|---|
-| `LOW` | 864 by 486 | 43.2 ms | 57.2 ms | 23 |
+| `LOW` | 960 by 540 | 47.7 ms | 61.3 ms | 21 |
 | `MEDIUM` | 960 by 540 | 72.6 ms | 89.7 ms | 14 |
 
 `GameRenderer.timings` holds the time of each stage of the last frame, in milliseconds. The stages are the shadow maps, the gathering, the vertices, the setup, the bins, the raster, the sky and the resolve. The bench prints the median of each of these stages under `draw_stages`. It also prints the triangles, the vertices and the draws of the median frame.

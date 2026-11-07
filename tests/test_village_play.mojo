@@ -302,10 +302,10 @@ def test_a_player_walks_jumps_and_is_followed() raises:
     assert_almost_equal(
         game.camera.fov.to(DEGREE), game.wide.to(DEGREE), atol=0.05
     )
-    # The frame is drawn at 45 percent of the window and stretched to it.
+    # The frame is drawn at 48 percent of the window and stretched to it.
     game.render(scene, assets)
-    assert_equal(game.fast.width, 22)
-    assert_equal(game.fast.height, 12)
+    assert_equal(game.fast.width, 23)
+    assert_equal(game.fast.height, 13)
     assert_equal(game.window.width, 48)
     assert_equal(game.window.height, 27)
     assert_true(game.upscale_ms > 0)

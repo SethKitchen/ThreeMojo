@@ -255,7 +255,7 @@ def test_the_environment_names_the_quality() raises:
 def test_the_game_turns_the_weather_and_the_day_as_the_x11_game_does() raises:
     var parameters = play_parameters(LOW)
     assert_true(parameters.weather_cycle)
-    assert_equal(parameters.quality.frame_size(1920, 1080)[0], 864)
+    assert_equal(parameters.quality.frame_size(1920, 1080)[0], 922)
     assert_almost_equal(parameters.day.hour, Float32(START_HOUR), atol=1e-6)
     assert_almost_equal(parameters.day.hours_a_second, DAY_RATE, atol=1e-9)
     # A day takes twenty minutes.
@@ -529,12 +529,12 @@ def test_a_game_for_a_gpu_draws_at_the_windows_size() raises:
     # frame does, so that they keep their spacing in the picture.
     var low = game_quality(LOW)
     var cpu = play_parameters(LOW)
-    assert_almost_equal(cpu.quality.render_scale, Float32(0.45), atol=1e-6)
+    assert_almost_equal(cpu.quality.render_scale, Float32(0.48), atol=1e-6)
     assert_equal(cpu.quality.sky_step, low.sky_step)
     var gpu = play_parameters(LOW, True)
     assert_equal(gpu.quality.render_scale, Float32(1))
     # Each step is divided by the share, and rounded.
-    assert_equal(gpu.quality.sky_step, Int(Float32(low.sky_step) / 0.45 + 0.5))
+    assert_equal(gpu.quality.sky_step, Int(Float32(low.sky_step) / 0.48 + 0.5))
     assert_equal(gpu.quality.water_step, 13)
     assert_equal(gpu.quality.frame_size(1920, 1080)[0], 1920)
     var medium = play_parameters(MEDIUM, True)
