@@ -116,13 +116,14 @@ struct HemPush(Movable):
         var bones = _bones(scene, self.mesh)
         var ends = self._ends(scene)
         ref points = piece.attribute_view(String(POSITION))
+        ref indices = piece.attribute_view(String(SKIN_INDEX))
+        ref shares = piece.attribute_view(String(SKIN_WEIGHT))
+        var weights = _weights(skinned, self.target)
         var moves = List[Float32](length=3 * points.count(), fill=0)
         var pushed = 0
         for v in self.skirt:  # pragma: no branch
-            var carry = _carry(piece, bones, v) * skinned.bind_matrix
-            var at = carry.transform_point(
-                _rest(piece, skinned, v, self.target)
-            )
+            var carry = _carry(indices, shares, bones, v)
+            var at = carry.transform_point(_rest(piece, points, weights, v))
             var moved = at
             # The thigh's and the shin's capsules meet at the knee: a move
             # out of one can end in the other, so the moves are made
@@ -173,12 +174,14 @@ struct HemPush(Movable):
         ref piece = assets.geometries.get(skinned.geometry)
         var bones = _bones(scene, self.mesh)
         var ends = self._ends(scene)
+        ref points = piece.attribute_view(String(POSITION))
+        ref indices = piece.attribute_view(String(SKIN_INDEX))
+        ref shares = piece.attribute_view(String(SKIN_WEIGHT))
+        var weights = _weights(skinned, piece.morph_count())
         var least = Float32(1.0e30)
         for v in self.skirt:  # pragma: no branch
-            var carry = _carry(piece, bones, v) * skinned.bind_matrix
-            var at = carry.transform_point(
-                _rest(piece, skinned, v, piece.morph_count())
-            )
+            var carry = _carry(indices, shares, bones, v)
+            var at = carry.transform_point(_rest(piece, points, weights, v))
             for c in range(len(self.legs)):  # pragma: no branch
                 var near = nearest_on_segment(at, ends[2 * c], ends[2 * c + 1])
                 least = min(least, (at - near).length() - self.legs[c].radius)
@@ -195,21 +198,29 @@ struct HemPush(Movable):
 
 
 def _bones(scene: Scene, mesh: Int) raises -> List[Matrix4]:
-    """Return each bone's matrix: where it carries a vertex bound in the
-    world."""
-    ref skeleton = scene.skinned_meshes[mesh].skeleton
+    """Return each bone's matrix, with the mesh's bind matrix: where it
+    carries a vertex of the mesh in the world. A vertex's blend of these is
+    its blend of the bones, then the bind matrix, as the renderer's skin
+    takes it."""
+    ref skinned = scene.skinned_meshes[mesh]
+    ref skeleton = skinned.skeleton
     var bones = List[Matrix4](capacity=skeleton.bone_count())
     for bone in skeleton.bones:  # pragma: no branch
-        bones.append(scene.world_matrix(bone.node) * bone.inverse_bind)
+        bones.append(
+            scene.world_matrix(bone.node)
+            * bone.inverse_bind
+            * skinned.bind_matrix
+        )
     return bones^
 
 
 def _carry(
-    piece: BufferGeometry, bones: List[Matrix4], v: Int
+    indices: BufferAttribute,
+    shares: BufferAttribute,
+    bones: List[Matrix4],
+    v: Int,
 ) raises -> Matrix4:
     """Return a vertex's blend of its four bones, by their weights."""
-    ref indices = piece.attribute_view(String(SKIN_INDEX))
-    ref shares = piece.attribute_view(String(SKIN_WEIGHT))
     var blend = Matrix4()
     for e in range(16):  # pragma: no branch
         blend.elements[e] = 0
@@ -222,17 +233,26 @@ def _carry(
 
 
 def _rest(
-    piece: BufferGeometry, skinned: SkinnedMesh, v: Int, targets: Int
+    piece: BufferGeometry,
+    points: BufferAttribute,
+    weights: List[Float32],
+    v: Int,
 ) raises -> Vector3:
-    """Return where a vertex rests, moved by the first `targets` targets
-    at their weights."""
-    var rest = piece.attribute_view(String(POSITION)).vector3(v)
+    """Return where a vertex rests, moved by the first targets, as many as
+    there are weights, at those weights."""
+    var rest = points.vector3(v)
     # A piece with a push has its sway's targets, at the least.
-    for k in range(targets):  # pragma: no branch
-        rest = rest + piece.morph_positions[k].vector3(v) * (
-            skinned.morph_influence(k)
-        )
+    for k in range(len(weights)):  # pragma: no branch
+        rest = rest + piece.morph_positions[k].vector3(v) * weights[k]
     return rest
+
+
+def _weights(skinned: SkinnedMesh, targets: Int) raises -> List[Float32]:
+    """Return the weights of a mesh's first targets."""
+    var weights = List[Float32](capacity=targets)
+    for k in range(targets):  # pragma: no branch
+        weights.append(skinned.morph_influence(k))
+    return weights^
 
 
 def _linear_inverse(m: Matrix4) -> Matrix4:
