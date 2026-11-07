@@ -3,7 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Worked processes, one module each: titanium, diamond and lime.
+"""Worked processes, one module each: titanium, diamond, lime, hpht and
+mpcvd.
 
 Each function returns a `Step` with its requirements. Add a process as a
 new module here, built from the public layers of `extensions.chemistry`.

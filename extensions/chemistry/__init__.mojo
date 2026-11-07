@@ -16,6 +16,7 @@ The package is in layers. Each layer uses only the ones before it:
 - `requirement`, `window` and `step`: the `Constraint` trait, the built-in
   requirements, operating windows and process steps.
 - `coating` and `balance`: coating mechanics and energy balances.
+- `production`: the cost of a batch of grown crystals, per kept carat.
 - `processes`: worked processes built from the layers above.
 
 See the wiki page Process chemistry.
