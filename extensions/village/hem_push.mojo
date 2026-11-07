@@ -132,13 +132,13 @@ struct HemPush(Movable):
                     var near = nearest_on_segment(
                         moved, ends[2 * c], ends[2 * c + 1]
                     )
-                    var out = moved - near
-                    var reach = out.length()
+                    var away = moved - near
+                    var reach = away.length()
                     var keep = self.legs[c].radius + HEM_GAP
                     # A vertex on the capsule's axis stays where it is: it
                     # has no way out.
                     if reach < keep:
-                        moved = near + out * (
+                        moved = near + away * (
                             keep / max(reach, Float32(1.0e-6))
                         )
             var shift = moved - at
