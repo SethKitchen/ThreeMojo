@@ -233,6 +233,9 @@ def _carry(
         blend.elements[e] = 0
     for slot in range(4):  # pragma: no branch
         var share = shares.component(v, slot)
+        # A bone of no weight carries the vertex nowhere.
+        if share == 0:
+            continue
         ref bone = bones[Int(indices.component(v, slot))]
         for e in range(16):  # pragma: no branch
             blend.elements[e] += bone.elements[e] * share
