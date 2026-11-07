@@ -26,6 +26,7 @@ from extensions.water.field import ComplexField, complex_mul, fft2
 from render.fillrule import pixel_index, shifted_pixel_index
 from extensions.water.filter import anisotropic_step, lod_blend
 from extensions.water.frame import (
+    _grid_of,
     CameraLook,
     WaterScene,
     _blur,
@@ -2313,6 +2314,26 @@ def test_the_optics_keep_nan_instead_of_saturating_to_one() raises:
     assert_true(isnan(aces_channel(value)))
     assert_true(isnan(smoothstep(0, 1, value)))
     assert_equal(smoothstep(0, 1, 0.5), Float32(0.5))
+
+
+def test_the_grid_marks_the_corners_of_each_cell_with_water() raises:
+    # A frame 10 by 7, a grid every 4 pixels, one water pixel at (5, 2).
+    var shown = List[Bool](length=70, fill=False)
+    shown[2 * 10 + 5] = True
+    var marks = _grid_of(shown, 10, 7, 4, (2, 3))
+    var lit = 0
+    for k in range(70):
+        if marks[k]:
+            lit += 1
+    # Its cell's corners: columns 4 and 8, rows 0 and 4. The other cells of
+    # its row hold no water and mark nothing.
+    assert_equal(lit, 4)
+    assert_true(marks[0 * 10 + 4] and marks[0 * 10 + 8])
+    assert_true(marks[4 * 10 + 4] and marks[4 * 10 + 8])
+    # A cell at the frame's edge takes the last column and row.
+    shown[6 * 10 + 9] = True
+    var edge = _grid_of(shown, 10, 7, 4, (2, 7))
+    assert_true(edge[4 * 10 + 9] and edge[6 * 10 + 9] and edge[6 * 10 + 8])
 
 
 def main() raises:

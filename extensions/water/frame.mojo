@@ -539,16 +539,30 @@ def _grid_of(
     """Return the grid samples that the shown pixels are mixed from. Only
     the water rows `rows` hold shown pixels."""
     var marks = List[Bool](length=width * height, fill=False)
+    var out = marks.unsafe_ptr()
+    var seen = shown.unsafe_ptr()
+    # Every pixel of a cell of the grid has the same four corners: a cell
+    # with a shown pixel marks them once.
     # The caller passes at least one water row.
     for y in range(rows[0], rows[1]):  # pragma: no branch
-        for x in range(width):  # pragma: no branch
-            if not shown[y * width + x]:
+        var top = (y // step) * step * width
+        var low = min((y // step) * step + step, height - 1) * width
+        var row = y * width
+        for x0 in range(0, width, step):  # pragma: no branch
+            var end = min(x0 + step, width)
+            var any = False
+            for x in range(x0, end):  # pragma: no branch
+                if seen[unsafe_offset=row + x]:
+                    any = True
+                    break
+            if not any:
                 continue
-            var c = _grid_corners(x, y, width, height, step)
-            marks[c[2] * width + c[0]] = True
-            marks[c[2] * width + c[1]] = True
-            marks[c[3] * width + c[0]] = True
-            marks[c[3] * width + c[1]] = True
+            var x1 = min(x0 + step, width - 1)
+            out[unsafe_offset=top + x0] = True
+            out[unsafe_offset=top + x1] = True
+            out[unsafe_offset=low + x0] = True
+            out[unsafe_offset=low + x1] = True
+    _ = len(shown)
     return marks^
 
 
