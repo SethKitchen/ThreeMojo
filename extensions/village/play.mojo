@@ -872,6 +872,9 @@ struct VillageGame(Movable):
             speaks=parameters.residents.faces,
             seed=1,
         )
+        # The camera is close to the player: their skirt keeps out of
+        # their legs.
+        self.body.keep_hems(scene, assets)
         self.player = Character(
             player_movement(),
             parameters.start_x,
@@ -1340,6 +1343,8 @@ struct VillageGame(Movable):
             var near = house.radius + INSIDE_REACH
             scene.node(house.inside).visible = dx * dx + dz * dz < near * near
         scene.update()
+        # The player's skirt rides over their legs as the bones now stand.
+        _ = self.body.push_hems(scene, assets)
         self.clock += delta.to(SECOND)
         self.ripple_pond(scene, delta)
         self.hear(delta)

@@ -394,6 +394,17 @@ A skirt's hem swings as the person moves. It trails a run, kicks forward as the 
 
 The renderer moves the vertices by the targets before the bones, so the swing turns with the hips. The offset stays within `SWAY_REACH`.
 
+### The skirt over a raised knee
+
+A skirt is skinned half to each thigh at the middle of its front. As one knee rises high, the cloth there follows it half way, and the knee shows through. The player's skirt is kept out of the legs each frame. The module is `extensions/village/hem_push.mojo`.
+
+1. `Body.keep_hems` gives each piece of the player's skirt one more morph target, at full weight. `add_hem_push` adds it.
+2. Each frame, after the bones move, `Body.push_hems` skins each vertex of the skirt as the renderer does. The other targets move its rest place, and its four bones carry it.
+3. A vertex within `HEM_GAP`, 4 cm, of a capsule round a thigh or a shin moves out along the capsule's normal to that distance. The capsules are `body_colliders`'s. The thigh's and the shin's capsules meet at the knee, so the moves are made `HEM_PASSES`, three, times.
+4. The move is turned back through the vertex's blend of its bones and the bind matrix, and written into the target. So the renderer carries the vertex to its new place.
+
+The push costs about 0.9 ms a frame for one person, so only the player has it. The people further from the camera keep their skirts as they are skinned.
+
 ## The lighter village
 
 `planted` changes the default village to the quality's plant detail. This table compares the default village with `FEWEST_PLANTS`, the `low` detail:

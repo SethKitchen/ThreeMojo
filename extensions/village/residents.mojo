@@ -70,6 +70,7 @@ from renderers.renderer import available_workers
 from extensions.vegetation.checks import require_between, require_count_between
 from extensions.vegetation.ground import Ground, Lot
 from extensions.vegetation.noise import hash01
+from extensions.village.hem_push import HemPush, add_hem_push
 from extensions.village.sway import (
     SWAY_REACH,
     Sway,
@@ -297,6 +298,9 @@ struct Body(Movable):
     # The skinned meshes of the skirts whose hems swing, how far they
     # swing, and the swing: see `extensions.village.sway`.
     var skirts: List[Int]
+    # The pushes that keep the skirts out of the legs, if `keep_hems` gave
+    # them: see `extensions.village.hem_push`.
+    var hems: List[HemPush]
     var sway_reach: Float32
     var sway: Sway
     # Each skinned mesh of the skin and the clothes, its own material,
@@ -393,6 +397,7 @@ struct Body(Movable):
         # each garment.
         var worn = self.person.skins.copy()
         self.skirts = List[Int]()
+        self.hems = List[HemPush]()
         self.sway = Sway()
         self.sway_reach = SWAY_REACH * self.person.rig.stature / Float32(1.8288)
         if len(outfit.garments) > 0:
@@ -552,6 +557,44 @@ struct Body(Movable):
         for mesh in self.skirts:  # pragma: no branch
             for w in range(5):  # pragma: no branch
                 scene.skinned_meshes[mesh].set_morph_influence(w, weights[w])
+
+    def keep_hems(mut self, mut scene: Scene, mut assets: Assets) raises:
+        """Give the person's skirts the pushes that keep them out of the
+        legs: see `extensions.village.hem_push`. A person close to the
+        camera wants them, as the player does.
+
+        Args:
+            scene: The scene the body is in.
+            assets: The stores of the skirts' geometries.
+
+        Raises:
+            Error: If a skirt's mesh is not in the scene.
+        """
+        var top = skirt_top(self.person.rig)
+        # Each skirt took the sway's targets, so it has relative targets
+        # and a vertex below the top: each takes a push.
+        for mesh in self.skirts:
+            var push = add_hem_push(scene, assets, mesh, self.person, top)
+            self.hems.append(push.take())
+
+    def push_hems(self, scene: Scene, mut assets: Assets) raises -> Int:
+        """Push the person's skirts out of the legs as the bones stand
+        now. A person with no pushes is left as they are.
+
+        Args:
+            scene: The scene, updated.
+            assets: The stores of the skirts' geometries.
+
+        Returns:
+            How many vertices were pushed.
+
+        Raises:
+            Error: If the scene is stale.
+        """
+        var pushed = 0
+        for k in range(len(self.hems)):
+            pushed += self.hems[k].push(scene, assets)
+        return pushed
 
     def head(self, scene: Scene) raises -> Vector3:
         """Return about where the person's eyes are, in the world.
