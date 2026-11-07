@@ -353,6 +353,10 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     )
     b.popups.append(Popup(Vector3(0, 2, 9), "99", WHITE_TEXT, 0.1))
     b.popups.append(Popup(Vector3(1, 2, -3), "PARRY", WHITE_TEXT, 0.1))
+    # A critical blow's gold number, with its halo.
+    b.popups.append(Popup(Vector3(-1, 2, -3), "88", GOLD_TEXT, 0.1))
+    # A gold word has no halo: only a number glows.
+    b.popups.append(Popup(Vector3(-1, 1, -3), "CRITICAL", GOLD_TEXT, 0.1))
     # And a blow's flash.
     b.impacts.append(Impact(Vector3(0, 1.2, -3), Vector3(255, 235, 190), 1, 0))
     # And a swing's trail.

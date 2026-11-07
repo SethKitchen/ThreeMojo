@@ -175,6 +175,9 @@ comptime POP_SECONDS = Float32(0.12)
 comptime POP_EASE = Float32(0.25)
 """How long a number takes to ease back to its size as it appears, in
 seconds."""
+comptime CRIT_GLOW = Float32(0.35)
+"""How strong the gold halo round a critical blow's number is, from 0 to
+1."""
 comptime POP_GROW = Float32(0.4)
 """How much larger a number stands as it appears: 0.4 is 40 percent."""
 comptime POPUP_FADE = Float32(0.3)
@@ -888,13 +891,18 @@ def draw_battle(
             style.shadow *= grow
             style.weight *= grow
         var middle = Float32(lefts[k]) + Float32(widths[k]) / 2
-        draw_styled(
-            frame,
-            middle - styled_width(popup.text, style.size) / 2,
-            Float32(tops[k] + drop) + style.outline + 1,
-            popup.text,
-            style,
-        )
+        var x = middle - styled_width(popup.text, style.size) / 2
+        var y = Float32(tops[k] + drop) + style.outline + 1
+        # A critical blow's gold number glows: a faint gold halo, much
+        # bolder than the number, under it.
+        if is_gold(popup.color) and base != scale:
+            var halo = style
+            halo.alpha *= CRIT_GLOW
+            halo.weight += style.size * 0.22
+            halo.outline = 0
+            halo.shadow = 0
+            draw_styled(frame, x, y, popup.text, halo)
+        draw_styled(frame, x, y, popup.text, style)
 
 
 def fill_triangle(
@@ -988,6 +996,20 @@ def _crosses(a: Int, a_size: Int, b: Int, b_size: Int) -> Bool:
     return a < b + b_size and b < a + a_size
 
 
+def is_gold(color: Rgb) -> Bool:
+    """Return whether a color is the gold of a critical blow's number.
+
+    Args:
+        color: The color.
+
+    Returns:
+        Whether it is `GOLD_TEXT`.
+    """
+    # One number of the three bytes: gold or not.
+    var packed = (color.r * 256 + color.g) * 256 + color.b
+    return packed == (GOLD_TEXT.r * 256 + GOLD_TEXT.g) * 256 + GOLD_TEXT.b
+
+
 def popup_scale(text: String, color: Rgb, age: Float32, scale: Int) -> Int:
     """Return the pixels a dot of a number or a word over a fighter takes.
 
@@ -1010,9 +1032,7 @@ def popup_scale(text: String, color: Rgb, age: Float32, scale: Int) -> Int:
     if not number:
         return scale
     var size = scale + (scale + 1) // 2
-    # One number of the three bytes: gold or not.
-    var packed = (color.r * 256 + color.g) * 256 + color.b
-    if packed == (GOLD_TEXT.r * 256 + GOLD_TEXT.g) * 256 + GOLD_TEXT.b:
+    if is_gold(color):
         size = 2 * scale
     if age < POP_SECONDS:
         size += max(1, scale // 2)
