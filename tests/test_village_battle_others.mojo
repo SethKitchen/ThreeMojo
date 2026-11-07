@@ -79,7 +79,7 @@ def test_wolves_close_in_bite_and_lie_down_when_felled() raises:
     assert_true(arena.battle.foes[0].down < 0)
 
 
-def test_a_fallen_foe_goes_in_a_puff_of_dust() raises:
+def test_a_fallen_foe_goes_and_comes_back_in_a_puff_of_dust() raises:
     var arena = Arena(arena_parameters(2, 0, 6))
     ref battle = arena.battle
     var linger = battle.parameters.linger.to(SECOND)
@@ -96,6 +96,11 @@ def test_a_fallen_foe_goes_in_a_puff_of_dust() raises:
     for puff in puffs:
         assert_true((puff.at - lay).length() < 1)
     battle.foes[0].down = linger + 1.5
+    assert_equal(len(battle.vanish_puffs(1)), 0)
+    # A foe that came back to its post a moment ago comes in a cloud too.
+    battle.foes[1].back = 0.3
+    assert_equal(len(battle.vanish_puffs(1)), 5)
+    battle.foes[1].back = 1.2
     assert_equal(len(battle.vanish_puffs(1)), 0)
 
 

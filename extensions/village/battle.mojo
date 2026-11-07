@@ -421,6 +421,9 @@ comptime POPUP_SECONDS = Float32(0.9)
 comptime WORD_REPEAT = Float32(0.4)
 """How long, in seconds, a blow's word that shows keeps the same word from
 showing again."""
+comptime BACK_LONG_AGO = Float32(1.0e6)
+"""How long ago, in seconds, a foe that has stood at its post since the
+fight began came back to it."""
 comptime VANISH_DUST = Float32(3)
 """How large the dust of a fallen foe that goes is, as times a foot's."""
 comptime HEM_NEAR = Float32(6)
@@ -918,6 +921,9 @@ struct Foe(Movable):
     var look: Int
     # The way its sidestep goes, of length one.
     var dodge_way: Vector3
+    # How long ago it came back to its post, in seconds: large for one
+    # that has stood there since the fight began.
+    var back: Float32
 
 
 @fieldwise_init
@@ -1260,6 +1266,7 @@ struct Battle(Movable):
                     False,
                     len(self.people) - 1,
                     Vector3(0, 0, 1),
+                    BACK_LONG_AGO,
                 )
             )
         self.allies = List[Ally]()
@@ -1351,6 +1358,7 @@ struct Battle(Movable):
                         True,
                         len(self.pelts) - 1,
                         Vector3(0, 0, 1),
+                        BACK_LONG_AGO,
                     )
                 )
         self.dummies = List[Practice]()
@@ -1654,14 +1662,15 @@ struct Battle(Movable):
 
     def vanish_puffs(self, seconds: Float32) -> List[Puff]:
         """Return the dust where each fallen foe has gone in the last
-        second: a body that has lain its `linger` goes in a puff of dust,
-        not all at once.
+        second, and where each foe has come back to its post: a body goes
+        and comes in a cloud of dust, not all at once.
 
         Args:
             seconds: The time, in seconds, which stirs the dust.
 
         Returns:
-            The puffs: five for each foe gone in the last second.
+            The puffs: five for each foe gone, and five for each foe come
+            back, in the last second.
         """
         var puffs = List[Puff]()
         var linger = self.parameters.linger.to(SECOND)
@@ -1672,6 +1681,16 @@ struct Battle(Movable):
                     foe.character.position,
                     seconds,
                     foe.down - linger,
+                    index,
+                    VANISH_DUST,
+                )
+            )
+            # A foe that comes back to its post comes in a cloud too.
+            puffs.extend(
+                dust_puffs(
+                    foe.character.position,
+                    seconds,
+                    foe.back,
                     index,
                     VANISH_DUST,
                 )
@@ -3317,6 +3336,7 @@ struct Battle(Movable):
             var node = self.node_of(index)
             ref foe = self.foes[index]
             foe.shove = foe.shove * fade
+            foe.back += seconds
             if not foe.fighter.defeated():
                 var state = foe.brain.state
                 var near = _flat(foe.character.position, player.position)
@@ -3338,6 +3358,7 @@ struct Battle(Movable):
                 foe.fighter.revive()
                 foe.brain = Brain(foe.brain.seed)
                 foe.down = -1
+                foe.back = 0
                 scene.node(node).visible = True
         if (
             self.lock >= 0
