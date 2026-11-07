@@ -180,7 +180,7 @@ def _level(glyph: Int, x: Int, y: Int) -> Float32:
     if x < 0 or y < 0 or x >= FONT_CELL or y >= FONT_CELL:
         return 0
     var at = (glyph * FONT_CELL + y) * FONT_CELL + x
-    var level = Int(FONT_FIELD.unsafe_ptr()[at]) - FONT_FIRST
+    var level = Int(FONT_FIELD.unsafe_ptr()[unsafe_offset=at]) - FONT_FIRST
     return Float32(level) * _PER_LEVEL
 
 
@@ -205,10 +205,10 @@ def _field(glyph: Int, u: Float32, v: Float32) -> Float32:
     # Inside the cell: the four samples, read straight.
     var field = FONT_FIELD.unsafe_ptr()
     var at = (glyph * FONT_CELL + y) * FONT_CELL + x
-    var a = Float32(Int(field[at]) - FONT_FIRST)
-    var b = Float32(Int(field[at + 1]) - FONT_FIRST)
-    var c = Float32(Int(field[at + FONT_CELL]) - FONT_FIRST)
-    var d = Float32(Int(field[at + FONT_CELL + 1]) - FONT_FIRST)
+    var a = Float32(Int(field[unsafe_offset=at]) - FONT_FIRST)
+    var b = Float32(Int(field[unsafe_offset=at + 1]) - FONT_FIRST)
+    var c = Float32(Int(field[unsafe_offset=at + FONT_CELL]) - FONT_FIRST)
+    var d = Float32(Int(field[unsafe_offset=at + FONT_CELL + 1]) - FONT_FIRST)
     var top = a + (b - a) * tx
     var low = c + (d - c) * tx
     return (top + (low - top) * ty) * _PER_LEVEL
@@ -371,11 +371,18 @@ def draw_styled(
 def _blend(mut frame: Framebuffer, x: Int, y: Int, color: Rgb, alpha: Float32):
     """Blend a color over one pixel of the frame. The caller keeps the
     pixel on the frame."""
-    var p = frame.pixels.unsafe_ptr() + (y * frame.width + x) * 4
+    var p = frame.pixels.unsafe_ptr()
+    var at = (y * frame.width + x) * 4
     var keep = 1 - alpha
-    p[0] = UInt8(Int(Float32(p[0]) * keep + Float32(color.r) * alpha))
-    p[1] = UInt8(Int(Float32(p[1]) * keep + Float32(color.g) * alpha))
-    p[2] = UInt8(Int(Float32(p[2]) * keep + Float32(color.b) * alpha))
+    p[unsafe_offset=at] = UInt8(
+        Int(Float32(p[unsafe_offset=at]) * keep + Float32(color.r) * alpha)
+    )
+    p[unsafe_offset=at + 1] = UInt8(
+        Int(Float32(p[unsafe_offset=at + 1]) * keep + Float32(color.g) * alpha)
+    )
+    p[unsafe_offset=at + 2] = UInt8(
+        Int(Float32(p[unsafe_offset=at + 2]) * keep + Float32(color.b) * alpha)
+    )
 
 
 def _mix(a: Rgb, b: Rgb, t: Float32) -> Rgb:
@@ -626,22 +633,22 @@ def _shrink(
     var pixels = frame.pixels.unsafe_ptr()
     var g = grid.unsafe_ptr()
     for y in range(h):  # pragma: no branch
-        var row = pixels + ((y0 + y) * frame.width + x0) * 4
-        var gy = g + (y // cell) * gw * 3
+        var row = ((y0 + y) * frame.width + x0) * 4
+        var gy = (y // cell) * gw * 3
         for x in range(w):  # pragma: no branch
             var at = gy + (x // cell) * 3
             var from_ = row + 4 * x
-            at[0] += Int32(from_[0])
-            at[1] += Int32(from_[1])
-            at[2] += Int32(from_[2])
+            for c in range(3):
+                g[unsafe_offset=at + c] += Int32(
+                    pixels[unsafe_offset=from_ + c]
+                )
     for cy in range(gh):  # pragma: no branch
         var tall = min(cell, h - cy * cell)
         for cx in range(gw):  # pragma: no branch
             var n = Int32(tall * min(cell, w - cx * cell))
-            var at = g + (cy * gw + cx) * 3
-            at[0] //= n
-            at[1] //= n
-            at[2] //= n
+            var at = (cy * gw + cx) * 3
+            for c in range(3):
+                g[unsafe_offset=at + c] //= n
     return grid^
 
 
@@ -664,11 +671,11 @@ __async def _glass_task(
     var h = Float32(glass.y1 - glass.y0)
     var r = glass.radius
     for y in range(first, past):  # pragma: no branch
-        var row = pixels + (y * width + glass.left) * 4
+        var row = (y * width + glass.left) * 4
         var fy = (Float32(y - glass.top) + 0.5) * per - 0.5
         var cy = min(gh - 1, max(0, Int(floor(fy))))
-        var upper = grid + cy * gw * 3
-        var lower = grid + min(gh - 1, cy + 1) * gw * 3
+        var upper = cy * gw * 3
+        var lower = min(gh - 1, cy + 1) * gw * 3
         var ty = min(Float32(1), max(Float32(0), fy - Float32(cy)))
         var t = (Float32(y - glass.y0) + 0.5) / h
         var dark = PANEL_ALPHA * (0.7 + 0.6 * t)
@@ -691,10 +698,12 @@ __async def _glass_task(
             var tx = min(Float32(1), max(Float32(0), fx - Float32(cx)))
             var keep = 1 - dark
             for k in range(3):
-                var ua = Float32(upper[a + k])
-                var la = Float32(lower[a + k])
-                var top = ua + (Float32(upper[b + k]) - ua) * tx
-                var low = la + (Float32(lower[b + k]) - la) * tx
+                var ua = Float32(grid[unsafe_offset=upper + a + k])
+                var la = Float32(grid[unsafe_offset=lower + a + k])
+                var ub = Float32(grid[unsafe_offset=upper + b + k])
+                var lb = Float32(grid[unsafe_offset=lower + b + k])
+                var top = ua + (ub - ua) * tx
+                var low = la + (lb - la) * tx
                 var blurred = top + (low - top) * ty
                 var shade = Float32(
                     SHADOW.r if k == 0 else (SHADOW.g if k == 1 else SHADOW.b)
@@ -702,8 +711,8 @@ __async def _glass_task(
                 var tinted = blurred * keep + shade * dark
                 if lit:
                     tinted += (255 - tinted) * 0.14
-                var under = Float32(row[4 * x + k])
-                row[4 * x + k] = UInt8(
+                var under = Float32(pixels[unsafe_offset=row + 4 * x + k])
+                pixels[unsafe_offset=row + 4 * x + k] = UInt8(
                     Int(under + (tinted - under) * cover + 0.5)
                 )
 
