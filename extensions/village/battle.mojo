@@ -275,8 +275,8 @@ from extensions.village.companion import (
     Companion,
     MEND_SHARE,
     assist_blow,
+    ally_goal,
     default_allies,
-    follow_point,
 )
 from extensions.village.interior import Doorway
 from extensions.village.foes import (
@@ -1000,6 +1000,9 @@ struct Ally(Movable):
     var assisting: Bool
     var down: Float32
     """How long she has lain fallen, in seconds, or -1 while she stands."""
+    var step: Int
+    """The point of a house's way up she walks to as she climbs to the
+    player, or -1: see `climb_step`."""
 
 
 @fieldwise_init
@@ -1079,6 +1082,8 @@ struct Battle(Movable):
     # player is indoors: see `follow_point`. Empty, she follows the
     # player straight.
     var doors: List[Doorway]
+    # The way up each house's stairs, in the doors' order.
+    var climbs: List[List[Vector3]]
     var bolts: List[Bolt]
     var called: Bool
     # The throwers' knives that fly.
@@ -1277,6 +1282,7 @@ struct Battle(Movable):
             )
         self.allies = List[Ally]()
         self.doors = List[Doorway]()
+        self.climbs = List[List[Vector3]]()
         for ally in parameters.allies:
             var person = Body(
                 scene,
@@ -1307,6 +1313,7 @@ struct Battle(Movable):
                     len(self.people) - 1,
                     -1,
                     False,
+                    -1,
                     -1,
                 )
             )
@@ -1667,13 +1674,20 @@ struct Battle(Movable):
                 out.append(self.target_at(index))
         return out^
 
-    def set_doors(mut self, var doors: List[Doorway]):
-        """Give the companion the houses' front doors to go in by.
+    def set_doors(
+        mut self,
+        var doors: List[Doorway],
+        var climbs: List[List[Vector3]] = List[List[Vector3]](),
+    ):
+        """Give the companion the houses' front doors to go in by, and the
+        ways up their stairs.
 
         Args:
             doors: The houses' front doors.
+            climbs: The way up each house's stairs, in the doors' order.
         """
         self.doors = doors^
+        self.climbs = climbs^
 
     def vanish_puffs(self, seconds: Float32) -> List[Puff]:
         """Return the dust where each fallen foe has gone in the last
@@ -3018,15 +3032,21 @@ struct Battle(Movable):
             # Out of a fight, she goes round a house's walls by its door.
             ref at = ally.character.position
             var goal = player.position
-            if not self.drawn:
+            if self.drawn:
+                ally.step = -1
+            else:
                 ref feet = player.position
-                goal = follow_point(
+                var aim_at = ally_goal(
                     at,
                     feet,
                     terrain.ceiling_over(feet.x, feet.z, feet.y) < OPEN_SKY,
                     terrain.ceiling_over(at.x, at.z, at.y) < OPEN_SKY,
                     self.doors,
+                    self.climbs,
+                    ally.step,
                 )
+                goal = aim_at[0]
+                ally.step = aim_at[1]
             var sight = AllySight(
                 ally.character.position,
                 goal,

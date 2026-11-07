@@ -64,6 +64,12 @@ comptime DOOR_INSIDE = Float32(1.8)
 comptime DOOR_REACH = Float32(2.2)
 """How near a door's middle, in meters, she must be to go in through it:
 more than `DOOR_OUTSIDE`, so she goes in once she is before it."""
+comptime CLIMB_REACH = Float32(0.5)
+"""How near a point of the way up the stairs, in meters, on the ground and
+in height, the companion must be to walk on to the next one."""
+comptime CLIMB_RISE = Float32(1.5)
+"""How far above her, in meters, the player must stand indoors for the
+companion to climb the house's stairs to them."""
 comptime FOLLOW = Float32(3)
 """How far from the player the companion keeps out of a fight, in meters."""
 comptime KEEP = Float32(6)
@@ -113,6 +119,60 @@ def _toward(a: Vector3, b: Vector3) -> Vector3:
     return Vector3((b.x - a.x) / gap, 0, (b.z - a.z) / gap)
 
 
+def nearest_door(doors: List[Doorway], player: Vector3) -> Int:
+    """Return the door nearest the player on the ground.
+
+    Args:
+        doors: The houses' front doors, one or more.
+        player: Where the player stands.
+
+    Returns:
+        The nearest door's index; the first of equally near ones.
+    """
+    var best = 0
+    var nearest = Float32(1.0e30)
+    for k in range(len(doors)):  # pragma: no branch
+        var gap = _flat_gap(doors[k].middle(), player)
+        if gap < nearest:
+            nearest = gap
+            best = k
+    return best
+
+
+def climb_step(at: Vector3, way: List[Vector3], step: Int) -> Int:
+    """Return the point of a house's way up that the companion walks to
+    next, as she climbs to the player.
+
+    She starts at the first point on her own story: the foot of its
+    flight. She goes on to the next point once she stands within
+    `CLIMB_REACH` of the one she walks to, on the ground and in height.
+
+    Args:
+        at: Where she stands.
+        way: The way up the house's stairs, one point or more, as
+            `HouseInterior.climb` gives it.
+        step: The point she walked to last frame, or -1 when she was not
+            climbing.
+
+    Returns:
+        The point's index in `way`: the last one, at the top, once she is
+        there.
+    """
+    var last = len(way) - 1
+    var next = step
+    if step < 0 or step > last:
+        next = last
+        for k in range(len(way)):  # pragma: no branch
+            if abs(way[k].y - at.y) < CLIMB_REACH:
+                next = k
+                break
+    ref to = way[next]
+    var there = _flat_gap(at, to) < CLIMB_REACH
+    if there and abs(to.y - at.y) < CLIMB_REACH:
+        next = min(next + 1, last)
+    return next
+
+
 def follow_point(
     at: Vector3,
     player: Vector3,
@@ -125,7 +185,7 @@ def follow_point(
     She follows the player. When they are under a roof and she is not,
     she goes to the front door nearest them, and then in through it: a
     house's walls stand between her and them. Once she is inside, she
-    follows them again.
+    follows them again: see `climb_step` for the stairs.
 
     Args:
         at: Where she stands.
@@ -141,13 +201,7 @@ def follow_point(
     """
     if not player_inside or ally_inside or len(doors) == 0:
         return player
-    var best = 0
-    var nearest = Float32(1.0e30)
-    for k in range(len(doors)):  # pragma: no branch
-        var gap = _flat_gap(doors[k].middle(), player)
-        if gap < nearest:
-            nearest = gap
-            best = k
+    var best = nearest_door(doors, player)
     ref door = doors[best]
     var middle = door.middle()
     var into = Vector3(door.swing_x, 0, door.swing_z)
@@ -157,6 +211,53 @@ def follow_point(
     # She stops `FOLLOW` from what she follows: the point lies that far
     # past the spot, so she stops at the spot.
     return spot + _toward(at, spot) * FOLLOW
+
+
+def ally_goal(
+    at: Vector3,
+    player: Vector3,
+    player_inside: Bool,
+    ally_inside: Bool,
+    doors: List[Doorway],
+    climbs: List[List[Vector3]],
+    step: Int,
+) -> Tuple[Vector3, Int]:
+    """Return the point the companion follows out of a fight, and the
+    point of a house's way up she walks to.
+
+    Outdoors, as `follow_point` says. When she and the player are both
+    under a roof, and the player stands more than `CLIMB_RISE` above her,
+    she climbs the stairs of the house whose door is nearest them, by
+    `climb_step`. Once she climbs, she climbs on while they stand more
+    than `CLIMB_REACH` above her.
+
+    Args:
+        at: Where she stands.
+        player: Where the player stands.
+        player_inside: Whether the player is under a roof.
+        ally_inside: Whether she is.
+        doors: The houses' front doors.
+        climbs: The way up each house's stairs, in the doors' order.
+        step: The point of the way up she walked to last frame, or -1.
+
+    Returns:
+        The point she follows, `FOLLOW` past a spot on her way so that she
+        stops at the spot; and the point of the way up she walks to, or
+        -1 when she does not climb.
+    """
+    var goal = follow_point(at, player, player_inside, ally_inside, doors)
+    # Once she climbs, she climbs on to the player's story.
+    var rise = CLIMB_REACH if step >= 0 else CLIMB_RISE
+    var high = player.y - at.y > rise
+    if not (player_inside and ally_inside and high) or len(doors) == 0:
+        return (goal, -1)
+    var house = nearest_door(doors, player)
+    if house >= len(climbs) or len(climbs[house]) == 0:
+        return (goal, -1)
+    ref way = climbs[house]
+    var next = climb_step(at, way, step)
+    ref to = way[next]
+    return (to + _toward(at, to) * FOLLOW, next)
 
 
 def flank_spot(target: Vector3, player: Vector3, at: Vector3) -> Vector3:

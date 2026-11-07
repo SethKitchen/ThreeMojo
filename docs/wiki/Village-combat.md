@@ -188,7 +188,11 @@ A fallen wolf lies on its side. It gives no coins, but it trains swordplay as a 
 
 The module is `extensions/village/companion.mojo`. A swordswoman dressed as a ranger starts beside the player, and fights with them. A foe goes for her when she stands nearer it than the player by `ALLY_SHY`, 1.5 meters, or more. Struck down, she lies still until the fight round her is over, and then rises.
 
-Out of a fight, she follows the player. She walks to them from more than 3 meters, and runs from more than 7. When the player goes into a house and she is outside, she goes to its front door and in through it, then follows them inside. `follow_point` gives the point she walks to, and `Battle.doors` holds the houses' front doors. In a fight, she faces the player's foe, and stands 6 meters from it, 70 degrees off the line from the foe to the player. So she keeps out of the way of the camera.
+Out of a fight, she follows the player. She walks to them from more than 3 meters, and runs from more than 7. In a fight, she faces the player's foe, and stands 6 meters from it, 70 degrees off the line from the foe to the player. So she keeps out of the way of the camera.
+
+When the player goes into a house and she is outside, she goes to its front door and in through it, then follows them inside. `follow_point` gives the point she walks to, and `Battle.doors` holds the houses' front doors.
+
+When the player stands more than `CLIMB_RISE`, 1.5 meters, above her indoors, she climbs the house's stairs to them. She walks the house's way up point by point, from the foot of her own story's flight: `climb_step` gives the point. Once she climbs, she climbs on until she is within `CLIMB_REACH`, half a meter, of their height.
 
 She never strays more than 10 meters from the player. She casts at the locked target. With no lock, she casts at the nearest foe that fights within 15 meters of the player.
 

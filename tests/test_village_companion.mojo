@@ -23,6 +23,9 @@ from extensions.village.companion import (
     DOOR_OUTSIDE,
     flank_spot,
     follow_point,
+    ally_goal,
+    climb_step,
+    CLIMB_RISE,
 )
 from extensions.village.interior import Doorway
 from math.vector3 import Vector3
@@ -214,6 +217,58 @@ def test_she_goes_into_a_house_by_its_door() raises:
     # The door nearest the player is the one she goes to.
     var other = follow_point(far, Vector3(50.5, 0, 5), True, False, doors)
     assert_true(other.x > 40)
+
+
+def test_she_climbs_a_houses_stairs_point_by_point() raises:
+    # The foot of a flight, its top, and round the landing.
+    var way: List[Vector3] = [
+        Vector3(0, 0, 0),
+        Vector3(0, 3, -4),
+        Vector3(1, 3, -4),
+        Vector3(1, 3, 0),
+    ]
+    # She starts at the first point on her own story, and walks to it.
+    assert_equal(climb_step(Vector3(0, 0, 2), way, -1), 0)
+    # At it, she goes on to the next.
+    assert_equal(climb_step(Vector3(0, 0.2, 0.2), way, 0), 1)
+    # Over it, but not on it, she walks on to it.
+    assert_equal(climb_step(Vector3(0, 1, 0), way, 0), 0)
+    # Round the landing, point by point; at the top, she stays.
+    assert_equal(climb_step(Vector3(1, 3, -3.8), way, 2), 3)
+    assert_equal(climb_step(Vector3(1, 3, 0), way, 3), 3)
+    # On no story of the way, she walks to its top; a step past the way
+    # starts again.
+    assert_equal(climb_step(Vector3(5, 10, 5), way, -1), 3)
+    assert_equal(climb_step(Vector3(0, 0, 2), way, 7), 0)
+
+
+def test_indoors_she_climbs_to_the_player_on_the_story_above() raises:
+    var doors: List[Doorway] = [Doorway(0, 0, 1, 0, 0, 1, 1, 2.1, 0, True)]
+    var way: List[Vector3] = [Vector3(0.5, 0, 3), Vector3(0.5, 3, -1)]
+    var climbs: List[List[Vector3]] = [way.copy()]
+    var at = Vector3(0.5, 0, 6)
+    var above = Vector3(0.5, 3, 2)
+    var goal = ally_goal(at, above, True, True, doors, climbs, -1)
+    assert_equal(goal[1], 0)
+    assert_almost_equal(goal[0].z, 3 - FOLLOW, atol=1e-5)
+    # Outdoors, on one story, or with no doors or no way up, she does not
+    # climb.
+    var none = List[Doorway]()
+    var bare = List[List[Vector3]]()
+    var flat: List[List[Vector3]] = [List[Vector3]()]
+    assert_equal(ally_goal(at, above, False, True, doors, climbs, -1)[1], -1)
+    assert_equal(ally_goal(at, above, True, False, doors, climbs, -1)[1], -1)
+    var level = Vector3(0.5, 0, 2)
+    assert_equal(ally_goal(at, level, True, True, doors, climbs, -1)[1], -1)
+    assert_equal(ally_goal(at, above, True, True, none, climbs, -1)[1], -1)
+    assert_equal(ally_goal(at, above, True, True, doors, bare, -1)[1], -1)
+    assert_equal(ally_goal(at, above, True, True, doors, flat, -1)[1], -1)
+    # A player a meter above her: too little to start a climb, but enough
+    # to go on with one.
+    var near = Vector3(0.5, 1, 2)
+    assert_true(Float32(1) < CLIMB_RISE)
+    assert_equal(ally_goal(at, near, True, True, doors, climbs, -1)[1], -1)
+    assert_equal(ally_goal(at, near, True, True, doors, climbs, 0)[1], 0)
 
 
 def main() raises:
