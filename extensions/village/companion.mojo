@@ -39,6 +39,7 @@ from extensions.attire.mix import RANGER, dressed_as
 from extensions.village.clothes import calling_groom
 from extensions.village.combat import Blow, FighterParameters
 from extensions.village.foes import Bandit
+from extensions.village.interior import Doorway
 from math.vector3 import Vector3
 from std.math import cos, sin, sqrt
 from units.si import (
@@ -55,6 +56,14 @@ from units.si import (
     Velocity,
 )
 
+comptime DOOR_OUTSIDE = Float32(1.5)
+"""How far before a door, in meters, the companion walks to as the player
+goes in."""
+comptime DOOR_INSIDE = Float32(1.8)
+"""How far past a door, in meters, she walks to once she is at it."""
+comptime DOOR_REACH = Float32(2.2)
+"""How near a door's middle, in meters, she must be to go in through it:
+more than `DOOR_OUTSIDE`, so she goes in once she is before it."""
 comptime FOLLOW = Float32(3)
 """How far from the player the companion keeps out of a fight, in meters."""
 comptime KEEP = Float32(6)
@@ -102,6 +111,52 @@ def _toward(a: Vector3, b: Vector3) -> Vector3:
     if gap < 1.0e-4:
         return Vector3(0, 0, 1)
     return Vector3((b.x - a.x) / gap, 0, (b.z - a.z) / gap)
+
+
+def follow_point(
+    at: Vector3,
+    player: Vector3,
+    player_inside: Bool,
+    ally_inside: Bool,
+    doors: List[Doorway],
+) -> Vector3:
+    """Return the point the companion follows out of a fight.
+
+    She follows the player. When they are under a roof and she is not,
+    she goes to the front door nearest them, and then in through it: a
+    house's walls stand between her and them. Once she is inside, she
+    follows them again.
+
+    Args:
+        at: Where she stands.
+        player: Where the player stands.
+        player_inside: Whether the player is under a roof.
+        ally_inside: Whether she is.
+        doors: The houses' front doors.
+
+    Returns:
+        The player's place. Or, `FOLLOW` beyond it on her way, a spot
+        `DOOR_OUTSIDE` before the nearest door; and once she is within
+        `DOOR_REACH` of the door, a spot `DOOR_INSIDE` past it.
+    """
+    if not player_inside or ally_inside or len(doors) == 0:
+        return player
+    var best = 0
+    var nearest = Float32(1.0e30)
+    for k in range(len(doors)):  # pragma: no branch
+        var gap = _flat_gap(doors[k].middle(), player)
+        if gap < nearest:
+            nearest = gap
+            best = k
+    ref door = doors[best]
+    var middle = door.middle()
+    var into = Vector3(door.swing_x, 0, door.swing_z)
+    var spot = middle - into * DOOR_OUTSIDE
+    if _flat_gap(at, middle) < DOOR_REACH:
+        spot = middle + into * DOOR_INSIDE
+    # She stops `FOLLOW` from what she follows: the point lies that far
+    # past the spot, so she stops at the spot.
+    return spot + _toward(at, spot) * FOLLOW
 
 
 def flank_spot(target: Vector3, player: Vector3, at: Vector3) -> Vector3:

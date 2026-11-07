@@ -18,8 +18,13 @@ from extensions.village.companion import (
     ally_fighter,
     assist_blow,
     default_allies,
+    FOLLOW,
+    DOOR_INSIDE,
+    DOOR_OUTSIDE,
     flank_spot,
+    follow_point,
 )
+from extensions.village.interior import Doorway
 from math.vector3 import Vector3
 from std.math import cos, pi
 from std.testing import (
@@ -181,6 +186,34 @@ def test_her_strength_and_her_assist_attack() raises:
     var allies = default_allies()
     assert_equal(len(allies), 1)
     assert_true(allies[0].spec.sex == FEMALE)
+
+
+def test_she_goes_into_a_house_by_its_door() raises:
+    # Two doors a meter wide, each opening into its house along +z.
+    var doors: List[Doorway] = [
+        Doorway(0, 0, 1, 0, 0, 1, 1, 2.1, 0, True),
+        Doorway(50, 0, 1, 0, 0, 1, 1, 2.1, 0, True),
+    ]
+    var player = Vector3(0.5, 0, 5)
+    var far = Vector3(0.5, 0, -10)
+    # Outdoors, or both indoors, or with no doors, she follows the player.
+    var none = List[Doorway]()
+    for case_ in [(False, False), (True, True)]:
+        var goal = follow_point(far, player, case_[0], case_[1], doors)
+        assert_almost_equal((goal - player).length(), 0, atol=1e-6)
+    var bare = follow_point(far, player, True, False, none)
+    assert_almost_equal((bare - player).length(), 0, atol=1e-6)
+    # Far from the door, before it; `FOLLOW` past that, so she stops there.
+    var before = follow_point(far, player, True, False, doors)
+    assert_almost_equal(before.z, -DOOR_OUTSIDE + FOLLOW, atol=1e-5)
+    assert_almost_equal(before.x, 0.5, atol=1e-5)
+    # At the door, in past it.
+    var at = Vector3(0.5, 0, -1)
+    var inside = follow_point(at, player, True, False, doors)
+    assert_almost_equal(inside.z, DOOR_INSIDE + FOLLOW, atol=1e-5)
+    # The door nearest the player is the one she goes to.
+    var other = follow_point(far, Vector3(50.5, 0, 5), True, False, doors)
+    assert_true(other.x > 40)
 
 
 def main() raises:

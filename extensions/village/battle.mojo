@@ -276,7 +276,9 @@ from extensions.village.companion import (
     MEND_SHARE,
     assist_blow,
     default_allies,
+    follow_point,
 )
+from extensions.village.interior import Doorway
 from extensions.village.foes import (
     POSTED,
     RETURNING,
@@ -319,7 +321,7 @@ from extensions.village.slashes import (
     slash_material,
 )
 from extensions.village.surfaces import HouseLooks
-from extensions.village.terrain import Terrain
+from extensions.village.terrain import OPEN_SKY, Terrain
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -1073,6 +1075,10 @@ struct Battle(Movable):
     # The companion, if any, and her bolts that fly; and whether the assist
     # button was pressed this frame.
     var allies: List[Ally]
+    # The houses' front doors, which the companion goes in by when the
+    # player is indoors: see `follow_point`. Empty, she follows the
+    # player straight.
+    var doors: List[Doorway]
     var bolts: List[Bolt]
     var called: Bool
     # The throwers' knives that fly.
@@ -1270,6 +1276,7 @@ struct Battle(Movable):
                 )
             )
         self.allies = List[Ally]()
+        self.doors = List[Doorway]()
         for ally in parameters.allies:
             var person = Body(
                 scene,
@@ -1659,6 +1666,14 @@ struct Battle(Movable):
             if self.standing(index):
                 out.append(self.target_at(index))
         return out^
+
+    def set_doors(mut self, var doors: List[Doorway]):
+        """Give the companion the houses' front doors to go in by.
+
+        Args:
+            doors: The houses' front doors.
+        """
+        self.doors = doors^
 
     def vanish_puffs(self, seconds: Float32) -> List[Puff]:
         """Return the dust where each fallen foe has gone in the last
@@ -3000,9 +3015,21 @@ struct Battle(Movable):
             # A fallen companion lies still.
             if ally.down >= 0:
                 continue
+            # Out of a fight, she goes round a house's walls by its door.
+            ref at = ally.character.position
+            var goal = player.position
+            if not self.drawn:
+                ref feet = player.position
+                goal = follow_point(
+                    at,
+                    feet,
+                    terrain.ceiling_over(feet.x, feet.z, feet.y) < OPEN_SKY,
+                    terrain.ceiling_over(at.x, at.z, at.y) < OPEN_SKY,
+                    self.doors,
+                )
             var sight = AllySight(
                 ally.character.position,
-                player.position,
+                goal,
                 target,
                 share,
                 ally.fighter.free(),

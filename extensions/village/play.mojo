@@ -897,6 +897,8 @@ struct VillageGame(Movable):
         # The fighters near the camera keep their skirts out of their
         # legs too.
         self.battle.keep_hems(scene, assets)
+        # The companion goes into a house by its front door.
+        self.battle.set_doors(homes.copy())
         self.village.meadow.grass_wind_every = self.quality.grass_wind_every
         # A still shadow map is drawn once, and the grass changes as the
         # player walks, so only full shadows take the grass.
