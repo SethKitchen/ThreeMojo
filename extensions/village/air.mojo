@@ -47,18 +47,47 @@ comptime MIST_NEAR = Float32(25)
 def _box(source: List[Float32], w: Int, h: Int, across: Bool) -> List[Float32]:
     """Return a box blur of three floats a texel, along one axis.
 
-    A texel at least `BLOOM_REACH` texels from both ends reads its taps
-    without the clamp at the edges. Every sum adds its taps from the
-    lowest to the highest, as the clamped sum does, so the blur does not
-    change."""
+    The rows are shared over the cores. A texel at least `BLOOM_REACH`
+    texels from both ends reads its taps without the clamp at the edges.
+    Every sum adds its taps from the lowest to the highest, as the clamped
+    sum does, so the blur does not change."""
     var blurred = List[Float32](length=len(source), fill=0)
+    var tasks = max(1, min(available_workers(), h))
+    var group = TaskGroup()
+    for t in range(tasks):  # pragma: no branch
+        group.create_task(
+            _box_task(
+                source.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[ImmutAnyOrigin](),
+                blurred.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                w,
+                h,
+                across,
+                t * h // tasks,
+                (t + 1) * h // tasks,
+            )
+        )
+    group.wait()
+    _ = len(source)
+    return blurred^
+
+
+__async def _box_task(
+    src: Pointer[Float32, ImmutAnyOrigin],
+    dest: MutPointer[Float32, MutAnyOrigin],
+    w: Int,
+    h: Int,
+    across: Bool,
+    first: Int,
+    past: Int,
+):
+    """Blur rows `first` to `past` of the small frame, as `_box` does."""
     var span = Float32(2 * BLOOM_REACH + 1)
-    var src = source.unsafe_ptr()
-    var out = blurred.unsafe_ptr()
     # A step of one texel along the axis, in floats.
     var stride = 3 if across else w * 3
     var reach = w if across else h
-    for y in range(h):  # pragma: no branch
+    for y in range(first, past):  # pragma: no branch
         for x in range(w):  # pragma: no branch
             var along = x if across else y
             var p = (y * w + x) * 3
@@ -81,11 +110,9 @@ def _box(source: List[Float32], w: Int, h: Int, across: Bool) -> List[Float32]:
                     r += src[unsafe_offset=at]
                     g += src[unsafe_offset=at + 1]
                     b += src[unsafe_offset=at + 2]
-            out[unsafe_offset=p] = r / span
-            out[unsafe_offset=p + 1] = g / span
-            out[unsafe_offset=p + 2] = b / span
-    _ = len(source)
-    return blurred^
+            dest[unsafe_offset=p] = r / span
+            dest[unsafe_offset=p + 1] = g / span
+            dest[unsafe_offset=p + 2] = b / span
 
 
 def linear_table() -> List[Float32]:
