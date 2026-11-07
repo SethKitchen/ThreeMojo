@@ -307,6 +307,7 @@ from extensions.village.skills import (
     DEFEAT_EXPERIENCE,
     PRACTICE_EXPERIENCE,
 )
+from extensions.village.puffs import Puff, dust_puffs
 from extensions.village.slashes import (
     FOE_TRAIL,
     IMPACT_SECONDS,
@@ -420,6 +421,8 @@ comptime POPUP_SECONDS = Float32(0.9)
 comptime WORD_REPEAT = Float32(0.4)
 """How long, in seconds, a blow's word that shows keeps the same word from
 showing again."""
+comptime VANISH_DUST = Float32(3)
+"""How large the dust of a fallen foe that goes is, as times a foot's."""
 comptime HEM_NEAR = Float32(6)
 """How near the camera, in meters, a fighter must be to keep their skirt
 out of their legs."""
@@ -1648,6 +1651,32 @@ struct Battle(Movable):
             if self.standing(index):
                 out.append(self.target_at(index))
         return out^
+
+    def vanish_puffs(self, seconds: Float32) -> List[Puff]:
+        """Return the dust where each fallen foe has gone in the last
+        second: a body that has lain its `linger` goes in a puff of dust,
+        not all at once.
+
+        Args:
+            seconds: The time, in seconds, which stirs the dust.
+
+        Returns:
+            The puffs: five for each foe gone in the last second.
+        """
+        var puffs = List[Puff]()
+        var linger = self.parameters.linger.to(SECOND)
+        for index in range(len(self.foes)):
+            ref foe = self.foes[index]
+            puffs.extend(
+                dust_puffs(
+                    foe.character.position,
+                    seconds,
+                    foe.down - linger,
+                    index,
+                    VANISH_DUST,
+                )
+            )
+        return puffs^
 
     def keep_hems(mut self, mut scene: Scene, mut assets: Assets) raises:
         """Give each fighter's skirts the pushes that keep them out of the

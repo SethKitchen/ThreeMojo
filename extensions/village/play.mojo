@@ -1759,6 +1759,8 @@ struct VillageGame(Movable):
             puffs.extend(
                 dust_puffs(self.dust_at, self.clock, self.dust_since, 7)
             )
+            # A fallen foe goes in a puff of dust.
+            puffs.extend(self.battle.vanish_puffs(self.clock))
             _ = draw_puffs(image, puffs, self.camera, light)
             self.veil(image, scene, day)
             covered = perf_counter_ns()

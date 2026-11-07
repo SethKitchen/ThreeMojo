@@ -42,7 +42,7 @@ from std.testing import (
     assert_false,
     assert_true,
 )
-from units.si import DEGREE, Angle
+from units.si import SECOND, DEGREE, Angle
 
 
 def test_wolves_close_in_bite_and_lie_down_when_felled() raises:
@@ -77,6 +77,26 @@ def test_wolves_close_in_bite_and_lie_down_when_felled() raises:
     assert_true(abs(lying.x) + abs(lying.z) > 0.5)
     arena.run(2.5)
     assert_true(arena.battle.foes[0].down < 0)
+
+
+def test_a_fallen_foe_goes_in_a_puff_of_dust() raises:
+    var arena = Arena(arena_parameters(2, 0, 6))
+    ref battle = arena.battle
+    var linger = battle.parameters.linger.to(SECOND)
+    # Standing foes, and one that still lies, raise no dust.
+    assert_equal(len(battle.vanish_puffs(1)), 0)
+    battle.foes[0].down = linger - 0.1
+    assert_equal(len(battle.vanish_puffs(1)), 0)
+    # Gone a moment ago: five puffs round where it lay, and none once the
+    # dust settles a second later.
+    battle.foes[0].down = linger + 0.2
+    var puffs = battle.vanish_puffs(1)
+    assert_equal(len(puffs), 5)
+    var lay = battle.foes[0].character.position
+    for puff in puffs:
+        assert_true((puff.at - lay).length() < 1)
+    battle.foes[0].down = linger + 1.5
+    assert_equal(len(battle.vanish_puffs(1)), 0)
 
 
 def test_a_foe_that_falls_below_its_rage_rages() raises:

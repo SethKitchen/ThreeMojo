@@ -172,7 +172,7 @@ A waiting bandit answers about one attack of the player's in three. Two answers 
 
 A bandit returns to its post when the player falls. It also returns when the player leads it more than 28 meters from its post. The dice that choose come from each bandit's seed, so a fight plays the same way each time.
 
-A fallen bandit gives 8 coins, which go into the satchel. One time in two, it also drops an herb. It lies for 10 seconds, and comes back to its post after a minute.
+A fallen bandit gives 8 coins, which go into the satchel. One time in two, it also drops an herb. It lies for 10 seconds, then goes in a cloud of dust, `VANISH_DUST`, three times a foot's, that settles in a second. `Battle.vanish_puffs` gives the dust. It comes back to its post after a minute.
 
 Fighting trains the player's swordplay. Each level over 1 makes the player's blows 5 percent stronger: see [Village skills](Village-skills).
 

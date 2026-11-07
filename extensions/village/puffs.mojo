@@ -92,7 +92,11 @@ def chimney_smoke(
 
 
 def dust_puffs(
-    foot: Vector3, seconds: Float32, since: Float32, seed: Int
+    foot: Vector3,
+    seconds: Float32,
+    since: Float32,
+    seed: Int,
+    size: Float32 = 1,
 ) -> List[Puff]:
     """Return the dust that a foot kicked up `since` seconds ago.
 
@@ -102,6 +106,8 @@ def dust_puffs(
         since: How long ago the foot struck, in seconds. The dust settles
             after one second.
         seed: Which dust.
+        size: How large the dust is, as times a foot's: its spread, its
+            rise and its puffs. One, the default, is a foot's.
 
     Returns:
         Five puffs round the foot, or none once the dust settles.
@@ -111,15 +117,15 @@ def dust_puffs(
         return puffs^
     for k in range(5):  # pragma: no branch
         var a = Float32(k) * 1.2566371 + Float32(seed % 13) * 0.5
-        var spread = 0.15 + 0.5 * since
+        var spread = (0.15 + 0.5 * since) * size
         var at = foot + Vector3(
-            spread * cos(a), 0.1 + 0.25 * since, spread * sin(a)
+            spread * cos(a), (0.1 + 0.25 * since) * size, spread * sin(a)
         )
         var wobble = 0.02 * sin(seconds * 7 + Float32(k))
         puffs.append(
             Puff(
                 at + Vector3(wobble, 0, 0),
-                0.12 + 0.3 * since,
+                (0.12 + 0.3 * since) * size,
                 0.35 * (1 - since),
                 DUST_TAN,
             )
