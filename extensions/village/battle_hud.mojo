@@ -704,15 +704,18 @@ def draw_battle(
     if f.combo >= 2:
         var alpha = note_alpha(f.combo_age, COMBO_KEEP)
         var count = String(f.combo)
-        var big = text_size(2 * scale)
         var word = _label(scale, GOLD_TEXT)
         word.alpha = alpha
         var right = Float32(w - 6 * scale) - styled_width(" HITS", word.size)
         var y = Float32(h * 2 // 5)
+        # Each hit pops the count, which then eases back to its size: it
+        # grows up from its foot, beside `HITS`.
+        var rest = text_size(2 * scale)
+        var big = rest * pop_grow(f.combo_age)
         draw_styled(
             frame,
             right - styled_width(count, big),
-            y,
+            y + rest - big,
             count,
             TextStyle(
                 big, GOLD_TEXT, alpha, big * 0.1, big * 0.08, big * 0.04, 0.14

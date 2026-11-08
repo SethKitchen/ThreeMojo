@@ -639,6 +639,21 @@ def test_a_thrower_is_named_over_its_bars() raises:
     assert_true(_changed(wolf) <= _changed(named))
 
 
+def test_the_combo_count_pops_with_each_hit() raises:
+    var arena = Arena(arena_parameters(0, 0, 5))
+    var camera = _camera()
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    arena.battle.fighter.combo = 7
+    arena.battle.fighter.combo_age = POP_EASE
+    var settled = _frame()
+    draw_battle(settled, arena.battle, arena.scene, camera, look)
+    # Just hit: the count stands larger, and lights more of the frame.
+    arena.battle.fighter.combo_age = 0
+    var fresh = _frame()
+    draw_battle(fresh, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(fresh) > _changed(settled))
+
+
 def test_a_number_pops_and_eases_back() raises:
     assert_almost_equal(pop_grow(0), 1 + POP_GROW, atol=1e-6)
     assert_true(pop_grow(POP_EASE / 2) < pop_grow(0))
