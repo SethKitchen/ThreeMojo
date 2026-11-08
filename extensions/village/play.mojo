@@ -285,6 +285,12 @@ comptime DYNAMIC_QUICK = 30
 """How many quick frames in a row grow the frame's size by a step."""
 comptime DYNAMIC_STEP = Float32(0.04)
 """How much of the window's width a step adds to the frame, or takes."""
+comptime DYNAMIC_FLOOR = Float32(0.12)
+"""How much less of the window than the quality's share the frame can be
+drawn at, while frames are slow: a smooth frame shows motion more clearly
+than a sharp one that judders."""
+comptime DYNAMIC_LEAST = Float32(0.25)
+"""The least share of the window the frame is drawn at."""
 comptime DYNAMIC_REACH = Float32(0.24)
 """How much more of the window than the quality's share the frame can be
 drawn at."""
@@ -1658,8 +1664,9 @@ struct VillageGame(Movable):
         `DYNAMIC_BUDGET_MS`, the share of the window the frame is drawn at
         grows by `DYNAMIC_STEP`, to the quality's `render_scale` and
         `DYNAMIC_REACH` more at the most. A frame over the budget shrinks
-        it by a step, to the quality's at the least. With `dynamic` off,
-        nothing changes.
+        it by a step, to `DYNAMIC_FLOOR` less than the quality's at the
+        least, and never under `DYNAMIC_LEAST`. With `dynamic` off, nothing
+        changes.
 
         Args:
             frame_ms: How long the frame just drawn took, in milliseconds.
@@ -1671,10 +1678,11 @@ struct VillageGame(Movable):
             return
         var base = self.quality.render_scale
         var top = min(Float32(1), base + DYNAMIC_REACH)
+        var least = max(DYNAMIC_LEAST, base - DYNAMIC_FLOOR)
         var was = self.scale
         if frame_ms > DYNAMIC_BUDGET_MS:
             self.quick = 0
-            self.scale = max(base, self.scale - DYNAMIC_STEP)
+            self.scale = max(least, self.scale - DYNAMIC_STEP)
         elif frame_ms < DYNAMIC_BUDGET_MS * DYNAMIC_ROOM:
             self.quick += 1
             if self.quick >= DYNAMIC_QUICK:

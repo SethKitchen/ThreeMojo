@@ -57,6 +57,8 @@ from extensions.village.residents import SIT, WORK
 from extensions.village.props import BARREL, BENCH, CROPS, Prop, WELL, WOODPILE
 from extensions.village.play import (
     DYNAMIC_BUDGET_MS,
+    DYNAMIC_FLOOR,
+    DYNAMIC_LEAST,
     DYNAMIC_QUICK,
     DYNAMIC_REACH,
 )
@@ -349,11 +351,13 @@ def test_quick_frames_draw_more_of_the_window() raises:
         game.scale, min(Float32(1), base + DYNAMIC_REACH), atol=1e-5
     )
     assert_true(game.fast.width > width)
-    # Slow frames shrink it again, to the quality's share at the least.
+    # Slow frames shrink it again, past the quality's share, to the floor
+    # at the least.
     for _ in range(20):
         game.adapt_scale(DYNAMIC_BUDGET_MS * 2)
-    assert_almost_equal(game.scale, base, atol=1e-5)
-    assert_equal(game.fast.width, width)
+    var floor = max(DYNAMIC_LEAST, base - DYNAMIC_FLOOR)
+    assert_almost_equal(game.scale, floor, atol=1e-5)
+    assert_true(game.fast.width < width)
 
 
 def test_a_player_walks_into_a_house_through_its_door() raises:

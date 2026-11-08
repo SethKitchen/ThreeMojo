@@ -84,7 +84,7 @@ The game does both in one pass over the window. `upscale_into(frame, window, wor
 
 A fast machine can draw more of the window's pixels than its quality asks, so a fight in motion is sharper. `VillageGame.set_dynamic(True)` turns this on. The village's window and `examples/village_walk.mojo --play` turn it on.
 
-`adapt_scale` measures each frame. After `DYNAMIC_QUICK`, 30, quick frames in a row, it grows the frame's share of the window by `DYNAMIC_STEP`, 0.04. A frame is quick when it takes less than `DYNAMIC_ROOM`, three quarters, of `DYNAMIC_BUDGET_MS`, 33.3 milliseconds. The share grows to the quality's `render_scale` and `DYNAMIC_REACH`, 0.24, more at the most. A frame over the budget shrinks the share by a step, to the quality's at the least.
+`adapt_scale` measures each frame. After `DYNAMIC_QUICK`, 30, quick frames in a row, it grows the frame's share of the window by `DYNAMIC_STEP`, 0.04. A frame is quick when it takes less than `DYNAMIC_ROOM`, three quarters, of `DYNAMIC_BUDGET_MS`, 33.3 milliseconds. The share grows to the quality's `render_scale` and `DYNAMIC_REACH`, 0.24, more at the most. A frame over the budget shrinks the share by a step. It shrinks to `DYNAMIC_FLOOR`, 0.12, less than the quality's at the least, and never under a quarter. A smooth frame shows motion more clearly than a sharp one that judders.
 
 `GameRenderer.resize` changes the size that the renderer draws at. It keeps the shapes, the maps and the shadows, so a step costs no more than a frame.
 
