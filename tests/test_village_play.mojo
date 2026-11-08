@@ -56,6 +56,7 @@ from extensions.village.talk import (
 from extensions.village.residents import SIT, WORK
 from extensions.village.props import BARREL, BENCH, CROPS, Prop, WELL, WOODPILE
 from extensions.village.play import (
+    WARDEN_MARK,
     DYNAMIC_BUDGET_MS,
     DYNAMIC_FLOOR,
     DYNAMIC_LEAST,
@@ -727,6 +728,39 @@ def test_the_compass_points_to_the_nearest_foe_that_stands() raises:
     game.battle.foes[0].down = -1
     game.battle.foes[0].character.position.z -= FOE_SIGHT * 2
     assert_equal(len(game.compass_marks()), 0)
+
+
+def test_the_compass_points_to_each_warden_that_stands() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.gathering.spots = []
+    parameters.battle.raids = PlayParameters(
+        game_quality(LOW)
+    ).battle.raids.copy()
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        64,
+        36,
+    )
+    assert_true(len(game.battle.wardens) > 0)
+    var violet = 0
+    for mark in game.compass_marks():
+        if mark.color.b == WARDEN_MARK.b and mark.color.r == WARDEN_MARK.r:
+            violet += 1
+    assert_equal(violet, len(game.battle.wardens))
+    # A beaten warden is not pointed to.
+    for k in range(len(game.battle.wardens)):
+        game.battle.wardens[k].boss.health = 0
+    for mark in game.compass_marks():
+        assert_false(
+            mark.color.r == WARDEN_MARK.r and mark.color.b == WARDEN_MARK.b
+        )
 
 
 def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:

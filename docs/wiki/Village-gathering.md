@@ -97,6 +97,7 @@ The panels are frosted glass. `draw_panel` blurs what is behind a panel and dark
 - A strip of 120° of the turn round the player, 36 % of the frame's width, centered on the way the camera looks. A tick shows each 15°, and `N`, `E`, `S` and `W` show at the four points. North is minus z.
 - A gold mark at each villager with an errand to offer, and a silver mark at each villager whose errand is taken.
 - A red mark at the nearest foe that stands, within `FOE_SIGHT`, 60 meters.
+- A violet mark at each raid's warden that stands, so the player can find a raid.
 - A mark past the strip's end stands at that end, half as bright, so the player knows which way to turn.
 - Under the strip, on a dark pill, the hour as a twelve-hour clock and the weather, such as `2:00 PM  CLEAR`.
 

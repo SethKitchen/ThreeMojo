@@ -331,6 +331,8 @@ comptime FOE_SIGHT = Float32(60)
 """How near a foe must be for the compass to point to it, in meters."""
 comptime SILVER_MARK = Rgb(200, 205, 215)
 """The color of the compass's mark at an errand taken."""
+comptime WARDEN_MARK = Rgb(175, 110, 255)
+"""The color of the compass's mark at a raid's warden that stands."""
 comptime GRIMACE = Float32(0.5)
 """How long the player's face holds what a move shows, in seconds."""
 comptime WINDED = Float32(0.6)
@@ -2093,6 +2095,13 @@ struct VillageGame(Movable):
                     self.battle.foes[nearest].character.position, DANGER
                 )
             )
+        # Each warden that stands, so the player can find a raid.
+        for index in range(len(self.battle.wardens)):
+            ref warden = self.battle.wardens[index]
+            if not warden.boss.defeated():
+                marks.append(
+                    CompassMark(warden.character.position, WARDEN_MARK)
+                )
         return marks^
 
     def prompt(self) -> String:
