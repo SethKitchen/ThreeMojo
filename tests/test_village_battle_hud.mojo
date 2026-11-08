@@ -431,10 +431,23 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     # An ultimate's start-up writes its name large, and a gold star grows
     # at the sword hand. After the start-up, neither shows.
     arena.battle.fighter.move = ULTIMATE
+    # Just begun, the name stands larger, and eases to its size.
+    arena.battle.fighter.clock = 0
+    arena.scene.update()
+    var landing = _frame()
+    draw_battle(landing, arena.battle, arena.scene, camera, look)
     arena.battle.fighter.clock = 0.3
     arena.scene.update()
     var rising = _frame()
     draw_battle(rising, arena.battle, arena.scene, camera, look)
+    # The name's rows: a quarter down the frame.
+    var title_landing = 0
+    var title_rising = 0
+    for k in range(20 * 320 * 4, 70 * 320 * 4):
+        if k % 4 != 3:
+            title_landing += Int(landing.pixels[k])
+            title_rising += Int(rising.pixels[k])
+    assert_true(title_landing > title_rising)
     arena.battle.fighter.clock = 0.7
     var spun = _frame()
     draw_battle(spun, arena.battle, arena.scene, camera, look)

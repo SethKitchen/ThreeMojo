@@ -635,11 +635,14 @@ def _ultimate(
         return
     var share = f.clock / startup
     var title = String("ULTIMATE")
-    var big = text_size(scale * 3)
+    # It lands large and eases to its size, as a blow's number does,
+    # about its middle.
+    var rest = text_size(scale * 3)
+    var big = rest * pop_grow(f.clock)
     draw_styled(
         frame,
         (Float32(frame.width) - styled_width(title, big)) / 2,
-        Float32(frame.height // 4),
+        Float32(frame.height // 4) - (big - rest) / 2,
         title,
         TextStyle(big, GOLD_TEXT, 1, big * 0.08, big * 0.1, big * 0.03, 0.14),
     )
