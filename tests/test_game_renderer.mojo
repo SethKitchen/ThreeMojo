@@ -205,6 +205,32 @@ def test_a_lit_floor_matches_the_general_renderer() raises:
         assert_equal(len(fast.timings), 8)
 
 
+def test_a_resized_renderer_draws_as_a_new_one_of_that_size() raises:
+    var assets = Assets()
+    var scene = _floor_scene(assets, Material(Color(180, 160, 140)))
+    var camera = _above()
+    var fast = GameRenderer(WIDTH, HEIGHT)
+    _ = fast.render(scene, assets, camera, NOW)
+    # The same size again changes nothing; another draws as a renderer
+    # made at that size.
+    fast.resize(WIDTH, HEIGHT)
+    # The same width and another height is another size.
+    fast.resize(WIDTH, HEIGHT // 2)
+    assert_equal(fast.height, HEIGHT // 2)
+    fast.resize(WIDTH // 2, HEIGHT // 2)
+    assert_equal(fast.width, WIDTH // 2)
+    var small = fast.render(scene, assets, camera, NOW)
+    var fresh = GameRenderer(WIDTH // 2, HEIGHT // 2)
+    var want = fresh.render(scene, assets, camera, NOW)
+    assert_equal(small.width, WIDTH // 2)
+    for i in range(len(want.pixels)):
+        assert_equal(small.pixels[i], want.pixels[i])
+    with assert_raises(contains="positive"):
+        fast.resize(0, HEIGHT)
+    with assert_raises(contains="positive"):
+        fast.resize(WIDTH, 0)
+
+
 def test_a_hidden_material_or_another_layer_draws_nothing() raises:
     # As in three.js and the general renderer: a part whose material is
     # hidden is not drawn, nor a node on no layer the camera sees.

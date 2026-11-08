@@ -1123,6 +1123,29 @@ struct GameRenderer(Movable):
     var _still_made: Int
     var _moving_made: Int
 
+    def resize(mut self, width: Int, height: Int) raises:
+        """Draw images of another size from now on, and keep everything
+        that does not depend on the size: the shapes, the maps and the
+        shadows.
+
+        Args:
+            width: The image's new width, in pixels.
+            height: The image's new height, in pixels.
+
+        Raises:
+            Error: If a size is not positive.
+        """
+        if width <= 0 or height <= 0:
+            raise Error("A game renderer's size must be positive")
+        if width == self.width and height == self.height:
+            return
+        self.width = width
+        self.height = height
+        self._stride = _padded(width)
+        var texels = self._stride * _padded(height)
+        self._depth = List[Float32](length=texels, fill=1)
+        self._ids = List[Int32](length=texels, fill=NO_TRIANGLE)
+
     def __init__(
         out self, width: Int, height: Int, exposure: Float32 = 1
     ) raises:

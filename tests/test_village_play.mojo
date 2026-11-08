@@ -56,6 +56,11 @@ from extensions.village.talk import (
 from extensions.village.residents import SIT, WORK
 from extensions.village.props import BARREL, BENCH, CROPS, Prop, WELL, WOODPILE
 from extensions.village.play import (
+    DYNAMIC_BUDGET_MS,
+    DYNAMIC_QUICK,
+    DYNAMIC_REACH,
+)
+from extensions.village.play import (
     CLOSE_EYE,
     FOCUS_HEIGHT,
     FOE_SIGHT,
@@ -309,6 +314,46 @@ def test_a_player_walks_jumps_and_is_followed() raises:
     assert_equal(game.window.width, 48)
     assert_equal(game.window.height, 27)
     assert_true(game.upscale_ms > 0)
+
+
+def test_quick_frames_draw_more_of_the_window() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        _game_parameters(),
+        pebble_bed(_bed()),
+        None,
+        100,
+        50,
+    )
+    var base = game.quality.render_scale
+    var width = game.fast.width
+    # Off, nothing changes however quick the frames.
+    for _ in range(DYNAMIC_QUICK * 2):
+        game.adapt_scale(1)
+    assert_equal(game.fast.width, width)
+    game.set_dynamic(True)
+    # A frame neither quick nor slow starts the count again.
+    for _ in range(DYNAMIC_QUICK - 1):
+        game.adapt_scale(1)
+    game.adapt_scale(DYNAMIC_BUDGET_MS * 0.9)
+    game.adapt_scale(1)
+    assert_equal(game.fast.width, width)
+    # Quick frames grow it a step at a time, to the reach at the most.
+    for _ in range(DYNAMIC_QUICK * 20):
+        game.adapt_scale(1)
+    assert_almost_equal(
+        game.scale, min(Float32(1), base + DYNAMIC_REACH), atol=1e-5
+    )
+    assert_true(game.fast.width > width)
+    # Slow frames shrink it again, to the quality's share at the least.
+    for _ in range(20):
+        game.adapt_scale(DYNAMIC_BUDGET_MS * 2)
+    assert_almost_equal(game.scale, base, atol=1e-5)
+    assert_equal(game.fast.width, width)
 
 
 def test_a_player_walks_into_a_house_through_its_door() raises:

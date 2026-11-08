@@ -276,6 +276,18 @@ comptime INSIDE_REACH = Float32(18)
 drawn, in meters."""
 comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
+comptime DYNAMIC_BUDGET_MS = Float64(33.3)
+"""The time a frame may take before its size shrinks, in milliseconds: 30
+frames a second."""
+comptime DYNAMIC_ROOM = Float64(0.75)
+"""The share of the budget a frame must stay under to count as quick."""
+comptime DYNAMIC_QUICK = 30
+"""How many quick frames in a row grow the frame's size by a step."""
+comptime DYNAMIC_STEP = Float32(0.04)
+"""How much of the window's width a step adds to the frame, or takes."""
+comptime DYNAMIC_REACH = Float32(0.24)
+"""How much more of the window than the quality's share the frame can be
+drawn at."""
 comptime CLOSE_EYE = Float32(1.2)
 """How near the player's head, in meters, the camera's eye can come before
 the player's body hides: nearer, the head and the shoulders fill the
@@ -745,6 +757,13 @@ struct VillageGame(Movable):
     var width: Int
     var height: Int
     var fast: GameRenderer
+    # Whether the frame's size follows the time a frame takes: see
+    # `adapt_scale`. Off unless the host turns it on.
+    var dynamic: Bool
+    # The share of the window the frame is drawn at now, and how many
+    # quick frames in a row have been drawn at it.
+    var scale: Float32
+    var quick: Int
     # How long the last frame's draw, its water, the smoothing of its edges
     # and its stretch and sharpening took, in milliseconds.
     var render_ms: Float64
@@ -820,6 +839,9 @@ struct VillageGame(Movable):
         self.width = width
         self.height = height
         self.fast = GameRenderer(size[0], size[1], EXPOSURE)
+        self.dynamic = False
+        self.scale = self.quality.render_scale
+        self.quick = 0
         self.fast.sky_step = self.quality.sky_step
         # The houses' brick, plaster, wood and tiles show at each pixel.
         self.fast.pixel_maps = True
@@ -1619,6 +1641,53 @@ struct VillageGame(Movable):
         for at in self.gathering.biting(scene):
             self.village.splash(at.x, at.z, Length(0.15, METER), 0.03)
 
+    def set_dynamic(mut self, on: Bool):
+        """Let the frame's size follow the time a frame takes, or keep it at
+        the quality's: see `adapt_scale`.
+
+        Args:
+            on: Whether the size follows the time.
+        """
+        self.dynamic = on
+
+    def adapt_scale(mut self, frame_ms: Float64) raises:
+        """Draw more of the window's pixels while frames are quick, and fewer
+        once one is slow, so a fast machine shows a sharper frame.
+
+        After `DYNAMIC_QUICK` frames in a row under `DYNAMIC_ROOM` of
+        `DYNAMIC_BUDGET_MS`, the share of the window the frame is drawn at
+        grows by `DYNAMIC_STEP`, to the quality's `render_scale` and
+        `DYNAMIC_REACH` more at the most. A frame over the budget shrinks
+        it by a step, to the quality's at the least. With `dynamic` off,
+        nothing changes.
+
+        Args:
+            frame_ms: How long the frame just drawn took, in milliseconds.
+
+        Raises:
+            Error: Never: the size is always positive.
+        """
+        if not self.dynamic:
+            return
+        var base = self.quality.render_scale
+        var top = min(Float32(1), base + DYNAMIC_REACH)
+        var was = self.scale
+        if frame_ms > DYNAMIC_BUDGET_MS:
+            self.quick = 0
+            self.scale = max(base, self.scale - DYNAMIC_STEP)
+        elif frame_ms < DYNAMIC_BUDGET_MS * DYNAMIC_ROOM:
+            self.quick += 1
+            if self.quick >= DYNAMIC_QUICK:
+                self.quick = 0
+                self.scale = min(top, self.scale + DYNAMIC_STEP)
+        else:
+            self.quick = 0
+        if self.scale != was:
+            self.fast.resize(
+                max(1, Int(Float32(self.width) * self.scale + 0.5)),
+                max(1, Int(Float32(self.height) * self.scale + 0.5)),
+            )
+
     def render(mut self, scene: Scene, assets: Assets) raises:
         """Draw the frame that `tick` prepared into `window`.
 
@@ -1645,6 +1714,13 @@ struct VillageGame(Movable):
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
         self._finish(scene, assets, image, began, perf_counter_ns(), False)
+        self.adapt_scale(
+            self.render_ms
+            + self.water_ms
+            + self.smooth_ms
+            + self.upscale_ms
+            + self.weather_ms
+        )
 
     def prepare_gpu(
         mut self, scene: Scene, assets: Assets, passes: Bool = False
