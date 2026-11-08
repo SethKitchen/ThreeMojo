@@ -271,7 +271,18 @@ def _boss_bar(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
             1,
         )
         y += 9 * scale
-        _bar(frame, x, y, width, 4 * scale, boss.health / boss.most, BOSS_RED)
+        # What a blow took stays pale a moment, then drains, as on every
+        # bar of health.
+        draw_gauge(
+            frame,
+            x,
+            y,
+            width,
+            4 * scale,
+            boss.health / boss.most,
+            BOSS_RED,
+            boss.chip / boss.most,
+        )
         y += 6 * scale
         _bar(
             frame, x, y, width, scale + 1, boss.poise / BOSS_POISE, POISE_COLOR

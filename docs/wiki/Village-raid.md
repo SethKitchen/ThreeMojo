@@ -116,7 +116,7 @@ The fallen warden gives 60 coins, 3 herbs, and 400 experience to the style the p
 
 `extensions/village/raid_hud.mojo` draws these parts over the frame:
 
-- **The warden's bars**, at the top: its name, its health, its poise, its phase or `STAGGERED`, and the time to its enrage. While a linked strike is ready, `HEAVY: LINKED STRIKE` shows under them.
+- **The warden's bars**, at the top: its name, its health, its poise, its phase or `STAGGERED`, and the time to its enrage. While a linked strike is ready, `HEAVY: LINKED STRIKE` shows under them. On its health bar, what a blow took stays pale a moment, then drains, as on every bar of health.
 - **The party**, on the left, on a glass panel: each raider's role and health, or `DOWN` and how far a revive has gone. A number of a blow does not stand over the panel: it moves up clear of it, or is not drawn.
 - **The zones and the mark**, on the ground: see above.
 
