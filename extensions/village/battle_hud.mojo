@@ -593,12 +593,22 @@ def _assist(mut frame: Framebuffer, battle: Battle, scale: Int):
             mind.assist / ASSIST_FULL,
             color,
         )
+        var style = _label(scale, color)
+        # Ready, the words glow gold, as a critical blow's number does.
+        if mind.ready():
+            var halo = style
+            halo.alpha = CRIT_GLOW
+            halo.weight = style.size * 0.22
+            halo.shadow = 0
+            draw_styled(
+                frame, Float32(margin), Float32(y - 7 * scale), label, halo
+            )
         draw_styled(
             frame,
             Float32(margin),
             Float32(y - 7 * scale),
             label,
-            _label(scale, color),
+            style,
         )
 
 

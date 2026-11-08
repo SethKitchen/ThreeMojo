@@ -220,7 +220,7 @@ Two straw dummies stand east of the start. A dummy is a post with a crossbar, a 
 
 The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these over the frame:
 
-- **The companion's assist gauge**, in the bottom left. It says `ASSIST READY` when it is full.
+- **The companion's assist gauge**, in the bottom left. It says `ASSIST READY` when it is full, and the words glow gold.
 - **The gauges**, in the bottom right, on a panel of frosted glass. A line names the style and the stance, such as `SWORD  MID STANCE`, and gives the health as a large number, such as `478 / 500`. Under it are the health, the stamina, the mana for magic, and the limit gauge, then the special gauge as a row of points. The health turns red below a quarter, and the stamina turns amber below a quarter. In a surge, the limit gauge turns gold, says `SURGE`, and empties as the time runs out. Through an ultimate's start-up, its name stands large and leaning in the middle of the frame, and a gold star grows at the sword hand. The name lands larger and eases to its size.
 - **The combo**, such as `12 HITS`, on the right: the count large and leaning, and `HITS` small. Each hit pops the count, as a blow's number pops. It fades as the combo ends.
 - **The red edges.** Below `VIGNETTE_HEALTH`, 35 percent, of their health, the edges of the player's frame redden, more the nearer they are to falling. The red beats as a heart does, about 80 times a minute. A blow that lands on the player flashes them red for 0.4 seconds. `draw_vignette` draws them.
