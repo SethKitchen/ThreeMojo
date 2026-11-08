@@ -389,7 +389,18 @@ def _party(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
             ref f = member.fighter
             var share = f.health / f.parameters.health
             var hue = Rgb(96, 200, 90) if share >= 0.25 else BOSS_RED
-            _bar(frame, x, y, width, 3 * scale, share, hue)
+            # What a blow took stays pale, then drains, as on every bar of
+            # health.
+            draw_gauge(
+                frame,
+                x,
+                y,
+                width,
+                3 * scale,
+                share,
+                hue,
+                f.chip / f.parameters.health,
+            )
         y += 8 * scale
 
 
