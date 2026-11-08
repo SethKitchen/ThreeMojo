@@ -276,6 +276,11 @@ comptime INSIDE_REACH = Float32(18)
 drawn, in meters."""
 comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
+comptime HEART_RATE = Float32(8.4)
+"""How fast the red of a player near falling beats, in radians a second:
+about 80 beats a minute."""
+comptime HEART_DEPTH = Float32(0.25)
+"""How much of the red of a player near falling each beat takes away."""
 comptime DYNAMIC_BUDGET_MS = Float64(33.3)
 """The time a frame may take before its size shrinks, in milliseconds: 30
 frames a second."""
@@ -1947,7 +1952,8 @@ struct VillageGame(Movable):
 
     def vignette(self) -> Float32:
         """Return how red the frame's edges are: the more, the nearer the
-        player is to falling, and in a flash as a blow lands.
+        player is to falling, and in a flash as a blow lands. The red of a
+        player near falling beats, `HEART_DEPTH` deep, at `HEART_RATE`.
 
         Returns:
             From 0 to 1.
@@ -1955,6 +1961,9 @@ struct VillageGame(Movable):
         ref f = self.battle.fighter
         var share = f.health / max(Float32(1), f.parameters.health)
         var low = max(Float32(0), (VIGNETTE_HEALTH - share) / VIGNETTE_HEALTH)
+        # Near falling, the red beats as a heart does.
+        var beat = 0.5 + 0.5 * sin(self.clock * HEART_RATE)
+        low *= 1 - HEART_DEPTH * beat
         var flash = Float32(0)
         for hurt in self.battle.hurts:
             flash = max(flash, max(Float32(0), 1 - hurt.age / 0.4) * 0.6)

@@ -995,6 +995,17 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     # Near falling, and as a blow lands, the frame's edges redden.
     game.battle.fighter.health = 10
     assert_true(game.vignette() > 0.5)
+    # It beats: stronger at one moment than at another.
+    var seen = List[Float32]()
+    for k in range(8):
+        game.clock = Float32(k) * 0.1
+        seen.append(game.vignette())
+    var most = seen[0]
+    var least = seen[0]
+    for v in seen:
+        most = max(most, v)
+        least = min(least, v)
+    assert_true(most - least > 0.05)
     game.battle.fighter.health = game.battle.fighter.parameters.health
     assert_equal(game.vignette(), 0)
     game.battle.hurts.append(Hurt(Vector3(1, 0, 0), 0.1))
