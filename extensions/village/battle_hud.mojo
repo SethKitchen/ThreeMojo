@@ -790,6 +790,21 @@ def draw_battle(
             _glow(frame, camera, look, foe.character.position, foe.fighter)
         if foe.fighter.raging():
             _centered(frame, middle, y + 6 * scale, "RAGE", scale, DANGER, 1)
+        # A captain or a thrower is named over its bars, small, where a
+        # break or a warning does not stand.
+        var name = target_name(battle, foes[k])
+        var busy = foe.fighter.move == STAGGER or foe.fighter.move == HEAVY
+        if name != "BANDIT" and not foe.beast and not busy:
+            var plate = _label(scale, WHITE_TEXT)
+            plate.size = Float32(scale) * 3.5
+            plate.alpha = 0.9
+            draw_styled(
+                frame,
+                Float32(x),
+                Float32(y) - plate.size - Float32(scale),
+                name,
+                plate,
+            )
     for index in range(len(battle.dummies)):
         ref practice = battle.dummies[index]
         ref fighter = practice.fighter

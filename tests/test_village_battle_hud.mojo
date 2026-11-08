@@ -599,6 +599,46 @@ def test_a_number_over_the_party_panel_is_not_drawn() raises:
     assert_true(_changed(below) != _changed(plain))
 
 
+def test_a_thrower_is_named_over_its_bars() raises:
+    var arena = Arena(arena_parameters(1, 0, 5))
+    var camera = _camera()
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    ref foe = arena.battle.foes[0]
+    foe.brain.state = CIRCLING
+    var plain = _frame()
+    draw_battle(plain, arena.battle, arena.scene, camera, look)
+    # A thrower's name stands over its bars: the frame is brighter.
+    foe.brain.throws = True
+    var named = _frame()
+    draw_battle(named, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(named) > _changed(plain))
+    # Staggered, or winding up a heavy attack, it is not named: the word
+    # or the warning stands there.
+    foe.fighter.move = STAGGER
+    var broken = _frame()
+    draw_battle(broken, arena.battle, arena.scene, camera, look)
+    foe.brain.throws = False
+    var plain_broken = _frame()
+    draw_battle(plain_broken, arena.battle, arena.scene, camera, look)
+    assert_equal(_changed(broken), _changed(plain_broken))
+    foe.fighter.move = HEAVY
+    foe.fighter.clock = 0.6
+    foe.brain.throws = True
+    var heavy = _frame()
+    draw_battle(heavy, arena.battle, arena.scene, camera, look)
+    foe.brain.throws = False
+    var plain_heavy = _frame()
+    draw_battle(plain_heavy, arena.battle, arena.scene, camera, look)
+    assert_equal(_changed(heavy), _changed(plain_heavy))
+    # A wolf is not named.
+    foe.fighter.move = FREE
+    foe.beast = True
+    var wolf = _frame()
+    draw_battle(wolf, arena.battle, arena.scene, camera, look)
+    foe.beast = False
+    assert_true(_changed(wolf) <= _changed(named))
+
+
 def test_a_number_pops_and_eases_back() raises:
     assert_almost_equal(pop_grow(0), 1 + POP_GROW, atol=1e-6)
     assert_true(pop_grow(POP_EASE / 2) < pop_grow(0))
