@@ -84,9 +84,12 @@ def test_the_compass_points_to_its_marks() raises:
     var at = (10 * 400 + 200) * 4
     assert_equal(Int(frame.pixels[at]), 255)
     assert_equal(Int(frame.pixels[at + 1]), 0)
-    # The mark behind stands at the strip's left end, half as bright.
+    # The mark behind stands at the strip's left end, smaller, in its own
+    # gold.
     var half = Int(400 * COMPASS_SHARE / 2)
-    assert_true(_red(frame, 200 - half + 1, 10) > 100)
+    var end = (10 * 400 + 200 - half) * 4
+    assert_equal(Int(frame.pixels[end]), GOLD_TEXT.r)
+    assert_equal(Int(frame.pixels[end + 2]), GOLD_TEXT.b)
     # The caption and the letters show; nothing shows below the caption.
     var lit = 0
     for x in range(400):

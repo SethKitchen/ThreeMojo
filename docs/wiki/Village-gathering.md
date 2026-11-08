@@ -98,7 +98,7 @@ The panels are frosted glass. `draw_panel` blurs what is behind a panel and dark
 - A gold mark at each villager with an errand to offer, and a silver mark at each villager whose errand is taken.
 - A red mark at the nearest foe that stands, within `FOE_SIGHT`, 60 meters.
 - A violet mark at each raid's warden that stands, so the player can find a raid.
-- A mark past the strip's end stands at that end, half as bright, so the player knows which way to turn.
+- A mark past the strip's end stands at that end, smaller, in its own color, so the player knows which way to turn.
 - Under the strip, on a dark pill, the hour as a twelve-hour clock and the weather, such as `2:00 PM  CLEAR`.
 
 The strip fades out toward each end, and a light line runs along its foot. North is gold. A gold wedge under the strip shows the way the camera looks, and each mark is a diamond.

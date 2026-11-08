@@ -13,8 +13,8 @@ camera looks:
 - a tick each 15 degrees, and the letters `N`, `E`, `S` and `W` at the
   four points. North is minus z, the way a yaw of zero looks;
 - a mark for each `CompassMark`, in its color, at the way it lies from
-  the player. A mark past the strip's end stands at that end, half as
-  bright, so the player knows which way to turn;
+  the player. A mark past the strip's end stands at that end, smaller,
+  in its own color, so the player knows which way to turn;
 - under the strip, a caption: the hour and the weather.
 
 `clock_text` writes an hour as a twelve-hour clock.
@@ -206,22 +206,21 @@ def draw_compass(
         )
     for mark in marks:
         var at = bearing(origin, mark.at, yaw)
-        var bright = Float32(1)
+        # A mark past the strip's end stands at that end, smaller, in its
+        # own color: dimmed, a color is lost against the strip.
+        var r = 2 * scale
         if abs(at) > COMPASS_SPAN / 2:
             at = COMPASS_SPAN / 2 if at > 0 else -COMPASS_SPAN / 2
-            bright = 0.5
+            r = max(1, (4 * scale) // 3)
         var x = middle - Int(at * per)
         # A diamond, ringed dark.
-        var r = 2 * scale
         var y = top + height // 2
         for dy in range(-r - 1, r + 2):  # pragma: no branch
             var w = r + 1 - abs(dy)
             fill_box(frame, x - w, y + dy, x + w + 1, y + dy + 1, SHADOW, 0.6)
         for dy in range(-r, r + 1):  # pragma: no branch
             var w = r - abs(dy)
-            fill_box(
-                frame, x - w, y + dy, x + w + 1, y + dy + 1, mark.color, bright
-            )
+            fill_box(frame, x - w, y + dy, x + w + 1, y + dy + 1, mark.color, 1)
     if caption.byte_length() > 0:
         # The caption stands over the sky: a dark pill keeps it clear.
         var small = Float32(scale) * 4.5
