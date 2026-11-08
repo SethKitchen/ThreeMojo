@@ -72,15 +72,43 @@ def water_mask(image: Framebuffer, before: List[Float32]) raises -> List[Bool]:
     if len(before) != count or len(image.depth) != count:
         raise Error("A frame needs a depth for each pixel")
     var mask = List[Bool](length=count, fill=False)
-    var now = image.depth.unsafe_ptr()
-    var was = before.unsafe_ptr()
-    var out = mask.unsafe_ptr()
-    # A frame has a pixel or more.
-    for k in range(count):  # pragma: no branch
-        out[unsafe_offset=k] = now[unsafe_offset=k] != was[unsafe_offset=k]
+    # The pixels are split among the cores, each a run of its own.
+    var tasks = max(1, min(available_workers(), count // MASK_RUN))
+    var group = TaskGroup()
+    for t in range(tasks):  # pragma: no branch
+        group.create_task(
+            _mask_task(
+                image.depth.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[ImmutAnyOrigin](),
+                before.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[ImmutAnyOrigin](),
+                mask.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                t * count // tasks,
+                (t + 1) * count // tasks,
+            )
+        )
+    group.wait()
     _ = len(image.depth)
     _ = len(before)
     return mask^
+
+
+comptime MASK_RUN = 4096
+"""The fewest pixels a task of `water_mask` compares."""
+
+
+__async def _mask_task(
+    now: Pointer[Float32, ImmutAnyOrigin],
+    was: Pointer[Float32, ImmutAnyOrigin],
+    marks: MutPointer[Bool, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Mark the pixels `first` to `past` whose depth the water changed."""
+    for k in range(first, past):  # pragma: no branch
+        marks[unsafe_offset=k] = now[unsafe_offset=k] != was[unsafe_offset=k]
 
 
 def _fresnel(cos_view: Float32) -> Float32:
