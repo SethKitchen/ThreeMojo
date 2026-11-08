@@ -853,10 +853,16 @@ def draw_battle(
             var unit = Float32(scale)
             var r = 6 * unit
             var thin = max(Float32(1.5), 0.55 * unit)
+            # Red while the foe winds up a heavy attack: the warning stands
+            # where the eye already is.
+            var ring = GOLD_TEXT
+            if battle.lock < len(battle.foes):
+                if battle.foes[battle.lock].fighter.move == HEAVY:
+                    ring = DANGER
             draw_arcs(frame, x, y, r, thin + 2, 2 * unit, SHADOW, 0.55)
-            draw_arcs(frame, x, y, r, thin, 2 * unit + 1, GOLD_TEXT, 1)
+            draw_arcs(frame, x, y, r, thin, 2 * unit + 1, ring, 1)
             draw_arcs(frame, x, y, 0, 1.6 * unit, 0, SHADOW, 0.5)
-            draw_arcs(frame, x, y, 0, 1.1 * unit, 0, GOLD_TEXT, 1)
+            draw_arcs(frame, x, y, 0, 1.1 * unit, 0, ring, 1)
     draw_raid(frame, battle, camera, look, scale)
     draw_effects(frame, battle, camera, look)
     # The numbers' boxes on the frame, the oldest first.

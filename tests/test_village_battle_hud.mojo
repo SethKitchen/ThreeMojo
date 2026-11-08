@@ -652,6 +652,31 @@ def test_a_thrower_is_named_over_its_bars() raises:
     assert_true(_changed(wolf) <= _changed(named))
 
 
+def test_the_lock_turns_red_on_a_heavy_wind_up() raises:
+    var arena = Arena(arena_parameters(1, 1, 5))
+    var camera = _camera()
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    arena.battle.lock = 0
+    var calm = _frame()
+    draw_battle(calm, arena.battle, arena.scene, camera, look)
+    arena.battle.foes[0].fighter.move = HEAVY
+    arena.battle.foes[0].fighter.clock = 0.9
+    var warned = _frame()
+    draw_battle(warned, arena.battle, arena.scene, camera, look)
+    # Red, not gold: less green in the frame.
+    var green_calm = 0
+    var green_warned = 0
+    for k in range(1, len(calm.pixels), 4):
+        green_calm += Int(calm.pixels[k])
+        green_warned += Int(warned.pixels[k])
+    assert_true(green_warned < green_calm)
+    # Locked on a dummy, past the foes, the ring stays gold.
+    arena.battle.lock = 1
+    var dummy = _frame()
+    draw_battle(dummy, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(dummy) > 0)
+
+
 def test_low_stamina_turns_the_gauge_amber() raises:
     var arena = Arena(arena_parameters(0, 0, 5))
     var camera = _camera()
