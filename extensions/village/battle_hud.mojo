@@ -131,7 +131,11 @@ comptime HEALTH = Rgb(96, 200, 90)
 comptime WOUNDED = Rgb(225, 70, 50)
 """The color of a fighter's health below a quarter, and of a bandit's."""
 comptime STAMINA_COLOR = Rgb(140, 205, 255)
-"""The color of stamina."""
+"""The color of a fighter's stamina."""
+comptime LOW_STAMINA = Float32(0.25)
+"""The share of the player's stamina below which the gauge turns amber."""
+comptime LOW_STAMINA_COLOR = Rgb(255, 170, 60)
+"""The color of the player's stamina when it runs low."""
 comptime SPECIAL_COLOR = Rgb(255, 190, 70)
 """The color of the special gauge's points."""
 comptime LIMIT_COLOR = Rgb(200, 120, 255)
@@ -347,14 +351,17 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
             _label(scale, GOLD_TEXT),
         )
     draw_gauge(frame, x, limit, width, scale, share, color)
+    # Stamina turns amber when it runs low, before a dodge or a sprint
+    # fails for the want of it.
+    var spent = f.stamina / f.parameters.stamina
     draw_gauge(
         frame,
         x,
         stamina,
         width,
         2 * scale,
-        f.stamina / f.parameters.stamina,
-        STAMINA_COLOR,
+        spent,
+        STAMINA_COLOR if spent >= LOW_STAMINA else LOW_STAMINA_COLOR,
     )
     if magic:
         draw_gauge(

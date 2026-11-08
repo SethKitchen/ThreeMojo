@@ -652,6 +652,26 @@ def test_a_thrower_is_named_over_its_bars() raises:
     assert_true(_changed(wolf) <= _changed(named))
 
 
+def test_low_stamina_turns_the_gauge_amber() raises:
+    var arena = Arena(arena_parameters(0, 0, 5))
+    var camera = _camera()
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    ref f = arena.battle.fighter
+    f.stamina = f.parameters.stamina * 0.3
+    var some = _frame()
+    draw_battle(some, arena.battle, arena.scene, camera, look)
+    f.stamina = f.parameters.stamina * 0.2
+    var low = _frame()
+    draw_battle(low, arena.battle, arena.scene, camera, look)
+    # Amber is redder than the blue it was.
+    var red_some = 0
+    var red_low = 0
+    for k in range(0, len(low.pixels), 4):
+        red_some += Int(some.pixels[k])
+        red_low += Int(low.pixels[k])
+    assert_true(red_low > red_some)
+
+
 def test_the_combo_count_pops_with_each_hit() raises:
     var arena = Arena(arena_parameters(0, 0, 5))
     var camera = _camera()
