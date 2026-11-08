@@ -397,7 +397,17 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
         small,
     )
     var count = String(Int(f.health + 0.5))
-    var big = TextStyle(7 * unit, WHITE_TEXT, 1, 0, 0.8 * unit, 0.25 * unit, 0)
+    # Red while what a blow took still drains from the bar.
+    var hurt = f.chip > f.health + 0.5
+    var big = TextStyle(
+        7 * unit,
+        WOUNDED if hurt else WHITE_TEXT,
+        1,
+        0,
+        0.8 * unit,
+        0.25 * unit,
+        0,
+    )
     draw_styled(
         frame,
         Float32(right) - tail - styled_width(count, big.size),

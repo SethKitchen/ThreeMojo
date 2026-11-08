@@ -677,6 +677,29 @@ def test_the_lock_turns_red_on_a_heavy_wind_up() raises:
     assert_true(_changed(dummy) > 0)
 
 
+def test_the_health_number_reddens_as_a_blow_drains() raises:
+    var arena = Arena(arena_parameters(0, 0, 5))
+    var camera = _camera()
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    ref f = arena.battle.fighter
+    f.health = 300
+    f.chip = 300
+    var steady = _frame()
+    draw_battle(steady, arena.battle, arena.scene, camera, look)
+    f.chip = 400
+    var drained = _frame()
+    draw_battle(drained, arena.battle, arena.scene, camera, look)
+    # Red, not white: less blue in the frame, though the pale chip adds.
+    var blue_steady = 0
+    var blue_drained = 0
+    var right = 320 * 4
+    for y in range(120, 180):
+        for k in range(y * right + 200 * 4 + 2, (y + 1) * right, 4):
+            blue_steady += Int(steady.pixels[k])
+            blue_drained += Int(drained.pixels[k])
+    assert_true(blue_drained != blue_steady)
+
+
 def test_low_stamina_turns_the_gauge_amber() raises:
     var arena = Arena(arena_parameters(0, 0, 5))
     var camera = _camera()
