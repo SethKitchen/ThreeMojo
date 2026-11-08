@@ -83,7 +83,12 @@ from extensions.village.combat import (
 from extensions.village.companion import ASSIST_FULL
 from extensions.village.foes import POSTED, bandit_fighter
 from extensions.village.effects_hud import draw_effects
-from extensions.village.raid_hud import DIM_TEXT, MANA_COLOR, draw_raid
+from extensions.village.raid_hud import (
+    DIM_TEXT,
+    MANA_COLOR,
+    draw_raid,
+    party_box,
+)
 from extensions.village.styles import MAGIC, style_name
 from extensions.village.slashes import (
     PIERCE_TRAIL,
@@ -857,6 +862,13 @@ def draw_battle(
     tops.extend(bar_tops.copy())
     widths.extend(bar_widths.copy())
     heights.extend(bar_heights.copy())
+    # The party's panel keeps its place too: a number over it moves up
+    # clear of it, or is not drawn.
+    var party = party_box(h, battle, scale)
+    lefts.append(party[0])
+    tops.append(party[1])
+    widths.append(party[2])
+    heights.append(party[3])
     tops = stack_boxes(lefts, tops, widths, heights)
     tops.resize(count, 0)
     # A number that the newer ones lift more than `POPUP_STACK` of its own
@@ -875,6 +887,11 @@ def draw_battle(
             drop = max(drop, band - tops[k])
     for k in range(len(shown)):
         if not kept[k]:
+            continue
+        # A number that the move down set over the party's panel is not
+        # drawn: the panel stands over it.
+        var over_x = _crosses(lefts[k], widths[k], party[0], party[2])
+        if over_x and _crosses(tops[k] + drop, heights[k], party[1], party[3]):
             continue
         ref popup = battle.popups[shown[k]]
         # The number's size without its pop, grown by the pop's ease about

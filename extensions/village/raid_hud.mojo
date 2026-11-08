@@ -312,6 +312,37 @@ def _boss_bar(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
             )
 
 
+def party_box(
+    height: Int, battle: Battle, scale: Int
+) -> Tuple[Int, Int, Int, Int]:
+    """Return the box of the panel that lists the raiders who joined, so
+    the numbers of the blows can stand clear of it.
+
+    Args:
+        height: The frame's height, in pixels.
+        battle: The fight.
+        scale: The scale of the display.
+
+    Returns:
+        Its left, its top, its width and its height, in pixels; a height
+        of 0 while no raider has joined.
+    """
+    var joined = 0
+    for k in range(len(battle.members)):
+        if battle.members[k].joined:
+            joined += 1
+    if joined == 0:
+        return (0, 0, 0, 0)
+    var x = 6 * scale
+    var y = height // 3
+    return (
+        x - 4 * scale,
+        y - 4 * scale,
+        58 * scale,
+        joined * 16 * scale + 6 * scale,
+    )
+
+
 def _party(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
     """Draw each raider who joined, on a glass panel: their role and their
     health, or `DOWN` and the revive."""
@@ -319,18 +350,10 @@ def _party(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
     var y = frame.height // 3
     var width = 48 * scale
     # A glass panel behind the raiders who joined, as behind the gauges.
-    var joined = 0
-    for k in range(len(battle.members)):
-        if battle.members[k].joined:
-            joined += 1
-    if joined > 0:
+    var box = party_box(frame.height, battle, scale)
+    if box[3] > 0:
         draw_panel(
-            frame,
-            x - 4 * scale,
-            y - 4 * scale,
-            x + width + 6 * scale,
-            y + joined * 16 * scale + 2 * scale,
-            scale,
+            frame, box[0], box[1], box[0] + box[2], box[1] + box[3], scale
         )
     for k in range(len(battle.members)):
         ref member = battle.members[k]

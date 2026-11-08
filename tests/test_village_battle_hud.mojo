@@ -554,6 +554,51 @@ def test_the_edges_tint_and_a_ki_pulse_rings() raises:
     assert_true(Int(full.pixels[0]) > 150)
 
 
+def _point_at(
+    camera: PerspectiveCamera, look: Vector3, x: Int, y: Int
+) raises -> Vector3:
+    """Return a point 4 meters before the camera that lands within a few
+    pixels of a pixel of a frame of 320 by 180."""
+    var best = Vector3(0, 0, 0)
+    var least = Float32(1.0e30)
+    for i in range(-40, 41):
+        for j in range(-20, 21):
+            var p = Vector3(Float32(i) * 0.1, 1 + Float32(j) * 0.1, -2)
+            var at = on_screen(camera, look, p, 320, 180)
+            if at:
+                var dx = at.value().x - Float32(x)
+                var dy = at.value().y - Float32(y)
+                if dx * dx + dy * dy < least:
+                    least = dx * dx + dy * dy
+                    best = p
+    return best
+
+
+def test_a_number_over_the_party_panel_is_not_drawn() raises:
+    var arena = Arena(arena_parameters(0, 0, 6, raid=True, raiders=2))
+    var camera = _camera()
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    for k in range(2):
+        arena.battle.members[k].joined = True
+    var plain = _frame()
+    draw_battle(plain, arena.battle, arena.scene, camera, look)
+    # A number on the panel, over a raider's row, is hidden by it.
+    arena.battle.popups.append(
+        Popup(_point_at(camera, look, 30, 80), "55", WHITE_TEXT, 0.5)
+    )
+    var over = _frame()
+    draw_battle(over, arena.battle, arena.scene, camera, look)
+    assert_equal(_changed(over), _changed(plain))
+    # A number under the panel, in its columns, is drawn.
+    arena.battle.popups.clear()
+    arena.battle.popups.append(
+        Popup(_point_at(camera, look, 30, 160), "55", WHITE_TEXT, 0.5)
+    )
+    var below = _frame()
+    draw_battle(below, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(below) != _changed(plain))
+
+
 def test_a_number_pops_and_eases_back() raises:
     assert_almost_equal(pop_grow(0), 1 + POP_GROW, atol=1e-6)
     assert_true(pop_grow(POP_EASE / 2) < pop_grow(0))
