@@ -270,7 +270,14 @@ from extensions.village.raid import (
     stone_places,
 )
 from extensions.village.boss import Boss, BOSS_WALK
+from extensions.village.route import (
+    Route,
+    RouteGrid,
+    follow_route,
+    no_route,
+)
 from extensions.village.companion import (
+    FOLLOW,
     ASSIST_PER_HIT,
     AllySight,
     Companion,
@@ -1006,6 +1013,8 @@ struct Ally(Movable):
     """How long she has lain fallen, in seconds, or -1 while she stands."""
     var climb: Climb
     """Where she is on a house's stairs: see `ally_goal`."""
+    var route: Route
+    """Her way round the houses and the pond: see `follow_route`."""
 
 
 @fieldwise_init
@@ -1087,6 +1096,9 @@ struct Battle(Movable):
     var doors: List[Doorway]
     # The way up each house's stairs, in the doors' order.
     var climbs: List[List[Vector3]]
+    # The grid of open ground that the companion and the raiders find
+    # their ways over, or none: see `extensions.village.route`.
+    var grid: Optional[RouteGrid]
     var bolts: List[Bolt]
     var called: Bool
     # The throwers' knives that fly.
@@ -1286,6 +1298,7 @@ struct Battle(Movable):
         self.allies = List[Ally]()
         self.doors = List[Doorway]()
         self.climbs = List[List[Vector3]]()
+        self.grid = None
         for ally in parameters.allies:
             var person = Body(
                 scene,
@@ -1318,6 +1331,7 @@ struct Battle(Movable):
                     False,
                     -1,
                     no_climb(),
+                    no_route(),
                 )
             )
         var paints = animal_paints(assets)
@@ -1546,6 +1560,7 @@ struct Battle(Movable):
                     Vector3(0, 0, 0),
                     Vector3(0, 0, 1),
                     no_climb(),
+                    no_route(),
                 )
             )
 
@@ -1692,6 +1707,15 @@ struct Battle(Movable):
             if self.members[index].down < 0:
                 out.append(self.members[index].character.position)
         return out^
+
+    def set_grid(mut self, var grid: RouteGrid):
+        """Give the companion and the raiders the grid of open ground that
+        they find their ways round the houses and the pond over.
+
+        Args:
+            grid: The grid: see `extensions.village.route.route_grid`.
+        """
+        self.grid = grid^
 
     def set_doors(
         mut self,
@@ -3072,6 +3096,13 @@ struct Battle(Movable):
                     Vector3(pond.x.to(METER), 0, pond.z.to(METER)),
                     pond.radius.to(METER),
                 )
+                # Outdoors, her way round the houses: indoors the door
+                # and the stairs give it.
+                var out = terrain.ceiling_over(at.x, at.z, at.y) >= OPEN_SKY
+                if self.grid and out:
+                    goal = follow_route(
+                        self.grid.value(), ally.route, at, goal, FOLLOW, seconds
+                    )
             var sight = AllySight(
                 ally.character.position,
                 goal,
@@ -3635,6 +3666,13 @@ struct Battle(Movable):
         around.extend(self.obstacles())
         var skip_from = first + self.first_warden() + len(self.allies)
         skip_from += len(self.wardens)
+        # A narrow stair takes one at a time: raiders on the stairs pass
+        # through each other, so a line of them does not jam it.
+        var climbing = List[Bool](capacity=len(self.members))
+        for k in range(len(self.members)):
+            climbing.append(self.members[k].climb.step >= 0)
+            if climbing[k]:
+                around[skip_from + k].radius = 0
         var target = self._member_target()
         var joined_now = False
         # The places that each raider sees: the hurt, the fallen, the mark.
@@ -3711,6 +3749,18 @@ struct Battle(Movable):
                     pond.radius.to(METER),
                     FOLLOW_GAP,
                 )
+                # Outdoors, its way round the houses: indoors the door
+                # and the stairs give it.
+                var out = terrain.ceiling_over(at.x, at.z, at.y) >= OPEN_SKY
+                if self.grid and out:
+                    sight.leader = follow_route(
+                        self.grid.value(),
+                        mine.route,
+                        at,
+                        sight.leader,
+                        FOLLOW_GAP,
+                        seconds,
+                    )
             else:
                 mine.climb = no_climb()
             if target >= 0 and joined:
@@ -3768,12 +3818,18 @@ struct Battle(Movable):
                     face = yaw_of(
                         intent.face.value() - member.character.position
                     )
+                # On the stairs, a raider passes under or over the player
+                # on another story: the player's circle stands at every
+                # height.
+                var near = around.copy()
+                if climbing[k]:
+                    near[first - 1].radius = 0
                 member.character.step(
                     walk,
                     Angle(0.0, RADIAN),
                     delta,
                     terrain,
-                    around,
+                    near,
                     skip_from + k,
                     face=face,
                 )

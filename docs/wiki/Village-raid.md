@@ -10,7 +10,7 @@ The Stone Warden is a giant who keeps a ring of standing stones behind the villa
 
 The modules are `extensions/village/boss.mojo` for the rules, `extensions/village/party.mojo` for the raiders' minds, and `extensions/village/raid.mojo` for the scene. `extensions/village/battle.mojo` runs the fight.
 
-1. The raiders wait at the stones. When the player comes within 30 meters of them, they join the party, and the note says `THE RAIDERS JOIN YOUR PARTY`. They go back when the player is further than 60 meters from them.
+1. The raiders wait at the stones. When the player comes within 30 meters of them, they join the party, and the note says `THE RAIDERS JOIN YOUR PARTY`. They go back when the player is further than 80 meters from them. So they follow the player into the houses of two stories, and up their stairs.
 2. The warden stands at home until a member comes within 16 meters, or strikes it. Then it walks to its target and makes the attacks of its phase, in turn.
 3. Each attack lays its zone on the ground in red light. The zone fills from its middle as the attack winds up, and strikes every member in it as the fill reaches its edge.
 4. The warden goes home and heals when every member has fallen, or when the party leads it further than 45 meters from home.

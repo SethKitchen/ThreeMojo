@@ -109,6 +109,7 @@ from extensions.village.gathering import (
     Gathering,
 )
 from extensions.village.battle_hud import DANGER, draw_target, hud_drop
+from extensions.village.route import ROUTE_REACH, route_grid
 from extensions.village.compass import CompassMark, clock_text, draw_compass
 from extensions.village.hud import (
     GOLD_TEXT,
@@ -899,6 +900,13 @@ struct VillageGame(Movable):
         self.battle.keep_hems(scene, assets)
         # The companion goes into a house by its front door.
         self.battle.set_doors(homes.copy(), climbs.copy())
+        # She and the raiders find their ways round the houses and the pond.
+        var grid = route_grid(
+            self.terrain,
+            self.player.parameters.wade_depth.to(METER),
+            ROUTE_REACH,
+        )
+        self.battle.set_grid(grid^)
         self.village.meadow.grass_wind_every = self.quality.grass_wind_every
         # A still shadow map is drawn once, and the grass changes as the
         # player walks, so only full shadows take the grass.

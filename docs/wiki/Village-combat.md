@@ -198,6 +198,12 @@ When the player stands more than `CLIMB_RISE`, 1.5 meters, above her indoors, sh
 
 Out of a fight, a raider of the party follows the player into a house, and up and down its stairs, the same way.
 
+Outdoors, she finds her way round the houses and the pond. `route_grid`, in `extensions/village/route.mojo`, lays a grid of 1-meter cells over the village. A cell is closed where a wall or a solid lot stands near its middle, or where the water is too deep to wade. When a house stands between her and the spot she walks to, `find_route` finds the shortest way over the open cells. `follow_route` then gives the furthest point of that way that she sees straight.
+
+She finds her way again each second, or when her goal moves 2 meters. Indoors, the door and the stairs give her way.
+
+Raiders on the stairs pass through each other and under the player, so a line of them does not jam a narrow flight.
+
 The pond is too deep to wade at its middle. When her straight way to her goal passes within `POND_MARGIN`, 1 meter, of the pond's edge, she walks round it. She goes first to a point that far outside the margin, on the side of the pond nearest her way. `around_pond` gives that point, and a raider walks round the pond the same way.
 
 She never strays more than 10 meters from the player. She casts at the locked target. With no lock, she casts at the nearest foe that fights within 15 meters of the player.

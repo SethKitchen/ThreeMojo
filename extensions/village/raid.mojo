@@ -80,6 +80,7 @@ from extensions.village.combat import (
     move_data,
 )
 from extensions.village.companion import Climb
+from extensions.village.route import Route
 from extensions.village.party import (
     ARCHER,
     HEALER,
@@ -112,9 +113,10 @@ comptime WARDEN_RADIUS = Float32(0.95)
 comptime JOIN_RANGE = Float32(30)
 """How near the stones the player must come for the raiders to join, in
 meters."""
-comptime PART_RANGE = Float32(60)
+comptime PART_RANGE = Float32(80)
 """How far from the stones the player goes before the raiders go back, in
-meters."""
+meters: far enough that they follow the player up the stairs of the
+houses of two stories."""
 comptime STONES = 9
 """How many standing stones ring the arena."""
 comptime RING_RADIUS = Float32(17)
@@ -452,3 +454,5 @@ struct Member(Movable):
     # Where it is on a house's stairs as it follows the player: see
     # `ally_goal`.
     var climb: Climb
+    # Its way round the houses and the pond: see `follow_route`.
+    var route: Route
