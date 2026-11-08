@@ -689,15 +689,15 @@ def test_the_health_number_reddens_as_a_blow_drains() raises:
     f.chip = 400
     var drained = _frame()
     draw_battle(drained, arena.battle, arena.scene, camera, look)
-    # Red, not white: less blue in the frame, though the pale chip adds.
-    var blue_steady = 0
-    var blue_drained = 0
-    var right = 320 * 4
-    for y in range(120, 180):
-        for k in range(y * right + 200 * 4 + 2, (y + 1) * right, 4):
-            blue_steady += Int(steady.pixels[k])
-            blue_drained += Int(drained.pixels[k])
-    assert_true(blue_drained != blue_steady)
+    # The number's pixels, over the bars on the right: red, not white.
+    var red_shift = 0
+    for y in range(148, 158):
+        for x in range(255, 305):
+            var k = (y * 320 + x) * 4
+            var was = Int(steady.pixels[k]) - Int(steady.pixels[k + 2])
+            var now = Int(drained.pixels[k]) - Int(drained.pixels[k + 2])
+            red_shift += now - was
+    assert_true(red_shift > 0)
 
 
 def test_low_stamina_turns_the_gauge_amber() raises:
