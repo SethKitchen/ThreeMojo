@@ -256,7 +256,7 @@ A track on a node that is not written is left out. So is a track of any other ki
 
 ### Textures
 
-Each texture becomes a PNG image and a sampler. The sampler holds the wrap, the filter and whether the texture has a mip chain. Each distinct image is written once, as three.js's `processImage` caches it. Two textures with the same pixels and size share one image, and each keeps its own sampler.
+Each texture becomes a compressed PNG image and a sampler. The sampler holds the wrap, the filter and whether the texture has a mip chain. Each distinct image is written once, as three.js's `processImage` caches it. Two textures with the same pixels and size share one image, and each keeps its own sampler.
 
 The `v` coordinate of glTF runs down from the top of the image. The `v` coordinate of this renderer runs up from the bottom. Thus the writer turns the image upside down, as three.js does for a `flipY` texture. A texture from `read_gltf` has this flip in its `repeat` and `offset`. The writer keeps the image of such a texture as it is.
 
@@ -393,6 +393,8 @@ The archive is a ZIP file that is not compressed. Each file's data starts at a m
 - `model.usda`: a `Root` `Xform`, a `Scenes` scope and a `Scene` `Xform` that holds the nodes, then a `Materials` scope.
 - `geometries/Geometry_<id>.usda`: one `Mesh` for each geometry, with its triangles, normals, points, texture coordinates and colors.
 - `textures/Texture_<id>_<flip_y>.png`: one PNG for each texture, named `true` or `false` by its `flip_y`, as three.js names it by its `flipY`.
+
+The glTF, USDZ and scene JSON writers compress each PNG at `render.png.TEXTURE_LEVEL`, which is DEFLATE level 6. The archive itself is not compressed, as USDZ asks. See [Write a PNG](Image-files#write-a-png).
 
 | Node | USD |
 |---|---|

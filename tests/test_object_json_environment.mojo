@@ -56,7 +56,7 @@ from render.cube_texture_store import (
 from render.cube_uv import CUBE_UV_MIN_MIP
 from render.framebuffer import Color, Framebuffer
 from render.pmrem import pmrem_from_cube
-from render.png import encode as encode_png
+from render.png import TEXTURE_LEVEL, encode as encode_png
 from render.srgb import LINEAR, SRGB
 from render.texture import BILINEAR, CLAMP, NEAREST, Texture, float_texture
 from renderers.renderer import Renderer
@@ -370,8 +370,10 @@ def test_a_scene_read_back_renders_the_same() raises:
 
 
 def _data_url(face: Int) raises -> String:
-    """Return a face as a PNG `data:` URL."""
-    var png = encode_png(Framebuffer(FACE, FACE, _face_pixels(face)))
+    """Return a face as a PNG `data:` URL, as the writer writes it."""
+    var png = encode_png(
+        Framebuffer(FACE, FACE, _face_pixels(face)), TEXTURE_LEVEL
+    )
     return "data:image/png;base64," + encode_base64(png)
 
 

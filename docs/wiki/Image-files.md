@@ -27,7 +27,30 @@ from render.png import encode
 Path("out/frame.png").write_bytes(encode(framebuffer))
 ```
 
-The encoder uses DEFLATE's stored blocks, so the file is larger than a compressed one and legal everywhere.
+By default the encoder uses DEFLATE's stored blocks. The file is then as large as its pixels, and it is legal everywhere.
+
+Give a level to write a compressed file:
+
+```mojo
+Path("out/frame.png").write_bytes(encode(framebuffer, 6))
+```
+
+| Level | What `encode` writes |
+|---|---|
+| 0 | Stored blocks and no row filter. This is the default, and the fastest. |
+| 1 to 9 | Filtered rows, compressed by `render/deflate.mojo` at that level. 1 is the fastest and 9 is the smallest. |
+
+At a level above 0, each row gets one of PNG's five filters: the filter whose bytes, read as signed, have the smallest sum. A level outside 0 to 9 raises.
+
+These sizes are for an image of 1024 by 1024 pixels, which is 4.2 MB at level 0:
+
+| Image | Level 1 | Level 6 | Level 9 |
+|---|---|---|---|
+| A photograph of bricks | 2.31 MB | 2.29 MB | 2.29 MB |
+| A grid of flat colors and text | 0.89 MB | 0.79 MB | 0.76 MB |
+| Time, on one core | 0.2 s | 0.45 s | 0.4 to 1.1 s |
+
+The exporters write each texture at `TEXTURE_LEVEL`, which is 6. See [Exporters](Exporters).
 
 ## Write an APNG
 
@@ -36,7 +59,7 @@ from render.apng import encode
 Path("out/turn.png").write_bytes(encode(frames, delay_ms=60))
 ```
 
-`frames` is a `List[Framebuffer]` of one size. The encoder raises for an empty list or a frame of a different size.
+`frames` is a `List[Framebuffer]` of one size. The encoder raises for an empty list or a frame of a different size. `encode(frames, delay_ms=60, level=6)` compresses each frame as `render.png.encode` does.
 
 ## Recompress a PNG
 
