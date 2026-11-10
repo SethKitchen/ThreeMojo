@@ -52,7 +52,11 @@ on what was decoded before. An image whose pixel count or sample buffer
 does not fit is refused. A tile with no positive width or height is
 refused. A tag whose shorts or longs run past the end of the file is
 refused: UTIF reads each missing value as zero, and a tag names up to
-four billion values.
+four billion values. Tags that name more samples than the decoded image
+holds are refused. UTIF decodes for the sample count of tag 277, or one,
+and reads for another count when the tag is not there: the length of
+tag 258, or what the photometric form implies. It then reads past its
+array, and each form reads the missing bytes in its own way.
 
 **Where UTIF is followed.** Any other LZW code past the table is read as
 the next code.
@@ -734,7 +738,8 @@ def _to_rgba8(ifd: _Ifd, var data: List[UInt8]) raises -> List[UInt8]:
             not floats, RGB of other sample sizes, RGB floats of other
             sample counts, a palette of other sample sizes, and a
             photometric form UTIF does not know or this port does not
-            read.
+            read. Also if the tags name more samples than the image's
+            bytes hold, or no sample.
     """
     var w = ifd.first(256, 0)
     var h = ifd.first(257, 0)
@@ -756,6 +761,23 @@ def _to_rgba8(ifd: _Ifd, var data: List[UInt8]) raises -> List[UInt8]:
     if intp == 1 and bits == 32 and format != 3:
         raise Error("TIFF: 32-bit gray that is not float")
     var bpl = (smpls * bits * w + 7) // 8
+    # The bytes were decoded for the sample count tag 277 gives, or one.
+    # The count here can be another: the length of tag 258, or what the
+    # photometric form implies. UTIF then reads past its array, and each
+    # form reads the missing bytes in its own way. How many bytes each
+    # form reads: whole rows for gray and palette, whole pixels for RGB,
+    # and for CMYK the fourth sample of the last pixel as well.
+    var needed = h * bpl
+    if intp == 2:
+        needed = area * smpls * (bits // 8)
+    elif intp == 5:
+        needed = max(area * smpls, (area - 1) * smpls + 4)
+    # Any other form is refused below, whatever its samples.
+    var known = intp <= 3 or intp == 5
+    if known and smpls < 1:
+        raise Error("TIFF: the image has no samples")
+    if known and needed > len(data):
+        raise Error("TIFF: the tags name more samples than the image holds")
     if intp == 0:
         for y in range(h):  # pragma: no branch
             var off = y * bpl
