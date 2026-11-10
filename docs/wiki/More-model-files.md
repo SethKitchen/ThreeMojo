@@ -181,7 +181,9 @@ The loader refuses these, with a message that names the problem:
 
 `ZipMethod` is a type. A bare integer does not compile. `unzip` reads `ZIP_STORED` and `ZIP_DEFLATED` entries, and `zip_archive` writes `ZIP_STORED` entries only.
 
-`unzip` checks each entry's size and CRC-32. fflate does not check them. `unzip` refuses encrypted entries, other compression methods, ZIP64 archives and archives on more than one disk.
+`unzip` checks each entry's size and CRC-32. fflate does not check them. `unzip` refuses encrypted entries, other compression methods and archives on more than one disk.
+
+`unzip` reads a ZIP64 archive. Some writers use the ZIP64 records for every archive, small ones too. Two of the seven 3MF files that three.js ships are such archives. An end record with a field at its largest value names a ZIP64 end record. The locator of that record is the 20 bytes before the end record. The ZIP64 record must end at its locator, and the central directory must end where the ZIP64 record starts. An entry with a size or an offset at its largest value holds the real value in its ZIP64 extra field. The values there are in a fixed order: size, compressed size, offset. The entry holds only the values that it asks for. fflate reads all three whichever are there.
 
 The end record's comment length must reach the archive end. Candidate checks follow the central headers and their local-data ranges. The central directory must end at that record, and its size and file count must agree. Shared directory suffixes are cached so repeated candidates do not scan those records again.
 
@@ -189,7 +191,7 @@ The reader selects the last structurally admissible end record. Two complete lay
 
 Names, extra fields and entry comments must fit inside the directory. Local headers and file data must fit before the directory. Invalid UTF-8 in a name becomes replacement characters.
 
-The record layout follows [PKWARE ZIP APPNOTE 6.3.10](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT), sections 4.3.6 and 4.3.12–13. ZIP64 end records and compressed or encrypted directories remain unsupported.
+The record layout follows [PKWARE ZIP APPNOTE 6.3.10](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT), sections 4.3.6, 4.3.12–15 and 4.5.3. Compressed or encrypted directories remain unsupported. The writer does not write ZIP64 records.
 
 The writer checks all lengths before it writes output. Names and local padding can use at most 65,535 bytes each. An archive can have at most 65,534 entries. Entry sizes, directory sizes and offsets must not use the reserved ZIP64 values. The complete archive must stay below 4 GiB.
 
