@@ -514,6 +514,38 @@ def test_no_orientations() raises:
     assert_equal(scheme.transform.max_value, 9)
 
 
+def _orientations(count: List[UInt8]) -> DracoBuffer:
+    """Return the data of a texture prediction: an orientation count of
+    four bytes, a bit decoder of one byte, and a wrap from zero to nine."""
+    var bytes = count.copy()
+    for byte in [128, 1, 0, 0, 0, 0, 0, 9, 0, 0, 0]:
+        bytes.append(UInt8(byte))
+    return DracoBuffer(bytes^)
+
+
+def test_orientations_are_held_to_the_corners() raises:
+    # A value takes one orientation at most, and a mesh has no more values
+    # than corners. Draco reads as many as the count says. A count of two
+    # billion in a duck of 120 KB took 2.3 GiB and six seconds.
+    var many = _orientations([0xFF, 0xFF, 0xFF, 0x7F])
+    var scheme = PredictionScheme(
+        DRACO_TEX_COORDS_PORTABLE, PredictionTransform(DRACO_WRAP, 2)
+    )
+    with assert_raises(contains="too many orientations"):
+        scheme.read(many, 6)
+    # One more than the corners is refused, and as many is read.
+    var over = _orientations([4, 0, 0, 0])
+    with assert_raises(contains="too many orientations"):
+        scheme.read(over, 3)
+    var exact = _orientations([3, 0, 0, 0])
+    var filled = PredictionScheme(
+        DRACO_TEX_COORDS_PORTABLE, PredictionTransform(DRACO_WRAP, 2)
+    )
+    filled.read(exact, 3)
+    assert_equal(len(filled.orientations), 3)
+    assert_equal(filled.transform.max_value, 9)
+
+
 def test_tex_coords_on_a_point() raises:
     # Two corners of a triangle at one quantized position: the texture
     # coordinate prediction falls back to the next corner's value.
