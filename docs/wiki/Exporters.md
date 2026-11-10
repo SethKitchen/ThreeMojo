@@ -437,6 +437,8 @@ The text is the text that three.js writes for a scene whose numbers are short de
 
 Set a normal map's color space to `LINEAR`. Its texture is then `raw`, which is what OpenUSD asks of a normal map.
 
+`read_usd` reads the archive back with the same normal scale. three.js 0.186 reads it back with twice the normal scale. See [USD](More-model-files#usd).
+
 ## Draco
 
 `exporters/draco.mojo` writes a mesh or a point cloud as a Draco file (`.drc`). three.js: `DRACOExporter`, which runs Draco's own encoder, compiled to WebAssembly. The port is that encoder, from Draco 1.5.6, the version of `draco3d` that three.js 0.180 uses. It writes the same bytes that three.js writes. `read_draco` reads the file back. See [Draco](More-model-files#draco).

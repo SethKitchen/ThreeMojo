@@ -1211,6 +1211,12 @@ These parts of `USDLoader` are not ported:
 - The `LoadingManager` URL modifier. A texture is found in the archive, then on the disk beside the file.
 - AVIF images. An AVIF texture is kept in the archive but is not decoded, so it is one black texel.
 
+The loader corrects one three.js behavior:
+
+- A normal map that has USD's own scale and bias has half its scale as its normal scale. A `UsdUVTexture` gives a texel times `inputs:scale`, plus `inputs:bias`. For a normal map of bytes, the `UsdPreviewSurface` specification asks for a scale of `(2, 2, 2, 1)` and a bias of `(-1, -1, -1, 0)`. That pair is a normal scale of 1. three.js 0.186 takes the scale itself as the normal scale, and draws the bumps twice as strong. `assets/usd/roundtrip.usdz` is written from a normal scale of 1, and three.js reads 2 from it.
+
+The correction applies when the bias of x and of y is minus half the scale. A scale with no bias, or with any other bias, is the normal scale, as in three.js. A file with the usual pair read with a normal scale of 2 before this correction. It now reads with 1.
+
 ### Errors
 
 The loader refuses what three.js throws on:
