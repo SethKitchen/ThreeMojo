@@ -43,6 +43,8 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 
 OBJ and PLY cut a convex face into a fan of triangles from its first corner, as three.js cuts every OBJ face. A fan covers a convex polygon and only that. A face that is not convex is cut by earcut, so that the triangles cover the face and nothing else. three.js cuts such a face into a fan too, and the fan covers the cutout. `ninjaHead_Low.obj`, which three.js ships, has two such quads among 4,074.
 
+A face that touches itself can have an area and no ear for earcut to cut. Earcut gives no triangles for such a face. The loaders cut it into a fan, as three.js does, so that the face is not lost.
+
 The loaders check convexity on the exact products of the stored `Float32` corners. Thus the scale of a finite model does not change how a face is cut. A corner that turns the wrong way by no more than `Float32` rounding of the file's numbers can explain counts as straight. So a corner that is straight in the file, such as a T-junction far from the origin, keeps the fan.
 
 For the cut, the loader drops the coordinate that the face's normal points along most. That changes no number, so the cut does not depend on the scale either. Each triangle turns the way the face turns, and each corner keeps its own normal, texture coordinate and color.

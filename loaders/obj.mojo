@@ -560,7 +560,9 @@ def _read_face(
         if cut.problem:
             raise Error(_where(line) + cut.problem)
         order = cut.triangles.copy()
-    for which in order:
+    # A face has a triangle at least: `cut_polygon` gives none only with a
+    # problem. The loop runs.
+    for which in order:  # pragma: no branch
         _read_corner(
             part,
             fields[which + 1],

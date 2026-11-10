@@ -473,6 +473,27 @@ def assert_covers(areas: List[Float64], count: Int, twice: Float64) raises:
     assert_almost_equal(total / twice, 1, atol=1e-5)
 
 
+def test_a_face_that_earcut_cannot_cut_is_a_fan() raises:
+    # This face goes through two of its corners twice. It has an area, so
+    # it is not refused, and it has no ear, so earcut gives no triangles.
+    # A cut of nothing would lose the face. three.js cuts every face into
+    # a fan from its first corner, and so is this one cut.
+    var touching = parse_obj(
+        String("v 3 1 0\nv 0 0 0\nv 1 1 0\nv 1 0 0\nf 1 2 3 1 2 4\n")
+    )
+    ref geometry = touching.objects[0].geometry
+    assert_equal(geometry.triangle_count(), 4)
+    ref positions = geometry.attribute_view(String(POSITION))
+    # The corners of the fan: 0 1 2, 0 2 3, 0 3 4, 0 4 5.
+    var corners: List[Int] = [0, 1, 2, 0, 2, 0, 0, 0, 1, 0, 1, 3]
+    var xs: List[Float32] = [3, 0, 1, 1]
+    var ys: List[Float32] = [1, 0, 1, 0]
+    assert_equal(positions.count(), 12)
+    for vertex in range(12):
+        assert_equal(positions.component(vertex, 0), xs[corners[vertex]])
+        assert_equal(positions.component(vertex, 1), ys[corners[vertex]])
+
+
 def test_a_polygon_that_is_not_convex_is_cut_where_it_is() raises:
     # three.js r180's `OBJLoader` cuts every face into a fan from its
     # first corner. A fan of this U shape covers the cutout between its

@@ -963,7 +963,9 @@ def parse_ply(
                 + String(face)
                 + ": its `texcoord` must hold two numbers for each corner"
             )
-        for corner in order:
+        # A face has a triangle at least: `cut_polygon` gives none only
+        # with a problem. The loop runs.
+        for corner in order:  # pragma: no branch
             index.append(corners[first + corner])
             if with_face_uv:
                 _append_run(corner_uvs, face_uvs, uv_first + 2 * corner, 2)

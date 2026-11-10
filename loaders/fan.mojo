@@ -100,6 +100,17 @@ struct PolygonCut(Movable):
         self.problem = String()
 
 
+def _fan(corners: Int) -> List[Int]:
+    """Return the fan of a polygon from its first corner: three.js's cut
+    of every polygon. `corners` is four or more."""
+    var triangles = List[Int](capacity=3 * (corners - 2))
+    for triangle in range(corners - 2):  # pragma: no branch
+        triangles.append(0)
+        triangles.append(triangle + 1)
+        triangles.append(triangle + 2)
+    return triangles^
+
+
 def cut_polygon(points: List[Vector3]) raises -> PolygonCut:
     """Return the triangles that cover a polygon of four or more corners.
 
@@ -110,12 +121,17 @@ def cut_polygon(points: List[Vector3]) raises -> PolygonCut:
     triangles turns the way the polygon turns. Dropping a coordinate
     changes no number, so the cut does not depend on the model's scale.
 
+    A polygon that touches itself can have an area and no ear for earcut
+    to cut. Earcut gives no triangles for it, and it is cut into a fan,
+    as three.js cuts it, so that the face is not lost.
+
     Args:
         points: The corners, in order, four or more, each finite.
 
     Returns:
-        The triangles. For a polygon with no area, no triangles and the
-        reason. A polygon that crosses itself is cut as earcut cuts it.
+        The triangles: one at least, when there is no problem. For a
+        polygon with no area, no triangles and the reason. A polygon that
+        crosses itself is cut as earcut cuts it.
 
     Raises:
         Error: If earcut refuses the corners. It refuses more than 80
@@ -124,10 +140,7 @@ def cut_polygon(points: List[Vector3]) raises -> PolygonCut:
     var cut = PolygonCut()
     var problem = fan_problem(points)
     if problem == "":
-        for triangle in range(len(points) - 2):  # pragma: no branch
-            cut.triangles.append(0)
-            cut.triangles.append(triangle + 1)
-            cut.triangles.append(triangle + 2)
+        cut.triangles = _fan(len(points))
         return cut^
     if problem == _NO_AREA:
         cut.problem = problem
@@ -150,4 +163,8 @@ def cut_polygon(points: List[Vector3]) raises -> PolygonCut:
         flat.append(along[first])
         flat.append(along[second])
     cut.triangles = earcut(flat)
+    if len(cut.triangles) == 0:
+        # A face that touches itself can have an area and no ear for
+        # earcut to cut. The fan keeps the face, as three.js keeps it.
+        cut.triangles = _fan(len(points))
     return cut^
