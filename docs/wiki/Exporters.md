@@ -97,7 +97,7 @@ A mesh that wears a list of materials writes one primitive for each group, as th
 | Attribute | Meaning |
 |---|---|
 | `POSITION` | Always. The accessor has `min` and `max`, as the specification requires. |
-| `NORMAL` | When the geometry has `normal`. |
+| `NORMAL` | When the geometry has `normal`. Each normal is made unit length when the length of one of them is more than 0.0005 from 1, as three.js's `createNormalizedNormalAttribute` makes them. A normal of no length is written as `(1, 0, 0)`. The geometry is not changed. |
 | `TEXCOORD_0` | When the geometry has `uv`. |
 | `TEXCOORD_1` | When the geometry has `uv1`. |
 | `COLOR_0` | When the geometry has `color` and the material has `vertex_colors` on. `read_gltf` turns `vertex_colors` on for a primitive with `COLOR_0`. |

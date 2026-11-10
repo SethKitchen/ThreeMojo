@@ -12,7 +12,7 @@ every choice the writer makes and every refusal.
 """
 
 from core.assets import Assets
-from core.buffer_attribute import BufferAttribute
+from core.buffer_attribute import INT8_COMPONENT, BufferAttribute
 from core.buffer_geometry import (
     COLOR,
     NORMAL,
@@ -32,8 +32,10 @@ from exporters.gltf import (
     binary_name_for,
     export_gltf,
     gltf_pixels,
+    has_unit_normals,
     index_component,
     percent_encoded,
+    unit_normals,
     write_gltf,
 )
 from loaders.bytes import encode_base64
@@ -74,6 +76,7 @@ from render.texture import (
     float_texture,
 )
 from render.texture_store import TextureId
+from std.math import nan
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -802,6 +805,101 @@ def test_a_single_vertex_and_a_plain_normal_map_are_written() raises:
     ref loaded = back[1]
     var normal = loaded.materials.get(back[0].meshes[0].material)
     assert_equal(normal.normal_scale.x, 1)
+
+
+def _with_normals(normal: BufferAttribute) raises -> BufferGeometry:
+    """Return three vertices that carry `normal`."""
+    var geometry = BufferGeometry()
+    geometry.set_attribute(
+        String(POSITION),
+        BufferAttribute([Float32(0), 0, 0, 1, 0, 0, 0, 1, 0], 3),
+    )
+    geometry.set_attribute(String(NORMAL), normal.copy())
+    return geometry^
+
+
+def _written_normals(var geometry: BufferGeometry) raises -> BufferAttribute:
+    """Return the `NORMAL` that a GLB of one mesh of `geometry` holds, and
+    assert that the export left the geometry's own normals alone."""
+    var assets = Assets()
+    var before = geometry.attribute_view(String(NORMAL)).packed()
+    var scene = one_mesh(assets, Material(Color(1, 2, 3)), geometry^)
+    var files = export_gltf(scene, assets, GLB)
+    ref kept = assets.geometries.get(scene.meshes[0].geometry)
+    assert_floats(kept.attribute_view(String(NORMAL)).packed(), before)
+    var back = read_back(files.document, List[UInt8](), GLB)
+    ref loaded = back[1].geometries.get(back[0].meshes[0].geometry)
+    return loaded.attribute_view(String(NORMAL)).clone()
+
+
+def test_normals_are_written_at_unit_length() raises:
+    # Twice too long, no length at all, and a 3-4-5 triangle's two sides.
+    var long = BufferAttribute([Float32(0), 0, 2, 0, 0, 0, 3, 4, 0], 3)
+    assert_false(has_unit_normals(long))
+    assert_floats(
+        _written_normals(_with_normals(long)).packed(),
+        [Float32(0), 0, 1, 1, 0, 0, 0.6, 0.8, 0],
+    )
+    assert_floats(
+        unit_normals(long).packed(), [Float32(0), 0, 1, 1, 0, 0, 0.6, 0.8, 0]
+    )
+    # No normals at all are unit length, and stay none.
+    var none = BufferAttribute(List[Float32](), 3)
+    assert_true(has_unit_normals(none))
+    assert_equal(unit_normals(none).count(), 0)
+
+
+def test_normals_within_the_tolerance_are_written_as_they_are() raises:
+    # The glTF validator allows 0.0005, and three.js writes these as they
+    # are. One step past it, every normal is made unit length.
+    var near = BufferAttribute(
+        [Float32(1.0004), 0, 0, 0, 0.9996, 0, 0, 0, 1], 3
+    )
+    assert_true(has_unit_normals(near))
+    assert_floats(
+        _written_normals(_with_normals(near)).packed(),
+        [Float32(1.0004), 0, 0, 0, 0.9996, 0, 0, 0, 1],
+    )
+    var past = BufferAttribute(
+        [Float32(1.0004), 0, 0, 0, 0.9994, 0, 0, 0, 1], 3
+    )
+    assert_false(has_unit_normals(past))
+    assert_floats(
+        _written_normals(_with_normals(past)).packed(),
+        [Float32(1), 0, 0, 0, 1, 0, 0, 0, 1],
+    )
+
+
+def test_quantized_normals_stay_in_their_type() raises:
+    # Signed bytes that stand for -1 to 1. Half length becomes full
+    # length, and no length becomes x, in the same bytes.
+    var short = BufferAttribute(
+        [64, 0, 0, 0, 0, 0, 0, 0, -127], 3, INT8_COMPONENT, True
+    )
+    assert_false(has_unit_normals(short))
+    var made = unit_normals(short)
+    assert_true(made.component_type() == INT8_COMPONENT)
+    assert_true(made.is_normalized())
+    assert_true(made.stored_values() == [127, 0, 0, 127, 0, 0, 0, 0, -127])
+    var whole = BufferAttribute(
+        [127, 0, 0, 0, 127, 0, 0, 0, -127], 3, INT8_COMPONENT, True
+    )
+    assert_true(has_unit_normals(whole))
+    var written = _written_normals(_with_normals(short))
+    assert_floats(written.packed(), [Float32(1), 0, 0, 1, 0, 0, 0, 0, -1])
+
+
+def test_a_normal_that_is_not_a_number_is_refused() raises:
+    # It is not a length to mend. three.js writes it, and a reader of
+    # glTF refuses it.
+    var bad = BufferAttribute(
+        [Float32(0), 0, 1, nan[DType.float32](), 0, 0, 0, 0, 1], 3
+    )
+    assert_true(has_unit_normals(bad))
+    var assets = Assets()
+    var scene = one_mesh(assets, Material(Color(1, 2, 3)), _with_normals(bad))
+    with assert_raises(contains="must be finite"):
+        _ = export_gltf(scene, assets, GLB)
 
 
 def test_the_small_helpers_give_what_the_format_asks() raises:

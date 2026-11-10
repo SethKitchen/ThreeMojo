@@ -82,6 +82,13 @@ are combined into one image of the same size, as three.js's
 `buildMetalRoughTexture` combines them. Two maps combined must share one
 transform and one channel, since one reference carries them.
 
+**Normals are unit length.** glTF asks for it, and the Khronos validator
+reports a normal whose length is more than 0.0005 from one. A geometry
+with such a normal has every normal made unit length in the file, as
+three.js's `createNormalizedNormalAttribute` makes them, and a normal of
+no length is written as `(1, 0, 0)`. The geometry itself is not changed.
+A geometry whose normals are all within 0.0005 is written as it is.
+
 **What a node carries.** A glTF node has one mesh, one skin, one camera
 and one light, so everything that rides one scene node is written on it.
 A directional, point or spot light is a `KHR_lights_punctual` light, as
@@ -255,10 +262,13 @@ from render.framebuffer import Color, FloatColor, Framebuffer, rgb_is_white
 from render.png import TEXTURE_LEVEL, encode as encode_png
 from render.texture import CLAMP, FLOAT_TYPE, MIRROR, Texture, Wrap
 from render.texture_store import TextureId
-from std.math import floor, isfinite
+from std.math import floor, isfinite, sqrt
 from std.pathlib import Path
 from units.si import METER, NANOMETER, RADIAN
 
+# How far the length of a normal can be from one before the writer makes
+# the normals unit length: three.js's number, which is the glTF validator's.
+comptime UNIT_TOLERANCE = 0.0005
 # The two buffer view targets: vertex attributes, and indices.
 comptime ARRAY_BUFFER = 34962
 comptime ELEMENT_ARRAY_BUFFER = 34963
@@ -994,9 +1004,16 @@ struct _Exporter(Movable):
             )
             var normal = -1
             if geometry.has_attribute(NORMAL):
-                normal = self.attribute_accessor(
-                    geometry.attribute_view(NORMAL), "VEC3", False, "NORMAL"
-                )
+                ref authored = geometry.attribute_view(NORMAL)
+                # glTF asks for unit normals. The geometry keeps its own.
+                if has_unit_normals(authored):
+                    normal = self.attribute_accessor(
+                        authored, "VEC3", False, "NORMAL"
+                    )
+                else:
+                    normal = self.attribute_accessor(
+                        unit_normals(authored), "VEC3", False, "NORMAL"
+                    )
             self.normals.append(normal)
             var uv = -1
             if geometry.has_attribute(UV):
@@ -2753,6 +2770,68 @@ def _gl_component(type: ComponentType) -> Int:
     if type == INT16_COMPONENT:
         return COMPONENT_SHORT
     return COMPONENT_UNSIGNED_SHORT
+
+
+def _normal_length(normal: BufferAttribute, index: Int) raises -> Float64:
+    """Return the length of one normal, in doubles as three.js has it."""
+    var x = Float64(normal.component(index, 0))
+    var y = Float64(normal.component(index, 1))
+    var z = Float64(normal.component(index, 2))
+    return sqrt(x * x + y * y + z * z)
+
+
+def has_unit_normals(normal: BufferAttribute) raises -> Bool:
+    """Return whether every normal is of unit length, three.js's
+    `isNormalizedNormalAttribute`.
+
+    Args:
+        normal: A `normal` attribute, three numbers a vertex.
+
+    Returns:
+        `False` when the length of a normal is more than `UNIT_TOLERANCE`
+        from one. A normal that is not a number passes, as in three.js,
+        and the writer refuses it afterward.
+
+    Raises:
+        Error: If the attribute refuses a read.
+    """
+    for index in range(normal.count()):
+        if abs(_normal_length(normal, index) - 1) > UNIT_TOLERANCE:
+            return False
+    return True
+
+
+def unit_normals(normal: BufferAttribute) raises -> BufferAttribute:
+    """Return a copy of a normal attribute with every normal made unit
+    length, three.js's `createNormalizedNormalAttribute`.
+
+    Args:
+        normal: A `normal` attribute, three numbers a vertex.
+
+    Returns:
+        The copy, of the same component type. A normal of no length has
+        no direction to keep, and becomes `(1, 0, 0)`, as in three.js.
+
+    Raises:
+        Error: If the attribute refuses a read or a write.
+    """
+    var out = normal.clone()
+    for index in range(out.count()):
+        var x = Float64(out.component(index, 0))
+        var y = Float64(out.component(index, 1))
+        var z = Float64(out.component(index, 2))
+        if x == 0 and y == 0 and z == 0:
+            x = 1
+        else:
+            # three.js multiplies by one over the length.
+            var scale = 1 / sqrt(x * x + y * y + z * z)
+            x *= scale
+            y *= scale
+            z *= scale
+        out.set_component(index, 0, Float32(x))
+        out.set_component(index, 1, Float32(y))
+        out.set_component(index, 2, Float32(z))
+    return out^
 
 
 def _is_quantized(
