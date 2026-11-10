@@ -695,7 +695,11 @@ def test_an_image_is_told_by_its_first_bytes() raises:
     var pixel = decode_image(tga).get_pixel(0, 0)
     assert_equal(pixel.r, UInt8(30))
     assert_equal(pixel.b, UInt8(10))
-    with assert_raises(contains="not a TGA"):
+    # The error names the image. It names no format of model, because
+    # every model loader reads its textures through `decode_image`.
+    with assert_raises(
+        contains="An image is neither PNG nor JPEG nor WebP, and not a TGA"
+    ):
         _ = decode_image(Path("assets/cube.obj").read_bytes())
     with assert_raises():
         _ = decode_image(List[UInt8]())
