@@ -394,7 +394,7 @@ The archive is a ZIP file that is not compressed. Each file's data starts at a m
 - `geometries/Geometry_<id>.usda`: one `Mesh` for each geometry, with its triangles, normals, points, texture coordinates and colors.
 - `textures/Texture_<id>_<flip_y>.png`: one PNG for each texture, named `true` or `false` by its `flip_y`, as three.js names it by its `flipY`.
 
-The glTF, USDZ and scene JSON writers compress each PNG at `render.png.TEXTURE_LEVEL`, which is DEFLATE level 6. The archive itself is not compressed, as USDZ asks. See [Write a PNG](Image-files#write-a-png).
+The glTF, USDZ and scene JSON writers compress each PNG with `render.png_compress.encode_compressed`, at DEFLATE level 6. The archive itself is not compressed, as USDZ asks. See [Write a compressed PNG](Image-files#write-a-compressed-png).
 
 | Node | USD |
 |---|---|

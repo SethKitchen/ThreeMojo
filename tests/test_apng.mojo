@@ -14,8 +14,6 @@ A viewer given a file that breaks either one simply shows a still image.
 from core.binary import big_endian_u16, big_endian_u32
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from render.inflate import zlib_inflate
-from render.png import decode, filtered_scanlines
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 comptime SIGNATURE_LENGTH = 8
@@ -175,44 +173,6 @@ def test_ihdr_matches_the_frame_size() raises:
     var at = data_offset_of(png, String("IHDR"))
     assert_equal(big_endian_u32(png, at), 7)
     assert_equal(big_endian_u32(png, at + 4), 4)
-
-
-def _ramps(swap: Bool) raises -> Framebuffer:
-    """Return a frame of 32 by 32 pixels: a ramp across and a ramp down,
-    in red and green, or in green and blue when `swap` is set."""
-    var frame = Framebuffer(32, 32, Color(0, 0, 0))
-    for y in range(32):
-        for x in range(32):
-            var across = UInt8(x * 4)
-            var down = UInt8(y * 4)
-            if swap:
-                frame.set_pixel(x, y, Color(9, down, across, 255))
-            else:
-                frame.set_pixel(x, y, Color(across, down, 0, 255))
-    return frame^
-
-
-def test_a_level_compresses_every_frame() raises:
-    # Each frame is its own zlib stream, in the IDAT chunk and in the fdAT
-    # chunk after its sequence number.
-    var frames = List[Framebuffer]()
-    frames.append(_ramps(False))
-    frames.append(_ramps(True))
-    var stored = encode(frames)
-    var packed = encode(frames, level=6)
-    assert_true(len(packed) * 10 < len(stored))
-    assert_true(chunk_kinds(packed) == chunk_kinds(stored))
-    assert_true(sequence_numbers(packed) == sequence_numbers(stored))
-    # The first frame is the still image that any PNG reader shows.
-    assert_true(decode(packed).pixels == frames[0].pixels)
-    var at = data_offset_of(packed, "fdAT")
-    var length = big_endian_u32(packed, at - 8)
-    var stream = List[UInt8]()
-    for k in range(at + 4, at + length):
-        stream.append(packed[k])
-    assert_true(zlib_inflate(stream) == filtered_scanlines(frames[1]))
-    with assert_raises(contains="a level must be from 0 to 9"):
-        _ = encode(frames, level=10)
 
 
 def test_empty_animation_is_rejected() raises:

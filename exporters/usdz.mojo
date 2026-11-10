@@ -54,8 +54,8 @@ for any scene whose numbers are short decimals. A matrix is this port's
 `Float32` matrix. A turn that a `Float32` cannot hold exactly, such as
 thirty degrees, is written a few units apart in the last digits.
 
-**Textures.** A texture is written as a PNG from `render.png`, compressed
-at `TEXTURE_LEVEL`. One whose
+**Textures.** A texture is written as a compressed PNG from
+`render.png_compress`. One whose
 longer side is past `max_texture_size`, 1024 by default, is scaled down
 to it, keeping its shape, as three.js's `imageToCanvas` scales it: each
 side times the size over the longer side, cut down to whole pixels. The
@@ -115,7 +115,7 @@ from materials.material import (
 from math.matrix4 import Matrix4
 from render.framebuffer import Color, Framebuffer
 from exporters.common import resized_image
-from render.png import TEXTURE_LEVEL, encode as encode_png
+from render.png_compress import encode_compressed
 from render.srgb import SRGB
 from render.texture import CLAMP, MIRROR, REPEAT, Texture, Wrap
 from render.texture_store import TextureId
@@ -1188,7 +1188,7 @@ def usdz_files(
             )
         files.add(
             _texture_file(id, texture),
-            encode_png(Framebuffer(wide, high, pixels^), TEXTURE_LEVEL),
+            encode_compressed(Framebuffer(wide, high, pixels^)),
         )
     return files^
 

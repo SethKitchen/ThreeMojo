@@ -133,10 +133,7 @@ def push_fdat(mut out: List[UInt8], sequence: Int, pixels: List[UInt8]) raises:
 
 
 def encode(
-    frames: List[Framebuffer],
-    delay_ms: Int = 100,
-    plays: Int = LOOP_FOREVER,
-    level: Int = 0,
+    frames: List[Framebuffer], delay_ms: Int = 100, plays: Int = LOOP_FOREVER
 ) raises -> List[UInt8]:
     """Return `frames` encoded as one animated PNG.
 
@@ -144,16 +141,14 @@ def encode(
         frames: At least one frame; all must share the first frame's size.
         delay_ms: How long each frame is shown, in milliseconds.
         plays: How many times to loop; 0 repeats forever.
-        level: How hard to compress each frame, from 0 to 9; see
-            `render.png.frame_data`. The default stores the pixels.
 
     Returns:
         The bytes of a valid APNG, which is also a valid PNG of frame one.
 
     Raises:
         Error: If `frames` is empty, the frames disagree on size, the delay
-            is outside 0 to 65535 milliseconds, the loop count is outside
-            what four bytes hold, or the level is not from 0 to 9.
+            is outside 0 to 65535 milliseconds, or the loop count is
+            outside what four bytes hold.
     """
     require_positive(len(frames), "An animation needs at least one frame")
 
@@ -175,12 +170,12 @@ def encode(
     var sequence = 0
     push_fctl(out, sequence, width, height, delay_ms)
     sequence += 1
-    push_chunk(out, String("IDAT"), frame_data(frames[0], level))
+    push_chunk(out, String("IDAT"), frame_data(frames[0]))
 
     for index in range(1, len(frames)):
         push_fctl(out, sequence, width, height, delay_ms)
         sequence += 1
-        push_fdat(out, sequence, frame_data(frames[index], level))
+        push_fdat(out, sequence, frame_data(frames[index]))
         sequence += 1
 
     push_chunk(out, String("IEND"), List[UInt8]())

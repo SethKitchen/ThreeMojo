@@ -65,8 +65,8 @@ thickness range is in nanometers and the anisotropy rotation in radians,
 as `read_gltf` reads them. glTF's sheen has no amount, so the sheen color
 is written times the amount; see `layer_extensions`.
 
-**Textures are PNG images.** Each texture is written once, as a PNG from
-`render.png` at `TEXTURE_LEVEL`, with a sampler for its wrap and filter. Each distinct image
+**Textures are PNG images.** Each texture is written once, as a compressed
+PNG from `render.png_compress`, with a sampler for its wrap and filter. Each distinct image
 is written once, as three.js's `cache.images` keeps it: two textures of
 the same pixels share one image. glTF's `v` runs down
 from the image's top, where a texture here runs up from its bottom, so an
@@ -259,7 +259,7 @@ from objects.instanced_mesh import InstancedMesh
 from objects.line import LOOP, SEGMENTS, LineMode
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from render.framebuffer import Color, FloatColor, Framebuffer, rgb_is_white
-from render.png import TEXTURE_LEVEL, encode as encode_png
+from render.png_compress import encode_compressed
 from render.texture import CLAMP, FLOAT_TYPE, MIRROR, Texture, Wrap
 from render.texture_store import TextureId
 from std.math import floor, isfinite, sqrt
@@ -1130,7 +1130,7 @@ struct _Exporter(Movable):
                 return at
         self.image_pixels.append(pixels.copy())
         self.image_sizes.append(width)
-        var png = encode_png(Framebuffer(width, height, pixels^), TEXTURE_LEVEL)
+        var png = encode_compressed(Framebuffer(width, height, pixels^))
         var writer = JsonWriter()
         writer.begin_object()
         if self.embed:

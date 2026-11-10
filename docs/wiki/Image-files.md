@@ -1,6 +1,6 @@
 # Image files
 
-`render/png.mojo`, `render/jpeg.mojo`, `render/tga.mojo`, `render/rgbe.mojo`, `render/exr.mojo`, `render/inflate.mojo`, `render/apng.mojo`, `render/ppm.mojo`, `render/tiff.mojo` and `render/webp.mojo`. The project writes PNG, APNG and PPM, and reads PNG, JPEG, WebP, TGA, TIFF, Radiance HDR and OpenEXR. No compression or image library is involved.
+`render/png.mojo`, `render/png_compress.mojo`, `render/jpeg.mojo`, `render/tga.mojo`, `render/rgbe.mojo`, `render/exr.mojo`, `render/inflate.mojo`, `render/apng.mojo`, `render/ppm.mojo`, `render/tiff.mojo` and `render/webp.mojo`. The project writes PNG, APNG and PPM, and reads PNG, JPEG, WebP, TGA, TIFF, Radiance HDR and OpenEXR. No compression or image library is involved.
 
 ![A triangle turns in an animated PNG](out/spin.png)
 
@@ -27,22 +27,27 @@ from render.png import encode
 Path("out/frame.png").write_bytes(encode(framebuffer))
 ```
 
-By default the encoder uses DEFLATE's stored blocks. The file is then as large as its pixels, and it is legal everywhere.
+The encoder uses DEFLATE's stored blocks, so the file is as large as its pixels and legal everywhere.
 
-Give a level to write a compressed file:
+## Write a compressed PNG
 
 ```mojo
-Path("out/frame.png").write_bytes(encode(framebuffer, 6))
+from render.png_compress import encode_compressed
+Path("out/frame.png").write_bytes(encode_compressed(framebuffer))
 ```
 
-| Level | What `encode` writes |
+`render/png_compress.mojo` writes the same pixels as a file that is far smaller. Each row gets one of PNG's five filters: the filter whose bytes, read as signed, have the smallest sum. `render/deflate.mojo` compresses the filtered rows. `render.png.decode` and any other PNG reader read the file back to the same pixels.
+
+`encode_compressed(framebuffer, level)` takes DEFLATE's level:
+
+| Level | What `encode_compressed` writes |
 |---|---|
-| 0 | Stored blocks and no row filter. This is the default, and the fastest. |
-| 1 to 9 | Filtered rows, compressed by `render/deflate.mojo` at that level. 1 is the fastest and 9 is the smallest. |
+| 0 | The filtered rows in stored blocks. |
+| 1 to 9 | The filtered rows, compressed at that level. 1 is the fastest and 9 is the smallest. |
 
-At a level above 0, each row gets one of PNG's five filters: the filter whose bytes, read as signed, have the smallest sum. A level outside 0 to 9 raises.
+The default is `TEXTURE_LEVEL`, which is 6. A level outside 0 to 9 raises.
 
-These sizes are for an image of 1024 by 1024 pixels, which is 4.2 MB at level 0:
+These sizes are for an image of 1024 by 1024 pixels, which is 4.2 MB from `render.png.encode`:
 
 | Image | Level 1 | Level 6 | Level 9 |
 |---|---|---|---|
@@ -50,7 +55,7 @@ These sizes are for an image of 1024 by 1024 pixels, which is 4.2 MB at level 0:
 | A grid of flat colors and text | 0.89 MB | 0.79 MB | 0.76 MB |
 | Time, on one core | 0.2 s | 0.45 s | 0.4 to 1.1 s |
 
-The exporters write each texture at `TEXTURE_LEVEL`, which is 6. See [Exporters](Exporters).
+The exporters write each texture with `encode_compressed`. See [Exporters](Exporters).
 
 ## Write an APNG
 
@@ -59,7 +64,7 @@ from render.apng import encode
 Path("out/turn.png").write_bytes(encode(frames, delay_ms=60))
 ```
 
-`frames` is a `List[Framebuffer]` of one size. The encoder raises for an empty list or a frame of a different size. `encode(frames, delay_ms=60, level=6)` compresses each frame as `render.png.encode` does.
+`frames` is a `List[Framebuffer]` of one size. The encoder raises for an empty list or a frame of a different size.
 
 ## Recompress a PNG
 
