@@ -1288,6 +1288,13 @@ def _data_array(
         # Text of a multiple of four characters is a byte at least.
         var values = List[Float64]()
         var blocks = _header_value(bytes, 0, width)
+        # Each block's size is one word of the header, after three others.
+        # A word that starts past the end reads as zero, and a block of no
+        # bytes is not zlib data. A header names up to two billion blocks,
+        # so the last block's word is looked for before an offset is kept
+        # for each of them.
+        if blocks > 0 and (blocks + 2) * width >= len(bytes):
+            raise Error("invalid zlib data")
         var header = (blocks + 3) * width
         # JavaScript's `%` keeps the sign, so a negative header is not
         # padded.

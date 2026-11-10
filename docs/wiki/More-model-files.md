@@ -1055,6 +1055,7 @@ The loader refuses these, with a message that names the problem. three.js throws
 - A binary count that does not fit in an integer.
 - An index length that wraps in an integer is refused.
 - A zlib block that expands past the size in its header.
+- A zlib header that names a block whose size is past the end of the data. three.js reads the missing size as zero, and the block is then not zlib data. The header names up to two billion blocks, so it is refused before the blocks are read.
 - An index past the points. three.js keeps it and draws from undefined positions.
 - A text or XML file that is not UTF-8.
 

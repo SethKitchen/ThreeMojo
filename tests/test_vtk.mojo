@@ -756,6 +756,24 @@ def test_xml_encodings_the_fixtures_miss_are_read_as_three_js_reads_them() raise
         )
     )
     _ = cut^
+    # A header that names two billion blocks, and one that names a block
+    # whose size is past the end. Each missing size reads as zero, and a
+    # block of no bytes is not zlib data. The header is refused before an
+    # offset is kept for each block.
+    for text in ["////fwAAAAAAAAAA", "AQAAAAAAAAAAAAAA"]:
+        with assert_raises(contains="invalid zlib data"):
+            _ = parse_vtk_xml(
+                _vtp(
+                    ' header_type="UInt32" compressor="z"',
+                    _PIECE
+                    + '<Points><DataArray type="Float32"'
+                    + ' NumberOfComponents="3" format="binary">'
+                    + text
+                    + "</DataArray></Points>"
+                    + _POLYS
+                    + "</Piece>",
+                )
+            )
     # Appended data with a section of no arrays, and an array whose slice
     # is empty.
     var appended = '<AppendedData encoding="base64">_AAAA</AppendedData>'
