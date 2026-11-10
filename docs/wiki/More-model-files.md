@@ -1221,6 +1221,7 @@ The loader also refuses these, where the port holds less than three.js:
 
 - A crate with no `TOKENS`, `FIELDS`, `FIELDSETS`, `PATHS` or `SPECS` section, and a spec of no known type.
 - A crate with an LZ4 chunk past the end of its input, or a path tree that does not end.
+- A crate whose paths together take more than 4096 bytes for each path that it counts. A path holds its parent's path, so a chain of children takes bytes that grow with the square of its length.
 - A crate count past what the file can hold.
 - An array attribute that is not an array, points that are not whole vertices, and faces with no corner indices.
 - A face count whose triangle count does not fit in an integer, or whose corner buffer would wrap, is refused.

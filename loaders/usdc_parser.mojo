@@ -165,6 +165,11 @@ comptime _FLOAT_TABLE = 0x74
 comptime _CHUNK = 65536
 # The most elements, paths, fields or specs this reader allocates for.
 comptime MAX_COUNT = 1 << 26
+# The most bytes the paths of a crate take together, and how many of them
+# for each path that the crate counts. A path of 4096 bytes is far past
+# any that a stage has.
+comptime MAX_PATH_BYTES = MAX_COUNT * 4
+comptime PATH_BYTES_EACH = 4096
 # How deep time samples may nest before the reader refuses them.
 comptime _MAX_DEPTH = 64
 
@@ -548,6 +553,8 @@ struct _Crate[origin: Origin[mut=False]](Movable):
     # Each path by its index: three.js's array, which an index past its
     # length grows, and a negative one sets as a property.
     var paths: Dict[Int, String]
+    # How many bytes of paths may still be set; see `read_paths`.
+    var path_room: Int
     var specs: List[_CrateSpec]
     var layer: UsdLayer
 
@@ -571,6 +578,7 @@ struct _Crate[origin: Origin[mut=False]](Movable):
         self.field_reps = List[_Rep]()
         self.field_sets = List[Int]()
         self.paths = Dict[Int, String]()
+        self.path_room = 0
         self.specs = List[_CrateSpec]()
         self.layer = UsdLayer()
 
@@ -940,23 +948,38 @@ struct _Crate[origin: Origin[mut=False]](Movable):
         """
         return self.paths.get(index).or_else("")
 
-    def set_path(mut self, index: Int, path: String):
+    def set_path(mut self, index: Int, path: String) raises:
         """Set a path, three.js's `this.paths[ index ] = path`.
 
         Args:
             index: The path's index.
             path: The path.
+
+        Raises:
+            Error: If the paths set so far are longer than `read_paths`
+                allows.
         """
+        self.path_room -= path.byte_length()
+        require_non_negative(
+            self.path_room, "USDC: the paths are longer than this reader holds"
+        )
         self.paths[index] = path
 
     def read_paths(mut self) raises:
         """Read `PATHS`, three.js's `_readPaths`.
 
+        A path is its parent's path and one more part, so a chain of
+        children holds a number of bytes that grows with the square of
+        its length. The paths together may take `PATH_BYTES_EACH` bytes
+        for each path the section counts, and `MAX_PATH_BYTES` at most.
+
         Raises:
-            Error: If the section is missing or passes the end.
+            Error: If the section is missing or passes the end, or its
+                paths are longer than that.
         """
         self.at = self.required("PATHS").start
         var count = self.count()
+        self.path_room = min((count + 1) * PATH_BYTES_EACH, MAX_PATH_BYTES)
         if not self.compressed():
             self.walk_paths("", 0)
             return
@@ -1026,34 +1049,51 @@ struct _Crate[origin: Origin[mut=False]](Movable):
         Raises:
             Error: If the budget runs out.
         """
+        # three.js calls itself for a sibling's subtree and then goes on
+        # to the child. A prim with forty thousand children that each have
+        # a child is forty thousand calls deep, which is past a thread's
+        # stack. The entries to come back to are kept in two lists.
+        var later = List[Int]()
+        var later_parents = List[String]()
         var parent = parent_path
         var at = start
-        while at < len(indices):
-            budget -= 1
-            require_non_negative(budget, "USDC: a path tree that does not end")
-            var this = at
-            at += 1
-            var path: String
-            if parent == "":
-                path = "/"
-                parent = path
-            else:
-                var element = elements[this]
-                path = _child_path(
-                    parent, self.token(abs(element)), element < 0
+        var walking = True
+        while walking:
+            while at < len(indices):
+                budget -= 1
+                require_non_negative(
+                    budget, "USDC: a path tree that does not end"
                 )
-            self.set_path(indices[this], path)
-            var jump = jumps[this]
-            var has_child = jump > 0 or jump == -1
-            var has_sibling = jump >= 0
-            if has_child:
-                if has_sibling:
-                    self.build_paths(
-                        indices, elements, jumps, this + jump, parent, budget
+                var this = at
+                at += 1
+                var path: String
+                if parent == "":
+                    path = "/"
+                    parent = path
+                else:
+                    var element = elements[this]
+                    path = _child_path(
+                        parent, self.token(abs(element)), element < 0
                     )
-                parent = path
-            elif not has_sibling:
-                break
+                self.set_path(indices[this], path)
+                var jump = jumps[this]
+                var has_child = jump > 0 or jump == -1
+                var has_sibling = jump >= 0
+                if has_child:
+                    if has_sibling:
+                        # The sibling's subtree first, under this parent,
+                        # and then the child, under this path.
+                        later.append(at)
+                        later_parents.append(path)
+                        at = this + jump
+                    else:
+                        parent = path
+                elif not has_sibling:
+                    break
+            walking = len(later) > 0
+            if walking:
+                at = later.pop()
+                parent = later_parents.pop()
 
     def read_specs(mut self) raises:
         """Read `SPECS`, three.js's `_readSpecs`.
