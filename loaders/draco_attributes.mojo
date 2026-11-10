@@ -1067,7 +1067,9 @@ struct PredictionScheme(Copyable, Movable):
     ) raises -> List[Int]:
         """Draco's `MeshPredictionSchemeTexCoordsPortablePredictor`."""
         var corner = data.value_corners[p]
-        var table = data.table.copy()
+        # The table is read where it is. A copy of it for each value takes
+        # a time that grows with the square of the mesh.
+        ref table = data.table
         var next = data.vertex_values[table.vertex(table.next(corner))]
         var prev = data.vertex_values[table.vertex(table.previous(corner))]
         if prev < p and next < p:
