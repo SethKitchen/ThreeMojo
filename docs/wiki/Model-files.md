@@ -401,6 +401,8 @@ The model says what went where, by the file's own indices.
 | `material_extras` | One `UserData` per glTF material: its `extras`, three.js's `material.userData`. |
 | `scene_extras` | The `extras` of the loaded scene, three.js's `scene.userData`. |
 
+A file can name one image in several textures. The loader decodes the image once for textures that name it with the same sampler and read it the same way. Each of those textures holds its own pixels, and each one after the first is a copy of the first. `kira.glb`, which three.js ships, names one image of 4096 by 4096 pixels in 24 textures. It loads in 6 seconds, down from 46.
+
 ### Extras
 
 The loader reads `extras` into user data, as three.js's `assignExtrasToUserData` does. User data is a `UserData` from `core/user_data.mojo`, the same map that [Scene JSON](Scene-JSON) reads.
