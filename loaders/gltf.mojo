@@ -223,6 +223,7 @@ from animation.keyframe_track import (
     SkinnedMeshIndex,
     TrackKind,
     TrackTarget,
+    rising_key_times,
     morph_target,
     node_target,
     skinned_morph_target,
@@ -3604,12 +3605,21 @@ struct _Loader(Movable):
         require_positive(
             len(input[0]), "glTF: a sampler needs at least one key"
         )
-        var times = List[Duration]()
-        for key in range(len(input[0])):  # pragma: no branch
-            times.append(Duration(input[0][key], SECOND))
         var how = _interpolation_of(self.text(sampler, "interpolation"))
+        # Keys that share a time are a jump, as three.js reads them. A
+        # track's times rise, so the key before the jump moves to the
+        # nearest time below, and a key that is never read is dropped.
+        var rising = rising_key_times(input[0], how == STEP)
+        var times = List[Duration]()
+        for key in range(len(rising.times)):  # pragma: no branch
+            times.append(Duration(rising.times[key], SECOND))
         var output_index = self.required_integer(sampler, "output")
         var output = self.accessor_floats(output_index)
+        if len(rising.keys) != len(input[0]):
+            output = (
+                _values_of_keys(output[0], len(input[0]), rising.keys),
+                output[1],
+            )
         if (
             path == "rotation"
             and self.required_integer(
@@ -3767,6 +3777,36 @@ def _normalize_quaternion_keys(mut output: List[Float32], parts: Int):
             for lane in range(4):
                 output[at + lane] = Float32(Float64(output[at + lane]) / length)
         key += 1
+
+
+def _values_of_keys(
+    output: List[Float32], count: Int, keys: List[Int]
+) raises -> List[Float32]:
+    """Return the values of some of a sampler's keys, in the order asked.
+
+    Args:
+        output: Every key's values end to end: the same number for each
+            key, with a cubic spline's two tangents among them.
+        count: How many keys the output is for. One or more.
+        keys: The keys to keep, each below `count`.
+
+    Returns:
+        The values of those keys, end to end.
+
+    Raises:
+        Error: If the output does not hold the same number of values for
+            every key.
+    """
+    var each = len(output) // count
+    if each * count != len(output):
+        raise Error(
+            "glTF: a sampler's output must hold the same number of values"
+            " for every key"
+        )
+    var kept = List[Float32](capacity=each * len(keys))
+    for key in keys:  # pragma: no branch
+        kept.extend(output[key * each : (key + 1) * each])
+    return kept^
 
 
 def _track(

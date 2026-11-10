@@ -506,6 +506,7 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 - A skin joint that the scene does not reach is refused. three.js puts a new bone in its place.
 - A morph target without `COLOR_0` changes no color. three.js adds the base colors to it as offsets.
 - A rotation key must be of unit length. A track refuses one that is not.
+- Keys that share a time are read as a jump, as in three.js. The key before the jump moves to the nearest time below, because the times of a track must rise. See [Keys that share a time](Animation#keys-that-share-a-time).
 - A map other than the occlusion texture must read the first set of texture coordinates. three.js reads any set. Here, only the ao map and the light map are sampled at a second set.
 - A map that reads the third set of texture coordinates or a later set is refused. A geometry here has only `uv` and `uv1`.
 
