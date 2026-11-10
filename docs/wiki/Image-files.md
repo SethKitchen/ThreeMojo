@@ -135,7 +135,7 @@ The pixels are the same as before, bit for bit.
 
 ### Integrity checks
 
-The decoder checks that every marker segment fits and that the frame header comes once and before the scans. It checks that every table a scan names was defined and holds no zero, and that each scan names components the frame has. It checks that the restart markers arrive in order and that the end marker closes the file. A truncated scan, a code no table defines and a run past a block's end are refused rather than padded.
+The decoder checks that every marker segment fits and that the frame header comes once and before the scans. It checks that every table a scan names was defined and holds no zero, and that each scan names components the frame has. It checks that the restart markers arrive in order and that the image has its end marker. Bytes after the end marker are not read, as libjpeg and a browser leave them. A glTF buffer view pads an image to four bytes, and a camera can append a second picture. A truncated scan, a code no table defines and a run past a block's end are refused rather than padded.
 
 ## Read a TGA
 

@@ -51,8 +51,11 @@ must fit in the file, a frame header must come once and before the
 scans, every table a scan names must have been defined and hold no zero,
 a scan must name components the frame has, every coefficient's bits
 must arrive in order and once, every component must be in some scan,
-the restart markers must arrive in order, and the file must end with its
-end marker. A file that asks for arithmetic coding, twelve bits a
+the restart markers must arrive in order, and the image must end with its
+end marker. Bytes after the end marker are not part of the image and are
+not read, as libjpeg and a browser leave them: a glTF buffer view pads
+an image to four bytes, and a camera appends a second picture. A file
+that asks for arithmetic coding, twelve bits a
 sample, sixteen-bit quantization tables, four components, a sampling
 factor past two, or three components not numbered as JFIF numbers them
 is refused by name rather than mis-decoded.
@@ -1465,7 +1468,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
 
     Raises:
         Error: If the file does not begin with a start-of-image marker or
-            end with an end-of-image marker, a marker segment does not fit,
+            has no end-of-image marker, a marker segment does not fit,
             the frame header is missing, doubled or malformed, a table is
             malformed or missing when a scan names it, a scan header does
             not match the frame or sends bits out of order, a component is
@@ -1571,9 +1574,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         at = end
     if not scanned:
         raise Error("A JPEG file ended before its scan")
-    # The end marker, and nothing after it.
-    if at + 2 != len(bytes):
-        raise Error("A JPEG file must end with its end-of-image marker")
+    # The image ends at its end marker. What follows is not read.
 
     var zigzag = zigzag_order()
     var cosines = cosine_table()

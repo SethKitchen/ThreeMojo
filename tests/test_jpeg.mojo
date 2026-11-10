@@ -517,15 +517,27 @@ def test_a_scan_that_ends_early_is_refused() raises:
     refused(gray_jpeg(8, 8, [5], [0x00], [0xFF, 0x00, 0xFF, 0x00]))
 
 
-def test_the_end_marker_must_close_the_file() raises:
-    # Data then nothing; data then a byte that is no marker; the wrong
-    # marker; and bytes after the end marker.
+def test_the_image_must_reach_its_end_marker() raises:
+    # Data then nothing; data then a byte that is no marker; and the wrong
+    # marker.
     refused(gray_jpeg(8, 8, [5], [0x00], [0x40], end=False))
     refused(gray_jpeg(8, 8, [5], [0x00], [0x40, 0x12]))
     refused(gray_jpeg(8, 8, [5], [0x00], [0x40, 0xFF, 0xD8], end=False))
+
+
+def test_bytes_after_the_end_marker_are_not_read() raises:
+    # A glTF buffer view pads its image to four bytes, and a camera
+    # appends a second picture. libjpeg and a browser stop at the end
+    # marker. ShaderBall2.glb, which three.js ships, has three such bytes.
     var whole = gray_jpeg(8, 8, [5], [0x00], [0x40])
-    whole.append(0)
-    refused(whole)
+    var plain = decode(whole)
+    for extra in [0, 0, 0, 0xFF, 0xD8, 0x12]:
+        whole.append(UInt8(extra))
+        var padded = decode(whole)
+        assert_equal(padded.width, plain.width)
+        assert_equal(padded.height, plain.height)
+        for index in range(len(plain.pixels)):
+            assert_equal(Int(padded.pixels[index]), Int(plain.pixels[index]))
 
 
 def test_restart_intervals_by_hand_wrap_and_must_be_kept() raises:
