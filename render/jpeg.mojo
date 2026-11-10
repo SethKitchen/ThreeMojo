@@ -55,10 +55,14 @@ the restart markers must arrive in order, and the image must end with its
 end marker. Bytes after the end marker are not part of the image and are
 not read, as libjpeg and a browser leave them: a glTF buffer view pads
 an image to four bytes, and a camera appends a second picture. A file
-that asks for arithmetic coding, twelve bits a
-sample, sixteen-bit quantization tables, four components, a sampling
-factor past two, or three components not numbered as JFIF numbers them
-is refused by name rather than mis-decoded.
+that asks for arithmetic coding, twelve bits a sample, four components,
+a sampling factor past two, or three components not numbered as JFIF
+numbers them is refused by name rather than mis-decoded.
+
+A quantization table's steps are a byte each, or two bytes each. The
+standard keeps two bytes for samples of twelve bits. libjpeg writes them
+for a step past 255, which a low quality asks for, and every viewer
+reads them. Six of the JPEG files three.js ships have such tables.
 
 JPEG carries no color space of its own. What every viewer assumes is
 sRGB, and so does this: a decoded JPEG is `SRGB`.
@@ -757,24 +761,30 @@ def _read_quant_tables(
         defined: Which of the four have been defined, marked in place.
 
     Raises:
-        Error: If a table is sixteen-bit, has an id past three, holds a
-            zero, or does not fit in the segment.
+        Error: If a table's steps are neither eight nor sixteen bits, it
+            has an id past three, holds a zero, or does not fit in the
+            segment.
     """
     var at = start
     while at < end:
         var precision = Int(bytes[at]) >> 4
         var id = Int(bytes[at]) & 15
-        if precision != 0:
+        # Zero is a byte a step, and one is two bytes. libjpeg writes two
+        # for a step past 255, which a low quality asks for, and reads
+        # them for samples of eight bits, as every viewer does.
+        if precision > 1:
             raise Error(
-                "A sixteen-bit quantization table is not supported: this"
-                " decoder reads baseline JPEG"
+                "A quantization table's steps are eight or sixteen bits"
             )
         require_quant_table(id)
-        if at + 1 + BLOCK_SAMPLES > end:
+        var width = precision + 1
+        if at + 1 + BLOCK_SAMPLES * width > end:
             raise Error("A quantization table does not fit its segment")
         var table = List[Int]()
         for index in range(BLOCK_SAMPLES):  # pragma: no branch
-            var step = Int(bytes[at + 1 + index])
+            var step = Int(bytes[at + 1 + index * width])
+            if precision == 1:
+                step = (step << 8) | Int(bytes[at + 2 + index * width])
             # A step of zero is not a quantization: it would turn every
             # coefficient it scales to nothing and make a plausible wrong
             # image, where the standard allows no such step.
@@ -783,7 +793,7 @@ def _read_quant_tables(
             table.append(step)
         tables[id] = table^
         defined[id] = True
-        at += 1 + BLOCK_SAMPLES
+        at += 1 + BLOCK_SAMPLES * width
 
 
 def require_huffman_span(at: Int, need: Int, end: Int) raises:
@@ -1456,9 +1466,8 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     4:4:4, 4:2:2 and 4:2:0 -- any restart interval, and scans of every
     component or of one, and widens it to opaque RGBA, since that is what
     a `Texture` holds. Everything else JPEG allows -- arithmetic coding,
-    twelve bits, sixteen-bit quantization tables, larger sampling
-    factors, four components, components numbered other than JFIF's one,
-    two and three -- is refused by name.
+    twelve bits, larger sampling factors, four components, components
+    numbered other than JFIF's one, two and three -- is refused by name.
 
     Args:
         bytes: The complete file.

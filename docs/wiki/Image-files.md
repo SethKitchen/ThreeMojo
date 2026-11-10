@@ -93,7 +93,8 @@ var skin = assets.textures.add(texture_from(photo, REPEAT, BILINEAR, mipmapped=T
 | Supported | Refused by name |
 |---|---|
 | Baseline sequential Huffman coding, `SOF0` and `SOF1` at 8 bits | Arithmetic coding |
-| Progressive Huffman coding, `SOF2`: spectral selection and successive approximation | Twelve bits a sample, and sixteen-bit quantization tables |
+| Progressive Huffman coding, `SOF2`: spectral selection and successive approximation | Twelve bits a sample |
+| Quantization tables with steps of 8 bits or of 16 bits | |
 | Gray, and YCbCr in three components numbered one, two and three as JFIF numbers them | Four components, which is CMYK, and three numbered any other way |
 | 4:4:4, 4:2:2 and 4:2:0 | Other sampling factors |
 | Restart intervals, in sequential and progressive scans | |
