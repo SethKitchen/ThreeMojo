@@ -41,7 +41,11 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 | `read_obj(path) -> ObjModel` | Read a file. |
 | `parse_obj(text) -> ObjModel` | Read the text of one. |
 
-OBJ and PLY check polygon convexity on the exact products of the stored `Float32` corners. Thus the scale of a finite model does not change whether a face is accepted. A corner that turns the wrong way by no more than `Float32` rounding of the file's numbers can explain is accepted. So a corner that is straight in the file, such as a T-junction far from the origin, does not refuse the face.
+OBJ and PLY cut a convex face into a fan of triangles from its first corner, as three.js cuts every OBJ face. A fan covers a convex polygon and only that. A face that is not convex is cut by earcut, so that the triangles cover the face and nothing else. three.js cuts such a face into a fan too, and the fan covers the cutout. `ninjaHead_Low.obj`, which three.js ships, has two such quads among 4,074.
+
+The loaders check convexity on the exact products of the stored `Float32` corners. Thus the scale of a finite model does not change how a face is cut. A corner that turns the wrong way by no more than `Float32` rounding of the file's numbers can explain counts as straight. So a corner that is straight in the file, such as a T-junction far from the origin, keeps the fan.
+
+For the cut, the loader drops the coordinate that the face's normal points along most. That changes no number, so the cut does not depend on the scale either. Each triangle turns the way the face turns, and each corner keeps its own normal, texture coordinate and color.
 
 ## ObjModel and ObjObject
 
@@ -66,7 +70,7 @@ OBJ and PLY check polygon convexity on the exact products of the stored `Float32
 | `v x y z r g b` | A position and its sRGB color, as in three.js. An object with a colored vertex gets a linear `color` attribute. A vertex without a color is white in it. |
 | `vt u v` | A texture coordinate. |
 | `vn x y z` | A normal. |
-| `f a b c ...` | A face of three or more corners, cut into a fan of triangles. A polygon must be convex. Each corner is `v`, `v/vt`, `v//vn` or `v/vt/vn`. |
+| `f a b c ...` | A face of three or more corners, cut into a fan of triangles. A polygon that is not convex is cut by earcut. Each corner is `v`, `v/vt`, `v//vn` or `v/vt/vn`. |
 | `o name`, `g name` | A new object. One with no faces is dropped. |
 | `usemtl name` | A new run of faces under that material, in the same object. A run with no faces is dropped. The first `usemtl` also takes the faces before it, as in three.js. |
 | `mtllib name` | A material library. The rest of the line is one file name. |
@@ -82,7 +86,7 @@ The parser raises, naming the line, for:
 
 - A `v`, `vt` or `vn` line with too few coordinates. A coordinate that is not a number, or is not finite as a `Float32`.
 - A face with fewer than three corners, or a corner with more than three parts.
-- A face of four or more corners that is not convex, or has no area. A fan covers a convex polygon and only that.
+- A face of four or more corners that has no area.
 - An index that is not a whole number, is zero, or names an entry the file does not have.
 - A face that names a normal or a texture coordinate where an earlier face of the object did not, or the other way round.
 - An `mtllib` line with no file name.
@@ -303,7 +307,7 @@ The loader reads the three formats: `ascii`, `binary_little_endian` and `binary_
 | `face`: `texcoord` | `uv` at each corner of the face. It holds two numbers for each corner. three.js reads it only for a triangle. |
 | `face`: `red`, `green`, `blue`, or their other names | `color` at each corner of the face, divided by 255 and decoded from sRGB. three.js gives a quad only three corners' colors, so its later colors move one triangle along. Here each triangle of a face takes the face's color. |
 
-A face of more than three corners becomes a fan of triangles from its first corner. Thus the face must be convex, as an OBJ face must be. three.js cuts a quad on the other diagonal, and it does not read a face of five or more corners.
+A convex face of more than three corners becomes a fan of triangles from its first corner. A face that is not convex is cut by earcut, as an OBJ face is. three.js cuts a quad on the other diagonal, and it does not read a face of five or more corners.
 
 A face's own texture coordinates or colors need a vertex for each corner. So the geometry then has no index, as three.js's `toNonIndexed` makes it. They replace the vertices' `uv` and `color`, as in three.js.
 
@@ -342,7 +346,7 @@ The loader raises, and names the element and the row, for:
 - An ASCII row with too few or too many values. A value that is not a number of its type, or is out of its range.
 - A file that ends before its last row. A list with a negative length.
 - A value of a vertex that is not finite as a `Float32`.
-- A face with fewer than three corners, or one that names a vertex the file does not have. A face that is not convex, or has no area. A face's `texcoord` without two numbers for each corner, when another face has some.
+- A face with fewer than three corners, or one that names a vertex the file does not have. A face that has no area. A face's `texcoord` without two numbers for each corner, when another face has some.
 
 ### Example
 

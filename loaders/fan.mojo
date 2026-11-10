@@ -3,18 +3,26 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The test a polygon passes before a loader cuts it into a fan.
+"""How a loader cuts a polygon into triangles.
 
 The OBJ and PLY loaders cut a face of four or more corners into a fan of
 triangles from its first corner, as three.js cuts it. A fan covers a
 convex polygon and only that. `fan_problem` finds a face that is not
-convex or has no area, so the loader refuses it rather than draws it
-wrong, as three.js draws it.
+convex or has no area.
+
+`cut_polygon` gives the triangles. A convex face is the fan. A face that
+is not convex is cut by earcut, so that the triangles cover the face and
+nothing else. three.js cuts such a face into a fan too, and draws it
+wrong: the fan covers the cutout. A face with no area is refused.
 """
 
+from geometries.earcut import earcut
 from math.triangle_normal import _polygon_cross_wide, _triangle_cross_wide
 from math.vector3 import Vector3
 from std.math import sqrt
+
+# What `fan_problem` answers for corners on one line.
+comptime _NO_AREA = "a face has no area"
 
 
 def _span(a: Vector3, b: Vector3) -> Float64:
@@ -51,7 +59,7 @@ def fan_problem(points: List[Vector3]) -> String:
     var normal = _polygon_cross_wide(points)
     var area_squared = (normal * normal).reduce_add()
     if area_squared == 0:
-        return "a face has no area"
+        return _NO_AREA
     # Rounding a number to a `Float32` moves it by at most 2**-24 of the
     # largest coordinate. Moving the three corners of a turn that far
     # moves the turn by less than 4 times that, times its two sides.
@@ -74,3 +82,72 @@ def fan_problem(points: List[Vector3]) -> String:
                 " fan of triangles"
             )
     return ""
+
+
+struct PolygonCut(Movable):
+    """The triangles of a polygon, or why it has none."""
+
+    # Three corner numbers for each triangle, in the polygon's winding.
+    # Empty when `problem` is set.
+    var triangles: List[Int]
+    # Empty, or why the polygon is not cut, for the loader to name its
+    # line or face before.
+    var problem: String
+
+    def __init__(out self):
+        """Start with no triangles and no problem."""
+        self.triangles = List[Int]()
+        self.problem = String()
+
+
+def cut_polygon(points: List[Vector3]) raises -> PolygonCut:
+    """Return the triangles that cover a polygon of four or more corners.
+
+    A convex polygon is cut into a fan from its first corner, as three.js
+    cuts every polygon. A polygon that is not convex is cut by earcut.
+    Its corners are laid on the coordinate plane that its Newell normal
+    faces most, wound counterclockwise there, so that each of earcut's
+    triangles turns the way the polygon turns. Dropping a coordinate
+    changes no number, so the cut does not depend on the model's scale.
+
+    Args:
+        points: The corners, in order, four or more, each finite.
+
+    Returns:
+        The triangles. For a polygon with no area, no triangles and the
+        reason. A polygon that crosses itself is cut as earcut cuts it.
+
+    Raises:
+        Error: If earcut refuses the corners. It refuses more than 80
+            corners with a coordinate that is not finite.
+    """
+    var cut = PolygonCut()
+    var problem = fan_problem(points)
+    if problem == "":
+        for triangle in range(len(points) - 2):  # pragma: no branch
+            cut.triangles.append(0)
+            cut.triangles.append(triangle + 1)
+            cut.triangles.append(triangle + 2)
+        return cut^
+    if problem == _NO_AREA:
+        cut.problem = problem
+        return cut^
+    var normal = _polygon_cross_wide(points)
+    var axis = 0
+    for other in [1, 2]:  # pragma: no branch
+        if abs(normal[other]) > abs(normal[axis]):
+            axis = other
+    # The two axes that are kept, in the order that turns about the
+    # dropped one. A normal that points down the axis turns the other way.
+    var first = (axis + 1) % 3
+    var second = (axis + 2) % 3
+    if normal[axis] < 0:
+        first = (axis + 2) % 3
+        second = (axis + 1) % 3
+    var flat = List[Float64](capacity=2 * len(points))
+    for point in points:  # pragma: no branch
+        var along = [Float64(point.x), Float64(point.y), Float64(point.z)]
+        flat.append(along[first])
+        flat.append(along[second])
+    cut.triangles = earcut(flat)
+    return cut^
