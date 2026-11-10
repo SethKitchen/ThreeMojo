@@ -27,7 +27,10 @@ from loaders.fbx import (
     BY_POLYGON_VERTEX,
     BY_VERTEX,
     DIRECT,
+    CURVE_COLOR,
+    CURVE_STEPS,
     INDEX_TO_DIRECT,
+    MAX_CURVE_ORDER,
     MAX_MODEL_DEPTH,
     FbxLayer,
     FbxMapping,
@@ -61,7 +64,7 @@ from loaders.fbx_tree import (
     string_property,
 )
 from loaders.bytes import decode_base64
-from materials.material import LAMBERT, NO_TEXTURE, PHONG, Material
+from materials.material import BASIC, LAMBERT, NO_TEXTURE, PHONG, Material
 from math.euler import YXZ, ZYX
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -1761,6 +1764,338 @@ def test_models() raises:
     var none = Assets()
     with assert_raises():
         _ = load_fbx(empty^, "", nowhere, none)
+
+
+def _array(name: String, numbers: String) -> String:
+    """Return an array entry of a geometry: its count, then its numbers.
+    A string of spaces is an array of nothing."""
+    var count = 0
+    if numbers.strip().byte_length() > 0:
+        count = numbers.count(",") + 1
+    return (
+        "\t\t"
+        + name
+        + ": *"
+        + String(count)
+        + " {\n\t\t\ta: "
+        + numbers
+        + "\n\t\t}\n"
+    )
+
+
+def _curve(
+    id: Int, order: String, form: String, points: String, knots: String
+) -> String:
+    """Return a `NurbsCurve` geometry. An empty `order`, `form`, `points`
+    or `knots` leaves that entry out."""
+    var text = "\tGeometry: " + String(id) + ', "Geometry::", "NurbsCurve" {\n'
+    if order.byte_length() > 0:
+        text += "\t\tOrder: " + order + "\n"
+    if form.byte_length() > 0:
+        text += "\t\tForm: " + form + "\n"
+    if points.byte_length() > 0:
+        text += _array("Points", points)
+    if knots.byte_length() > 0:
+        text += _array("KnotVector", knots)
+    return text + "\t}\n"
+
+
+def _curve_model(id: Int, name: String) -> String:
+    """Return a `NurbsCurve` model."""
+    return (
+        "\tModel: "
+        + String(id)
+        + ', "Model::'
+        + name
+        + '", "NurbsCurve" {\n\t}\n'
+    )
+
+
+def _join(child: Int, parent: Int) -> String:
+    """Return a connection of a child to a parent."""
+    return '\tC: "OO",' + String(child) + "," + String(parent) + "\n"
+
+
+# Four control points, the third one twice as heavy, and the knots of an
+# open curve of degree two.
+comptime OPEN_POINTS = "0,0,0,1, 1,2,0,1, 3,2,1,2, 4,0,0,1"
+comptime OPEN_KNOTS = "0,0,0,0.5,1,1,1"
+
+
+def _one_curve(
+    order: String, form: String, points: String, knots: String
+) raises -> Tuple[Scene, Assets, FbxModel]:
+    """Read one curve geometry under one curve model."""
+    var scene = Scene()
+    var assets = Assets()
+    var model = load_text(
+        objects(
+            _curve(1000, order, form, points, knots) + _curve_model(100, "A"),
+            _join(100, 0) + _join(1000, 100),
+        ),
+        scene,
+        assets,
+    )
+    return (scene^, assets^, model^)
+
+
+def _path(scene: Scene, assets: Assets, line: Int) raises -> List[Float32]:
+    """Return the points of one line of a scene."""
+    return values(assets, scene.lines[line].geometry, String(POSITION))
+
+
+def _assert_point(
+    path: List[Float32], index: Int, x: Float32, y: Float32, z: Float32
+) raises:
+    """Assert that one point of a path is close to (x, y, z)."""
+    assert_almost_equal(path[index * 3], x, atol=2e-6)
+    assert_almost_equal(path[index * 3 + 1], y, atol=2e-6)
+    assert_almost_equal(path[index * 3 + 2], z, atol=2e-6)
+
+
+def test_curves() raises:
+    # An open, a closed and a periodic curve, as three.js r180 reads them:
+    # twelve steps for each control point, and the numbers `FBXLoader`
+    # printed for this text in Node.
+    var scene = Scene()
+    var assets = Assets()
+    var model = load_text(
+        objects(
+            _curve(1000, "3", '"Open"', OPEN_POINTS, OPEN_KNOTS)
+            + _curve(
+                1001,
+                "3",
+                '"Closed"',
+                "0,0,0,1, 1,2,0,1, 3,2,1,1, 4,0,0,1",
+                "0,0,0,0.33,0.67,1,1,1",
+            )
+            + _curve(
+                1002,
+                "4",
+                '"Periodic"',
+                "0,0,0,1, 2,0,0,1, 2,2,0,1, 0,2,0.5,1",
+                "-3,-2,-1,0,1,2,3,4,5,6,7",
+            )
+            + '\tModel: 100, "Model::Open", "NurbsCurve" {\n'
+            + "\t\tProperties70:  {\n"
+            + '\t\t\tP: "Lcl Translation", "Lcl Translation", "",'
+            + ' "A",1,2,3\n\t\t}\n\t}\n'
+            + _curve_model(101, "Closed")
+            + _curve_model(102, "Periodic"),
+            _join(100, 0)
+            + _join(1000, 100)
+            + _join(101, 0)
+            + _join(1001, 101)
+            + _join(102, 0)
+            + _join(1002, 102),
+        ),
+        scene,
+        assets,
+    )
+    assert_equal(model.first_line, 0)
+    assert_equal(model.line_count, 3)
+    assert_equal(len(scene.lines), 3)
+    assert_equal(len(scene.meshes), 0)
+    assert_equal(len(model.geometries), 3)
+    # The open curve: four control points, so 48 steps. It starts on its
+    # first control point and ends on its last.
+    var open = _path(scene, assets, 0)
+    assert_equal(len(open), 49 * 3)
+    _assert_point(open, 0, 0, 0, 0)
+    _assert_point(
+        open, 1, 0.08586296439170837, 0.16478751599788666, 0.0017346054082736373
+    )
+    _assert_point(open, 24, 2.3333332538604736, 2, 0.6666666865348816)
+    _assert_point(open, 48, 4, 0, 0)
+    assert_near(scene.get(scene.lines[0].node).position, 1, 2, 3)
+    assert_equal(scene.get(scene.lines[0].node).name, "Open")
+    # The closed curve has its first control point again at its end.
+    var closed = _path(scene, assets, 1)
+    assert_equal(len(closed), 61 * 3)
+    _assert_point(
+        closed,
+        1,
+        0.10097202658653259,
+        0.19691868126392365,
+        0.0012563444906845689,
+    )
+    _assert_point(
+        closed, 30, 2.8731343746185303, 1.746268630027771, 0.746268630027771
+    )
+    _assert_point(closed, 60, 0, 0, 0)
+    # The periodic curve repeats three control points, and runs between
+    # its fourth knot and its fourth from the end. It closes on itself.
+    var periodic = _path(scene, assets, 2)
+    assert_equal(len(periodic), 85 * 3)
+    _assert_point(periodic, 0, 1.6666666269302368, 0.3333333432674408, 0)
+    _assert_point(
+        periodic,
+        1,
+        1.7120181322097778,
+        0.3831479549407959,
+        0.0000089983086581924,
+    )
+    _assert_point(
+        periodic, 42, 0.3333333432674408, 1.6666666269302368, 0.3333333432674408
+    )
+    _assert_point(periodic, 84, 1.6666666269302368, 0.3333333432674408, 0)
+    # An FBX file gives a curve no material: three.js's blue, for each.
+    var paint = scene.lines[0].material
+    assert_true(scene.lines[1].material == paint)
+    assert_true(scene.lines[2].material == paint)
+    ref material = assets.materials.get(paint)
+    assert_true(material.kind == BASIC)
+    assert_true(material.color == CURVE_COLOR)
+    assert_equal(Int(CURVE_COLOR.r), 0x33)
+    assert_equal(Int(CURVE_COLOR.g), 0)
+    assert_equal(Int(CURVE_COLOR.b), 0xFF)
+    assert_equal(CURVE_STEPS, 12)
+
+
+def test_a_curve_order_is_read_as_parse_int_reads_it() raises:
+    # A number with a fraction, and a string that begins with digits.
+    for order in ["3.7", '"3"', '"3 or so"']:
+        var read = _one_curve(order, '"Open"', OPEN_POINTS, OPEN_KNOTS)
+        assert_equal(len(_path(read[0], read[1], 0)), 49 * 3, order)
+    # No order, an order that is not a number, an order with no value and
+    # an order that is a list: three.js reports each and adds a line of
+    # nothing. Here the geometry has no points, and no line is added.
+    for order in ["", '"x"', " {\n\t\t}", "*1 {\n\t\t\ta: 3\n\t\t}"]:
+        var read = _one_curve(order, '"Open"', OPEN_POINTS, OPEN_KNOTS)
+        assert_equal(len(read[0].lines), 0, order)
+        assert_equal(read[2].line_count, 0)
+        assert_equal(len(read[2].geometries), 1)
+        ref empty = read[1].geometries.get(read[2].geometries[0])
+        assert_false(empty.has_attribute(String(POSITION)))
+
+
+def test_a_curve_with_no_form_is_open() raises:
+    # No form, a form that is not a name, and a form with no value.
+    for form in ["", "7", " {\n\t\t}", '"Wavy"']:
+        var read = _one_curve("3", form, OPEN_POINTS, OPEN_KNOTS)
+        var path = _path(read[0], read[1], 0)
+        assert_equal(len(path), 49 * 3, form)
+        _assert_point(path, 48, 4, 0, 0)
+
+
+def test_a_periodic_curve_of_degree_zero_repeats_no_point() raises:
+    # Order one: a step from one control point to the next, as three.js
+    # draws it. Twelve points on the first and thirteen on the second.
+    var read = _one_curve("1", '"Periodic"', "1,2,3,1, 4,5,6,1", "0,1,2")
+    var path = _path(read[0], read[1], 0)
+    assert_equal(len(path), 25 * 3)
+    for index in range(25):
+        if index < 12:
+            _assert_point(path, index, 1, 2, 3)
+        else:
+            _assert_point(path, index, 4, 5, 6)
+
+
+def _curve_refused(
+    order: String, form: String, points: String, knots: String, why: String
+) raises:
+    """Assert that one curve is refused, with a reason."""
+    with assert_raises(contains=why):
+        _ = _one_curve(order, form, points, knots)
+
+
+def test_curves_that_are_refused() raises:
+    # three.js draws `NaN`s for an order below one.
+    _curve_refused(
+        "0", "", OPEN_POINTS, OPEN_KNOTS, "order must be one or more"
+    )
+    _curve_refused(
+        "-2", "", OPEN_POINTS, OPEN_KNOTS, "order must be one or more"
+    )
+    _curve_refused(
+        String(MAX_CURVE_ORDER + 1),
+        "",
+        OPEN_POINTS,
+        OPEN_KNOTS,
+        "order must be",
+    )
+    _curve_refused("3", "", OPEN_POINTS, "", "has no KnotVector")
+    _curve_refused("3", "", "", OPEN_KNOTS, "has no Points")
+    # No points at all, and a point of three numbers.
+    _curve_refused("3", "", " ", OPEN_KNOTS, "fours of numbers")
+    _curve_refused("3", "", "0,0,0,1, 1,2,0", OPEN_KNOTS, "fours of numbers")
+    # A periodic curve repeats as many points as its degree.
+    _curve_refused(
+        "9",
+        '"Periodic"',
+        OPEN_POINTS,
+        OPEN_KNOTS,
+        "fewer points than its degree",
+    )
+    # Knots that do not fit the points and the degree.
+    _curve_refused("3", "", OPEN_POINTS, "0,0,0,1,1,1", "as many knots")
+    # The largest order is past any curve's points, and is refused there.
+    _curve_refused(
+        String(MAX_CURVE_ORDER),
+        "",
+        OPEN_POINTS,
+        OPEN_KNOTS,
+        "degree must be below",
+    )
+
+
+def test_a_curve_model_draws_its_last_geometry() raises:
+    var triangle = (
+        '\tGeometry: 2000, "Geometry::", "Mesh" {\n\t\tVertices: *9 {\n'
+        + "\t\t\ta: 0,0,0,1,0,0,0,1,0\n\t\t}\n\t\tPolygonVertexIndex: *3"
+        + " {\n\t\t\ta: 0,1,-3\n\t\t}\n\t}\n"
+    )
+    var nothing = '\tGeometry: 2001, "Geometry::", "Mesh" {\n\t}\n'
+    var shape = '\tGeometry: 2002, "Geometry::", "Shape" {\n\t}\n'
+    var open = _curve(1000, "3", "", OPEN_POINTS, OPEN_KNOTS)
+    var scene = Scene()
+    var assets = Assets()
+    var model = load_text(
+        objects(
+            open + triangle + nothing + shape
+            # Two geometries: the last one connected is drawn.
+            + _curve_model(100, "Both")
+            # A mesh geometry is a path through its vertices.
+            + _curve_model(101, "Corners")
+            # The same curve again: its geometry is built once.
+            + _curve_model(102, "Again")
+            # A mesh of no triangles draws nothing.
+            + _curve_model(103, "Empty")
+            # A child model and a shape are not geometries to draw.
+            + _curve_model(104, "Parent")
+            + '\tModel: 105, "Model::Child", "Null" {\n\t}\n',
+            _join(100, 0)
+            + _join(2000, 100)
+            + _join(1000, 100)
+            + _join(101, 0)
+            + _join(2000, 101)
+            + _join(102, 0)
+            + _join(1000, 102)
+            + _join(103, 0)
+            + _join(2001, 103)
+            + _join(104, 0)
+            + _join(105, 104)
+            + _join(2002, 104)
+            + _join(1000, 104),
+        ),
+        scene,
+        assets,
+    )
+    assert_equal(model.line_count, 4)
+    assert_equal(len(_path(scene, assets, 0)), 49 * 3)
+    assert_list(_path(scene, assets, 1), [Float32(0), 0, 0, 1, 0, 0, 0, 1, 0])
+    assert_true(scene.lines[2].geometry == scene.lines[0].geometry)
+    assert_true(scene.lines[3].geometry == scene.lines[0].geometry)
+    assert_equal(scene.get(scene.lines[3].node).name, "Parent")
+    # The curve, the triangle and the empty mesh: three geometries.
+    assert_equal(len(model.geometries), 3)
+    # three.js throws a `TypeError` for a curve model with no geometry, or
+    # with only a geometry that is neither a curve nor a mesh.
+    for joins in [_join(100, 0), _join(100, 0) + _join(2002, 100)]:
+        with assert_raises(contains="a curve model has no geometry"):
+            _ = load_text(
+                objects(shape + _curve_model(100, "Bare"), joins), scene, assets
+            )
 
 
 def test_global_settings() raises:

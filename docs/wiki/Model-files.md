@@ -905,6 +905,7 @@ print(model.mesh_count, len(model.materials))
 | `unit` | The length of one unit of the file, a `Length`: `UnitScaleFactor` from `GlobalSettings`, in centimeters. Like three.js, the loader keeps it and does not apply it. |
 | `first_mesh`, `mesh_count`, `first_light`, `light_count` | Where the meshes and lights of the file start in the scene, and how many there are. |
 | `first_skinned_mesh`, `skinned_mesh_count` | Where the skinned meshes of the file start in `scene.skinned_meshes`, and how many there are. |
+| `first_line`, `line_count` | Where the curves of the file start in `scene.lines`, and how many there are. |
 | `animations` | One `AnimationClip` for each animation stack that makes a track. See [Skins, blend shapes and animation](#skins-blend-shapes-and-animation). |
 
 A name is sanitized as three.js's `PropertyBinding.sanitizeNodeName` does it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are removed.
@@ -930,6 +931,8 @@ A binary file writes an object name as `Name\x00\x01Class`. three.js stops the s
 |---|---|
 | `Model` | An `Object3D` under its parent model. |
 | `Geometry` of type `Mesh` | A `BufferGeometry` with `position`, and `normal`, `uv` and `color` when the layer elements give them. It has a group for each run of polygons of one material index, as three.js's `genGeometry` adds them. A layer mapped `AllSame` adds no group. |
+| `Geometry` of type `NurbsCurve` | A `BufferGeometry` with the `position` of each point of the path. See [Curves](#curves). |
+| `Model` of type `NurbsCurve` | A `Line` of its geometry, in a `BASIC` material. |
 | `Material` | A `LAMBERT` material for the `lambert` shading model, and a `PHONG` material for any other, as in three.js. |
 | `Texture` and `Video` | A `Texture`. |
 | `NodeAttribute` of a `Camera` model | A `PerspectiveCamera`. |
@@ -1000,6 +1003,19 @@ A light reads `LightType`: 0 is a point light, 1 a directional light and 2 a spo
 
 A directional or spot light stands one unit up its own y axis before the model transform applies, as in three.js. It shines toward the world origin.
 
+### Curves
+
+A `NurbsCurve` model is a line: the path of the `NurbsCurve` geometry that is connected to it, as three.js's `createCurve` and `parseNurbsGeometry` build it. The lines are in `scene.lines`, from `first_line`, and `line_count` says how many there are.
+
+| Entry of the geometry | Meaning |
+|---|---|
+| `Order` | The degree of the curve and one. It is read as JavaScript's `parseInt` reads it, so `3.7` is 3. |
+| `Points` | The control points, four numbers each: x, y, z and the weight. |
+| `KnotVector` | The knots. There must be as many as the control points, the degree and one more. |
+| `Form` | `Closed` adds the first control point at the end. `Periodic` adds as many of the first control points as the degree, and the curve runs between the knots that the degree leaves at each end. Any other form is an open curve. |
+
+The path has twelve steps for each control point, at equal steps of the curve's parameter. An FBX file gives a curve no material, so each line is a `BASIC` material in `CURVE_COLOR`, three.js's blue. When two geometries are connected to the model, the last one is drawn. A `Mesh` geometry that is connected to a curve model is drawn as a path through its vertices, as in three.js.
+
 ### Skins, blend shapes and animation
 
 A `Skin` deformer on a geometry makes each mesh of the geometry a `SkinnedMesh`. `loaders/fbx.mojo` reads the skins and blend shapes, and `loaders/fbx_animation.mojo` reads the animation stacks. three.js: `parseDeformers`, `bindSkeleton` and `AnimationParser`.
@@ -1027,6 +1043,8 @@ The stacks come in the order that three.js meets them. A JavaScript object puts 
 
 - A polygon of four or more corners is cut by ear clipping. three.js uses earcut, which picks other diagonals. A flat polygon gives the same surface.
 - The ASCII reader reads tokens, not lines and tabs. A file that three.js reads, this reader reads the same way.
+- A control point of a curve is held as `Float32`s. three.js holds it as doubles, so a point of the path can differ in its last digit.
+- A curve whose order is not a number has no points, and it is given no line. three.js adds a line of nothing.
 - three.js sets the penumbra of a spot light to the outer angle in radians, at least 1. This loader uses 1, because a penumbra above 1 is refused.
 - `ByVertex` and `Index` are read as `ByVertice` and `IndexToDirect`. three.js does not read them.
 - A texture with no image is `NO_TEXTURE`. three.js makes an empty texture.
@@ -1041,7 +1059,7 @@ The stacks come in the order that three.js meets them. A JavaScript object puts 
 
 ### Not read
 
-Animation layers after the first of a stack are not read, as in three.js. NURBS curves, `LookAtProperty`, orthographic cameras, a second set of texture coordinates, and the ambient occlusion, displacement, reflection and specular maps are skipped.
+Animation layers after the first of a stack are not read, as in three.js. `LookAtProperty`, orthographic cameras, a second set of texture coordinates, and the ambient occlusion, displacement, reflection and specular maps are skipped.
 
 ### Errors
 
@@ -1065,6 +1083,7 @@ The loader raises for:
 - A mapping or a reference that is not known. A layer index outside its values.
 - A position index outside `Vertices`. A last polygon with no negative index. A polygon of four or more corners with no area, or one that crosses itself so that no ear is left.
 - A mesh model with no mesh geometry. Models connected in a loop, or nested deeper than `MAX_MODEL_DEPTH`. A transform that flattens an axis.
+- A curve model with no geometry, for which three.js throws a `TypeError`. A curve with an order below one or above `MAX_CURVE_ORDER`, with no `KnotVector` or no `Points`, or with points that are not fours of numbers. A periodic curve with fewer points than its degree. Knots that do not fit the points and the degree. three.js draws `NaN`s for these curves.
 - A camera, a light or a material that its builder refuses.
 - A rotation order, an inherit type, a light type or a camera projection that is not a whole number, or that does not fit.
 - A skin that deforms no geometry. A cluster with no `TransformLink`, a `TransformLink` that is not 16 numbers, or a cluster with not one weight for each index. A cluster with no bone.
