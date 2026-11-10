@@ -210,6 +210,7 @@ The decoder refuses these, with a message that names the problem:
 - An image of no width or no height, and a file that starts with neither `II` nor `MM`. Also a tile with no offset or no byte count. three.js gives an empty image for the first two. For such a tile, UTIF reads what it can, differently for each compression.
 - An image whose pixel count or sample buffer does not fit.
 - A tile whose width or height is not positive.
+- A tag whose shorts or longs run past the end of the file. UTIF reads each missing value as zero. A tag names up to four billion values, so a short file can read as gigabytes of zeros.
 
 The tests read 96 files that `assets/tiff/make_tiff.py` wrote, with Pillow and by hand. Each one must have the bytes that three.js 0.180 gives, or be one of the seven that the decoder refuses on purpose.
 

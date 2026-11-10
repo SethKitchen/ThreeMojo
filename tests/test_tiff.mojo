@@ -178,5 +178,71 @@ def test_a_deflate_strip_that_is_not_deflate_is_refused() raises:
         _ = read_tiff(file)
 
 
+def _entry(mut bytes: List[UInt8], tag: Int, type: Int, num: Int, value: Int):
+    _push16(bytes, tag)
+    _push16(bytes, type)
+    _push32(bytes, num)
+    _push32(bytes, value)
+
+
+def test_a_tag_whose_values_pass_the_end_is_refused() raises:
+    # A tag names up to four billion values, and UTIF reads each missing
+    # one as zero. A file of twenty-six bytes must not read as gigabytes.
+    for type in [3, 4, 13]:
+        var bomb = List[UInt8]()
+        bomb.append(73)
+        bomb.append(73)
+        _push16(bomb, 42)
+        _push32(bomb, 8)
+        _push16(bomb, 1)
+        _entry(bomb, 273, type, 0xFFFFFFFF, 8)
+        _push32(bomb, 0)
+        with assert_raises(contains="tag 273 names values past the end"):
+            _ = read_tiff(bomb)
+    # Two strips of one gray pixel each. The strip offsets are two longs
+    # that end where the file ends, and they are read.
+    var bytes = List[UInt8]()
+    bytes.append(73)
+    bytes.append(73)
+    _push16(bytes, 42)
+    _push32(bytes, 10)
+    bytes.append(10)
+    bytes.append(200)
+    _push16(bytes, 7)
+    _long(bytes, 256, 1)
+    _long(bytes, 257, 2)
+    _long(bytes, 258, 8)
+    _long(bytes, 262, 1)
+    _entry(bytes, 273, 4, 2, 100)
+    _long(bytes, 278, 1)
+    _entry(bytes, 279, 3, 2, 1 | (1 << 16))
+    _push32(bytes, 0)
+    assert_equal(len(bytes), 100)
+    _push32(bytes, 8)
+    _push32(bytes, 9)
+    var texture = read_tiff(bytes)
+    assert_equal(texture.width, 1)
+    assert_equal(texture.height, 2)
+    assert_equal(Int(texture.pixels[0]), 10)
+    assert_equal(Int(texture.pixels[4]), 200)
+    # One byte shorter, the second offset passes the end.
+    _ = bytes.pop()
+    with assert_raises(contains="tag 273 names values past the end"):
+        _ = read_tiff(bytes)
+    # Two shorts inside an entry that the file cuts short.
+    var cut = List[UInt8]()
+    cut.append(73)
+    cut.append(73)
+    _push16(cut, 42)
+    _push32(cut, 8)
+    _push16(cut, 1)
+    _push16(cut, 279)
+    _push16(cut, 3)
+    _push32(cut, 2)
+    _push16(cut, 1)
+    with assert_raises(contains="tag 279 names values past the end"):
+        _ = read_tiff(cut)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
