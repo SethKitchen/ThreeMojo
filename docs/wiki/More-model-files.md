@@ -748,8 +748,9 @@ The other nodes are read but not built, as in three.js. These are the lights, th
 - A texture transform with no `rotation` turns by zero.
 - An `ImageTexture` is decoded at once, when its file is there.
 - A number too big for a double is refused.
-- A pixel image whose byte count does not fit is refused.
+- A pixel image of more than 2^28 pixels is refused. The image takes four bytes for each pixel that it names, whatever pixels the file gives.
 - An elevation grid whose index length does not fit is refused.
+- An elevation grid with more points than heights is refused before it is built. three.js reads each missing height as `NaN`.
 
 ### Example
 

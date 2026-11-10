@@ -490,6 +490,38 @@ def test_refusals() raises:
         ),
         "larger than this port",
     )
+    # The bytes are made for the size the image states. A size that fits
+    # in an integer is still gigabytes, from a file of one line.
+    refuses(
+        (
+            "Shape { appearance Appearance { texture PixelTexture { image"
+            " 2147483648 1 1 } } }"
+        ),
+        "larger than this port",
+    )
+    refuses(
+        (
+            "Shape { appearance Appearance { texture PixelTexture { image"
+            " 16384 16385 1 } } }"
+        ),
+        "larger than this port",
+    )
+    # A grid of four billion points and no heights. three.js reads each
+    # missing height as NaN. The grid is refused before its points are made.
+    refuses(
+        (
+            "Shape { geometry ElevationGrid { xDimension 4294967296"
+            " zDimension 1 } }"
+        ),
+        "more points than heights",
+    )
+    refuses(
+        (
+            "Shape { geometry ElevationGrid { xDimension 2 zDimension 2"
+            " height [ 1 2 3 ] } }"
+        ),
+        "more points than heights",
+    )
     # 3037000500 * 3037000500 wraps in Int. The old index length was a
     # short loop, so the grid looked small enough to build.
     refuses(
