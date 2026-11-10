@@ -430,6 +430,12 @@ The text is the text that three.js writes for a scene whose numbers are short de
 - A texture file is named for the texture's id. three.js names it for the id of its source.
 - Each file's data starts at a multiple of 64 bytes. three.js pads each file by a count that is right only for the first file.
 - A geometry that is not whole triangles is refused. three.js throws a `RangeError`.
+- Three texture inputs are written as the `UsdPreviewSurface` specification asks, and as three.js 0.186 writes them. OpenUSD's validators report each one in a file of three.js 0.180:
+  - A reader's `inputs:varname` is a `string`. three.js 0.180 writes a `token`.
+  - A transform's `inputs:in` is a `float2`. three.js 0.180 writes a `token`.
+  - A normal map's texture has `inputs:scale` and `inputs:bias`. They turn a byte from 0 to 1 into a normal from -1 to 1. For x and y they are twice the material's `normal_scale.x` and its negative. For z they are 2 and -1. three.js 0.180 writes neither, so a renderer reads each normal as it is in the file, from 0 to 1.
+
+Set a normal map's color space to `LINEAR`. Its texture is then `raw`, which is what OpenUSD asks of a normal map.
 
 ## Draco
 
@@ -582,7 +588,7 @@ The writers raise for:
 
 `tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js r187 writes, in `assets/exr_export/three.json`. `assets/exr_export/three_exr_export.mjs` writes that fixture. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`.
 
-`tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
+`tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. It changes the three texture inputs of the USDZ differences in the three.js text before it compares. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
 
 `tests/test_draco_export.mojo` compares Draco files with the files that three.js writes, in `assets/draco/export/three.json` and `three.bin`. It checks a representative subset of the 323 cases: each encoder method, both traversals, each KD-tree level and each class of quantization. It reads the files of the smaller geometries back with `decode_draco` and finds each triangle of the geometry in them. To check all 323 cases, run `make draco-export-check`. This target is not part of `make check` or `make coverage`. `assets/draco/export/three_export.mjs` writes the three.js files in Node.
 
