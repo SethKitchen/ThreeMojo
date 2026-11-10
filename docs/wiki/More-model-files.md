@@ -183,7 +183,11 @@ The loader refuses these, with a message that names the problem:
 
 `unzip` checks each entry's size and CRC-32. fflate does not check them. `unzip` refuses encrypted entries, other compression methods and archives on more than one disk.
 
-`unzip` reads a ZIP64 archive. Some writers use the ZIP64 records for every archive, small ones too. Two of the seven 3MF files that three.js ships are such archives. An end record with a field at its largest value names a ZIP64 end record. The locator of that record is the 20 bytes before the end record. The ZIP64 record must end at its locator, and the central directory must end where the ZIP64 record starts. An entry with a size or an offset at its largest value holds the real value in its ZIP64 extra field. The values there are in a fixed order: size, compressed size, offset. The entry holds only the values that it asks for. fflate reads all three whichever are there.
+`unzip` reads a ZIP64 archive. Some writers use the ZIP64 records for every archive, small ones too. Two of the seven 3MF files that three.js ships are such archives.
+
+An end record with a field at its largest value names a ZIP64 end record. The locator of that record is the 20 bytes before the end record. The ZIP64 record must end at its locator, and the central directory must end where the ZIP64 record starts.
+
+An entry with a size or an offset at its largest value holds the real value in its ZIP64 extra field. The values there are in a fixed order: size, compressed size, offset. The entry holds only the values that it asks for. fflate reads all three whichever are there.
 
 The end record's comment length must reach the archive end. Candidate checks follow the central headers and their local-data ranges. The central directory must end at that record, and its size and file count must agree. Shared directory suffixes are cached so repeated candidates do not scan those records again.
 
