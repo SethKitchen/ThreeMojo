@@ -1222,6 +1222,7 @@ The loader also refuses these, where the port holds less than three.js:
 - A crate count past what the file can hold.
 - An array attribute that is not an array, points that are not whole vertices, and faces with no corner indices.
 - A face count whose triangle count does not fit in an integer, or whose corner buffer would wrap, is refused.
+- A face of more than 80 corners with a corner or a point that is not in the file. three.js reads the missing value as `NaN`. Its earcut then takes a time that grows with the square of the corners.
 - A material value that is not a number, and a color outside zero to one.
 - A texture that reads `st2`. The port has no third set of texture coordinates.
 - References that nest more than 64 deep.

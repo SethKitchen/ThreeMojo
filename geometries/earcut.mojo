@@ -22,7 +22,11 @@ a last point that repeats the first, of the outline and of each hole.
 
 **Where this port differs.** earcut reads a
 missing coordinate of a list of odd length as `undefined`; this refuses
-such a list. Each product that feeds a sum is rounded on its own, as
+such a list. A list of more than 80 points with a coordinate that is not
+finite is refused. The z-order curve cannot place such a point, and
+without the curve the search takes a time that grows with the square of
+the points: earcut does not return from a face of a million points that
+are NaN. Each product that feeds a sum is rounded on its own, as
 JavaScript rounds it, so a nearly flat corner is judged as three.js
 judges it.
 """
@@ -849,6 +853,35 @@ def require_even_points(count: Int) raises:
         raise Error("earcut: a point list of odd length")
 
 
+def require_finite_points(data: List[Float64]) raises:
+    """Refuse a list of more than 80 points with a coordinate that is not
+    finite.
+
+    Nothing. The call returns when the list is short or every coordinate
+    is finite.
+
+    earcut searches a polygon of more than 80 points through a z-order
+    curve, which needs each point's place in a finite box. A point that
+    is NaN or infinite has none, and every ear test then visits every
+    such point.
+
+    Args:
+        data: The points, x then y for each.
+
+    Raises:
+        Error: If the list holds more than 80 points and a coordinate is
+            NaN or infinite.
+    """
+    if len(data) <= 160:
+        return
+    for value in data:  # pragma: no branch
+        if not isfinite(value):
+            raise Error(
+                "earcut: more than 80 points with a coordinate that is not"
+                " finite"
+            )
+
+
 def earcut(
     data: List[Float64], hole_indices: List[Int] = List[Int]()
 ) raises -> List[Int]:
@@ -867,9 +900,11 @@ def earcut(
     Raises:
         Error: If the list has an odd length, or a hole starts outside
             it, before the one before it, or where the outline would
-            have no point.
+            have no point; or the list holds more than 80 points and a
+            coordinate is not finite.
     """
     require_even_points(len(data))
+    require_finite_points(data)
     var points = len(data) // 2
     for at in range(len(hole_indices)):
         var low = 1 if at == 0 else hole_indices[at - 1] + 1
@@ -943,7 +978,8 @@ def triangulate_shape(
         first, then each hole's.
 
     Raises:
-        Error: If a list has an odd length.
+        Error: If a list has an odd length, or the lists hold more than
+            80 points and a coordinate is not finite.
     """
     var points = contour.copy()
     drop_closing_point(points)
