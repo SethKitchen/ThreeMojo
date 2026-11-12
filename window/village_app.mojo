@@ -360,8 +360,9 @@ struct VillageApp(Movable):
             height,
         )
         # A machine with time to spare draws more of the window's pixels,
-        # so a fight in motion is sharper.
-        self.game.set_dynamic(True)
+        # so a fight in motion is sharper. A GPU draws into an image of a
+        # fixed size, so its frame keeps the quality's size.
+        self.game.set_dynamic(not gpu)
         self.scene = scene^
         self.assets = assets^
         self.keys = HeldKeys(KEY_HOLD)

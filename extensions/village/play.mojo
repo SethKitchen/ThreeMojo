@@ -1698,10 +1698,17 @@ struct VillageGame(Movable):
         else:
             self.quick = 0
         if self.scale != was:
-            self.fast.resize(
+            self._size_frame(
                 max(1, Int(Float32(self.width) * self.scale + 0.5)),
                 max(1, Int(Float32(self.height) * self.scale + 0.5)),
             )
+
+    def _size_frame(mut self, width: Int, height: Int) raises:
+        """Draw the frame at a size from now on. A face is drawn in detail
+        by its height in the frame's pixels, so `face_reach` follows the
+        frame's height."""
+        self.fast.resize(width, height)
+        self.face_reach = face_reach(height, self.wide)
 
     def render(mut self, scene: Scene, assets: Assets) raises:
         """Draw the frame that `tick` prepared into `window`.
@@ -1766,6 +1773,12 @@ struct VillageGame(Movable):
         """
         self.gpu_began = perf_counter_ns()
         self.gpu_post.on = False
+        # The GPU writes into `gpu_image`, which has the quality's size. So
+        # the frame has that size again, whatever size `adapt_scale` left
+        # for a frame that the CPU drew.
+        self.scale = self.quality.render_scale
+        self.quick = 0
+        self._size_frame(self.gpu_image.width, self.gpu_image.height)
         self.fast.prepare_gpu(
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )

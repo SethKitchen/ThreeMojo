@@ -334,6 +334,8 @@ def test_quick_frames_draw_more_of_the_window() raises:
     )
     var base = game.quality.render_scale
     var width = game.fast.width
+    var height = game.fast.height
+    var reach = game.face_reach
     # Off, nothing changes however quick the frames.
     for _ in range(DYNAMIC_QUICK * 2):
         game.adapt_scale(1)
@@ -352,6 +354,9 @@ def test_quick_frames_draw_more_of_the_window() raises:
         game.scale, min(Float32(1), base + DYNAMIC_REACH), atol=1e-5
     )
     assert_true(game.fast.width > width)
+    # A face is drawn in detail by its height in the frame's pixels, so a
+    # taller frame shows faces in detail from further.
+    assert_true(game.face_reach > reach)
     # Slow frames shrink it again, past the quality's share, to the floor
     # at the least.
     for _ in range(20):
@@ -359,6 +364,17 @@ def test_quick_frames_draw_more_of_the_window() raises:
     var floor = max(DYNAMIC_LEAST, base - DYNAMIC_FLOOR)
     assert_almost_equal(game.scale, floor, atol=1e-5)
     assert_true(game.fast.width < width)
+    assert_true(game.face_reach < reach)
+    # A GPU draws into `gpu_image`, which has the quality's size. A frame
+    # prepared for it has that size again, whatever the CPU's last had.
+    _ = game.tick(scene, assets, no_input(), Duration(0.1, SECOND))
+    game.prepare_gpu(scene, assets)
+    assert_equal(game.fast.width, width)
+    assert_equal(game.fast.height, height)
+    assert_equal(game.fast.width, game.gpu_image.width)
+    assert_equal(game.fast.height, game.gpu_image.height)
+    assert_equal(game.scale, base)
+    assert_almost_equal(game.face_reach, reach, atol=1e-5)
 
 
 def test_a_player_walks_into_a_house_through_its_door() raises:

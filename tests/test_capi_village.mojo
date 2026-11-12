@@ -567,12 +567,17 @@ def test_a_game_that_a_gpu_does_not_draw_prepares_no_frame() raises:
     _step(app, 2)
     assert_equal(tm_village_prepare(app), Int32(0))
     assert_false(_state(app)[].gpu)
+    # The CPU's frame draws more of the window when there is time.
+    assert_true(_state(app)[].game.dynamic)
     tm_destroy(app)
 
 
 def test_a_prepared_frame_is_described_to_the_host() raises:
     var app = _make_gpu()
     assert_true(_state(app)[].gpu)
+    # A GPU draws into an image of a fixed size, so the frame keeps its
+    # size.
+    assert_false(_state(app)[].game.dynamic)
     _step(app, 3)
     assert_equal(tm_village_prepare(app), Int32(1))
     var ints = tm_village_ints(app)

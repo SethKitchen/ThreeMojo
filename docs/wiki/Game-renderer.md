@@ -82,7 +82,7 @@ The game does both in one pass over the window. `upscale_into(frame, window, wor
 
 ## Draw more pixels when there is time
 
-A fast machine can draw more of the window's pixels than its quality asks, so a fight in motion is sharper. `VillageGame.set_dynamic(True)` turns this on. The village's window and `examples/village_walk.mojo --play` turn it on.
+A fast machine can draw more of the window's pixels than its quality asks, so a fight in motion is sharper. `VillageGame.set_dynamic(True)` turns this on. The village's window and `examples/village_walk.mojo --play` turn it on. A window that a GPU draws keeps it off: the GPU draws into an image of a fixed size.
 
 `adapt_scale` measures each frame. After `DYNAMIC_QUICK`, 30, quick frames in a row, it grows the frame's share of the window by `DYNAMIC_STEP`, 0.04. A frame is quick when it takes less than `DYNAMIC_ROOM`, three quarters, of `DYNAMIC_BUDGET_MS`, 33.3 milliseconds. The share grows to the quality's `render_scale` and `DYNAMIC_REACH`, 0.24, more at the most.
 
