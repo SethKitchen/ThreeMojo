@@ -444,8 +444,8 @@ def nail_lateral_value(
 
     Args:
         diameter: D, more than 0 and 0.17 in. or less.
-        penetration: lm, the nail's length in the main member.
-        side_thickness: ls, the side member thickness.
+        penetration: `lm`, the nail's length in the main member.
+        side_thickness: `ls`, the side member thickness.
         main_gravity: G of the main member, from 0 to 1.
         side_gravity: G of the side member, from 0 to 1. NDS Table
             12.3.3B gives 0.50 for OSB.
@@ -536,7 +536,7 @@ def column_buckling_stress(
 
     Args:
         minimum_modulus: E'min, the adjusted modulus for stability.
-        slenderness: le / d about the axis of buckling, more than 0 and
+        slenderness: `le / d` about the axis of buckling, more than 0 and
             50 or less (NDS 3.7.1.4).
 
     Returns:
@@ -591,9 +591,9 @@ def beam_column_ratio(
     """Return the interaction ratio of NDS equation 3.9-3, one bending axis.
 
     Args:
-        axial_stress: fc, the compression stress.
+        axial_stress: `fc`, the compression stress.
         allowable_axial: F'c, with Cp.
-        bending_stress: fb1, about the strong axis.
+        bending_stress: `fb1`, about the strong axis.
         allowable_bending: F'b1.
         buckling_stress: FcE1, buckling in the plane of bending.
 
