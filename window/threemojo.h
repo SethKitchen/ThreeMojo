@@ -8,7 +8,8 @@
  *
  * Every library has these functions: window/capi_core.mojo, which also builds
  * for WebAssembly, window/capi_scene.mojo, which runs the full renderer and
- * builds for the host only, window/capi_water.mojo and window/capi_splat.mojo.
+ * builds for the host only, window/capi_water.mojo, window/capi_splat.mojo and
+ * window/capi_village.mojo, the village game, which builds for the host only.
  * Load one of them. The water and the splat libraries have the functions
  * below that say so.
  */
@@ -45,7 +46,10 @@ enum {
   TM_KEY_ARROW_UP = 256,
   TM_KEY_ARROW_DOWN = 257,
   TM_KEY_ARROW_LEFT = 258,
-  TM_KEY_ARROW_RIGHT = 259
+  TM_KEY_ARROW_RIGHT = 259,
+  /* A key event has no modifiers, so Shift is a key of its own. The village
+   * library runs while it is held. A library that has no use for it drops it. */
+  TM_KEY_SHIFT = 260
 };
 
 /* The version of the ABI that the library was built with. */
@@ -64,7 +68,8 @@ void tm_destroy(tm_app *app);
 /* Tell the app about one input event. x and y are pixels. detail is the key
  * code of a key event, the button of a pointer event (0 first, 1 middle,
  * 2 second, -1 none), or the notches of a wheel event, positive toward the
- * user. The space bar pauses and resumes the app. */
+ * user. The space bar pauses and resumes the app. The village game takes it
+ * for the jump instead. */
 void tm_event(tm_app *app, int32_t kind, int32_t x, int32_t y, int32_t detail);
 
 /* Move the app on by the time since the last step, in microseconds. */
@@ -232,6 +237,170 @@ int32_t tm_splat_words(const tm_app *app, int32_t which);
 /* One of the numbers about the scan. 0 before a scan is loaded, and for a
  * number that is not one. */
 int32_t tm_splat_info(const tm_app *app, int32_t which);
+
+/* The village game on a GPU (window/capi_village.mojo, with THREEMOJO_GPU=1).
+ * The library does the shadow maps, the gathering, the light at the vertices,
+ * the setup of each triangle and the sky's grid. The host draws the rest:
+ *
+ *   tm_step(app, microseconds);
+ *   if (tm_village_prepare(app) == 1) {
+ *     draw the triangles on the GPU, as the three arrays below describe them;
+ *     copy the colors, and the depths if TM_VILLAGE_INT_DEPTH is 1, into the
+ *         images named by TM_VILLAGE_POINTER_COLOR and TM_VILLAGE_POINTER_DEPTH;
+ *     frame = tm_village_finish(app);        the rain and the HUD added, and
+ *                                            the water, weather and smoothing
+ *                                            unless the host took them
+ *   }
+ *
+ * The three arrays are valid until the next tm_village_prepare. Every address
+ * in the pointers is valid until then too. */
+
+/* tm_village_ints: counts and sizes, 64-bit integers. */
+enum {
+  TM_VILLAGE_INT_WIDTH = 0,         /* the image's size, in pixels */
+  TM_VILLAGE_INT_HEIGHT = 1,
+  TM_VILLAGE_INT_VERTICES = 2,      /* vertices of 16 floats */
+  TM_VILLAGE_INT_TRIANGLES = 3,
+  TM_VILLAGE_INT_SKY_COLUMNS = 4,   /* the sky's grid, one RGB sample each */
+  TM_VILLAGE_INT_SKY_ROWS = 5,
+  TM_VILLAGE_INT_SKY_STEP = 6,      /* pixels between two samples */
+  TM_VILLAGE_INT_FOG = 7,           /* 1 if the scene has fog */
+  TM_VILLAGE_INT_STILL_ON = 8,      /* 1 if the still shadow map shades */
+  TM_VILLAGE_INT_STILL_SIZE = 9,    /* texels on a side */
+  TM_VILLAGE_INT_STILL_STRIDE = 10, /* floats in a row */
+  TM_VILLAGE_INT_STILL_MADE = 11,   /* changes when the map is drawn again */
+  TM_VILLAGE_INT_MOVING_ON = 12,
+  TM_VILLAGE_INT_MOVING_SIZE = 13,
+  TM_VILLAGE_INT_MOVING_STRIDE = 14,
+  TM_VILLAGE_INT_MOVING_MADE = 15,
+  TM_VILLAGE_INT_MAP_SLOTS = 16,    /* maps read at each pixel */
+  TM_VILLAGE_INT_MAP_LEVELS = 17,   /* levels of all the maps */
+  TM_VILLAGE_INT_MAP_FLOATS = 18,   /* floats of all the maps' texels */
+  TM_VILLAGE_INT_PASSES = 19,       /* 1 if the host draws the passes below */
+  TM_VILLAGE_INT_DEPTH = 20,        /* 1 if the host must return the depths */
+  TM_VILLAGE_INT_COVER_COLUMNS = 21,/* the clouds' grid, one float a point */
+  TM_VILLAGE_INT_COVER_ROWS = 22,
+  TM_VILLAGE_INT_COVER_STEP = 23,   /* pixels between two points */
+  TM_VILLAGE_INT_NIGHT_ON = 24,     /* 1 if the hour changes the sky */
+  TM_VILLAGE_INT_SMOOTH_ON = 25,    /* 1 if the host smooths the edges */
+  TM_VILLAGE_INT_WATER_ON = 26,     /* 1 if the host composes the water */
+  TM_VILLAGE_INT_WATER_STEP = 27,   /* pixels between two shaded samples */
+  TM_VILLAGE_INT_WATER_GRID_WIDTH = 28,
+  TM_VILLAGE_INT_WATER_GRID_HEIGHT = 29,
+  TM_VILLAGE_INT_WATER_SURFACE_MADE = 30, /* changes with the surface and the
+                                             caustics */
+  TM_VILLAGE_INT_WATER_RIPPLE_MADE = 31,  /* changes with the ripples */
+  TM_VILLAGE_INT_WATER_BED_MADE = 32,     /* changes with the photograph */
+  TM_VILLAGE_INT_WATER_SURFACE_FLOATS = 33,
+  TM_VILLAGE_INT_WATER_RIPPLE_FLOATS = 34,
+  TM_VILLAGE_INT_WATER_CAUSTIC_FLOATS = 35,
+  TM_VILLAGE_INT_WATER_PEBBLE_FLOATS = 36,
+  TM_VILLAGE_INT_WATER_WORDS = 37,
+  TM_VILLAGE_INT_COUNT = 38
+};
+
+/* tm_village_floats: scalars, 32-bit floats. */
+enum {
+  TM_VILLAGE_FLOAT_EXPOSURE = 0,
+  TM_VILLAGE_FLOAT_BIAS = 1,        /* the shadow bias, in meters */
+  TM_VILLAGE_FLOAT_FOG_RED = 2,     /* the fog's color, linear */
+  TM_VILLAGE_FLOAT_FOG_GREEN = 3,
+  TM_VILLAGE_FLOAT_FOG_BLUE = 4,
+  TM_VILLAGE_FLOAT_STILL_PER_METER = 5,
+  TM_VILLAGE_FLOAT_MOVING_PER_METER = 6,
+  TM_VILLAGE_FLOAT_WATER_EYE = 7,   /* 3 floats: the camera's place */
+  TM_VILLAGE_FLOAT_WATER_CLIP = 10, /* 16 floats, column by column: the
+                                       camera's projection and view */
+  TM_VILLAGE_FLOAT_WATER_SHARE = 26,/* the water's own light, 0 to 1 */
+  TM_VILLAGE_FLOAT_WATER_NIGHT = 27,/* 3 floats: bytes */
+  TM_VILLAGE_FLOAT_COVER_GRAY = 30, /* 3 floats: bytes */
+  TM_VILLAGE_FLOAT_COVER_FOG = 33,  /* 3 floats: bytes */
+  TM_VILLAGE_FLOAT_COVER_VEIL = 36,
+  TM_VILLAGE_FLOAT_COVER_MIST = 37,
+  TM_VILLAGE_FLOAT_COVER_BRIGHT = 38,
+  TM_VILLAGE_FLOAT_COVER_GLOOM = 39,
+  TM_VILLAGE_FLOAT_NIGHT_DAY = 40,
+  TM_VILLAGE_FLOAT_NIGHT_DUSK = 41,
+  TM_VILLAGE_FLOAT_NIGHT_STARS = 42,
+  TM_VILLAGE_FLOAT_NIGHT_D00 = 43,    /* 3 floats */
+  TM_VILLAGE_FLOAT_NIGHT_ACROSS = 46, /* 3 floats */
+  TM_VILLAGE_FLOAT_NIGHT_DOWN = 49,   /* 3 floats */
+  TM_VILLAGE_FLOAT_NIGHT_GLOW = 52,   /* 3 floats: a gain */
+  TM_VILLAGE_FLOAT_NIGHT_SKY = 55,    /* 3 floats: bytes */
+  TM_VILLAGE_FLOAT_NIGHT_STAR_GRID = 58,
+  TM_VILLAGE_FLOAT_NIGHT_STAR_RATE = 59,
+  TM_VILLAGE_FLOAT_NIGHT_MOON = 60,   /* 3 floats */
+  TM_VILLAGE_FLOAT_NIGHT_MOONLIT = 63,
+  TM_VILLAGE_FLOAT_COUNT = 64
+};
+
+/* tm_village_pointers: addresses, 64-bit integers. */
+enum {
+  TM_VILLAGE_POINTER_VERTICES = 0,    /* float x 16 each: clip x y z w, ambient
+                                         r g b, sun r g b, world x y z, a packed
+                                         fog share, u, v */
+  TM_VILLAGE_POINTER_CORNERS = 1,     /* int32 x 3 a triangle */
+  TM_VILLAGE_POINTER_CODES = 2,       /* float a triangle: the map code, or -1 */
+  TM_VILLAGE_POINTER_SKY = 3,         /* float x 3 a sample, linear */
+  TM_VILLAGE_POINTER_STILL_DEPTH = 4, /* float, TM_VILLAGE_INT_STILL_STRIDE a row */
+  TM_VILLAGE_POINTER_STILL_CLIP = 5,  /* 16 floats, column by column */
+  TM_VILLAGE_POINTER_MOVING_DEPTH = 6,
+  TM_VILLAGE_POINTER_MOVING_CLIP = 7,
+  TM_VILLAGE_POINTER_MAP_TEXELS = 8,  /* float x 3 a texel, linear */
+  TM_VILLAGE_POINTER_MAP_STARTS = 9,  /* int32 a level: where its texels start,
+                                         in floats */
+  TM_VILLAGE_POINTER_MAP_WIDTHS = 10, /* int32 a level */
+  TM_VILLAGE_POINTER_MAP_HEIGHTS = 11,
+  TM_VILLAGE_POINTER_MAP_FIRSTS = 12, /* int32 a map: its first level */
+  TM_VILLAGE_POINTER_MAP_COUNTS = 13, /* int32 a map: its levels */
+  TM_VILLAGE_POINTER_MAP_WRAPS_S = 14,/* int32 a map: 0 repeat, 1 clamp, 2 mirror */
+  TM_VILLAGE_POINTER_MAP_WRAPS_T = 15,
+  TM_VILLAGE_POINTER_COLOR = 16,      /* RGBA bytes, row by row from the top:
+                                         the host writes the colors here */
+  TM_VILLAGE_POINTER_DEPTH = 17,      /* float a pixel: the host writes the NDC
+                                         depth here, infinity for the sky */
+  TM_VILLAGE_POINTER_COVER = 18,      /* float a point of the clouds' grid */
+  TM_VILLAGE_POINTER_WATER_SURFACE = 19,
+  TM_VILLAGE_POINTER_WATER_RIPPLE = 20,
+  TM_VILLAGE_POINTER_WATER_CAUSTIC = 21,
+  TM_VILLAGE_POINTER_WATER_PEBBLE = 22,
+  TM_VILLAGE_POINTER_WATER_WORDS = 23, /* uint32: frame words for the water
+                                          shader (extensions/water/upload.mojo) */
+  TM_VILLAGE_POINTER_COUNT = 24
+};
+
+/* A triangle's map code is its map's slot times TM_VILLAGE_LEVEL_CODE, plus the
+ * level its pixels read. */
+#define TM_VILLAGE_LEVEL_CODE 32
+
+/* Let the host draw more of the frame. With the passes on (1), the host draws
+ * the weather and the night with the sky, composes the pond's water over the
+ * triangles and smooths the edges, each as the arrays of tm_village_prepare
+ * switch it on (TM_VILLAGE_INT_NIGHT_ON, _WATER_ON and _SMOOTH_ON; the
+ * weather is always on). tm_village_finish then leaves those passes out, and
+ * TM_VILLAGE_INT_DEPTH is 0: the host need not return the depths. Call this
+ * before tm_village_prepare; it takes effect at the next one. Returns 1 if
+ * the app is one for a GPU, and 0 if not. */
+int32_t tm_village_passes(tm_app *app, int32_t on);
+
+/* Make the next FRAMES samples of the village's sound into SAMPLES: stereo,
+ * 44,100 samples a second, the left first, from -1 to 1, so 2 * FRAMES floats.
+ * Returns FRAMES, or 0 if FRAMES is not from 0 to 44,100. Call it once for
+ * each step, with the samples that the step's time takes. */
+int32_t tm_village_audio(tm_app *app, float *samples, int32_t frames);
+
+/* Prepare the frame that the last tm_step left. Returns 1 if the three arrays
+ * describe it, and 0 if the app is not one for a GPU (THREEMOJO_GPU is not 1)
+ * or the frame cannot be drawn. */
+int32_t tm_village_prepare(tm_app *app);
+
+int64_t *tm_village_ints(tm_app *app);
+float *tm_village_floats(tm_app *app);
+int64_t *tm_village_pointers(tm_app *app);
+
+/* End the frame that the GPU drew into the images, and return it as tm_frame
+ * does. */
+const uint8_t *tm_village_finish(tm_app *app);
 
 #ifdef __cplusplus
 }

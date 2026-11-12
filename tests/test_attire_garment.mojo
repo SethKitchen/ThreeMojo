@@ -28,6 +28,14 @@ from extensions.attire.garment import (
     wardrobe,
 )
 from extensions.attire.kinds import (
+    Design,
+    Ruffles,
+    Neckline,
+    Opening,
+    Sleeve,
+    CROWN,
+    HATTED,
+    Headwear,
     BANDED,
     ARMOR_LAYER,
     COWLED,
@@ -47,6 +55,7 @@ from extensions.attire.kinds import (
     Layer,
     Slot,
 )
+from extensions.attire.metal import Metal
 from extensions.attire.plates import (
     anchor_weights,
     articulate,
@@ -59,6 +68,7 @@ from extensions.humanoid.rig.joints import (
     HIPS,
     JOINT_COUNT,
     RIGHT_SHIN,
+    RIGHT_UPPER_ARM,
     SPINE,
     Joint,
 )
@@ -162,7 +172,7 @@ def test_a_garment_refuses_what_cannot_be_made() raises:
     with assert_raises(contains="named one"):
         bad.check()
     bad = good.copy()
-    bad.pattern = DyePattern(9)
+    bad.pattern = DyePattern(40)
     with assert_raises(contains="named pattern"):
         bad.check()
     bad = good.copy()
@@ -195,9 +205,48 @@ def test_a_garment_refuses_what_cannot_be_made() raises:
     with assert_raises(contains="An ease"):
         bad.check()
     bad = good.copy()
-    bad.form = Form(5)
+    bad.form = Form(9)
     with assert_raises(contains="form must"):
         bad.check()
+    bad = good.copy()
+    bad.metal = Metal(30)
+    with assert_raises(contains="metal must"):
+        bad.check()
+    bad = good.copy()
+    bad.headwear = Headwear(30)
+    with assert_raises(contains="headwear kind must"):
+        bad.check()
+    bad = good.copy()
+    bad.neckline = Neckline(30)
+    with assert_raises(contains="neckline must"):
+        bad.check()
+    bad = good.copy()
+    bad.opening = Opening(30)
+    with assert_raises(contains="opening must"):
+        bad.check()
+    bad = good.copy()
+    bad.sleeve = Sleeve(30)
+    with assert_raises(contains="sleeve must"):
+        bad.check()
+    bad = good.copy()
+    bad.design = Design(30)
+    with assert_raises(contains="design must"):
+        bad.check()
+    bad = good.copy()
+    bad.ruffles = Ruffles(30)
+    with assert_raises(contains="Ruffles must"):
+        bad.check()
+    # A hat names its headwear, and nothing else does.
+    bad = good.copy()
+    bad.form = HATTED
+    with assert_raises(contains="names its headwear"):
+        bad.check()
+    bad = good.copy()
+    bad.headwear = CROWN
+    with assert_raises(contains="names its headwear"):
+        bad.check()
+    bad.form = HATTED
+    bad.check()
     bad = good.copy()
     bad.flare = -0.1
     with assert_raises(contains="A flare"):
@@ -271,6 +320,38 @@ def test_lames_step_from_the_anchor() raises:
     assert_equal(
         Int(all.attribute_view(String(SKIN_INDEX)).component(0, 0)),
         CHEST.value,
+    )
+    # Holding the arms, the anchor takes an arm's weight where the arm
+    # turns less than half: a cuirass does not turn with a raised arm.
+    # Its edge over the arm still turns with it. Not holding them, the
+    # anchor takes no arm's weight; nor does a leg give its weight up.
+    var side = _shared(RIGHT_UPPER_ARM, 0.4, CHEST, 0.6)
+    share_with(side, CHEST, 1, True)
+    assert_equal(
+        Int(side.attribute_view(String(SKIN_INDEX)).component(0, 0)),
+        CHEST.value,
+    )
+    assert_almost_equal(
+        side.attribute_view(String(SKIN_WEIGHT)).component(0, 0), 1
+    )
+    var arm = _shared(RIGHT_UPPER_ARM, 1, SPINE, 0)
+    var edge = arm.clone()
+    share_with(edge, CHEST, 1, True)
+    assert_equal(
+        Int(edge.attribute_view(String(SKIN_INDEX)).component(0, 0)),
+        RIGHT_UPPER_ARM.value,
+    )
+    var pauldron = arm.clone()
+    share_with(pauldron, CHEST, 1)
+    assert_equal(
+        Int(pauldron.attribute_view(String(SKIN_INDEX)).component(0, 0)),
+        RIGHT_UPPER_ARM.value,
+    )
+    var fauld = _shared(RIGHT_SHIN, 1, SPINE, 0)
+    share_with(fauld, HIPS, 1, True)
+    assert_equal(
+        Int(fauld.attribute_view(String(SKIN_INDEX)).component(0, 0)),
+        RIGHT_SHIN.value,
     )
     # The anchor's weight falls down the strip, so the lames step down it.
     var falling = strip(0, 4, CHEST)

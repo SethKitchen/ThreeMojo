@@ -8,6 +8,8 @@
 from core.assets import Assets
 from core.scene import Scene
 from extensions.village.gathering import (
+    FISH,
+    SEAL,
     CHEST,
     GatherKind,
     HERBS,
@@ -16,7 +18,24 @@ from extensions.village.gathering import (
     TRINKET,
 )
 from extensions.village.surfaces import house_looks
+from extensions.humanoid.skeleton.head.expression import (
+    NEUTRAL,
+    SADNESS,
+    SMILE,
+)
 from extensions.village.talk import (
+    ERRAND_AGAIN,
+    FISH_PRICE,
+    HERB_PRICE,
+    TRINKET_PRICE,
+    FAIR,
+    NIGHT,
+    SNOWY,
+    WET,
+    Mood,
+    mood_line,
+    ASKING,
+    CHATTING,
     DONE,
     Errand,
     ErrandState,
@@ -25,7 +44,10 @@ from extensions.village.talk import (
     SPEECH_SECONDS,
     Speaker,
     TAKEN,
+    THANKFUL,
     Talk,
+    WANTING,
+    revealed,
     default_speakers,
 )
 from math.vector3 import Vector3
@@ -104,6 +126,17 @@ def test_a_speaker_who_is_no_villager_is_left_out() raises:
     ]
     with assert_raises(contains="one thing or more"):
         _ = Talk(scene, assets, house_looks(assets, 4, 1), greedy^, 2)
+    var greedy_again: List[Speaker] = [
+        Speaker(
+            0,
+            "A",
+            ["a"],
+            Errand(HERBS, 1, 1, "x", "y"),
+            Errand(HERBS, 0, 1, "x", "y"),
+        )
+    ]
+    with assert_raises(contains="one thing or more"):
+        _ = Talk(scene, assets, house_looks(assets, 4, 1), greedy_again^, 2)
     # No speaker at all is a village where nobody talks.
     var nobody = Talk(
         scene, assets, house_looks(assets, 4, 1), List[Speaker](), 0
@@ -133,20 +166,30 @@ def test_an_errand_is_asked_taken_and_paid() raises:
     var scene = Scene()
     var talk = _talk(scene, assets)
     var satchel = Satchel()
+    assert_true(talk.feeling == NEUTRAL)
     assert_equal(talk.speak(0, satchel), "Three herbs, please.")
     assert_true(talk.states[0] == TAKEN)
+    # Each answer has its feeling: asking smiles a little, wanting looks
+    # sad, thanks smile broadly, and a line smiles.
+    assert_true(talk.feeling == SMILE)
+    assert_almost_equal(talk.strength, ASKING, atol=1e-6)
     assert_equal(talk.speak(0, satchel), "I still need 3 more herbs.")
+    assert_true(talk.feeling == SADNESS)
+    assert_almost_equal(talk.strength, WANTING, atol=1e-6)
     satchel.counts[HERBS.value] = 2
     assert_equal(talk.errands(satchel)[0], "herbs for Ann 2/3")
     satchel.counts[HERBS.value] = 4
     assert_equal(talk.errands(satchel)[0], "herbs for Ann 3/3")
     assert_equal(talk.speak(0, satchel), "Thank you.")
     assert_true(talk.states[0] == DONE)
+    assert_almost_equal(talk.strength, THANKFUL, atol=1e-6)
     assert_equal(satchel.count(HERBS), 1)
     assert_equal(satchel.count(CHEST), 10)
     assert_equal(len(talk.errands(satchel)), 0)
     # Once done, and with no errand, a speaker says their lines in turn.
     assert_equal(talk.speak(0, satchel), "Hello.")
+    assert_true(talk.feeling == SMILE)
+    assert_almost_equal(talk.strength, CHATTING, atol=1e-6)
     assert_equal(talk.speak(1, satchel), "One.")
     assert_equal(talk.speak(1, satchel), "Two.")
     assert_equal(talk.speak(1, satchel), "One.")
@@ -154,6 +197,107 @@ def test_an_errand_is_asked_taken_and_paid() raises:
         _ = talk.speak(2, satchel)
     with assert_raises(contains="one of the village's"):
         _ = talk.speak(-1, satchel)
+
+
+def test_a_speaker_remarks_once_on_the_village_s_mood() raises:
+    for mood in [FAIR, WET, SNOWY, NIGHT]:
+        assert_true(mood.is_valid())
+    assert_false(Mood(4).is_valid())
+    assert_equal(mood_line(FAIR, 0), "")
+    assert_true(mood_line(WET, 1) != mood_line(SNOWY, 1))
+    assert_true(mood_line(NIGHT, 6) == mood_line(NIGHT, 1))
+    var assets = Assets()
+    var scene = Scene()
+    var talk = _talk(scene, assets)
+    var satchel = Satchel()
+    talk.mood = WET
+    # The second speaker, who has no errand, remarks on the rain once,
+    # then says their lines.
+    assert_equal(talk.speak(1, satchel), mood_line(WET, 1))
+    assert_equal(talk.speak(1, satchel), "One.")
+    talk.mood = NIGHT
+    assert_equal(talk.speak(1, satchel), mood_line(NIGHT, 1))
+    # A fair day after it brings no remark.
+    talk.mood = FAIR
+    assert_equal(talk.speak(1, satchel), "Two.")
+
+
+def test_an_errand_comes_back_and_alternates_with_another() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var speakers: List[Speaker] = [
+        Speaker(
+            0,
+            "Osric",
+            ["Hello."],
+            Errand(HERBS, 1, 5, "One herb.", "Thanks."),
+            Errand(SEAL, 2, 9, "Two seals.", "Their seals!"),
+        ),
+        Speaker(1, "Edith", ["Good day."], None, None, True),
+    ]
+    var talk = Talk(scene, assets, house_looks(assets, 4, 1), speakers^, 2)
+    var satchel = Satchel()
+    satchel.counts[HERBS.value] = 1
+    assert_equal(talk.speak(0, satchel), "One herb.")
+    assert_equal(talk.speak(0, satchel), "Thanks.")
+    assert_true(talk.states[0] == DONE)
+    assert_equal(talk.rounds[0], 1)
+    # After a while, the second errand is offered.
+    var places: List[Vector3] = [Vector3(50, 0, 50), Vector3(60, 0, 60)]
+    var heads: List[Float32] = [1.7, 1.6]
+    # Not at once.
+    _ = talk.update(
+        scene,
+        Vector3(0, 0, 0),
+        places,
+        heads,
+        False,
+        satchel,
+        Duration(1.0, SECOND),
+    )
+    assert_true(talk.states[0] == DONE)
+    _ = talk.update(
+        scene,
+        Vector3(0, 0, 0),
+        places,
+        heads,
+        False,
+        satchel,
+        Duration(ERRAND_AGAIN + 1, SECOND),
+    )
+    assert_true(talk.states[0] == OFFERED)
+    assert_equal(talk.speak(0, satchel), "Two seals.")
+    assert_equal(talk.errands(satchel)[0], "seals for Osric 0/2")
+    satchel.counts[SEAL.value] = 2
+    assert_equal(talk.speak(0, satchel), "Their seals!")
+    assert_equal(satchel.count(CHEST), 14)
+    # The trader buys fish and trinkets, then sells an herb for coins.
+    satchel.counts[FISH.value] = 2
+    satchel.counts[TRINKET.value] = 1
+    var paid = 2 * FISH_PRICE + TRINKET_PRICE
+    assert_equal(
+        talk.speak(1, satchel), String("Fine wares! ", paid, " coins for them.")
+    )
+    assert_equal(satchel.count(FISH), 0)
+    assert_equal(satchel.count(CHEST), 14 + paid)
+    satchel.counts[HERBS.value] = 0
+    _ = talk.speak(1, satchel)
+    assert_equal(satchel.count(HERBS), 1)
+    assert_equal(satchel.count(CHEST), 14 + paid - HERB_PRICE)
+    # With herbs enough, the trader only talks.
+    satchel.counts[HERBS.value] = 3
+    assert_equal(talk.speak(1, satchel), "Good day.")
+    # With no coins for an herb, too.
+    satchel.counts[HERBS.value] = 0
+    satchel.counts[CHEST.value] = 0
+    assert_equal(talk.speak(1, satchel), "Good day.")
+
+
+def test_words_are_revealed_and_keep_their_width() raises:
+    assert_equal(revealed("Good day", 0.5), "Good    ")
+    assert_equal(revealed("Good day", -1), "        ")
+    assert_equal(revealed("Good day", 2), "Good day")
+    assert_equal(revealed("", 0.5), "")
 
 
 def test_a_press_speaks_and_the_markers_follow() raises:
@@ -168,6 +312,7 @@ def test_a_press_speaks_and_the_markers_follow() raises:
     # A held button speaks once, on its press.
     assert_true(talk.update(scene, feet, places, heads, True, satchel, step))
     assert_equal(talk.speech, "Ann: Three herbs, please.")
+    assert_equal(talk.words, "Three herbs, please.")
     assert_equal(talk.age, 0)
     assert_false(talk.update(scene, feet, places, heads, True, satchel, step))
     assert_almost_equal(talk.age, 0.1, atol=1e-6)

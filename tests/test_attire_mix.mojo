@@ -6,14 +6,50 @@
 """Tests for a crowd's clothes: outfits picked by a seed."""
 
 from extensions.attire.kinds import (
+    CUFF_RUFFLES,
+    HEM_RUFFLE,
+    PLAIN,
+    TARTAN,
+    WOOL,
+    DYE_PATTERN_COUNT,
+    FRONT_PANEL,
     PARTY,
     PLATE,
     QUARTERLY,
     PRIMARY_DYE,
+    SCALE,
     SECONDARY_DYE,
+    SOLID,
+    STRIPES,
     TRIM_DYE,
 )
 from extensions.attire.mix import (
+    ARCANE_DYES,
+    BARBARIAN,
+    FARMER,
+    FOREST_DYES,
+    FUR_DYES,
+    RANGER,
+    ROYAL,
+    SHADOW_DYES,
+    WARLOCK,
+    WARRIOR,
+    WIZARD,
+    arcane_dye,
+    calling_arms,
+    calling_beard,
+    calling_cloak,
+    calling_hair,
+    calling_sex,
+    carries_bow,
+    cloak_of,
+    heraldry,
+    dressed_as,
+    forest_dye,
+    fur_dye,
+    mixed_sex,
+    shadow_dye,
+    warrior_metal,
     ARCHER,
     CALLING_COUNT,
     GOODWIFE,
@@ -35,8 +71,18 @@ from extensions.attire.mix import (
     require_calling,
     rich_dye,
 )
+from extensions.attire.kinds import FUR, HATTED, VELVET
+from extensions.attire.metal import METAL_COUNT
 from extensions.attire.outfit import Outfit
+from extensions.humanoid.sex import FEMALE, MALE, Sex
+from extensions.humanoid.skeleton.head.hair.beard import (
+    CLEAN_SHAVEN,
+    FULL_BEARD,
+    LONG_BEARD,
+)
+from extensions.humanoid.skeleton.head.hair.styles import TWIN_BRAIDS
 from extensions.attire.preset import outfit_json
+from std.collections import Set
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -82,23 +128,43 @@ def test_the_dyes_wrap_round() raises:
     assert_true(rich_dye(1) == rich_dye(RICH_DYES + 1))
     assert_true(plain_dye(0) != plain_dye(1))
     assert_true(rich_dye(0) != rich_dye(1))
+    assert_true(fur_dye(2) == fur_dye(FUR_DYES + 2))
+    assert_true(forest_dye(1) == forest_dye(FOREST_DYES + 1))
+    assert_true(arcane_dye(3) == arcane_dye(ARCANE_DYES + 3))
+    assert_true(shadow_dye(4) == shadow_dye(SHADOW_DYES + 4))
+    assert_true(fur_dye(0) != fur_dye(1))
+    assert_true(forest_dye(0) != forest_dye(1))
+    assert_true(arcane_dye(0) != arcane_dye(1))
+    assert_true(shadow_dye(0) != shadow_dye(1))
 
 
 def test_each_calling_wears_its_own_clothes() raises:
     for seed in range(24):
-        for k in range(CALLING_COUNT):
+        for k in range(FARMER.value):
             var outfit = calling_outfit(Calling(k), seed)
             outfit.check()
             assert_true(_has(outfit, "boots"))
-            assert_true(_has(outfit, "shirt"))
+            # Linen next to the skin: a shirt, a laced shirt or a chemise.
+            assert_true(
+                _has(outfit, "shirt")
+                or _has(outfit, "laced shirt")
+                or _has(outfit, "chemise")
+            )
         var monk = calling_outfit(MONK, seed)
         assert_true(_has(monk, "robe") and _has(monk, "hood"))
-        assert_true(_has(calling_outfit(GOODWIFE, seed), "gown"))
+        var goodwife = calling_outfit(GOODWIFE, seed)
+        assert_true(_has(goodwife, "gown") or _has(goodwife, "skirt"))
         assert_true(_has(calling_outfit(NOBLEWOMAN, seed), "belt"))
         var archer = calling_outfit(ARCHER, seed)
         assert_true(_has(archer, "jerkin") and _has(archer, "gambeson"))
-        assert_true(_has(calling_outfit(PEASANT, seed), "breeches"))
-        assert_true(_has(calling_outfit(MERCHANT, seed), "tunic"))
+        var peasant = calling_outfit(PEASANT, seed)
+        assert_true(_has(peasant, "breeches") or _has(peasant, "trousers"))
+        var merchant = calling_outfit(MERCHANT, seed)
+        assert_true(
+            _has(merchant, "tunic")
+            or _has(merchant, "doublet")
+            or _has(merchant, "waistcoat")
+        )
         assert_true(_has(calling_outfit(MAN_AT_ARMS, seed), "hauberk"))
         var knight = calling_outfit(KNIGHT, seed)
         assert_true(_has(knight, "cuirass") and _has(knight, "belt"))
@@ -140,9 +206,9 @@ def test_small_choices_differ_from_seed_to_seed() raises:
         for garment in calling_outfit(NOBLEWOMAN, seed).garments:
             if garment.name == "gown" and garment.pattern == PARTY:
                 gowns += 1
-    assert_true(parted > 10 and parted < 40)
+    assert_true(parted > 2 and parted < 20)
     assert_true(quartered > 2 and quartered < 20)
-    assert_true(gowns > 8 and gowns < 30)
+    assert_true(gowns > 2 and gowns < 20)
     # Each goodwife's hood is a chance too.
     var goodwives = 0
     for seed in range(40):
@@ -193,6 +259,456 @@ def test_a_crowd_is_mixed_and_repeatable() raises:
     # Any integer is a seed.
     mixed_outfit(-12345).check()
     mixed_outfit(Int.MAX).check()
+
+
+def test_each_archetype_dresses_either_sex() raises:
+    var sexes: List[Sex] = [MALE, FEMALE]
+    for seed in range(16):
+        for k in range(FARMER.value, CALLING_COUNT):
+            for sex in sexes:
+                var outfit = dressed_as(Calling(k), sex, seed)
+                outfit.check()
+        var farmer = dressed_as(FARMER, MALE, seed)
+        assert_true(_has(farmer, "trousers"))
+        assert_true(_has(farmer, "smock") or _has(farmer, "tunic"))
+        var farmwife = dressed_as(FARMER, FEMALE, seed)
+        assert_true(_has(farmwife, "gown") or _has(farmwife, "skirt"))
+        # A barbarian is bare-chested or in scales; a woman wears a jerkin
+        # or scales.
+        var barbarian = dressed_as(BARBARIAN, MALE, seed)
+        assert_false(_has(barbarian, "shirt"))
+        assert_true(
+            _has(barbarian, "fur kilt") or _has(barbarian, "plaid kilt")
+        )
+        var shieldmaiden = dressed_as(BARBARIAN, FEMALE, seed)
+        assert_true(
+            _has(shieldmaiden, "jerkin") or _has(shieldmaiden, "scale shirt")
+        )
+        var king = dressed_as(ROYAL, MALE, seed)
+        assert_true(_has(king, "royal robe") or _has(king, "royal doublet"))
+        assert_true(_has(king, "crown"))
+        var queen = dressed_as(ROYAL, FEMALE, seed)
+        assert_true(_has(queen, "royal gown"))
+        assert_true(_has(queen, "crown") or _has(queen, "circlet"))
+        var wizard = dressed_as(WIZARD, MALE, seed)
+        assert_true(_has(wizard, "wizard robe") and _has(wizard, "wizard hat"))
+        var warlock = dressed_as(WARLOCK, FEMALE, seed)
+        assert_true(
+            _has(warlock, "cassock")
+            or _has(warlock, "frock coat")
+            or _has(warlock, "long coat")
+        )
+        var ranger = dressed_as(RANGER, MALE, seed)
+        assert_true(_has(ranger, "bracers"))
+        assert_true(_has(ranger, "feathered cap") or _has(ranger, "hood"))
+        # A warrior's plate is all of one metal.
+        var warrior = dressed_as(WARRIOR, FEMALE, seed)
+        assert_true(_has(warrior, "platebody") or _has(warrior, "scale shirt"))
+        assert_true(_has(warrior, "plate legs"))
+        var metal = warrior_metal(seed)
+        for garment in warrior.garments:
+            if garment.fabric == PLATE or garment.fabric == SCALE:
+                assert_equal(garment.metal, metal)
+    with assert_raises(contains="MALE or FEMALE"):
+        _ = dressed_as(FARMER, Sex(5), 0)
+    with assert_raises(contains="named one"):
+        _ = dressed_as(Calling(40), MALE, 0)
+
+
+def test_archetypes_choose_by_chance() raises:
+    var straw = 0
+    var horns = 0
+    var circlets = 0
+    var hoods = 0
+    var caps = 0
+    var bare = 0
+    var trimmed = 0
+    var seen = List[Bool](length=METAL_COUNT, fill=False)
+    for seed in range(80):
+        if _has(dressed_as(FARMER, MALE, seed), "straw hat"):
+            straw += 1
+        if _has(dressed_as(BARBARIAN, MALE, seed), "horned helm"):
+            horns += 1
+        if _has(dressed_as(ROYAL, FEMALE, seed), "circlet"):
+            circlets += 1
+        if _has(dressed_as(WARLOCK, MALE, seed), "hood"):
+            hoods += 1
+        if _has(dressed_as(RANGER, FEMALE, seed), "feathered cap"):
+            caps += 1
+        var warrior = dressed_as(WARRIOR, FEMALE, seed)
+        var helmed = False
+        for garment in warrior.garments:
+            if garment.form == HATTED:
+                helmed = True
+            if garment.name == "platebody" and not (
+                garment.dyes[2] == garment.dyes[0]
+            ):
+                trimmed += 1
+        if not helmed:
+            bare += 1
+        seen[warrior_metal(seed).value] = True
+    assert_true(straw > 40 and straw < 72)
+    assert_true(horns > 25 and horns < 55)
+    assert_true(circlets > 15 and circlets < 50)
+    assert_true(hoods > 35 and hoods < 65)
+    assert_true(caps > 25 and caps < 55)
+    assert_true(bare > 10 and bare < 40)
+    assert_true(trimmed > 20 and trimmed < 60)
+    var metals = 0
+    for k in range(METAL_COUNT):
+        if seen[k]:
+            metals += 1
+    assert_true(metals >= 7)
+    # A man in plate always wears a helm.
+    for seed in range(40):
+        var helmed = False
+        for garment in dressed_as(WARRIOR, MALE, seed).garments:
+            if garment.form == HATTED:
+                helmed = True
+        assert_true(helmed)
+
+
+def test_each_person_of_a_crowd_has_a_sex() raises:
+    assert_equal(calling_sex(GOODWIFE), FEMALE)
+    assert_equal(calling_sex(NOBLEWOMAN), FEMALE)
+    assert_equal(calling_sex(KNIGHT), MALE)
+    var women = 0
+    var men = 0
+    for seed in range(400):
+        var calling = mixed_calling(seed)
+        var sex = mixed_sex(seed)
+        if calling.value < FARMER.value:
+            assert_equal(sex, calling_sex(calling))
+        elif sex == FEMALE:
+            women += 1
+        else:
+            men += 1
+    assert_true(women > 20 and men > 30)
+
+
+def test_each_calling_picks_its_hair_and_its_beard() raises:
+    var sexes: List[Sex] = [MALE, FEMALE]
+    var styles = List[Int]()
+    for k in range(CALLING_COUNT):
+        for sex in sexes:
+            for seed in range(6):
+                var style = calling_hair(Calling(k), sex, seed)
+                assert_true(style.is_valid())
+                if not style.value in styles:
+                    styles.append(style.value)
+                var beard = calling_beard(Calling(k), sex, seed)
+                assert_true(beard.is_valid())
+                if sex == FEMALE:
+                    assert_equal(beard, CLEAN_SHAVEN)
+    assert_true(len(styles) >= 10)
+    # A wizard grows a long beard or a full one; the same seed picks the
+    # same.
+    for seed in range(12):
+        var beard = calling_beard(WIZARD, MALE, seed)
+        assert_true(beard == LONG_BEARD or beard == FULL_BEARD)
+    assert_equal(
+        calling_hair(BARBARIAN, FEMALE, 4), calling_hair(BARBARIAN, FEMALE, 4)
+    )
+    var braided = False
+    for seed in range(12):
+        if calling_hair(BARBARIAN, FEMALE, seed) == TWIN_BRAIDS:
+            braided = True
+    assert_true(braided)
+    with assert_raises(contains="MALE or FEMALE"):
+        _ = calling_hair(FARMER, Sex(3), 0)
+    with assert_raises(contains="MALE or FEMALE"):
+        _ = calling_beard(FARMER, Sex(3), 0)
+    with assert_raises(contains="named one"):
+        _ = calling_hair(Calling(40), MALE, 0)
+    with assert_raises(contains="named one"):
+        _ = calling_beard(Calling(40), MALE, 0)
+
+
+def _look(calling: Calling, sex: Sex, seed: Int) raises -> String:
+    """Return a key for a person's whole look: garments, dyes, metals,
+    headwear, hair and beard."""
+    var key = String(calling_hair(calling, sex, seed).value) + "/"
+    key += String(calling_beard(calling, sex, seed).value)
+    for garment in dressed_as(calling, sex, seed).garments:
+        key += "|" + garment.name + ":" + String(garment.metal.value)
+        for dye in garment.dyes:
+            key += "," + String(Int(dye.r)) + "." + String(Int(dye.g))
+            key += "." + String(Int(dye.b))
+    return key^
+
+
+def test_the_archetypes_make_thousands_of_looks() raises:
+    var seen = Set[String]()
+    var sexes: List[Sex] = [MALE, FEMALE]
+    var made = 0
+    for seed in range(120):
+        for k in range(FARMER.value, CALLING_COUNT):
+            for sex in sexes:
+                seen.add(_look(Calling(k), sex, seed))
+                made += 1
+    # Few of the 1,680 people are twins in their clothes, hair and beard.
+    assert_equal(made, 1680)
+    assert_true(len(seen) > 1500)
+
+
+def test_each_calling_wears_a_cloak_of_its_own_by_chance() raises:
+    var wearers = List[Int](length=CALLING_COUNT, fill=0)
+    for c in range(CALLING_COUNT):
+        for seed in range(200):
+            if calling_cloak(Calling(c), MALE, seed):
+                wearers[c] += 1
+    # Three royals in four, and three peasants in twenty.
+    assert_true(wearers[ROYAL.value] > 130 and wearers[ROYAL.value] < 170)
+    assert_true(wearers[PEASANT.value] > 15 and wearers[PEASANT.value] < 45)
+    assert_true(wearers[RANGER.value] > wearers[MONK.value])
+    with assert_raises(contains="calling"):
+        _ = calling_cloak(Calling(99), MALE, 1)
+    with assert_raises(contains="sex"):
+        _ = calling_cloak(ROYAL, Sex(9), 1)
+    with assert_raises(contains="calling"):
+        _ = cloak_of(Calling(99), 1)
+
+
+def test_a_cloak_suits_its_calling() raises:
+    var edges = Set[Int]()
+    for seed in range(60):
+        var royal = cloak_of(ROYAL, seed)
+        assert_true(royal.fabric == VELVET)
+        assert_true(Bool(royal.trim))
+        edges.add(Int(royal.trim.value().r))
+        assert_true(cloak_of(NOBLEWOMAN, seed).fabric == VELVET)
+        var wizard = cloak_of(WIZARD, seed)
+        edges.add(Int(wizard.trim.value().b))
+        assert_true(Bool(cloak_of(WARLOCK, seed).trim))
+        assert_true(Bool(cloak_of(KNIGHT, seed).trim))
+        assert_false(Bool(cloak_of(WARRIOR, seed).trim))
+        assert_false(Bool(cloak_of(MERCHANT, seed).trim))
+        assert_false(Bool(cloak_of(RANGER, seed).trim))
+        assert_false(Bool(cloak_of(ARCHER, seed).trim))
+        var fur = cloak_of(BARBARIAN, seed)
+        assert_true(fur.fabric == FUR)
+        # Each is lined but a monk's and a peasant's.
+        assert_true(Bool(royal.lining) and Bool(fur.lining))
+        assert_true(Bool(cloak_of(WARLOCK, seed).lining))
+        assert_false(Bool(cloak_of(MONK, seed).lining))
+        assert_false(Bool(cloak_of(PEASANT, seed).lining))
+        # A barbarian's is short, a monk's long, and a peasant's between.
+        var monk = cloak_of(MONK, seed)
+        var peasant = cloak_of(PEASANT, seed)
+        assert_true(fur.length.value < peasant.length.value)
+        assert_true(peasant.length.value < monk.length.value)
+        assert_true(monk.flare > 0.8 and monk.flare < 1.2)
+    # Ermine and gold, gold and silver.
+    assert_true(len(edges) >= 3)
+
+
+def test_heraldry_bears_every_charge() raises:
+    var seen = Set[Int]()
+    var plain = 0
+    for seed in range(400):
+        var pattern = heraldry(seed, 77)
+        assert_true(pattern.is_valid())
+        seen.add(pattern.value)
+        if pattern == SOLID:
+            plain += 1
+    # Every heraldic pattern but stripes, and about one in five plain.
+    assert_equal(len(seen), 9)
+    assert_false(STRIPES.value in seen)
+    assert_false(FRONT_PANEL.value in seen)
+    assert_true(plain > 50 and plain < 110)
+    # A knight's surcoat bears arms by its seed.
+    var charges = Set[Int]()
+    for seed in range(40):
+        var outfit = dressed_as(KNIGHT, MALE, seed)
+        for garment in outfit.garments:
+            if garment.name == "surcoat":
+                charges.add(garment.pattern.value)
+    assert_true(len(charges) >= 5)
+
+
+def test_soldiers_bear_the_arms_of_their_surcoats() raises:
+    for seed in range(30):
+        var arms = calling_arms(KNIGHT, seed)
+        assert_true(Bool(arms))
+        var outfit = dressed_as(KNIGHT, MALE, seed)
+        for garment in outfit.garments:
+            if garment.name == "surcoat":
+                assert_true(garment.pattern == arms.value().pattern)
+                assert_true(
+                    garment.dyes[PRIMARY_DYE.value] == arms.value().field
+                )
+        var warrior = calling_arms(WARRIOR, seed)
+        var harness = dressed_as(WARRIOR, FEMALE, seed)
+        for garment in harness.garments:
+            if garment.name == "surcoat":
+                assert_true(garment.pattern == warrior.value().pattern)
+        var company = calling_arms(MAN_AT_ARMS, seed)
+        assert_true(company.value().pattern.is_valid())
+        assert_false(Bool(calling_arms(WIZARD, seed)))
+    # Rims of gold, brass, or the harness's own metal.
+    var rims = Set[Int]()
+    for seed in range(60):
+        rims.add(Int(calling_arms(WARRIOR, seed).value().rim.r))
+    assert_true(len(rims) >= 3)
+    with assert_raises(contains="calling"):
+        _ = calling_arms(Calling(99), 1)
+
+
+def test_some_warriors_and_barbarians_wear_scales() raises:
+    var warriors = 0
+    var barbarians = 0
+    for seed in range(200):
+        var harness = dressed_as(WARRIOR, MALE, seed)
+        if _has(harness, "scale shirt"):
+            warriors += 1
+            # A shirt of scales reaches the thigh: no skirt of plate.
+            assert_false(_has(harness, "plate skirt") or _has(harness, "fauld"))
+            assert_false(_has(harness, "platebody"))
+        if _has(dressed_as(BARBARIAN, FEMALE, seed), "scale shirt"):
+            barbarians += 1
+    assert_true(warriors > 40 and warriors < 80)
+    assert_true(barbarians > 30 and barbarians < 70)
+
+
+def test_callings_wear_the_tailor_s_garments() raises:
+    var names = List[String]()
+    for seed in range(80):
+        var outfits = [
+            calling_outfit(GOODWIFE, seed),
+            calling_outfit(PEASANT, seed),
+            calling_outfit(MERCHANT, seed),
+            calling_outfit(NOBLEWOMAN, seed),
+            dressed_as(ROYAL, MALE, seed),
+            dressed_as(ROYAL, FEMALE, seed),
+            dressed_as(WARLOCK, MALE, seed),
+            dressed_as(FARMER, FEMALE, seed),
+            dressed_as(RANGER, FEMALE, seed),
+        ]
+        for outfit in outfits:
+            outfit.check()
+            for garment in outfit.garments:
+                if not (garment.name in names):
+                    names.append(garment.name)
+    for name in [
+        "chemise",
+        "laced shirt",
+        "laced bodice",
+        "skirt",
+        "apron",
+        "doublet",
+        "royal doublet",
+        "waistcoat",
+        "frock coat",
+        "long coat",
+        "open robe",
+        "ball gown",
+        "royal gown",
+    ]:
+        assert_true(name in names)
+    # A goodwife in a skirt wears a chemise and a laced bodice with it.
+    for seed in range(40):
+        var goodwife = calling_outfit(GOODWIFE, seed)
+        if _has(goodwife, "skirt"):
+            assert_true(_has(goodwife, "chemise"))
+            assert_true(_has(goodwife, "laced bodice"))
+
+
+def test_callings_wear_designs_by_chance() raises:
+    var designed = List[Int](length=CALLING_COUNT, fill=0)
+    var plaid = 0
+    for seed in range(100):
+        for k in range(CALLING_COUNT):
+            var outfit = dressed_as(Calling(k), calling_sex(Calling(k)), seed)
+            for garment in outfit.garments:
+                if garment.design != PLAIN:
+                    designed[k] += 1
+                    break
+            for garment in outfit.garments:
+                if garment.name == "plaid kilt":
+                    assert_true(garment.design == TARTAN)
+                    assert_true(garment.fabric == WOOL)
+                    plaid += 1
+    # Most royals and noblewomen wear a design; fewer peasants do; a
+    # warrior's is on his surcoat, now and then.
+    assert_true(designed[ROYAL.value] > 80)
+    assert_true(designed[NOBLEWOMAN.value] > 50)
+    assert_true(designed[PEASANT.value] > 20)
+    assert_true(designed[PEASANT.value] < designed[ROYAL.value])
+    assert_true(designed[WARRIOR.value] < 20)
+    assert_true(plaid > 15 and plaid < 60)
+
+
+def test_rangers_wear_a_capuchon_and_carry_bows() raises:
+    var caped = 0
+    for seed in range(100):
+        var ranger = dressed_as(RANGER, MALE, seed)
+        ranger.check()
+        if _has(ranger, "hood cape"):
+            caped += 1
+            assert_false(_has(ranger, "fur mantle"))
+    assert_true(caped > 35 and caped < 75)
+    assert_true(carries_bow(RANGER) and carries_bow(ARCHER))
+    assert_false(carries_bow(WARRIOR) or carries_bow(PEASANT))
+    with assert_raises(contains="calling"):
+        _ = carries_bow(Calling(77))
+
+
+def test_monks_archers_and_men_at_arms_vary() raises:
+    var habits = List[Int]()
+    var corded = 0
+    var metals = List[Int]()
+    var helmed = 0
+    var capped = 0
+    var hides = List[Int]()
+    for seed in range(80):
+        for garment in calling_outfit(MONK, seed).garments:
+            if garment.name == "robe" and not (
+                Int(garment.dyes[0].r) in habits
+            ):
+                habits.append(Int(garment.dyes[0].r))
+            if garment.name == "sash":
+                corded += 1
+        for garment in calling_outfit(MAN_AT_ARMS, seed).garments:
+            if garment.name == "hauberk" and not (
+                garment.metal.value in metals
+            ):
+                metals.append(garment.metal.value)
+            if garment.name == "half helm":
+                helmed += 1
+        for garment in calling_outfit(ARCHER, seed).garments:
+            if garment.name == "feathered cap":
+                capped += 1
+            if garment.name == "jerkin" and not (
+                Int(garment.dyes[0].r) in hides
+            ):
+                hides.append(Int(garment.dyes[0].r))
+    # Five habits, a cord or a belt; four metals of mail, a half helmet
+    # by chance; jerkins of several hides, and a cap now and then.
+    assert_equal(len(habits), 5)
+    assert_true(corded > 20 and corded < 60)
+    assert_equal(len(metals), 4)
+    assert_true(helmed > 20 and helmed < 60)
+    assert_true(len(hides) >= 4)
+    assert_true(capped > 5 and capped < 40)
+
+
+def test_callings_wear_frills_by_chance() raises:
+    var royal_shirts = 0
+    var flounces = 0
+    var frilled_gowns = 0
+    for seed in range(100):
+        for garment in dressed_as(ROYAL, MALE, seed).garments:
+            if garment.name == "shirt" and garment.ruffles.has(CUFF_RUFFLES):
+                royal_shirts += 1
+        for garment in calling_outfit(GOODWIFE, seed).garments:
+            if garment.name == "skirt" and garment.ruffles.has(HEM_RUFFLE):
+                flounces += 1
+        for garment in calling_outfit(NOBLEWOMAN, seed).garments:
+            if garment.name == "gown" and garment.ruffles.has(CUFF_RUFFLES):
+                frilled_gowns += 1
+    assert_true(royal_shirts > 15)
+    assert_true(flounces > 3 and flounces < 30)
+    assert_true(frilled_gowns > 3)
 
 
 def main() raises:

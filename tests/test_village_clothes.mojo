@@ -22,10 +22,16 @@ from extensions.village.clothes import (
     WALNUT,
     WELD,
     WOAD,
+    calling_groom,
     dyed_outfit,
     natural_dye,
+    plain_groom,
     village_outfit,
 )
+from extensions.attire.mix import MONK, calling_beard, calling_hair
+from extensions.humanoid.sex import MALE
+from extensions.humanoid.skeleton.head.hair.beard import CLEAN_SHAVEN
+from extensions.humanoid.skeleton.head.hair.styles import GROWN
 from render.framebuffer import Color
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
@@ -83,6 +89,15 @@ def test_a_seed_picks_three_different_dyes() raises:
         assert_false(_same(body, legs))
         assert_false(_same(trim, legs))
     assert_equal(len(dyed_outfit(4, True).garments), 5)
+
+
+def test_a_groom_is_plain_or_suits_a_calling() raises:
+    var plain = plain_groom()
+    assert_true(plain.hair == GROWN)
+    assert_true(plain.beard == CLEAN_SHAVEN)
+    var monk = calling_groom(MONK, MALE, 21)
+    assert_true(monk.hair == calling_hair(MONK, MALE, 21))
+    assert_true(monk.beard == calling_beard(MONK, MALE, 21))
 
 
 def main() raises:

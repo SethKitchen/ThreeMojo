@@ -18,7 +18,12 @@ from extensions.attire.kinds import (
 )
 from extensions.attire.outfit import Outfit
 from core.scene import Scene
+from extensions.animals.coat import EYE
+from extensions.animals.build import create_animal
+from extensions.animals.options import CROWD, animal_options
+from extensions.animals.rig import Pose
 from extensions.animals.registry import CHICKEN, RABBIT, SpeciesId
+from core.buffer_geometry import MaterialIndex
 from extensions.humanoid.rig.joints import CHEST, HIPS, SPINE
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
@@ -35,12 +40,22 @@ from extensions.village.character import (
 from extensions.village.clothes import dyed_outfit
 from extensions.village.interior import Doorway
 from extensions.village.residents import (
+    FOLLOW_REACH,
+    HEEL,
+    IDLE,
+    PANIC,
+    SIT,
+    WORK,
+    Activity,
+    Stop,
+    home_route,
     APPROACH,
     INDOORS,
     THRESHOLD,
     Body,
+    EYE_HEIGHT,
     Flipbook,
-    GIVE_UP,
+    DETOURS,
     Herd,
     HouseId,
     JUMP_PLAY,
@@ -49,7 +64,9 @@ from extensions.village.residents import (
     ResidentsParameters,
     Route,
     Villager,
+    animal_look,
     clip_of,
+    mesh_poses,
     facing_turn,
     play_rate,
     visit,
@@ -59,11 +76,12 @@ from controls.third_person_controls import yaw_of
 from core.geometry_store import GeometryId
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from std.math import cos, pi
+from std.math import cos, nan, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -155,23 +173,27 @@ def test_a_stuck_resident_gives_up_on_its_point() raises:
     var route = Route(
         [Vector3(0, 0, -5), Vector3(5, 0, 0)], Duration(1.0, SECOND)
     )
-    # Standing still on its way, it waits, then rests and moves on.
+    # Stuck on its way, it walks aside, to one side and then the other,
+    # and at last gives up on the point, rests, and moves on.
     var second = Duration(1.0, SECOND)
-    _ = route.steer(walker, second)
-    _ = route.steer(walker, second)
-    assert_equal(route.next, 0)
-    assert_true(route.stalled >= 2)
-    _ = route.steer(walker, second)
-    var steer = route.steer(walker, second)
+    var sides = List[Float32]()
+    var steps = 0
+    while route.next == 0 and steps < 50:
+        _ = route.steer(walker, second)
+        if route.detour > 0:
+            sides.append(route.side)
+        steps += 1
     assert_equal(route.next, 1)
+    assert_equal(route.detours, 0)
+    assert_true(steps > DETOURS)
+    assert_true(len(sides) >= 2 and sides[0] != sides[1])
+    var steer = route.steer(walker, second)
     assert_equal(steer[0].forward, 0)
-    assert_true(route.stalled == 0)
     # Moving on its way, it is not stuck.
     route.resting = 0
     walker.velocity = Vector3(1, 0, 0)
     _ = route.steer(walker, second)
     assert_true(route.stalled == 0)
-    assert_true(GIVE_UP > 2 and GIVE_UP < 3)
 
 
 def test_residents_bump_into_each_other() raises:
@@ -240,6 +262,10 @@ def test_a_flipbook_shows_the_pose_of_the_stride() raises:
     assert_equal(still.frame(walker).value, 9)
     var legless = Flipbook(GeometryId(9), [GeometryId(1)], 0)
     assert_equal(legless.frame(walker).value, 9)
+    # An animal that turns on the spot steps as it turns: its feet move
+    # though it stands; still, it shows its standing mesh.
+    assert_equal(book.frame_at(0.6, True).value, 2)
+    assert_equal(book.frame_at(0.6, False).value, 9)
 
 
 def test_residents_that_cannot_be_built_are_refused() raises:
@@ -334,6 +360,35 @@ def test_residents_that_cannot_be_built_are_refused() raises:
             p.check()
 
 
+def _eye_triangles(coarseness: Float64) raises -> Int:
+    """Return how many triangles a rabbit's standing mesh's eyes have."""
+    var store = Assets()
+    var look = animal_look(store, RABBIT, 3, 1, CROWD, coarseness)
+    var count = 0
+    for group in store.geometries.get(look.book.stand).groups:
+        if group.material_index == MaterialIndex(EYE.value):
+            count += group.count // 3
+    return count
+
+
+def test_poses_are_meshed_at_once_and_a_foreign_pose_is_refused() raises:
+    var rabbit = create_animal(RABBIT, animal_options(3, quality=CROWD))
+    var chicken = create_animal(CHICKEN, animal_options(3, quality=CROWD))
+    var poses = List[Pose]()
+    poses.append(rabbit.bind_pose())
+    poses.append(chicken.bind_pose())
+    with assert_raises(contains="another rig"):
+        _ = mesh_poses(rabbit, poses)
+
+
+def test_a_coarse_animals_eyes_are_as_coarse() raises:
+    var fine = _eye_triangles(1)
+    var coarse = _eye_triangles(3)
+    assert_true(coarse > 0)
+    # Three times the cell is about a ninth of the triangles.
+    assert_true(coarse * 5 < fine)
+
+
 def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
     var ground = _flat()
     var assets = Assets()
@@ -367,6 +422,58 @@ def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
     ref jump = body.mixer.action(body.actions[3])
     assert_true(jump.phase > 0.5)
     assert_almost_equal(jump.time_scale, JUMP_PLAY, atol=1e-6)
+
+
+def test_a_speaking_body_shows_its_moving_face_near_the_camera() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var body = Body(
+        scene,
+        assets,
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        Outfit(),
+        800,
+        8,
+        speaks=True,
+        seed=4,
+    )
+    assert_true(body.speaks)
+    var walker = Character(
+        CharacterParameters(), 2, 3, Angle(0.0, RADIAN), _flat()
+    )
+    var step = Duration(0.1, SECOND)
+    body.pose(scene, walker, step)
+    scene.update()
+    # The eyes are near the top of the person, over their feet.
+    var head = body.head(scene)
+    var tall = body.person.rig.stature
+    assert_almost_equal(head.x, 2, atol=1e-5)
+    assert_almost_equal(head.y, EYE_HEIGHT * tall, atol=1e-4)
+    ref face = body.person.face.value()
+    var mouth = face.meshes[0]
+    var still = body.person.far_face.value()
+    # Far away, the still face shows.
+    body.show_face(scene, Vector3(2, 1, 40), 3, step)
+    assert_false(body.near)
+    assert_true(scene.node(still).visible)
+    # Near, the preserved face shows, and says its words.
+    body.life.say("Hello")
+    body.show_face(scene, Vector3(2, 1.5, 4), 3, step)
+    assert_true(body.near)
+    assert_false(scene.node(still).visible)
+    assert_true(scene.meshes[mouth].morph_influences.is_worn())
+    # A body that does not speak is left as it is.
+    var quiet = Body(
+        scene,
+        assets,
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        Outfit(),
+        500,
+        8,
+    )
+    quiet.show_face(scene, Vector3(0, 0, 0), 3, step)
+    assert_false(quiet.speaks)
+    assert_false(quiet.near)
 
 
 def test_a_garment_that_shows_nothing_casts_nothing() raises:
@@ -543,6 +650,196 @@ def test_a_villager_visits_their_home_through_its_door() raises:
     )
     with assert_raises(contains="home"):
         _ = Residents(scene, assets, p, ground, List[Lot](), _homes())
+
+
+def _villager(home: HouseId) -> Villager:
+    return Villager(
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        0,
+        0,
+        3,
+        4,
+        False,
+        Outfit(),
+        home,
+    )
+
+
+def test_a_person_sits_works_shelters_and_flees() raises:
+    assert_true(SIT.is_valid() and WORK.is_valid() and IDLE.is_valid())
+    assert_false(Activity(3).is_valid())
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.villagers.append(_villager(HouseId(0)))
+    var stops: List[Stop] = [
+        Stop(1, 1, Angle(0.5, RADIAN), SIT),
+        Stop(-1, -1, Angle(1.0, RADIAN), WORK),
+        Stop(50, 50, Angle(0.0, RADIAN), SIT),
+    ]
+    var residents = Residents(
+        scene, assets, p, ground, List[Lot](), _homes(), stops
+    )
+    # The two stops near where she wanders are on her route; the far one
+    # is not.
+    ref route = residents.walks[0]
+    var sits = 0
+    var works = 0
+    for activity in route.activities:
+        if activity == SIT:
+            sits += 1
+        elif activity == WORK:
+            works += 1
+    assert_equal(sits, 1)
+    assert_equal(works, 1)
+    # At a bench she sits, turned as the bench faces, for longer.
+    for k in range(len(route.points)):
+        if route.activities[k] == SIT:
+            route.next = k
+    residents.people[0].position = Vector3(
+        route.points[route.next].x, 0, route.points[route.next].z
+    )
+    residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_true(residents.doing(0) == SIT)
+    assert_true(residents.walks[0].resting > p.rest.to(SECOND))
+    for _ in range(5):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_equal(residents.bodies[0].clip, 4)
+    assert_true(residents.doing(5) == IDLE)
+    assert_true(residents.doing(-1) == IDLE)
+    # At her work she works, for longer.
+    ref walk = residents.walks[0]
+    for k in range(len(walk.points)):
+        if walk.activities[k] == WORK:
+            walk.next = k
+    walk.resting = 0
+    residents.people[0].position = Vector3(
+        walk.points[walk.next].x, 0, walk.points[walk.next].z
+    )
+    for _ in range(6):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_true(residents.doing(0) == WORK)
+    assert_equal(residents.bodies[0].clip, 5)
+    # A foe near her makes her run from it.
+    var at = residents.people[0].position
+    residents.update(
+        scene,
+        Duration(0.1, SECOND),
+        ground,
+        List[Obstacle](),
+        None,
+        False,
+        [at + Vector3(1, 0, 0), at + Vector3(0, 0, 2)],
+    )
+    assert_true(residents.people[0].velocity.x < 0)
+    # At night she goes home, and stays in.
+    for _ in range(400):
+        residents.update(
+            scene, Duration(0.1, SECOND), ground, List[Obstacle](), None, True
+        )
+        ref going = residents.homeward[0]
+        if going.at == len(going.points) - 1 and going.resting > 0:
+            break
+    assert_true(residents.sheltering)
+    assert_true(residents.doing(0) == IDLE)
+    ref home = residents.homeward[0]
+    assert_equal(home.at, len(home.points) - 1)
+    # A long frame indoors keeps her in.
+    residents.update(
+        scene, Duration(1.0, SECOND), ground, List[Obstacle](), None, True
+    )
+    assert_true(residents.sheltering)
+    # Once the night is over, she walks her route again.
+    residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_false(residents.sheltering)
+
+
+def test_a_person_with_no_house_and_none_to_go_to_stays_out() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.villagers.append(_villager(NO_HOUSE))
+    var residents = Residents(
+        scene, assets, p, ground, List[Lot](), List[Doorway]()
+    )
+    assert_equal(len(residents.homeward), 1)
+    residents.update(
+        scene, Duration(0.1, SECOND), ground, List[Obstacle](), None, True
+    )
+    assert_true(residents.sheltering)
+    var home = home_route(_homes()[0])
+    assert_equal(len(home.points), 3)
+
+
+def test_a_dog_follows_and_a_shy_animal_runs_from_a_foe() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.rest = Duration(5.0, SECOND)
+    p.herds.append(Herd(RABBIT, 1, 0, 0, 0, 8, follows=True))
+    p.herds.append(Herd(RABBIT, 1, 20, 0, 0, 9, flee=Length(3.0, METER)))
+    var residents = Residents(scene, assets, p, ground, List[Lot](), _homes())
+    var start = residents.beasts[0].character.position.x
+    var shy = residents.beasts[1].character.position
+    for _ in range(10):
+        residents.update(
+            scene,
+            Duration(0.1, SECOND),
+            ground,
+            List[Obstacle](),
+            Vector3(10, 0, 0),
+            False,
+            [shy + Vector3(0, 0, 2)],
+        )
+    # The follower comes toward the player; the shy one runs from the foe.
+    assert_true(residents.beasts[0].character.position.x > start)
+    assert_true(residents.beasts[1].character.position.z < shy.z)
+    # At the player's heel, the follower stands.
+    residents.beasts[0].character.position = Vector3(10 - HEEL / 2, 0, 0)
+    residents.beasts[0].character.velocity = Vector3(0, 0, 0)
+    residents.update(
+        scene,
+        Duration(0.1, SECOND),
+        ground,
+        List[Obstacle](),
+        Vector3(10, 0, 0),
+    )
+    assert_true(residents.beasts[0].character.speed().to(METER_PER_SECOND) < 1)
+    _ = PANIC
+    # Left far behind, it keeps to its own walk.
+    residents.beasts[0].character.position = Vector3(
+        10 - FOLLOW_REACH - 5, 0, 0
+    )
+    residents.update(
+        scene,
+        Duration(0.1, SECOND),
+        ground,
+        List[Obstacle](),
+        Vector3(10, 0, 0),
+    )
+
+
+def test_an_animal_that_turns_on_the_spot_steps_round() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.rest = Duration(0.0, SECOND)
+    p.herds.append(Herd(RABBIT, 1, 0, 0, 0, 8))
+    var residents = Residents(scene, assets, p, ground, List[Lot](), _homes())
+    # It faces away from the point it walks to, and turns to it.
+    ref beast = residents.beasts[0]
+    beast.route.points = [Vector3(0, 0, 5)]
+    beast.route.activities = [IDLE]
+    beast.route.facings = [nan[DType.float32]()]
+    beast.route.next = 0
+    beast.route.resting = 0
+    beast.character.heading = Angle(3.0, RADIAN)
+    residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_true(residents.beasts[0].paced > 0)
 
 
 def test_an_empty_village_has_no_residents() raises:

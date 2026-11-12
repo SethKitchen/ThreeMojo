@@ -156,7 +156,9 @@ renderer.set_output_color_space(DISPLAY_P3_COLOR_SPACE)
 
 `set_output_color_space` is three.js's `outputColorSpace`. sRGB is the default, as in three.js. `resolve` writes each pixel's light in that space, after the tone mapping curve. Both backends use the same `OutputEncoding`, from `render/color_spaces.mojo`.
 
-The light is multiplied by three.js's matrix, then goes through the space's transfer function. A linear space has no transfer function, so its bytes are the light itself. The matrix is `ColorManagement._getMatrix`, rounded to four places, as `WebGLProgram` writes it into the shader. The shader multiplies the color by the matrix from the left, `value.rgb * mat3(...)`, and this does the same.
+The light is multiplied by three.js's matrix, then goes through the space's transfer function. A linear space has no transfer function, so its bytes are the light itself. The matrix is three.js r187's `ColorManagement._getMatrix`, rounded to four places, as `WebGLProgram` writes it into the shader. The shader multiplies the matrix by the color, `mat3(...) * value.rgb`, and this does the same.
+
+three.js r186 and earlier gave a wide gamut output the wrong colors. They multiplied the two matrices in the other order, and the color from the left. For example, sRGB red came out in Display P3 as `[223, 132, 33]`. r187 and this port give `[234, 51, 35]`.
 
 A space with sRGB's primaries has the identity matrix, and the matrix is skipped. A pixel that a normal or depth material wrote is data. three.js writes it without `linearToOutputTexel`, and so does this, in every space.
 

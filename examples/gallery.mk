@@ -135,6 +135,14 @@ $(call gallery,shell-analysis,plate)
 $(call gallery,building-energy,heat)
 # The lowest modes of a chain of springs.
 $(call gallery,numerics,spring_modes)
+# An Alcubierre warp bubble: energy density, null energy condition, expansion.
+$(call gallery,warp-drive,warp_drive)
+# The sky from inside an Alcubierre bubble at 1, 3 and 6 times c.
+$(call gallery,warp-view,warp_view)
+# The ring of negative energy around a warp bubble, turning.
+$(call gallery,warp-surface,warp_surface)
+# A warp bubble crossing the frame: energy and momentum density.
+$(call gallery,warp-bubble,warp_bubble)
 $(call gallery,femur,femur)
 $(call gallery,tibia,tibia)
 $(call gallery,fibula,fibula)
@@ -204,6 +212,23 @@ $(call gallery,family,family)
 $(call gallery,armory,armory)
 # Eight people of eight callings, each of a genome and an outfit picked by a seed.
 $(call gallery,crowd,crowd)
+# Seven callings as a man and a woman each: hats and helmets, furs, robes and
+# plate of many metals, with hair cards moving as they walk.
+$(call gallery,archetypes,archetypes)
+# Eight heads, each in a hat or a helmet shaped round it, over hair cards.
+$(call gallery,headwear,headwear)
+# Ten surcoats, one in each dye pattern: party, quartered and charged.
+$(call gallery,heraldry,heraldry)
+# Eight people in the tailor's shirts, bodices, skirts, coats and gowns.
+$(call gallery,tailoring,tailoring)
+# Nine people, each in one design woven or embroidered over the dyes.
+$(call gallery,designs,designs)
+# Five people whose cloth shows its character: frills, fur, folds and leather.
+$(call gallery,fabrics,fabrics)
+# Two forest outlaws in hoods and hood capes, with longbows and quivers.
+$(call gallery,outlaws,outlaws)
+# Eight people in four kits of plate and mail, each kit on a man and a woman.
+$(call gallery,plate_and_mail,plate_and_mail)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.
@@ -217,3 +242,24 @@ $(call gallery,scanned-buildings,building_scan)
 # A demonstration site of splats on a hillside, cut into parts, with a copy of
 # its largest part beside it, drawn with levels of detail on every core.
 $(call gallery,scan-parts,scan_parts)
+# An Ellingham diagram computed from the NASA data in the chemistry catalog.
+$(call gallery,ellingham,ellingham)
+# Predominance maps: Ti-O-Cl at 1000 K, and the Fe-O-C Baur-Glaessner map.
+$(call gallery,predominance,predominance)
+# The requirements of each Kroll step and the windows where they all hold.
+$(call gallery,process-windows,process_windows)
+# Anodized titanium colors from thin-film interference, 0 to 120 V.
+$(call gallery,anodizing,anodizing)
+# The Kroll route as a loop, with the flows the flowsheet solver settles on.
+$(call gallery,kroll-loop,kroll_loop)
+# Diamond and graphite read from CIF text, turning side by side.
+$(call gallery,crystal,crystal)
+# Wijnendale Castle from the air in autumn, under the sun of 19 October 2026.
+$(call gallery,wijnendale,wijnendale)
+# The castle each hour of 19 October, with the donjon's shadow turning.
+$(call gallery,wijnendale-simulation,wijnendale_simulation,assets/pebbles.jpg)
+# The castle in mountains, woods and lakes, beside a scanned church when the
+# scan is cached.
+$(call gallery,wijnendale-landscape,wijnendale_landscape,assets/pebbles.jpg)
+# The castle scanned by 24 virtual cameras, drawn as its splats.
+$(call gallery,wijnendale-scan,wijnendale_scan)

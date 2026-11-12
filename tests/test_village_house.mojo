@@ -24,6 +24,11 @@ from extensions.building.material import brick
 from extensions.building.model import Element, Furnishing, Opening, Space
 from extensions.vegetation.ground import Ground
 from extensions.village.house import (
+    BY_FACADE,
+    RoofCovering,
+    SLATES,
+    THATCH,
+    TILES,
     BARN,
     BARN_DOOR,
     BOARDED,
@@ -470,6 +475,25 @@ def test_a_barn_is_checked() raises:
     barn.story_height = Length(3.0, METER)
     with assert_raises(contains="barn's story"):
         barn.check()
+
+
+def test_a_roof_is_covered_by_its_facade_or_its_own_covering() raises:
+    for covering in [BY_FACADE, TILES, SLATES, THATCH]:
+        assert_true(covering.is_valid())
+    assert_false(RoofCovering(4).is_valid())
+    assert_false(RoofCovering(-1).is_valid())
+    var house = HouseParameters(
+        "cottage", Length(6.0, METER), Length(5.0, METER), 1, brick()
+    )
+    assert_true(house.roof_covering() == TILES)
+    house.facade = STONE_FACADE
+    assert_true(house.roof_covering() == SLATES)
+    house.covering = THATCH
+    assert_true(house.roof_covering() == THATCH)
+    house.check()
+    house.covering = RoofCovering(7)
+    with assert_raises(contains="covering"):
+        house.check()
 
 
 def main() raises:

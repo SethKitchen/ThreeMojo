@@ -41,6 +41,22 @@ var image = village.render(renderer, scene, assets, camera)
 
 `render` draws the scene, and then composes the pond's water into the picture. Do not draw the scene with `renderer.render` alone: that picture has no water.
 
+## Draw an hour
+
+`keep_hour` sets the village for the hour of a `DayCycle`. It puts the sun or the moon where the hour does. From dusk to dawn it lights the lamps and the windows. Give the same hour to `render`, so it darkens the water and draws the night sky, the stars and the moon:
+
+```mojo
+from extensions.village.day import DayCycle
+
+var night = DayCycle(21.5)
+village.keep_hour(scene, night)
+_ = village.update(scene, assets, camera, Duration(2.0, SECOND))
+night.light(scene)
+var image = village.render(renderer, scene, assets, camera, night)
+```
+
+Call `DayCycle.light` after `update`, because the meadow's sun sets its lights again there. `examples/village.mojo --hour=21.5` draws the village at that hour.
+
 ## Add a scanned building
 
 Fetch a scan first. Then give its id to the example:
@@ -86,7 +102,11 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | `weather.mojo` | `WeatherKind`, `WeatherLook`, `weather_look`, `cloud_cover` and `Weather`. See [Village weather](Village-weather). |
 | `surfaces.mojo` | The textures, `HouseLooks` and `house_looks`. |
 | `scanned.mojo` | `CutBuilding`, `cut_building`, `grid_voxel`, `linear_splats`, `scan_lot` and `stand_scan`. |
-| `village.mojo` | `HousePlacement`, `VillageParameters` and `Village`. |
+| `air.mojo` | `bloom` and `ground_mist`. See [Village weather](Village-weather#the-air). |
+| `pond.mojo` | `PondLook` and `water_mask`. |
+| `puffs.mojo` | `Puff`, `chimney_smoke`, `dust_puffs` and `draw_puffs`. |
+| `shore.mojo` | `ShoreParameters`, `StandingShore` and `stand_shore`. |
+| `village.mojo` | `HousePlacement`, `VillageParameters`, `pond_basin` and `Village`. |
 
 ## The default village
 
@@ -96,11 +116,13 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 |---|---|
 | A pond 12 meters across and 1.2 meters deep | Right of the trail, 11 meters ahead of the camera. |
 | A stone cottage of one story, 7 by 5.5 meters, under slates | Left of the trail, about 25 meters away, turned 80 degrees. |
-| A framed cottage of one story, 6.5 by 5 meters | Left of the trail, about 60 meters away, turned 70 degrees. |
-| A framed house of two stories, 8 by 6 meters | Right of the trail, about 55 meters away, turned -80 degrees. |
-| A brick house of two stories, 9 by 7 meters | On the left, about 75 meters away, turned 20 degrees. |
-| A boarded barn of one story 4.2 meters tall, 13 by 8 meters | Ahead, about 90 meters away, turned -12 degrees. |
+| A brick house of two stories, 9 by 7 meters, under weathered tiles | West of the green, about 55 meters away, turned 90 degrees to face it. |
+| A framed cottage of one story, 6.5 by 5 meters, under thatch | South of the green, about 60 meters away, facing it. |
+| A framed house of two stories, 8 by 6 meters, under warm tiles | Right of the trail, across it from the green, about 55 meters away, turned -80 degrees. |
+| A boarded barn of one story 4.2 meters tall, 13 by 8 meters, under gray tiles | Ahead, about 90 meters away, turned -12 degrees. |
 | The scanned building, if there is one | On the right, about 110 meters away, turned 28 degrees. |
+
+Three houses face the green round the well. The green holds a bench, a trough, a handcart, a signpost where the paths meet the trail, and three lamp posts.
 
 The houses' textures are 128 texels on a side.
 
@@ -132,8 +154,36 @@ The water's ocean spectrum is 256 texels on a side, and its glare is 128 texels.
 | `FENCE` | Posts at most 2 meters apart, and two rails, a meter tall | Its length |
 | `BENCH` | A plank on two trestles | Its length |
 | `WOODPILE` | Split logs stacked under a board lid, their ends out, 0.6 meters deep and 1.15 meters tall | Its length |
+| `CART` | A handcart: a bed of boards on two spoked wheels, with two shafts | Its bed's length |
+| `SIGNPOST` | A post with two pointing arms | Its height |
+| `WASHING_LINE` | Two posts, a line between them, and cloths of three colors | Its length |
+| `TROUGH` | A trough of boards on legs, full of water | Its length |
+| `SCARECROW` | A post and a cross arm in a coat, a straw head and a hat | Its height |
+| `CROPS` | A garden bed of three rows of cabbages | Its length |
+| `LAMP_POST` | An iron post on a stone foot, with a lantern that glows from dusk to dawn | Its height |
+| `HEDGE` | A clipped hedge of leaves, 1.4 meters tall and 0.9 meters deep | Its length |
 
-The default village has a well and a bench by the trail, and barrels, crates and hay before the barn. A fence closes a garden behind the stone cottage, and a bench stands before the framed house. A woodpile stands outside the hearth's gable of each house with a hearth: `woodpile_by` places it, and `hearthed` says which houses have one. Each prop but a fence is a solid lot of the terrain, and each fence is a wall span. The residents' routes keep off the props.
+The default village has the green's props, and barrels, crates and hay before the barn. A hedge runs between the barn's yard and the green. Fences close a garden behind the stone cottage, with a gate on its south side. Three beds of cabbages and a scarecrow stand in it, and a washing line stands beside it. A bench stands before the framed house. A woodpile stands outside the hearth's gable of each house with a hearth: `woodpile_by` places it, and `hearthed` says which houses have one.
+
+Each fence and each hedge is a wall span of the terrain. Crops stop nobody. Each other prop is a solid lot. The residents' routes keep off the props. A lamp post's glowing glass hangs from `StandingProps.lit`, and its cold glass from `StandingProps.daylit`. The game shows one of them with the houses' lamps.
+
+The ground at the foot of each building is dark with grime, out to `GRIME_REACH`, 0.9 meters, from its lot. See `lot_grime` in [Vegetation](Vegetation#ponds-and-lots).
+
+## Chimney smoke
+
+Smoke rises from the pot of each house with a hearth. `StandingHouse.chimney` holds the top of the pot, and `Village.chimneys` holds each pot in the world. `Village.smoke` gives the puffs over every chimney at a time.
+
+| Part | Value |
+|---|---|
+| Puffs over a chimney at once | `SMOKE_PUFFS`, 14 |
+| A puff's life | `SMOKE_LIFE`, 8 seconds |
+| How fast a puff rises | `SMOKE_RISE`, 0.55 meters a second, slowing as it rises |
+| How fast the wind carries it | `SMOKE_DRIFT`, 0.6 meters a second, along the meadow's wind |
+| How large it grows | From 0.22 meters across its middle to 1.42 meters |
+
+A puff has no state of its own. `chimney_smoke` finds it from the time alone, so the same time gives the same smoke.
+
+The renderers draw opaque triangles only. So `draw_puffs` blends each puff into the finished frame as a soft disc that faces the camera. A pixel nearer than the puff's middle keeps its color, so smoke behind a wall does not show through it. The puffs are drawn far to near. `render` draws the smoke into the still, and the game draws it after the night's sky, dimmer at night. `dust_puffs` gives the dust that a foot kicks up.
 
 ## Lots
 
@@ -166,11 +216,48 @@ The pond's water is a `WaterScene`. Its sun is the meadow's sun, so the water's 
 
 `render` composes the water into the picture at the ground's `water_level`. The water is an endless plane, and the composition tests it against the depth of each pixel. The ground outside the basin lies above the water, so the water shows only in the basin. Grass and trees in front of the water keep their pixels.
 
+When the renderer supersamples, `render` composes the water into each sample before it averages them. So a grass blade that covers one sample of a pixel does not keep the whole pixel from the water.
+
 `update` moves the water's clock on to the frame's time. An earlier time leaves the clock where it is, because the water's state moves only forward.
+
+### The basin and the ripples
+
+`pond_basin` gives the water the pond's own basin. The water's bed is level in the middle and rises to the shore, as the ground does. So the water grows shallow toward its edge. Where it is shallower than 35 centimeters, its bed turns to mud. See [Water](Water#a-basin).
+
+The water's ripple window lies over the pond, one meter wider than the pond. `Village.splash` taps the water at a point on the next `update`. The game taps the pond in three ways:
+
+| What | Where | How often |
+|---|---|---|
+| Rain | At random points of the pond | 40 drops a second in a downpour, fewer in lighter rain |
+| A wading player | At the player's feet, while the player moves faster than 0.3 meters a second | Every 0.18 seconds |
+| A bite at a fishing float | At the float | Every frame of the bite |
+
+### The shore
+
+`stand_shore` dresses the pond's edge. `VillageParameters.shore` holds how much of each part it draws:
+
+| Part | Count | Where |
+|---|---|---|
+| Reeds | 16 clumps of 5 to 11 blades, in four beds | Where the water is at most 15 centimeters deep, and on the mud up to 12 centimeters above it |
+| Cattails | In about a third of the clumps | Near the top of every fourth blade |
+| Stones | 30 | On the damp band, from 6 centimeters under the water to 12 centimeters above it |
+| Lily pads | 14, some with a flower | Where the water is 60 centimeters deep or more |
+
+Nothing of the shore stands on a lot or its apron, and nothing of it stops a character. No grass blade roots under the water, no seed head stands on the wet shore, and no litter lies on the bed. The mud is darkest at the water's edge, and it dries over the 12 centimeters above it.
+
+### What the water mirrors
+
+`PondLook` finishes the water after the composition. `render` and the game both use it:
+
+1. **The village.** Each pixel above the water is mirrored in the water's plane. The mirror image shows at the water's Fresnel share, at most 85 percent, and it trembles a pixel or two. Where the frame does not show what the water would mirror, the water keeps its own sky.
+2. **The fog.** The water fades into the scene's fog by its distance, as the triangles do.
+3. **The stars.** At night, the water mirrors the stars of the sky. See [Village day and night](Village-day).
 
 ## Limits
 
-- The water does not reflect the houses, the trees or the sky cube. It reflects the Clearwater sky.
+- The water mirrors only what the frame shows. A house out of the frame, or behind another one, is not in the water. The water's own sky is the Clearwater sky, not the sky cube.
+- On a GPU that composes the water, the water does not mirror the village, the fog or the stars. The chimneys do not smoke there.
+- A puff of smoke is lit by the hour, not by the sun. It casts no shadow, and the fog does not fade it.
 - A house is a box of stories under one gable roof. It has no porch and no wing. Its upper stories have no stairs.
 - A scanned building's splats are lit by the scan's own light, not by the meadow's sun. They cast no shadow.
 - A lot keeps plants off the ground, but it does not level the ground. The plinth and the sunk foot fill the slope.

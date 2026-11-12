@@ -10,6 +10,10 @@ from core.fog import exp2_fog
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.village.day import (
+    LOWEST_LIGHT,
+    MOON_FACE,
+    NOON_HEIGHT,
+    moon_sky,
     DayCycle,
     MOON,
     MOONLIGHT,
@@ -17,10 +21,10 @@ from extensions.village.day import (
     SUNSET,
     dim_water,
 )
-from lights.light import ambient_light, directional_light
+from lights.light import ambient_light, directional_light, point_light
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
-from std.math import inf
+from std.math import inf, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -164,6 +168,30 @@ def test_the_night_sky_is_dark_and_starry() raises:
         DayCycle(1).night_sky(flat, _camera(), 1)
 
 
+def test_the_night_look_is_off_by_day_and_aims_at_the_corners() raises:
+    var noon = DayCycle(12).night_look(_camera(), 1)
+    assert_false(noon.on)
+    assert_almost_equal(noon.day, 1)
+    # At night the stars come out, and cloud hides them.
+    var night = DayCycle(1).night_look(_camera(), 1)
+    assert_true(night.on)
+    assert_almost_equal(night.stars, 1)
+    assert_almost_equal(DayCycle(1).night_look(_camera(), 0.25).stars, 0.25)
+    assert_almost_equal(DayCycle(1).night_look(_camera(), 0).stars, 0)
+    # The camera looks along -z: the top left corner is up and to the left,
+    # the steps run right and down.
+    assert_true(night.d00.z < 0)
+    assert_true(night.d00.x < 0)
+    assert_true(night.d00.y > 0)
+    assert_true(night.across.x > 0)
+    assert_true(night.down.y < 0)
+    # At dusk the sky is warm, and the stars have not yet come out.
+    var dusk = DayCycle(19.4).night_look(_camera(), 1)
+    assert_true(dusk.on)
+    assert_true(dusk.dusk > 0)
+    assert_true(dusk.stars < night.stars)
+
+
 def test_the_water_darkens() raises:
     var image = _frame()
     var before = image.depth.copy()
@@ -179,6 +207,49 @@ def test_the_water_darkens() raises:
     flat.depth = List[Float32]()
     with assert_raises(contains="depth for each pixel"):
         dim_water(flat, List[Float32](length=16, fill=0), 0.5)
+
+
+def test_the_sun_crosses_the_sky_and_the_moon_follows_it() raises:
+    # At 14:00 the sun stands where the meadow baked it.
+    var afternoon = DayCycle(14).sun_toward()
+    assert_almost_equal(afternoon.y, sin(NOON_HEIGHT * 0.017453292), atol=1e-5)
+    # It is low in the morning and the evening, and never under its least.
+    var morning = DayCycle(SUNRISE + 0.5).sun_toward()
+    assert_true(morning.y < afternoon.y)
+    var least = sin(LOWEST_LIGHT * 0.017453292)
+    assert_almost_equal(DayCycle(SUNRISE).sun_toward().y, least, atol=1e-5)
+    # At night the moon crosses the sky as the sun does twelve hours on.
+    var night = DayCycle(23).sun_toward()
+    assert_true(night.y >= least - 1e-6)
+    var length = sqrt(night.x * night.x + night.y * night.y + night.z * night.z)
+    assert_almost_equal(length, 1, atol=1e-5)
+    var dawn = DayCycle(2).sun_toward()
+    assert_true(dawn.y > 0)
+
+
+def test_the_moon_shows_its_disk_and_its_glow() raises:
+    var moon = Vector3(0, 1, 0)
+    var dark = Vector3(10, 10, 20)
+    # No moon, or a pixel far from it: the sky as it was.
+    assert_true(moon_sky(dark, moon, moon, 0) == dark)
+    assert_true(moon_sky(dark, Vector3(1, 0, 0), moon, 1) == dark)
+    # Its middle is its face; its glow is fainter.
+    var middle = moon_sky(dark, moon, moon, 1)
+    assert_almost_equal(middle.x, MOON_FACE.x, atol=1e-3)
+    var aside = Vector3(0.06, 1, 0)
+    aside = aside / sqrt(aside.x * aside.x + aside.y * aside.y)
+    var glow = moon_sky(dark, aside, moon, 1)
+    assert_true(glow.x > dark.x and glow.x < middle.x)
+
+
+def test_a_lamp_keeps_its_light_at_night() raises:
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_light(point_light(Color(255, 180, 100), node, 6))
+    scene.update()
+    DayCycle(23).light(scene)
+    assert_equal(scene.lights[0].intensity, 6)
+    assert_equal(scene.lights[0].color.r, 255)
 
 
 def main() raises:

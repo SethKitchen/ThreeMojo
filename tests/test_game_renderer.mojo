@@ -195,6 +195,12 @@ def test_a_lit_floor_matches_the_general_renderer() raises:
         assert_equal(image.depth[2 * WIDTH + 40], inf[DType.float32]())
         assert_true(fast.triangles > 0)
         assert_true(fast.drawn > 0)
+        # A drawn pixel keeps its depth; the sky's is infinite.
+        var finite = 0
+        for i in range(WIDTH * HEIGHT):
+            if image.depth[i] < inf[DType.float32]():
+                finite += 1
+        assert_equal(fast.drawn, finite)
         assert_equal(fast.draw_count, 1)
         assert_equal(len(fast.timings), 8)
 
@@ -614,6 +620,11 @@ def test_an_interleaved_and_a_replaced_geometry_are_read() raises:
     var buffer = InterleavedBuffer(data^, 4)
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(buffer, 3, 0))
+    # Texture coordinates interleaved with a third float are read too.
+    var uvs: List[Float32] = [0, 0, 9, 1, 0, 9, 0, 1, 9]
+    geometry.set_attribute(
+        String(UV), BufferAttribute(InterleavedBuffer(uvs^, 3), 2, 0)
+    )
     var scene = _facing_scene(
         assets, geometry^, [Material(Color(255, 255, 255), kind=BASIC)]
     )
@@ -624,6 +635,89 @@ def test_an_interleaved_and_a_replaced_geometry_are_read() raises:
     assets.geometries.replace(scene.meshes[0].geometry, _triangle_geometry())
     var replaced = fast.render(scene, assets, _facing(), NOW)
     assert_true(replaced.depth[28 * WIDTH + 50] < 1)
+    # Replaced again by the same triangles, raised: the shape keeps its
+    # parts, and draws where the new positions are.
+    var raised = _triangle_geometry()
+    var points = raised.attribute_view(String(POSITION)).packed()
+    for i in range(6):
+        points[3 * i + 1] += 1.5
+    raised.set_attribute(String(POSITION), BufferAttribute(points^, 3))
+    assets.geometries.replace(scene.meshes[0].geometry, raised^)
+    var moved = fast.render(scene, assets, _facing(), NOW)
+    assert_equal(moved.depth[33 * WIDTH + 30], inf[DType.float32]())
+    assert_true(moved.depth[14 * WIDTH + 30] < 1)
+
+
+def _raised(relative: Bool, normals: Bool) raises -> BufferGeometry:
+    """Return the two triangles with a target that raises them 1.5 meters,
+    and a target that moves nothing; with normals, or without."""
+    var geometry = _triangle_geometry()
+    var up = List[Float32]()
+    var base = geometry.attribute_view(String(POSITION)).packed()
+    for i in range(6):
+        up.append(0 if relative else base[3 * i])
+        up.append(1.5 + (0 if relative else base[3 * i + 1]))
+        up.append(0 if relative else base[3 * i + 2])
+    geometry.morph_relative = relative
+    if normals:
+        var facing = List[Float32](length=18, fill=0)
+        for i in range(6):
+            facing[3 * i + 2] = 1
+        geometry.set_attribute(String(NORMAL), BufferAttribute(facing^, 3))
+        var turned = List[Float32](length=18, fill=0)
+        for i in range(6):
+            turned[3 * i] = 0.5
+            turned[3 * i + 2] = 0 if relative else 1
+        geometry.add_morph_target(
+            BufferAttribute(up^, 3), BufferAttribute(turned^, 3)
+        )
+    else:
+        geometry.add_morph_target(BufferAttribute(up^, 3))
+    if normals and relative:
+        geometry.add_morph_target(
+            BufferAttribute(List[Float32](length=18, fill=0), 3),
+            BufferAttribute(List[Float32](length=18, fill=0), 3),
+        )
+    elif normals:
+        var facing = List[Float32](length=18, fill=0)
+        for i in range(6):
+            facing[3 * i + 2] = 1
+        geometry.add_morph_target(
+            BufferAttribute(base^, 3), BufferAttribute(facing^, 3)
+        )
+    else:
+        geometry.add_morph_target(BufferAttribute(base^, 3))
+    return geometry^
+
+
+def test_a_mesh_wears_its_morph_targets() raises:
+    # Relative with normals, absolute without, and absolute with.
+    for kind in range(3):
+        var assets = Assets()
+        var fast = GameRenderer(WIDTH, HEIGHT)
+        var scene = _facing_scene(
+            assets,
+            _raised(kind == 0, kind != 1),
+            [Material(Color(255, 255, 255))],
+        )
+        var low = 33 * WIDTH + 30
+        var high = 14 * WIDTH + 30
+        var rest = fast.render(scene, assets, _facing(), NOW)
+        assert_true(rest.depth[low] < 1)
+        assert_equal(rest.depth[high], inf[DType.float32]())
+        # The first target raises the triangles; the second moves nothing.
+        scene.meshes[0].morph_influences.set(0, 1)
+        var raised = fast.render(scene, assets, _facing(), NOW)
+        assert_equal(raised.depth[low], inf[DType.float32]())
+        assert_true(raised.depth[high] < 1)
+        # The same weights again draw the same.
+        var again = fast.render(scene, assets, _facing(), NOW)
+        assert_equal(again.depth[high], raised.depth[high])
+        # Worn back to rest, the triangles are where they were.
+        scene.meshes[0].morph_influences.set(0, 0)
+        var back = fast.render(scene, assets, _facing(), NOW)
+        assert_equal(back.depth[low], rest.depth[low])
+        assert_equal(back.depth[high], inf[DType.float32]())
 
 
 def _baked_geometry() raises -> BufferGeometry:
@@ -748,6 +842,13 @@ def test_a_skinned_mesh_follows_its_bones() raises:
         if image.depth[i] < 1 and not (still.depth[i] < 1):
             right += 1
     assert_true(right > 20)
+    assert_true(fast.draw_count > 0)
+    # Seen from the other way, the skinned mesh is behind the camera: it is
+    # not drawn at all, so none of it is skinned.
+    _ = fast.render(
+        scene, assets, _camera(Vector3(0, 0, 5), Vector3(0, 0, 10)), NOW
+    )
+    assert_equal(fast.draw_count, 0)
     # A bone the skeleton lacks, a negative weight and a missing skin are
     # refused.
     var far = _skinned_scene(assets, List[Float32](length=24, fill=3), weights)
@@ -856,16 +957,61 @@ def test_what_the_game_renderer_cannot_draw_is_refused() raises:
     two_suns.update()
     with assert_raises(contains="one directional"):
         _ = fast.render(two_suns, assets, _above(), NOW)
-    var bulb = _floor_scene(assets, Material(Color(180, 180, 180)))
-    bulb.add_light(point_light(Color(255, 255, 255), NodeId(0)))
-    with assert_raises(contains="point"):
-        _ = fast.render(bulb, assets, _above(), NOW)
+    var spot = _floor_scene(assets, Material(Color(180, 180, 180)))
+    spot.add_light(spot_light(Color(255, 255, 255), NodeId(0)))
+    with assert_raises(contains="spot"):
+        _ = fast.render(spot, assets, _above(), NOW)
+    var bulbs = _floor_scene(assets, Material(Color(180, 180, 180)))
+    for _ in range(9):
+        bulbs.add_light(point_light(Color(255, 255, 255), NodeId(0)))
+    with assert_raises(contains="8 point lights"):
+        _ = fast.render(bulbs, assets, _above(), NOW)
     var misty = _floor_scene(assets, Material(Color(180, 180, 180)))
     misty.fog = linear_fog(
         Color(1, 1, 1), Length(1.0, METER), Length(10.0, METER)
     )
     with assert_raises(contains="exponential"):
         _ = fast.render(misty, assets, _above(), NOW)
+
+
+def _lamp(
+    mut scene: Scene, x: Float32, y: Float32, z: Float32
+) raises -> NodeId:
+    var node = Object3D()
+    node.set_position(x, y, z)
+    return scene.add(node^)
+
+
+def test_a_lamp_lights_what_faces_it() raises:
+    var assets = Assets()
+    var fast = GameRenderer(WIDTH, HEIGHT)
+    var plain = _floor_scene(assets, Material(Color(180, 180, 180)))
+    var dark = _brightness(
+        _pixel(fast.render(plain, assets, _above(), NOW), 40, 30)
+    )
+    # A near lamp that fades to its cutoff, a lamp with no falloff, and a
+    # lamp too far away to reach the floor.
+    var lit = _floor_scene(assets, Material(Color(180, 180, 180)))
+    var near = _lamp(lit, 0, 1, 0)
+    lit.add_light(point_light(Color(255, 200, 120), near, 4.0, 2.0, 20.0))
+    var even = _lamp(lit, 0, 3, 0)
+    lit.add_light(point_light(Color(255, 255, 255), even, 0.3, 0.0))
+    var far = _lamp(lit, 50, 1, 50)
+    lit.add_light(point_light(Color(255, 255, 255), far, 4.0, 2.0, 0.5))
+    lit.update()
+    var bright = _brightness(
+        _pixel(fast.render(lit, assets, _above(), NOW), 40, 30)
+    )
+    assert_true(bright > dark)
+    # A lamp under the floor lights nothing that faces up.
+    var under = _floor_scene(assets, Material(Color(180, 180, 180)))
+    var below = _lamp(under, 0, -1, 0)
+    under.add_light(point_light(Color(255, 255, 255), below, 4.0, 2.0, 20.0))
+    under.update()
+    assert_equal(
+        _brightness(_pixel(fast.render(under, assets, _above(), NOW), 40, 30)),
+        dark,
+    )
 
 
 def test_many_meshes_and_a_large_one_share_the_work() raises:
@@ -907,6 +1053,49 @@ def test_many_meshes_and_a_large_one_share_the_work() raises:
     assert_equal(fast.draw_count, 1 + 400 * 6)
     assert_true(fast.vertex_count > 4096)
     assert_true(image.depth[30 * WIDTH + 40] < 1)
+
+
+def test_small_triangles_far_from_the_corner_leave_no_pinholes() raises:
+    # A floor of 180,000 small triangles fills the bottom right of a wide
+    # frame, far from its corner, each a few pixels across. No pixel
+    # inside it falls between two triangles to the sky.
+    var assets = Assets()
+    var wide = GameRenderer(1920, 1080)
+    var scene = Scene()
+    var ground = scene.add(_lying())
+    var floor = assets.geometries.add(
+        plane(Length(8.0, METER), Length(8.0, METER), 300, 300)
+    )
+    var paint = assets.materials.add(
+        Material(Color(160, 160, 160), kind=PHYSICAL)
+    )
+    scene.add_mesh(Mesh(floor, paint, ground))
+    _sunlit(scene)
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(1920) / Float32(1080),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(-3, 5, -3), Vector3(1.5, 0, 1.5))
+    var image = wide.render(scene, assets, camera, NOW)
+    var holes = 0
+    var drawn = 0
+    for y in range(540, 1070):
+        for x in range(960, 1910):
+            if image.depth[y * 1920 + x] < 1:
+                drawn += 1
+                continue
+            # A pixel nothing drew, with drawn pixels on each side.
+            var left = image.depth[y * 1920 + x - 1] < 1
+            var right = image.depth[y * 1920 + x + 1] < 1
+            var up = image.depth[(y - 1) * 1920 + x] < 1
+            var down = image.depth[(y + 1) * 1920 + x] < 1
+            if left and right and up and down:
+                holes += 1
+    assert_true(drawn > 100000)
+    assert_equal(holes, 0)
 
 
 def _empty_geometry() raises -> BufferGeometry:
@@ -1269,6 +1458,22 @@ def test_triangles_past_the_near_and_far_planes_are_cut() raises:
     assert_true(image.depth[(HEIGHT - 1) * WIDTH + 40] < 1)
     # Past the far plane is sky.
     assert_equal(image.depth[2 * WIDTH + 40], inf[DType.float32]())
+
+
+def test_a_frame_with_no_mesh_is_prepared_for_a_gpu() raises:
+    # A frame with triangles first, so the packed arrays hold something.
+    var assets = Assets()
+    var scene = _floor_scene(assets, Material(Color(180, 160, 140)))
+    var fast = GameRenderer(WIDTH, HEIGHT)
+    fast.prepare_gpu(scene, assets, _above(), NOW)
+    assert_true(fast.triangles > 0)
+    # A scene with a light and no mesh has no draw, so nothing is packed.
+    var bare = Scene()
+    bare.add_light(ambient_light(Color(255, 255, 255), 0.5))
+    bare.update()
+    fast.prepare_gpu(bare, assets, _above(), NOW)
+    assert_equal(fast.draw_count, 0)
+    assert_equal(fast.triangles, 0)
 
 
 def main() raises:

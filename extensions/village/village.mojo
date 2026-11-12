@@ -35,6 +35,8 @@ house at its door: see `extensions.village.terrain`.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.object3d import NodeId, Object3D
+from materials.material import MaterialId
 from core.scene import Scene
 from extensions.building.material import brick, timber
 from extensions.building.model import Building
@@ -43,7 +45,14 @@ from extensions.vegetation.checks import (
     require_count_between,
 )
 from extensions.vegetation.field import FieldStats
-from extensions.vegetation.ground import Ground, Lot, Pond, footpath
+from extensions.vegetation.ground import (
+    POND_FLAT,
+    POND_FREEBOARD,
+    Ground,
+    Lot,
+    Pond,
+    footpath,
+)
 from extensions.vegetation.meadow import (
     Meadow,
     MeadowParameters,
@@ -58,6 +67,7 @@ from extensions.village.house import (
     BRICK_FACADE,
     HouseParameters,
     STONE_FACADE,
+    THATCH,
     TIMBER_FRAMED,
     fieldstone,
     footing,
@@ -74,11 +84,19 @@ from extensions.village.house_view import StandingHouse, stand_house
 from extensions.village.props import (
     BARREL,
     BENCH,
+    CART,
     CRATE,
+    CROPS,
     FENCE,
     HAY_BALE,
+    HEDGE,
+    LAMP_POST,
     Prop,
+    SCARECROW,
+    SIGNPOST,
     StandingProps,
+    TROUGH,
+    WASHING_LINE,
     WELL,
     WOODPILE,
     WOODPILE_DEPTH,
@@ -88,9 +106,22 @@ from extensions.village.surfaces import HouseLooks, house_looks
 from extensions.village.terrain import Floor, Terrain
 from extensions.village.scanned import CutBuilding, scan_lot, stand_scan
 from extensions.water.frame import WaterScene
+from render.antialias import SUPERSAMPLE, downsample
+from core.fog import FogView
+from extensions.village.day import DayCycle, dim_water
+from extensions.village.pond import PondLook
+from extensions.village.puffs import Puff, chimney_smoke, draw_puffs
+from extensions.village.shore import (
+    ShoreParameters,
+    StandingShore,
+    stand_shore,
+)
+from extensions.water.optics import Basin
 from extensions.water.pebbles import PebbleBed
 from extensions.water.resolution import SpectrumResolution
-from render.framebuffer import Framebuffer
+from render.framebuffer import Color, Framebuffer
+from lights.light import PHYSICAL_DECAY, point_light
+from renderers.game_renderer import GAME_LAMPS
 from renderers.renderer import Renderer
 from math.vector3 import Vector3
 from std.math import atan2, cos, sin
@@ -111,6 +142,21 @@ from units.si import (
 
 # The water's clock at the start, in seconds: the Clearwater page's.
 comptime WATER_START = Float32(5)
+comptime SOAKED = Float32(0.3)
+"""The share of a surface's light that the rain takes when it is soaked."""
+comptime SNOW_WHITE = Color(236, 240, 248)
+"""The color that snow shines, in sRGB bytes."""
+comptime SNOW_SHINE = Float32(0.4)
+"""How bright a full cover of snow shines in full daylight, as a
+material's emissive intensity."""
+comptime LAMP_COLOR = Color(255, 186, 110)
+"""The color of a lamp's flame, in sRGB bytes."""
+comptime LAMP_INTENSITY = Float32(6)
+"""How bright a lamp burns, as a point light's intensity."""
+comptime LAMP_REACH = Float32(9)
+"""How far a lamp's light reaches, in meters."""
+comptime SMOKE_DRIFT = Float32(0.6)
+"""How fast the wind carries the chimneys' smoke, in meters a second."""
 # The texels on a side of each texture of the houses.
 comptime SURFACE_TEXELS = 128
 comptime PATH_WIDTH = Float32(0.8)
@@ -215,6 +261,8 @@ struct VillageParameters(Copyable, Movable):
     # The well, the barrels, the crates, the hay, the fences and the
     # benches.
     var props: List[Prop]
+    # The reeds, the stones and the lily pads at the pond.
+    var shore: ShoreParameters
     # Where the middle of a scanned building's footprint stands, and how
     # far it is turned, if the village has one.
     var scan_x: Float32
@@ -232,11 +280,12 @@ struct VillageParameters(Copyable, Movable):
 
         A pond lies right of the trail, 11 meters ahead of the camera. A
         stone cottage stands on the left of the trail, about 25 meters
-        away, and a framed cottage and a framed house stand on each side
-        of it, about 60 meters away. A brick house stands on the left,
-        about 75 meters away, and a timber barn about 90 meters away. A
-        scanned building stands on the right, about 110 meters away. The
-        meadow's open and round trees grow as oaks: see `oak`.
+        away. Past it, three houses face a green round the well, 50 to 60
+        meters away: a brick house from the west, a thatched framed
+        cottage from the south, and a framed house from across the trail.
+        A timber barn stands about 90 meters away, and a scanned building
+        on the right, about 110 meters away. The meadow's open and round
+        trees grow as oaks: see `oak`.
 
         Raises:
             Error: Never; the defaults are in range.
@@ -260,11 +309,12 @@ struct VillageParameters(Copyable, Movable):
                     2,
                     brick(),
                     BRICK_FACADE,
+                    roof=Vector3(0.78, 0.66, 0.62),
                     seed=3,
                 ),
-                -24,
-                -42,
-                Angle(20.0, DEGREE),
+                -9,
+                -22,
+                Angle(90.0, DEGREE),
             ),
             HousePlacement(
                 HouseParameters(
@@ -276,6 +326,7 @@ struct VillageParameters(Copyable, Movable):
                     BOARDED,
                     Length(4.2, METER),
                     Angle(35.0, DEGREE),
+                    roof=Vector3(0.72, 0.70, 0.68),
                     trim=Vector3(0.3, 0.045, 0.03),
                     seed=5,
                     use=BARN,
@@ -311,6 +362,7 @@ struct VillageParameters(Copyable, Movable):
                     TIMBER_FRAMED,
                     Length(2.6, METER),
                     Angle(48.0, DEGREE),
+                    roof=Vector3(1.0, 0.9, 0.78),
                     trim=Vector3(0.02, 0.04, 0.09),
                     seed=11,
                 ),
@@ -330,10 +382,11 @@ struct VillageParameters(Copyable, Movable):
                     Angle(45.0, DEGREE),
                     trim=Vector3(0.09, 0.05, 0.015),
                     seed=13,
+                    covering=THATCH,
                 ),
                 2,
                 -32,
-                Angle(70.0, DEGREE),
+                Angle(0.0, DEGREE),
             ),
         ]
         self.props = default_props()
@@ -342,6 +395,7 @@ struct VillageParameters(Copyable, Movable):
             ref placed = self.houses[index]
             if hearthed(placed.house):
                 self.props.append(woodpile_by(placed))
+        self.shore = ShoreParameters()
         self.scan_x = 22
         self.scan_z = -78
         self.scan_turn = Angle(28.0, DEGREE)
@@ -354,7 +408,7 @@ struct VillageParameters(Copyable, Movable):
         """Refuse a village that cannot be built.
 
         Raises:
-            Error: If the meadow, a house or a prop is refused; there are
+            Error: If the meadow, a house, a prop or the shore is refused; there are
                 not from 0 to 64 houses or from 0 to 1,000 props; a house or
                 the scanned building stands
                 further than 10 kilometers away; a water resolution is not
@@ -373,6 +427,7 @@ struct VillageParameters(Copyable, Movable):
         )
         for prop in self.props:
             prop.check()
+        self.shore.check()
         for index in range(len(self.houses)):
             ref placed = self.houses[index]
             placed.house.check()
@@ -394,17 +449,28 @@ struct VillageParameters(Copyable, Movable):
         )
 
 
-def default_props() -> List[Prop]:
+def default_props() raises -> List[Prop]:
     """Return the props of the default village.
 
     Returns:
-        A well by the trail with a bench beside it; barrels, crates and
-        hay bales before the barn; a fenced garden behind the stone
-        cottage; and a bench before the framed house.
+        A green round the well, with a bench, a trough, a handcart, a
+        signpost where the paths meet the trail, and three lamp posts;
+        barrels, crates and hay bales before the barn, and a hedge
+        between the barn's yard and the green; a fenced garden behind the
+        stone cottage, with a gate, three beds of cabbages and a
+        scarecrow, and a washing line beside it; a bench before the
+        framed house; and a pen for the sheep and the goat east of the
+        trail, with a gate toward it and a trough in it.
     """
     return [
         Prop(WELL, 4, -18, Angle(20.0, DEGREE), 0.8),
         Prop(BENCH, 4.5, -15.6, Angle(10.0, DEGREE), 1.6),
+        Prop(TROUGH, 6.2, -20.4, Angle(20.0, DEGREE), 1.6),
+        Prop(CART, -1.5, -14.5, Angle(35.0, DEGREE), 1.4),
+        Prop(SIGNPOST, 5.5, -11, Angle(-60.0, DEGREE), 2.2),
+        Prop(LAMP_POST, -3.5, -20, Angle(0.0, DEGREE), 2.6),
+        Prop(LAMP_POST, 4.5, -26.5, Angle(90.0, DEGREE), 2.6),
+        Prop(LAMP_POST, 13.8, -20.5, Angle(180.0, DEGREE), 2.6),
         Prop(BARREL, -11, -52.2, Angle(0.0, DEGREE), 0.3),
         Prop(BARREL, -11.7, -52.6, Angle(30.0, DEGREE), 0.3),
         Prop(BARREL, -11.2, -51.5, Angle(60.0, DEGREE), 0.3),
@@ -412,10 +478,23 @@ def default_props() -> List[Prop]:
         Prop(CRATE, -2.6, -52.6, Angle(-15.0, DEGREE), 0.6),
         Prop(HAY_BALE, 2.5, -55, Angle(30.0, DEGREE), 1.1),
         Prop(HAY_BALE, 2.9, -53.9, Angle(25.0, DEGREE), 1.1),
+        Prop(HEDGE, -13, -41, Angle(0.0, DEGREE), 14),
         Prop(FENCE, -12, 15, Angle(0.0, DEGREE), 6),
         Prop(FENCE, -15, 13, Angle(90.0, DEGREE), 4),
         Prop(FENCE, -9, 13, Angle(90.0, DEGREE), 4),
+        Prop(FENCE, -13.75, 11, Angle(0.0, DEGREE), 2.5),
+        Prop(FENCE, -9.75, 11, Angle(0.0, DEGREE), 1.5),
+        Prop(CROPS, -12, 13.6, Angle(0.0, DEGREE), 4.6),
+        Prop(SCARECROW, -10, 12, Angle(15.0, DEGREE), 1.8),
+        Prop(WASHING_LINE, -17, 7, Angle(90.0, DEGREE), 4),
         Prop(BENCH, 16.3, -21.5, Angle(-80.0, DEGREE), 1.6),
+        # The sheep's pen, with its gate toward the trail.
+        Prop(FENCE, 15, 11, Angle(0.0, DEGREE), 14),
+        Prop(FENCE, 15, -3, Angle(0.0, DEGREE), 14),
+        Prop(FENCE, 22, 4, Angle(90.0, DEGREE), 14),
+        Prop(FENCE, 8, 0.5, Angle(90.0, DEGREE), 7),
+        Prop(FENCE, 8, 9, Angle(90.0, DEGREE), 4),
+        Prop(TROUGH, 20.5, 8, Angle(90.0, DEGREE), 1.6),
     ]
 
 
@@ -470,6 +549,157 @@ def _require_near(x: Float32, z: Float32, what: String) raises:
     require_between(z, -1.0e4, 1.0e4, what + " must stand within 10 kilometers")
 
 
+def pond_basin(ground: Ground) raises -> Basin:
+    """Return the basin that a ground's pond holds its water in.
+
+    The water's bed then follows the ground's own: level in the middle,
+    rising to the shore, and standing above the water at the rim.
+
+    Args:
+        ground: The ground.
+
+    Returns:
+        The pond's basin, or no basin for ground with no pond.
+
+    Raises:
+        Error: If the pond cannot be a basin.
+    """
+    ref pond = ground.pond
+    var radius = pond.radius.to(METER)
+    if radius <= 0:
+        return Basin()
+    var level = ground.water_level()
+    var x = pond.x.to(METER)
+    var z = pond.z.to(METER)
+    # The rim is the ground round the basin, above the water by at least
+    # its freeboard.
+    var rim = Float32(0)
+    for k in range(8):  # pragma: no branch
+        var a = Float32(k) * 0.7853982
+        rim += max(
+            ground.hills_at(x + radius * cos(a), z + radius * sin(a)) - level,
+            POND_FREEBOARD,
+        )
+    return Basin(
+        pond.x,
+        pond.z,
+        pond.radius,
+        pond.depth,
+        POND_FLAT,
+        Length(min(rim / 8, Float32(10)), METER),
+    )
+
+
+def lamp_places(
+    parameters: VillageParameters,
+    houses: List[StandingHouse],
+    ground: Ground,
+) raises -> List[Vector3]:
+    """Return where the village's lamps burn: by the front door of each
+    dwelling, and in each lamp post's lantern.
+
+    Args:
+        parameters: The village's houses and props.
+        houses: The houses as they stand, in the order of `parameters`.
+        ground: The ground.
+
+    Returns:
+        The lamps, the doors' first, at most `GAME_LAMPS`.
+
+    Raises:
+        Error: If a dwelling has no door that leads outside.
+    """
+    var places = List[Vector3]()
+    for index in range(len(houses)):
+        if parameters.houses[index].house.use == BARN:
+            continue
+        var door = houses[index].interior.front_door()
+        var middle = Vector3(
+            door.hinge_x + door.along_x * door.width / 2,
+            door.bottom + door.height - 0.15,
+            door.hinge_z + door.along_z * door.width / 2,
+        )
+        # The lantern hangs beside the door, out from the wall: the door
+        # swings in.
+        places.append(
+            middle
+            + Vector3(door.along_x, 0, door.along_z) * (door.width / 2 + 0.25)
+            - Vector3(door.swing_x, 0, door.swing_z) * 0.35
+        )
+    for prop in parameters.props:
+        if prop.kind != LAMP_POST:
+            continue
+        var turn = prop.turn.to(RADIAN)
+        places.append(
+            Vector3(
+                prop.x + 0.38 * cos(turn),
+                ground.height_at(prop.x, prop.z) + prop.length - 0.25,
+                prop.z - 0.38 * sin(turn),
+            )
+        )
+    while len(places) > GAME_LAMPS:
+        _ = places.pop()
+    return places^
+
+
+def chimney_tops(
+    scene: Scene, houses: List[StandingHouse]
+) raises -> List[Vector3]:
+    """Return the top of each house's chimney pot, in the world.
+
+    Args:
+        scene: The scene, updated.
+        houses: The houses as they stand.
+
+    Returns:
+        One top a house with a chimney, in the order of `houses`.
+
+    Raises:
+        Error: If the scene is stale.
+    """
+    var tops = List[Vector3]()
+    for index in range(len(houses)):
+        ref house = houses[index]
+        if house.chimney:
+            tops.append(scene.local_to_world(house.root, house.chimney.value()))
+    return tops^
+
+
+def _hang_lamps(
+    mut scene: Scene,
+    parameters: VillageParameters,
+    houses: List[StandingHouse],
+    ground: Ground,
+) raises -> NodeId:
+    """Add a warm point light at each lamp, under one node hidden by day,
+    and return the node."""
+    var root = Object3D()
+    root.visible = False
+    var lamps = scene.add(root^)
+    for at in lamp_places(parameters, houses, ground):
+        var node = Object3D()
+        node.set_position(at.x, at.y, at.z)
+        node.parent = lamps
+        var bulb = scene.add(node^)
+        scene.add_light(
+            point_light(
+                LAMP_COLOR, bulb, LAMP_INTENSITY, PHYSICAL_DECAY, LAMP_REACH
+            )
+        )
+    return lamps
+
+
+def _fill_pond(mut water: WaterScene, ground: Ground) raises:
+    """Give the water its pond's basin, and lay its ripple window over the
+    pond."""
+    water.basin = pond_basin(ground)
+    ref pond = ground.pond
+    var radius = pond.radius.to(METER)
+    water.place_ripples(
+        pond.x, pond.z, Length(min(2 * radius + 1, Float32(200)), METER)
+    )
+
+
 struct Village(Movable):
     """The village in a scene: its meadow, its buildings and its pond."""
 
@@ -484,10 +714,31 @@ struct Village(Movable):
     var doors: Doors
     # The props, and what of them stops a character.
     var props: StandingProps
+    # The reeds, the stones and the lily pads at the pond.
+    var shore: StandingShore
     # The lot of the scanned building, if the village has one.
     var scanned: Optional[Lot]
     # The houses' materials, which the props wear too.
     var looks: HouseLooks
+    # What finishes the pond's water: the mirrored village, the fog and
+    # the stars.
+    var look: PondLook
+    var chimneys: List[Vector3]
+    """The top of each chimney's pot, in the world, in the order of the
+    houses that have one."""
+    var wind: Vector3
+    """The wind that carries the chimneys' smoke, in meters a second."""
+    var weathered: List[MaterialId]
+    """The materials that the weather wets and the snow covers: the
+    walls', the wood's and the stone's, the roofs', the grass's and the
+    ground's."""
+    var roofs: Int
+    """How many of `weathered`, from its start, are walls and wood, which
+    the rain darkens but no snow covers."""
+    var lamps: NodeId
+    """The node of the lamps' lights: a light at each dwelling's door
+    lantern and at each lamp post, at most `GAME_LAMPS`. It is hidden by
+    day."""
 
     def __init__(
         out self,
@@ -553,6 +804,9 @@ struct Village(Movable):
                 self.doors.add(hinge, standing.interior.doorways[hinge.door])
             self.houses.append(standing^)
         self.props = stand_props(scene, assets, looks, parameters.props, ground)
+        self.shore = stand_shore(
+            scene, assets, looks, parameters.shore, ground, meadow.lots
+        )
         self.scanned = None
         if scan:
             self.scanned = stand_scan(
@@ -563,7 +817,25 @@ struct Village(Movable):
                 parameters.scan_turn,
                 ground,
             )
+        self.lamps = _hang_lamps(scene, parameters, self.houses, ground)
+        self.weathered = [
+            looks.brick,
+            looks.fieldstone,
+            looks.plaster,
+            looks.boards,
+            looks.wood,
+            looks.ashlar,
+            looks.tiles,
+            looks.slates,
+            looks.thatch,
+            self.meadow.grass,
+            self.meadow.wood_still,
+        ]
+        self.roofs = 6
         scene.update()
+        self.chimneys = chimney_tops(scene, self.houses)
+        var heading = meadow.wind.heading.to(RADIAN)
+        self.wind = Vector3(cos(heading), 0, sin(heading)) * SMOKE_DRIFT
         self.water = WaterScene(
             parameters.ocean,
             parameters.caustic_grid,
@@ -576,6 +848,8 @@ struct Village(Movable):
         )
         self.bed = bed^
         self.level = Length(ground.water_level(), METER)
+        _fill_pond(self.water, ground)
+        self.look = PondLook()
 
     def terrain(self) -> Terrain:
         """Return what carries and stops a character in the village.
@@ -660,20 +934,123 @@ struct Village(Movable):
         self.water.advance(Duration(max(Float32(0), later), SECOND), False)
         return self.meadow.update(scene, assets, camera, time)
 
+    def smoke(self, seconds: Float32) -> List[Puff]:
+        """Return the puffs of smoke over every chimney at a time.
+
+        Args:
+            seconds: The time, in seconds.
+
+        Returns:
+            `SMOKE_PUFFS` puffs for each chimney.
+        """
+        var puffs = List[Puff]()
+        for index in range(len(self.chimneys)):
+            puffs.extend(
+                chimney_smoke(self.chimneys[index], seconds, self.wind, index)
+            )
+        return puffs^
+
+    def keep_hour(mut self, mut scene: Scene, day: DayCycle) raises:
+        """Set the village for an hour, for a still: the sun or the moon,
+        the lamps and the windows.
+
+        Call it before `update`. The meadow's sun sets its lights again in
+        `update`, so scale the lights for the hour after it, with
+        `DayCycle.light`.
+
+        Args:
+            scene: The scene.
+            day: The hour.
+
+        Raises:
+            Error: If a node is missing, or the sun is not above the
+                horizon.
+        """
+        var toward = day.sun_toward()
+        scene.node(self.meadow.sun.node).set_position(
+            toward.x * 100, toward.y * 100, toward.z * 100
+        )
+        self.water.set_sun(toward)
+        var lamps = day.daylight() < 0.5
+        for index in range(len(self.houses)):  # pragma: no branch
+            ref house = self.houses[index]
+            scene.node(house.lit).visible = lamps
+            scene.node(house.daylit).visible = not lamps
+        scene.node(self.props.lit).visible = lamps
+        scene.node(self.props.daylit).visible = not lamps
+        scene.node(self.lamps).visible = lamps
+        scene.update()
+
+    def weather_surfaces(
+        self, mut assets: Assets, wet: Float32, snowed: Float32, light: Float32
+    ) raises:
+        """Darken the village's surfaces as the rain soaks them, and
+        whiten its roofs, its grass and its ground under snow.
+
+        A soaked surface keeps `1 - SOAKED` of its light. Snow shines with
+        the light of the day: its white is the material's emissive color,
+        at `light` of its strength, so it dims at night.
+
+        Args:
+            assets: The stores: the materials' colors and emissive light
+                are set.
+            wet: How wet the village is, from 0 to 1.
+            snowed: How much snow lies on it, from 0 to 1.
+            light: How much of the day's light the snow catches, from 0 to
+                1.
+
+        Raises:
+            Error: If a value is not from 0 to 1.
+        """
+        for value in [wet, snowed, light]:
+            if not (value >= 0 and value <= 1):
+                raise Error("A surface's weather must be from 0 to 1")
+        var gray = UInt8(Int(255 * (1 - SOAKED * wet) + 0.5))
+        for index in range(len(self.weathered)):  # pragma: no branch
+            ref m = assets.materials.materials[self.weathered[index].value]
+            m.color = Color(gray, gray, gray)
+            if index < self.roofs:
+                continue
+            m.emissive = SNOW_WHITE
+            m.emissive_intensity = SNOW_SHINE * snowed * light
+
+    def splash(
+        mut self, x: Float32, z: Float32, radius: Length, strength: Float32
+    ) raises:
+        """Ripple the pond at a point on the next `update`.
+
+        A point out of the pond's ripple window is let go.
+
+        Args:
+            x: The point's x, in meters.
+            z: The point's z, in meters.
+            radius: The drop's radius, from 0 to 10 meters.
+            strength: How far the drop pulls the water down, from 0 to 1.
+
+        Raises:
+            Error: If the point is not finite, or a value is out of range.
+        """
+        self.water.splash(Length(x, METER), Length(z, METER), radius, strength)
+
     def render(
         mut self,
         mut renderer: Renderer,
         scene: Scene,
         assets: Assets,
         camera: PerspectiveCamera,
+        day: Optional[DayCycle] = None,
     ) raises -> Framebuffer:
-        """Draw the scene and compose the pond's water into it.
+        """Draw the scene and compose the pond's water into it, mirror the
+        village and the stars in the water, and smoke the chimneys.
 
         Args:
             renderer: The renderer.
             scene: The scene, updated for the frame.
             assets: The stores.
             camera: The camera of the frame.
+            day: The hour, for its night sky, its stars and its darker
+                water. None draws the meadow's afternoon. Set the hour's
+                light first with `keep_hour`.
 
         Returns:
             The picture.
@@ -682,6 +1059,32 @@ struct Village(Movable):
             Error: If the scene cannot be drawn, or the camera is not a
                 centered perspective camera above the water.
         """
-        var image = renderer.render(scene, assets, camera)
+        # The water is composed into each sample before they are averaged:
+        # composed after, a grass blade that covers one sample of a pixel
+        # keeps the whole pixel from the water, and shows as a dark line.
+        var image = renderer.supersampled().render(
+            scene, assets, camera
+        ) if renderer.antialias else renderer.render(scene, assets, camera)
+        var before = image.depth.copy()
         _ = self.water.compose(image, scene, camera, self.level, self.bed)
+        var stars = Float32(0)
+        var light = Float32(1)
+        if day:
+            ref hour = day.value()
+            var share = hour.water_light()
+            if share < 1:
+                dim_water(image, before, share)
+            stars = hour.night_look(camera, 1).stars
+            light = 0.2 + 0.8 * hour.daylight()
+        self.look.clock = self.water.clock.to(SECOND)
+        _ = self.look.apply(
+            image, before, camera, self.level, FogView(scene.fog), stars
+        )
+        if day:
+            day.value().night_sky(image, camera, 1)
+        _ = draw_puffs(
+            image, self.smoke(self.water.clock.to(SECOND)), camera, light
+        )
+        if renderer.antialias:
+            return downsample(image, SUPERSAMPLE)
         return image^

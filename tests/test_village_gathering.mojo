@@ -24,6 +24,8 @@ from extensions.village.gathering import (
     Gathering,
     HERBS,
     KINDS,
+    SEAL,
+    SPOT_KINDS,
     LID_OPEN,
     MUSHROOMS,
     ORE,
@@ -58,9 +60,10 @@ def test_the_kinds_are_named_and_checked() raises:
     assert_equal(kind_name(CHEST), "coins")
     assert_equal(kind_name(TRINKET), "trinkets")
     assert_equal(kind_name(FISH), "fish")
+    assert_equal(kind_name(SEAL), "seals")
     assert_true(respawns(FISH))
     assert_equal(solid_radius(FISH), 0)
-    with assert_raises(contains="one of the seven"):
+    with assert_raises(contains="one of the eight"):
         _ = kind_name(GatherKind(9))
     # A chest and a trinket are found once; the rest come back.
     assert_false(respawns(CHEST))
@@ -76,8 +79,10 @@ def test_the_kinds_are_named_and_checked() raises:
 
 def test_a_spot_and_a_satchel_are_checked() raises:
     Spot(HERBS, 3, -4, Angle(0.0, RADIAN)).check()
-    with assert_raises(contains="one of the seven"):
-        Spot(GatherKind(7), 0, 0, Angle(0.0, RADIAN)).check()
+    with assert_raises(contains="one of the eight"):
+        Spot(GatherKind(8), 0, 0, Angle(0.0, RADIAN)).check()
+    with assert_raises(contains="bandit"):
+        Spot(SEAL, 0, 0, Angle(0.0, RADIAN)).check()
     with assert_raises(contains="10 kilometers"):
         Spot(HERBS, 2.0e4, 0, Angle(0.0, RADIAN)).check()
     with assert_raises(contains="10 kilometers"):
@@ -88,11 +93,11 @@ def test_a_spot_and_a_satchel_are_checked() raises:
     satchel.counts[HERBS.value] = 1
     assert_equal(satchel.count(ORE), 2)
     assert_equal(satchel.total(), 3)
-    with assert_raises(contains="one of the seven"):
-        _ = satchel.count(GatherKind(7))
+    with assert_raises(contains="one of the eight"):
+        _ = satchel.count(GatherKind(8))
     # The default village has a spot of every kind.
     var spots = default_spots()
-    for k in range(KINDS):
+    for k in range(SPOT_KINDS):
         var found = False
         for spot in spots:
             if spot.kind.value == k:
@@ -108,7 +113,7 @@ def _spots() -> List[Spot]:
     """Return a spot of each kind in a row along x, 4 meters apart, and
     two more trinkets, so both gems are drawn."""
     var out = List[Spot]()
-    for k in range(KINDS):
+    for k in range(SPOT_KINDS):
         out.append(Spot(GatherKind(k), Float32(4 * k), 0, Angle(0.5, RADIAN)))
     out.append(Spot(TRINKET, 28, 0, Angle(0.0, RADIAN)))
     out.append(Spot(TRINKET, 32, 0, Angle(0.0, RADIAN)))
@@ -130,7 +135,7 @@ def test_every_kind_is_drawn_and_the_solid_ones_stop() raises:
     var assets = Assets()
     var scene = Scene()
     var gathering = _gathering(scene, assets, _spots())
-    assert_equal(len(gathering.spots), KINDS + 2)
+    assert_equal(len(gathering.spots), SPOT_KINDS + 2)
     assert_true(gathering.triangles > 1000)
     assert_equal(gathering.meshes, len(scene.meshes))
     assert_equal(gathering.focus, -1)
@@ -190,7 +195,7 @@ def test_a_gathering_refuses_a_bad_spot_reach_or_respawn() raises:
     var looks = house_looks(assets, 4, 1)
     var bad = GatherParameters()
     bad.spots = [Spot(GatherKind(12), 0, 0, Angle(0.0, RADIAN))]
-    with assert_raises(contains="one of the seven"):
+    with assert_raises(contains="one of the eight"):
         _ = Gathering(scene, assets, looks, bad, Ground(), List[Lot]())
     var far = GatherParameters()
     far.reach = Length(-1.0, METER)
@@ -323,6 +328,26 @@ def test_a_boulder_takes_strikes_and_a_chest_opens_once() raises:
     assert_equal(gathering.satchel.total(), 2 + CHEST_COINS + 1)
 
 
+def test_a_spot_used_up_in_a_game_before_stays_used() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var gathering = _gathering(scene, assets, _spots())
+    assert_equal(len(gathering.spent()), 0)
+    # The chest and the first trinket were used up; a place that is no
+    # spot is let go.
+    gathering.spend(scene, 4)
+    gathering.spend(scene, 5)
+    gathering.spend(scene, 99)
+    gathering.spend(scene, -1)
+    var spent = gathering.spent()
+    assert_equal(len(spent), 2)
+    assert_equal(spent[0], 4)
+    assert_false(scene.node(gathering.spots[5].node).visible)
+    # A herb used up comes back, so it is not kept as spent.
+    gathering.spend(scene, 0)
+    assert_equal(len(gathering.spent()), 2)
+
+
 def test_a_trinket_bobs_and_turns() raises:
     var assets = Assets()
     var scene = Scene()
@@ -355,6 +380,7 @@ def test_a_fish_is_cast_for_waited_on_and_hooked() raises:
     assert_false(_press(gathering, scene, shore))
     assert_equal(gathering.spots[6].phase, WAITING)
     assert_true(scene.node(hinge).visible)
+    assert_equal(len(gathering.biting(scene)), 0)
     assert_true(gathering.spots[6].timer >= 2)
     # Reel in before it bites: nothing.
     assert_false(_press(gathering, scene, shore))
@@ -368,6 +394,13 @@ def test_a_fish_is_cast_for_waited_on_and_hooked() raises:
         waited += 1
     assert_equal(gathering.spots[6].phase, BITING)
     assert_true(scene.node(hinge).position.y < gathering.water - foot)
+    # A biting fish jerks its float, where the float lies.
+    scene.update()
+    var bites = gathering.biting(scene)
+    assert_equal(len(bites), 1)
+    var floating = scene.world_position(hinge)
+    assert_almost_equal(bites[0].x, floating.x, atol=1e-6)
+    assert_almost_equal(bites[0].z, floating.z, atol=1e-6)
     # Hook it.
     assert_true(_press(gathering, scene, shore))
     assert_equal(gathering.satchel.count(FISH), 1)

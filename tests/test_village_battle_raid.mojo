@@ -55,6 +55,7 @@ from extensions.village.combat import (
 from extensions.village.combos import SUNDER
 from extensions.village.party import TAUNT_EVERY
 from extensions.village.foes import CIRCLING
+from extensions.village.raid import RISE_SECONDS
 from extensions.village.raid import (
     REVIVE_SHARE,
     RISE_SECONDS,
@@ -386,6 +387,13 @@ def test_the_raids_blows_and_heals_pass_by_the_fallen_and_the_far() raises:
     arena.battle.wardens[0].boss.zone = Zone(
         CIRCLE, Vector3(0, 0, 0), Vector3(0, 0, 1), 30, 0
     )
+    # A standing player in the zone is struck, and the display marks the
+    # way to the warden.
+    arena.battle._zone_strikes(arena.scene, 0, arena.player)
+    assert_true(len(arena.battle.hurts) > 0)
+    var from_warden = arena.battle.hurts[len(arena.battle.hurts) - 1].source
+    var warden_at = arena.battle.wardens[0].character.position
+    assert_true((from_warden - warden_at).length() < 1.0e-4)
     # A zone passes by a fallen player, a fallen raider and one who left.
     arena.battle.fighter.health = 0
     arena.battle.fighter.move = FALL
@@ -654,6 +662,23 @@ def test_the_companion_casts_at_the_warden_in_its_fight() raises:
     assert_equal(arena.battle.ally_target(Vector3(0, 0, 0)), warden)
     arena.battle.wardens[0].boss.health = 0
     assert_equal(arena.battle.ally_target(Vector3(0, 0, 0)), -1)
+
+
+def test_a_fallen_companion_lies_still_while_a_warden_fights() raises:
+    var arena = Arena(arena_parameters(0, 0, 30, ally=True, raid=True))
+    arena.tick(no_input())
+    # A warden is a danger, and the village's people run from it.
+    assert_equal(len(arena.battle.dangers()), 1)
+    # A blow on the warden is a blow on a foe: the game hears it.
+    assert_equal(
+        arena.battle.foes_health(), arena.battle.wardens[0].boss.health
+    )
+    arena.battle.allies[0].fighter.health = 0
+    arena.battle.allies[0].fighter.move = FALL
+    for _ in range(Int(RISE_SECONDS * 20) + 20):
+        arena.battle.wardens[0].boss.engaged = True
+        arena.tick(no_input())
+    assert_true(arena.battle.allies[0].down > RISE_SECONDS)
 
 
 def main() raises:

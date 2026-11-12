@@ -28,6 +28,9 @@ from extensions.building.model import Element, Furnishing, Opening, Space
 from extensions.topology.arrangement import Point2
 from extensions.vegetation.ground import Canyon, Ground
 from extensions.village.house import (
+    SLATES,
+    THATCH,
+    TILES,
     BARN,
     BOARDED,
     BRICK_FACADE,
@@ -56,10 +59,18 @@ from extensions.village.house_view import (
     outside_shade,
     painted,
     roof_shade,
+    roof_tile,
     stand_house,
+    window_lit,
 )
 from extensions.village.dressing import FLAME
-from extensions.village.surfaces import HouseLooks, house_looks
+from extensions.village.surfaces import (
+    HouseLooks,
+    SLATE_TILE,
+    THATCH_TILE,
+    TILE_TILE,
+    house_looks,
+)
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from std.math import pi, sin, sqrt
@@ -190,11 +201,12 @@ def test_every_facade_stands_with_its_doors_on_hinges() raises:
         var standing = stand_house(
             scene, assets, looks, house, model, lot, _flat()
         )
-        # Seven sheets of the shell, six of the inside, the windows'
-        # lamplight, their panes by night and by day, and a leaf for each
-        # of the two doors.
-        assert_equal(standing.meshes, 18)
-        assert_equal(len(scene.meshes), 18)
+        # Six sheets of the shell, six of the inside, the windows' and
+        # the door lantern's lamplight, their panes by night and by day,
+        # and a leaf for each of the two doors. The lantern's glass shows
+        # with the lamplight, or with the panes by day.
+        assert_equal(standing.meshes, 17)
+        assert_equal(len(scene.meshes), 17)
         assert_true(scene.node(standing.daylit).visible)
         # The lamplight hangs hidden from a node of its own.
         assert_false(scene.node(standing.lit).visible)
@@ -364,7 +376,7 @@ def test_a_wide_window_on_a_framed_wall_and_doors_upstairs() raises:
     var standing = stand_house(scene, assets, looks, house, model, lot, _flat())
     assert_equal(len(standing.hinges), 2)
     # The upstairs door has a leaf too.
-    assert_equal(standing.meshes, 19)
+    assert_equal(standing.meshes, 18)
 
 
 def test_a_boarded_house_with_no_openings() raises:
@@ -671,6 +683,35 @@ def test_a_house_is_dressed_by_its_facade() raises:
     var level = Scene()
     _ = _stand(level, assets, looks, flat)
     assert_false(_has_color(level, assets, looks.plaster, ZINC))
+
+
+def test_a_thatched_roof_wears_the_thatch_and_some_windows_stay_dark() raises:
+    assert_equal(roof_tile(TILES), TILE_TILE)
+    assert_equal(roof_tile(SLATES), SLATE_TILE)
+    assert_equal(roof_tile(THATCH), THATCH_TILE)
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    var scene = Scene()
+    var house = _house(7, 1, TIMBER_FRAMED)
+    house.covering = THATCH
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    _ = stand_house(
+        scene, assets, looks, house, house_model(house), lot, _flat()
+    )
+    var thatched = False
+    for mesh in scene.meshes:
+        if mesh.material == looks.thatch:
+            thatched = True
+    assert_true(thatched)
+    # About `LIT_WINDOWS` of the windows glow at night; the same window
+    # always does, or never.
+    var lit = 0
+    for k in range(400):
+        var corner = Vector3(Float32(k % 20) * 0.7, 1.2, Float32(k // 20) * 0.9)
+        if window_lit(corner, 3):
+            lit += 1
+        assert_equal(window_lit(corner, 3), window_lit(corner, 3))
+    assert_true(lit > 220 and lit < 340)
 
 
 def main() raises:

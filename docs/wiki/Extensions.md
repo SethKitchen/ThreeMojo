@@ -16,15 +16,21 @@ The animals subject ports procedural-animals: 24 species sculpted as distance fi
 
 The building subject generates buildings for engineering analysis and for games from one canonical model. It has shared numerics, a cell complex, the building model, IFC exchange and procedural towers and interiors. Frame, shell and energy analysis read the same model. See [Why buildings have one canonical model](Why-buildings-have-one-canonical-model).
 
-The scan subject reads splat scans of real places, in SOG and other formats, and puts them in meters with z up. It fills an occupancy grid that gives a static collider, and cuts the grid into parts to weigh, simulate and use again. It also cleans a scan and walks a physics capsule through it. The building subject fits a building model of a reusable construction kit to the grid, and takes the gravity load down its walls. A pinned manifest downloads the scans, and a GPU draws one at 50 frames a second at 1920 by 1080. See [Scanned buildings](Scanned-buildings), [Scan parts](Scan-parts), [Cleaning and orienting scans](Cleaning-and-orienting-scans), [Walking through a scan](Walking-through-a-scan) and [GPU splats](GPU-splats).
+The scan subject reads splat scans of real places, in SOG and other formats, and puts them in meters with z up. It fills an occupancy grid that gives a static collider, and cuts the grid into parts to weigh, simulate and use again. It also cleans a scan, walks a physics capsule through it, and makes a scan of any rendered scene. The building subject fits a building model of a reusable construction kit to the grid, and takes the gravity load down its walls. A pinned manifest downloads the scans, and a GPU draws one at 50 frames a second at 1920 by 1080. See [Scanned buildings](Scanned-buildings), [Scan parts](Scan-parts), [Cleaning and orienting scans](Cleaning-and-orienting-scans), [Walking through a scan](Walking-through-a-scan), [GPU splats](GPU-splats) and [Virtual scans](Virtual-scans).
+
+The castle subject builds a moated brick castle from a plan and draws it under the sun of a date and an hour. It ships the plan of Wijnendale Castle in West Flanders. It checks the wind on its donjon, the arch of its bridge, its quay wall, the water of its moat and its shadows. See [Castle](Castle) and [Castle analysis](Castle-analysis). The castle also stands in a [landscape](Landscape) of mountains, woods and lakes, beside a church that was scanned as Gaussian splats.
 
 The geotech subject analyzes earth-retaining walls: earth and water pressure, LRFD stability and slip circles. The visual subject draws engineering results with meshes, labels and textures. See [Retaining walls](Retaining-walls) and [Engineering views](Engineering-views).
+
+The chemistry subject is a library for the steps of a process. It models the thermodynamic, phase, kinetic, physical and engineering requirements that turn a material into a product. Each step has an operating window, and new constraints and data plug in. It also solves equilibria, draws process maps and solves flowsheets. See [Process chemistry](Process-chemistry) and [Why a process runs where it does](Why-a-process-runs-where-it-does).
 
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
 The gamepad subject ports the gamepad subsystem of SDL. It reads Xbox, PlayStation, Nintendo and other controllers on Linux and through a host's own gamepad API, and names their controls by position. It runs their rumble, lights, motion sensors and touchpads. See [Gamepads](Gamepads).
 
-The Streamline subject types NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction: modes, presets, options, per-frame constants and buffer checks. It has a CPU fallback upscaler. It does not run DLSS yet. See [Streamline](Streamline).
+The warp subject ports WarpFactory. It finds the stress-energy tensor that a warp drive metric needs, and checks the energy conditions. It adds exact derivatives, more metrics, energy totals, curvilinear grids and geodesics. See [Warp drives](Warp-drives).
+
+The Streamline subject types NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction: modes, presets, options, per-frame constants and buffer checks. It has a CPU fallback upscaler, and a native Windows host that runs both features through `sl.interposer`. See [Streamline](Streamline).
 
 See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee) and [Muscles](Muscles). See [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves), [Integument](Integument), [Leg](Leg) and [Foot](Foot).
 
@@ -158,6 +164,18 @@ extensions/
     agents*.mojo, navigation*.mojo               agents and walker navigation
     recorder*.mojo, replayer*.mojo               the recorder
     town.mojo, render_*.mojo, camera_render.mojo rendering
+  castle/
+    kinds.mojo                             materials, roof kinds and provenance
+    plan.mojo, wijnendale.mojo             the plan, and the plan of Wijnendale
+    masonry.mojo                           masonry strength and stiffness
+    wind.mojo, arch.mojo                   wind on the donjon, arch limit analysis
+    moat_wall.mojo, moat_water.mojo        the quay wall and the water of the moat
+    sun.mojo, shadow.mojo                  the sun over the site and its shadows
+    parts.mojo, render.mojo                the mesh view of a plan
+    look.mojo, textures.mojo               the materials and their maps
+    reflect.mojo, sky.mojo, scene.mojo     the moat as a mirror, the sky, the scene
+    trees.mojo, crowns.mojo, forest.mojo   trees, far crowns and woods
+    landscape.mojo, landscape_mesh.mojo    the ground from meadow to mountains
   streamline/
     kinds.mojo      modes, presets and buffer kinds
     options.mojo    the options of Super Resolution and Ray Reconstruction
@@ -166,6 +184,49 @@ extensions/
     constants.mojo  the per-frame constants from two cameras
     tags.mojo       the check of a frame's tagged buffers
     upscaler.mojo   the upscaler trait and a CPU fallback
+    bundle.mojo     the frames that the native host reads, and its result
+    native/         the Direct3D 12 host and its build script, for Windows
+  warp/
+    kinds.mojo, quantities.mojo, grid.mojo     kinds, units and the grid
+    tensor.mojo, three_plus_one.mojo           tensor fields and the 3+1 split
+    metrics.mojo, warp_shell.mojo              the metrics of WarpFactory
+    natario.mojo, krasnikov.mojo               more metrics
+    fell_heisenberg.mojo                       the positive-energy soliton
+    curvilinear.mojo                           spherical and cylindrical metrics
+    derivatives.mojo, solver.mojo              the Einstein equations
+    gpu.mojo                                   the Einstein equations on a GPU
+    jet.mojo, analytic.mojo                    exact derivatives
+    frame.mojo, conditions.mojo, scalars.mojo  the analysis
+    totals.mojo, geodesics.mojo                totals, geodesics, the passenger view
+    flow.mojo, evaluation.mojo, plot.mojo      flow lines, one call, planes
+  chemistry/
+    quantities.mojo       molar values, amounts, pressures, angstroms
+    kinds.mojo            phases, requirement kinds, checks and hazards
+    elements.mojo         elements, atomic weights, formulas and their parser
+    thermo.mojo           NASA-7, NASA-9 and Shomate fits, species, substances
+    chemkin.mojo          CHEMKIN thermo files, read and written
+    cea.mojo              a reader for NASA CEA thermo.inp files
+    fitting.mojo          NASA-7 fits to tabulated data
+    catalog.mojo          built-in substances
+    reaction.mojo         reactions, their driving force, equilibria, uncertainty
+    requirement.mojo      the Constraint trait and the built-in requirements
+    window.mojo           operating windows for any constraint
+    step.mojo             process steps and their reports
+    equilibrium.mojo      multiphase chemical equilibrium
+    maps.mojo             scans, Ellingham diagrams and predominance maps
+    kinetics.mojo         Arrhenius rates and the shrinking core
+    transport.mojo        evaporation, case depth and heating time
+    electrochemistry.mojo cell voltages, Faraday's law and cell energy
+    optics.mojo           the color of a thin film on a metal
+    solution.mojo         binary solutions and their phase boundaries
+    balance.mojo          stream enthalpies and heat duties
+    flowsheet.mojo        units joined by streams, with recycle
+    routes.mojo           the search for reaction routes
+    materials.mojo        expansion curves, melting points, eutectics
+    coating.mojo          coating stress, peeling, buckling and thermal shock
+    crystal.mojo          a CIF reader, unit cells and bonds
+    plot.mojo             chart axes for process figures
+    processes/            worked processes: titanium, diamond and lime
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.

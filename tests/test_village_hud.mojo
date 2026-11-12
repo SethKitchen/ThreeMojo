@@ -17,10 +17,12 @@ from extensions.village.gathering import (
     HERBS,
     MUSHROOMS,
     ORE,
+    SEAL,
     Satchel,
     TRINKET,
 )
 from extensions.village.hud import (
+    draw_vignette,
     GOLD_TEXT,
     NOTE_SECONDS,
     Rgb,
@@ -41,6 +43,7 @@ from std.testing import (
     assert_almost_equal,
     assert_equal,
     assert_false,
+    assert_raises,
     assert_true,
 )
 
@@ -91,7 +94,7 @@ def test_text_is_drawn_with_a_shadow() raises:
     assert_equal(_changed(frame), 0)
     # A capital I: seven dots down its middle and two pairs at its ends,
     # eleven dots, and its shadow.
-    draw_text(frame, 1, 1, "i", 1, WHITE_TEXT, 1)
+    draw_text(frame, 1, 1, "I", 1, WHITE_TEXT, 1)
     var lit = 0
     var dark = 0
     for k in range(40 * 12):
@@ -101,6 +104,28 @@ def test_text_is_drawn_with_a_shadow() raises:
             dark += 1
     assert_equal(lit, 11)
     assert_true(dark > 0)
+    # A small i is its own: a dot over a stem with a foot, nine dots.
+    var small = _frame(40, 12)
+    draw_text(small, 1, 1, "i", 1, WHITE_TEXT, 1)
+    var dots = 0
+    for k in range(40 * 12):
+        if Int(small.pixels[4 * k]) == WHITE_TEXT.r:
+            dots += 1
+    assert_equal(dots, 9)
+
+
+def test_a_vignette_reddens_the_corners_and_not_the_middle() raises:
+    var frame = _frame(40, 40)
+    draw_vignette(frame, 0)
+    assert_equal(_changed(frame), 0)
+    draw_vignette(frame, 1)
+    assert_true(Int(frame.pixels[0]) > Int(frame.pixels[1]))
+    var middle = (20 * 40 + 20) * 4
+    assert_equal(Int(frame.pixels[middle]), 100)
+    with assert_raises(contains="strength"):
+        draw_vignette(frame, 2)
+    with assert_raises(contains="strength"):
+        draw_vignette(frame, -1)
 
 
 def test_each_kind_has_a_color_and_a_prompt() raises:
@@ -122,6 +147,10 @@ def test_each_kind_has_a_color_and_a_prompt() raises:
         for b in range(a + 1, 7):
             assert_true(reds[a] != reds[b])
             assert_true(prompts[a] != prompts[b])
+    # A seal of the warden's has a color of its own.
+    var seal = kind_color(SEAL).g * 1000 + kind_color(SEAL).r
+    for red in reds:
+        assert_true(red != seal)
     assert_equal(use_prompt(ORE, 2), "E  MINE ORE 2/3")
     assert_equal(use_prompt(ORE, 0, 0, 1), "E  MINE ORE 0/1")
     assert_equal(use_prompt(HERBS, 0), "E  GATHER HERBS")

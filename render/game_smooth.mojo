@@ -136,11 +136,31 @@ __async def _luma_task(
     nearest pixel's past the frame's edge."""
     for row in range(first, past):
         var y = min(height - 1, max(0, row - 1))
-        for column in range(stride):  # pragma: no branch
-            var x = min(width - 1, max(0, column - 1))
-            lumas[unsafe_offset=row * stride + column] = _luma(
-                pixels, (y * width + x) * 4
+        var line = lumas.unsafe_offset(row * stride)
+        var start = y * width * 4
+        line[unsafe_offset=0] = _luma(pixels, start)
+        # Inside the frame, sixteen pixels at once: their bytes split into
+        # red and blue, and green and alpha, and then apart.
+        var column = 1
+        while column + GAME_LANES <= width + 1:
+            var bytes = pixels.unsafe_load[width=4 * GAME_LANES](
+                start + (column - 1) * 4
             )
+            var pairs = bytes.deinterleave()
+            var red_blue = pairs[0].deinterleave()
+            var green_alpha = pairs[1].deinterleave()
+            line.unsafe_offset(column).unsafe_store(
+                (
+                    red_blue[0].cast[DType.float32]() * 0.299
+                    + green_alpha[0].cast[DType.float32]() * 0.587
+                    + red_blue[1].cast[DType.float32]() * 0.114
+                )
+                * (1.0 / 255)
+            )
+            column += GAME_LANES
+        for edge in range(column, stride):  # pragma: no branch
+            var x = min(width - 1, max(0, edge - 1))
+            line[unsafe_offset=edge] = _luma(pixels, start + x * 4)
 
 
 __async def _smooth_task(

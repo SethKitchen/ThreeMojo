@@ -47,11 +47,13 @@ from core.fog import exp2_fog
 from core.ordinal import ordinal_valid
 from core.scene import Scene
 from extensions.vegetation.noise import hash01, value_noise
-from lights.light import DIRECTIONAL
+from lights.light import DIRECTIONAL, POINT
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
-from std.math import exp, isinf, sqrt
+from render.tasks import TaskGroup
+from std.math import exp, isinf, sin, sqrt
+from std.sys import num_logical_cores
 from units.si import PER_METER, RADIAN, SECOND, Angle, Duration, InverseLength
 
 comptime DROPS = 700
@@ -67,6 +69,16 @@ comptime WIND = Vector3(0.006, 0, 0.0025)
 comptime EASE = Float32(0.4)
 """How fast the look closes on its kind's: each second it closes all but
 `exp(-EASE)` of the gap."""
+comptime FLAKE_PACE = Float32(0.18)
+"""How fast a snowflake falls, as a share of a raindrop's pace."""
+comptime SOAK_SECONDS = Float32(40)
+"""How long a downpour takes to soak the village, in seconds."""
+comptime DRY_SECONDS = Float32(150)
+"""How long the soaked village takes to dry, in seconds."""
+comptime SNOW_SECONDS = Float32(90)
+"""How long a snowfall takes to cover the village, in seconds."""
+comptime MELT_SECONDS = Float32(240)
+"""How long the covered village takes to thaw, in seconds."""
 comptime CYCLE_SECONDS = Float32(90)
 """How long each weather of the cycle lasts, in seconds."""
 comptime FOG_GRAY = Vector3(150, 155, 160)
@@ -80,18 +92,42 @@ struct WeatherKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the four kinds there are.
+        """Return True if this is one of the five kinds there are.
 
         Returns:
             Whether the value names a kind.
         """
-        return ordinal_valid(self.value, 3)
+        return ordinal_valid(self.value, 4)
 
 
 comptime CLEAR = WeatherKind(0)
 comptime OVERCAST = WeatherKind(1)
 comptime RAIN = WeatherKind(2)
 comptime FOG = WeatherKind(3)
+comptime SNOW = WeatherKind(4)
+
+
+def weather_label(kind: WeatherKind) -> String:
+    """Return the name of a kind of weather, for the heads-up display.
+
+    Args:
+        kind: The weather.
+
+    Returns:
+        `CLEAR`, `OVERCAST`, `RAIN`, `FOG` or `SNOW`, or an empty string for
+        a kind that is not one.
+    """
+    if kind == CLEAR:
+        return "CLEAR"
+    if kind == OVERCAST:
+        return "OVERCAST"
+    if kind == RAIN:
+        return "RAIN"
+    if kind == FOG:
+        return "FOG"
+    if kind == SNOW:
+        return "SNOW"
+    return ""
 
 
 @fieldwise_init
@@ -110,6 +146,8 @@ struct WeatherLook(ImplicitlyCopyable):
     # ground.
     var sun: Float32
     var sky: Float32
+    # The share of `DROPS` that fall as snowflakes, from 0 to 1.
+    var snow: Float32
 
     def mixed(self, other: WeatherLook, t: Float32) -> WeatherLook:
         """Return this look moved a share of the way to another.
@@ -128,6 +166,7 @@ struct WeatherLook(ImplicitlyCopyable):
             self.fog + (other.fog - self.fog) * t,
             self.sun + (other.sun - self.sun) * t,
             self.sky + (other.sky - self.sky) * t,
+            self.snow + (other.snow - self.snow) * t,
         )
 
 
@@ -144,14 +183,16 @@ def weather_look(kind: WeatherKind) raises -> WeatherLook:
         Error: If the kind is not one.
     """
     if kind == CLEAR:
-        return WeatherLook(0.25, 0, 0, 0.0008, 1, 1)
+        return WeatherLook(0.25, 0, 0, 0.0008, 1, 1, 0)
     if kind == OVERCAST:
-        return WeatherLook(0.85, 0.35, 0, 0.002, 0.12, 2.5)
+        return WeatherLook(0.85, 0.35, 0, 0.002, 0.12, 2.5, 0)
     if kind == RAIN:
-        return WeatherLook(1, 0.7, 1, 0.005, 0.03, 1.8)
+        return WeatherLook(1, 0.7, 1, 0.005, 0.03, 1.8, 0)
     if kind == FOG:
-        return WeatherLook(0.6, 0.2, 0, 0.03, 0.15, 2.4)
-    raise Error("A weather must be one of the four")
+        return WeatherLook(0.6, 0.2, 0, 0.03, 0.15, 2.4, 0)
+    if kind == SNOW:
+        return WeatherLook(0.9, 0.25, 0, 0.004, 0.3, 2.6, 1)
+    raise Error("A weather must be one of the five")
 
 
 def next_weather(kind: WeatherKind, step: Int) -> WeatherKind:
@@ -204,6 +245,46 @@ def cloud_cover(u: Float32, v: Float32, clouds: Float32) -> Float32:
     return smoothstep(edge - 0.12, edge + 0.22, n)
 
 
+@fieldwise_init
+struct CoverLook(ImplicitlyCopyable):
+    """The numbers that `Weather.cover` mixes a sky pixel with."""
+
+    # The color of a cloud's face, in sRGB bytes.
+    var gray: Vector3
+    # The color of the mist, in sRGB bytes.
+    var fog: Vector3
+    # How much of the sky an overcast layer hides everywhere, from 0 to 1.
+    var veil: Float32
+    # How much the mist takes of what shows, from 0 to 1.
+    var mist: Float32
+    # The lightning's gain on what shows, 1 or more.
+    var bright: Float32
+    # How dark the clouds are, from 0 to 1.
+    var gloom: Float32
+
+
+struct CloudGrid(Movable):
+    """The layer of cloud at the points of a grid over a frame."""
+
+    # The grid's points across and down.
+    var columns: Int
+    var rows: Int
+    # How much cloud covers each point, row by row.
+    var cover: List[Float32]
+
+    def __init__(out self, columns: Int, rows: Int, var cover: List[Float32]):
+        """Keep a grid.
+
+        Args:
+            columns: How many points lie across.
+            rows: How many points lie down.
+            cover: The cover of each point, `columns * rows` values.
+        """
+        self.columns = columns
+        self.rows = rows
+        self.cover = cover^
+
+
 struct Weather(Movable):
     """The weather now, and the drops of its rain."""
 
@@ -230,6 +311,12 @@ struct Weather(Movable):
     # Each drop: where it is on the window, from 0 to 1 across and down,
     # and how near the eye, from 0.3 to 1.
     var drops: List[Vector3]
+    var wet: Float32
+    """How wet the village is, from 0 to 1: rain soaks it over
+    `SOAK_SECONDS`, and it dries over `DRY_SECONDS`."""
+    var snowed: Float32
+    """How much snow lies on the village, from 0 to 1: snow covers it
+    over `SNOW_SECONDS`, and it melts over `MELT_SECONDS`."""
     # The camera's last yaw, in radians, so the drops slide as it turns.
     var yaw: Float32
 
@@ -276,6 +363,8 @@ struct Weather(Movable):
                 )
             )
         self.yaw = 0
+        self.wet = 0
+        self.snowed = 0
 
     def set(mut self, kind: WeatherKind) raises:
         """Turn toward a weather. The look eases toward it.
@@ -314,6 +403,26 @@ struct Weather(Movable):
             self.changes += 1
         var target = weather_look(self.kind)
         self.look = self.look.mixed(target, 1 - exp(-EASE * seconds))
+        # Rain soaks the village and snow covers it; in their absence it
+        # dries and the snow melts.
+        var rain = self.look.rain
+        self.wet = min(
+            Float32(1),
+            max(
+                Float32(0),
+                self.wet
+                + seconds * (rain / SOAK_SECONDS - (1 - rain) / DRY_SECONDS),
+            ),
+        )
+        var snow = self.look.snow
+        self.snowed = min(
+            Float32(1),
+            max(
+                Float32(0),
+                self.snowed
+                + seconds * (snow / SNOW_SECONDS - (1 - snow) / MELT_SECONDS),
+            ),
+        )
         # Lightning flashes in heavy rain, every 5 to 15 seconds.
         self.flash *= exp(-10 * seconds)
         if self.look.rain > 0.5:
@@ -331,6 +440,10 @@ struct Weather(Movable):
             var tint = neutral
             if light.kind == DIRECTIONAL:
                 share = self.look.sun
+                tint = 0
+            elif light.kind == POINT:
+                # A lamp burns as bright in any weather.
+                share = 1
                 tint = 0
             light.intensity = self.bases[index] * share
             var base = self.colors[index]
@@ -353,11 +466,91 @@ struct Weather(Movable):
         # turns and as the wind blows.
         var turned = yaw.to(RADIAN) - self.yaw
         self.yaw = yaw.to(RADIAN)
+        # A snowflake falls slower than a drop.
+        var falls = rain + snow
+        var pace = Float32(1)
+        if falls > 0:
+            pace = (rain + FLAKE_PACE * snow) / falls
         for ref d in self.drops:  # pragma: no branch
-            d.y += seconds * (0.9 + 1.6 * d.z)
+            d.y += seconds * (0.9 + 1.6 * d.z) * pace
             d.x += turned * 0.6 * d.z + seconds * 0.05
             d.x -= Float32(Int(d.x + 8)) - 8
             d.y -= Float32(Int(d.y + 8)) - 8
+
+    def cover_look(self) -> CoverLook:
+        """Return the numbers that `cover` mixes a sky pixel with.
+
+        Returns:
+            The cloud's gray, the fog's color and the three shares of the
+            clouds, the mist and the lightning that `cover` applies.
+        """
+        var shade = 235 - 120 * self.look.gloom
+        var veil = (
+            max(Float32(0), self.look.clouds - 0.5)
+            * 2
+            * (0.4 + 0.5 * self.look.gloom)
+        )
+        var fog = self.haze + (FOG_GRAY - self.haze) * self.look.gloom
+        return CoverLook(
+            Vector3(shade, shade, shade + 6),
+            fog,
+            veil,
+            smoothstep(0.001, 0.02, self.look.fog),
+            1 + 1.5 * self.flash,
+            self.look.gloom,
+        )
+
+    def cloud_grid(
+        self, camera: PerspectiveCamera, width: Int, height: Int
+    ) raises -> CloudGrid:
+        """Find the layer of cloud on a grid of `CLOUD_STEP` pixels.
+
+        Args:
+            camera: The camera that draws the frame.
+            width: The frame's width, in pixels.
+            height: The frame's height, in pixels.
+
+        Returns:
+            How much cloud covers each grid point of a frame this size,
+            row by row from the top.
+
+        Raises:
+            Error: If the camera's matrices cannot be made.
+        """
+        var inverse = camera.projection_matrix()
+        inverse.multiply(camera.view_matrix())
+        inverse.invert()
+        var eye = camera.position
+        # The directions through three corners of the window: the rest
+        # are mixed from them.
+        var d00 = inverse.transform_point(Vector3(-1, 1, 1)) - eye
+        var d10 = inverse.transform_point(Vector3(1, 1, 1)) - eye
+        var d01 = inverse.transform_point(Vector3(-1, -1, 1)) - eye
+        var columns = (width + CLOUD_STEP - 1) // CLOUD_STEP + 1
+        var rows = (height + CLOUD_STEP - 1) // CLOUD_STEP + 1
+        # Each grid point's cloud, as how much it covers.
+        var cover = List[Float32](length=columns * rows, fill=0)
+        var drift_u = WIND.x * self.clock
+        var drift_v = WIND.z * self.clock
+        for row in range(rows):  # pragma: no branch
+            var fy = min(Float32(row * CLOUD_STEP), Float32(height)) / Float32(
+                height
+            )
+            for column in range(columns):  # pragma: no branch
+                var fx = min(
+                    Float32(column * CLOUD_STEP), Float32(width)
+                ) / Float32(width)
+                var d = d00 + (d10 - d00) * fx + (d01 - d00) * fy
+                var up = d.y / d.length()
+                if up < 0.02:
+                    continue
+                var reach = CLOUD_HEIGHT / d.y
+                var u = (eye.x + d.x * reach) / CLOUD_SCALE + drift_u
+                var v = (eye.z + d.z * reach) / CLOUD_SCALE + drift_v
+                cover[row * columns + column] = cloud_cover(
+                    u, v, self.look.clouds
+                ) * smoothstep(0.02, 0.2, up)
+        return CloudGrid(columns, rows, cover^)
 
     def cover(self, mut image: Framebuffer, camera: PerspectiveCamera) raises:
         """Draw the drifting clouds, the fog and the lightning over a
@@ -374,89 +567,92 @@ struct Weather(Movable):
         """
         if len(image.depth) != image.width * image.height:
             raise Error("A frame needs a depth for each pixel")
-        var inverse = camera.projection_matrix()
-        inverse.multiply(camera.view_matrix())
-        inverse.invert()
-        var eye = camera.position
-        # The directions through three corners of the window: the rest
-        # are mixed from them.
-        var d00 = inverse.transform_point(Vector3(-1, 1, 1)) - eye
-        var d10 = inverse.transform_point(Vector3(1, 1, 1)) - eye
-        var d01 = inverse.transform_point(Vector3(-1, -1, 1)) - eye
         var w = image.width
         var h = image.height
-        var columns = (w + CLOUD_STEP - 1) // CLOUD_STEP + 1
-        var rows = (h + CLOUD_STEP - 1) // CLOUD_STEP + 1
-        # Each grid point's cloud, as how much it covers and its shade.
-        var cover = List[Float32](length=columns * rows, fill=0)
-        var drift_u = WIND.x * self.clock
-        var drift_v = WIND.z * self.clock
-        for row in range(rows):  # pragma: no branch
-            var fy = min(Float32(row * CLOUD_STEP), Float32(h)) / Float32(h)
-            for column in range(columns):  # pragma: no branch
-                var fx = min(
-                    Float32(column * CLOUD_STEP), Float32(w)
-                ) / Float32(w)
-                var d = d00 + (d10 - d00) * fx + (d01 - d00) * fy
-                var up = d.y / d.length()
-                if up < 0.02:
-                    continue
-                var reach = CLOUD_HEIGHT / d.y
-                var u = (eye.x + d.x * reach) / CLOUD_SCALE + drift_u
-                var v = (eye.z + d.z * reach) / CLOUD_SCALE + drift_v
-                cover[row * columns + column] = cloud_cover(
-                    u, v, self.look.clouds
-                ) * smoothstep(0.02, 0.2, up)
-        var shade = 235 - 120 * self.look.gloom
-        var veil = (
-            max(Float32(0), self.look.clouds - 0.5)
-            * 2
-            * (0.4 + 0.5 * self.look.gloom)
-        )
-        var mist = smoothstep(0.001, 0.02, self.look.fog)
-        var bright = 1 + 1.5 * self.flash
-        var gray = Vector3(shade, shade, shade + 6)
-        for y in range(h):  # pragma: no branch
-            var gy = Float32(y) / Float32(CLOUD_STEP)
-            var r0 = min(Int(gy), rows - 2)
-            var ty = gy - Float32(r0)
-            for x in range(w):  # pragma: no branch
-                var at = y * w + x
-                if not isinf(image.depth[at]):
-                    continue
-                var gx = Float32(x) / Float32(CLOUD_STEP)
-                var c0 = min(Int(gx), columns - 2)
-                var tx = gx - Float32(c0)
-                var a = cover[r0 * columns + c0]
-                var b = cover[r0 * columns + c0 + 1]
-                var c = cover[(r0 + 1) * columns + c0]
-                var e = cover[(r0 + 1) * columns + c0 + 1]
-                var top = a + (b - a) * tx
-                var bottom = c + (e - c) * tx
-                var cloud = top + (bottom - top) * ty
-                var alpha = min(Float32(1), veil + cloud * (1 - veil))
-                var p = at * 4
-                var sky = Vector3(
-                    Float32(image.pixels[p]),
-                    Float32(image.pixels[p + 1]),
-                    Float32(image.pixels[p + 2]),
+        var grid = self.cloud_grid(camera, w, h)
+        var columns = grid.columns
+        var rows = grid.rows
+        ref cover = grid.cover
+        var look = self.cover_look()
+        var veil = look.veil
+        var mist = look.mist
+        var bright = look.bright
+        var gray = look.gray
+        var fog = look.fog
+        # Each pixel is its own, so the rows are cut over the cores.
+        var tasks = max(1, min(h, num_logical_cores()))
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _cover_rows(
+                    image.depth.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    image.pixels.unsafe_ptr().unsafe_origin_cast[
+                        MutAnyOrigin
+                    ](),
+                    cover.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    w,
+                    columns,
+                    rows,
+                    look,
+                    task * h // tasks,
+                    (task + 1) * h // tasks,
                 )
-                # The underside of a thick cloud is darker than its edge.
-                var tone = gray * (1 - 0.18 * cloud * self.look.gloom)
-                var seen = sky + (tone - sky) * alpha
-                var fog = self.haze + (FOG_GRAY - self.haze) * self.look.gloom
-                seen = seen + (fog - seen) * mist
-                seen = seen * bright
-                image.pixels[p] = UInt8(Int(min(Float32(255), seen.x)))
-                image.pixels[p + 1] = UInt8(Int(min(Float32(255), seen.y)))
-                image.pixels[p + 2] = UInt8(Int(min(Float32(255), seen.z)))
+            )
+        group.wait()
+        _ = len(image.depth)
+        _ = len(image.pixels)
+        _ = len(cover)
 
-    def rain(self, mut window: Framebuffer):
-        """Draw the falling drops over a window as thin streaks.
+    def rain(
+        self,
+        mut window: Framebuffer,
+        sheltered: List[Bool] = List[Bool](),
+        mask_width: Int = 0,
+        mask_height: Int = 0,
+    ):
+        """Draw the falling drops over a window as thin streaks, and the
+        falling snow as flakes.
 
         Args:
             window: The window's frame.
+            sheltered: Which pixels of a grid over the window show a place
+                under a roof, where no drop or flake is drawn. Empty, the
+                default, shelters nothing.
+            mask_width: The grid's width, in cells.
+            mask_height: The grid's height, in cells.
         """
+        var masked = (
+            len(sheltered) > 0 and len(sheltered) == mask_width * mask_height
+        )
+        var flakes = Int(Float32(DROPS) * self.look.snow)
+        for k in range(flakes):
+            ref d = self.drops[k]
+            # A flake drifts from side to side as it falls.
+            var sway = 0.012 * sin(self.clock * 1.7 + Float32(k) * 0.37)
+            var x0 = Int(Float32(window.width) * (d.x + sway))
+            var y0 = Int(Float32(window.height) * d.y)
+            var size = 1 + Int(2 * d.z)
+            var alpha = 0.35 + 0.5 * d.z
+            for dy in range(size):  # pragma: no branch
+                for dx in range(size):  # pragma: no branch
+                    var x = x0 + dx
+                    var y = y0 + dy
+                    if x < 0 or x >= window.width or y >= window.height:
+                        continue
+                    if masked and _under(
+                        sheltered, x, y, window, mask_width, mask_height
+                    ):
+                        continue
+                    var p = (y * window.width + x) * 4
+                    for c in range(3):
+                        var under = Float32(window.pixels[p + c])
+                        window.pixels[p + c] = UInt8(
+                            Int(under + (245 - under) * alpha)
+                        )
         var count = Int(Float32(DROPS) * self.look.rain)
         var long = Float32(window.height) * 0.05
         for k in range(count):
@@ -473,9 +669,81 @@ struct Weather(Movable):
                 var y = Int(y0) + s
                 if y >= window.height:
                     continue
+                if masked and _under(
+                    sheltered, x, y, window, mask_width, mask_height
+                ):
+                    continue
                 var p = (y * window.width + x) * 4
                 for c in range(3):
                     var under = Float32(window.pixels[p + c])
                     window.pixels[p + c] = UInt8(
                         Int(under + (215 - under) * alpha)
                     )
+
+
+def _under(
+    sheltered: List[Bool],
+    x: Int,
+    y: Int,
+    window: Framebuffer,
+    mask_width: Int,
+    mask_height: Int,
+) -> Bool:
+    """Return whether a window's pixel falls in a sheltered cell of a
+    grid over it."""
+    var mx = x * mask_width // window.width
+    var my = y * mask_height // window.height
+    return sheltered[my * mask_width + mx]
+
+
+__async def _cover_rows(
+    depth: Pointer[Float32, ImmutAnyOrigin],
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    cover: Pointer[Float32, ImmutAnyOrigin],
+    w: Int,
+    columns: Int,
+    rows: Int,
+    look: CoverLook,
+    first: Int,
+    past: Int,
+):
+    """Draw the clouds and the fog over rows `first` to `past` of a frame's
+    sky, from the grid of cloud cover, as `Weather.cover` does."""
+    var veil = look.veil
+    var mist = look.mist
+    var bright = look.bright
+    var gray = look.gray
+    var fog = look.fog
+    for y in range(first, past):  # pragma: no branch
+        var gy = Float32(y) / Float32(CLOUD_STEP)
+        var r0 = min(Int(gy), rows - 2)
+        var ty = gy - Float32(r0)
+        for x in range(w):  # pragma: no branch
+            var at = y * w + x
+            if not isinf(depth[unsafe_offset=at]):
+                continue
+            var gx = Float32(x) / Float32(CLOUD_STEP)
+            var c0 = min(Int(gx), columns - 2)
+            var tx = gx - Float32(c0)
+            var a = cover[unsafe_offset=r0 * columns + c0]
+            var b = cover[unsafe_offset=r0 * columns + c0 + 1]
+            var c = cover[unsafe_offset=(r0 + 1) * columns + c0]
+            var e = cover[unsafe_offset=(r0 + 1) * columns + c0 + 1]
+            var top = a + (b - a) * tx
+            var bottom = c + (e - c) * tx
+            var cloud = top + (bottom - top) * ty
+            var alpha = min(Float32(1), veil + cloud * (1 - veil))
+            var p = at * 4
+            var sky = Vector3(
+                Float32(pixels[unsafe_offset=p]),
+                Float32(pixels[unsafe_offset=p + 1]),
+                Float32(pixels[unsafe_offset=p + 2]),
+            )
+            # The underside of a thick cloud is darker than its edge.
+            var tone = gray * (1 - 0.18 * cloud * look.gloom)
+            var seen = sky + (tone - sky) * alpha
+            seen = seen + (fog - seen) * mist
+            seen = seen * bright
+            pixels[unsafe_offset=p] = UInt8(Int(min(Float32(255), seen.x)))
+            pixels[unsafe_offset=p + 1] = UInt8(Int(min(Float32(255), seen.y)))
+            pixels[unsafe_offset=p + 2] = UInt8(Int(min(Float32(255), seen.z)))

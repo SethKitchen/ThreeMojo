@@ -18,6 +18,7 @@ from extensions.vegetation.ground import Ground, Lot, Pond, footpath
 from extensions.vegetation.meadow import Planting
 from controls.third_person_controls import yaw_of
 from extensions.village.character import (
+    Obstacle,
     AIRBORNE,
     STANDING,
     MoveInput,
@@ -25,19 +26,67 @@ from extensions.village.character import (
 )
 from extensions.village.day import DayCycle
 from extensions.village.foes import Bandit, Den, Post
-from extensions.village.gathering import CHEST, HERBS, Spot
+from extensions.village.gathering import BITING, CHEST, FISH, HERBS, Spot
 from extensions.village.house import HouseParameters, house_lot
+from extensions.humanoid.skeleton.head.expression import (
+    ANGER,
+    FEAR,
+    SADNESS,
+    SMILE,
+    FacialExpression,
+)
+from extensions.village.faces import FaceLife
+from extensions.village.battle import Hurt
+from render.framebuffer import Color, Framebuffer
+from extensions.village.battle_hud import DANGER
+from extensions.village.foes import bandit_fighter
+from extensions.village.hud import GOLD_TEXT
+from extensions.village.sound import COIN, HIT, SPLASH, SWING
+from extensions.village.talk import (
+    DONE,
+    FAIR,
+    NIGHT,
+    OFFERED,
+    SNOWY,
+    TAKEN,
+    WET,
+)
+from extensions.village.residents import SIT, WORK
+from extensions.village.props import BARREL, BENCH, CROPS, Prop, WELL, WOODPILE
 from extensions.village.play import (
     FOCUS_HEIGHT,
+    FOE_SIGHT,
+    SILVER_MARK,
+    GRIMACE,
+    WINDED,
+    player_mood,
     SPECIALTY_MIGHT,
     PlayParameters,
     TRUNK,
     VillageGame,
     default_residents,
+    game_residents,
     tree_obstacles,
+    prop_stops,
+    trunks_reach,
+    village_mood,
+    HITSTOP,
 )
-from extensions.village.combat import LIGHT_ONE
+from extensions.village.combat import (
+    DODGE,
+    FREE,
+    FALL,
+    FLINCH,
+    HEAVY,
+    LIGHT_ONE,
+    STAGGER,
+    WHIRLWIND,
+    CombatMove,
+    Fighter,
+    FighterParameters,
+)
 from extensions.village.progress import (
+    PLACE_SHIFT,
     Progress,
     pack_progress,
     unpack_progress,
@@ -467,11 +516,128 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
     game.player.position = game.residents.people[0].position + Vector3(
         0.8, 0, 0
     )
+    # Before anyone speaks, the speech is as `Talk` holds it; the compass
+    # points to her errand, in gold.
+    assert_equal(game.speech(), "")
+    var marks = game.compass_marks()
+    assert_equal(len(marks), 1)
+    assert_equal(marks[0].color.r, GOLD_TEXT.r)
+    # The map marks her as one with an errand to give, and once the
+    # errand is taken, as one of the villagers.
+    scene.update()
+    assert_equal(len(game.map_marks(scene).errands), 1)
+    game.talk.states[0] = TAKEN
+    assert_equal(len(game.map_marks(scene).people), 1)
+    game.talk.states[0] = OFFERED
+    game.talk.speakers[0].villager = 9
+    assert_equal(len(game.map_marks(scene).errands), 0)
+    game.talk.speakers[0].villager = 0
     var use = no_input()
     use.use = True
     _ = game.tick(scene, assets, use, Duration(0.1, SECOND))
     assert_true(game.talk.speech != "")
     assert_true(game.residents.holds[0] > 0)
+    # Her words show as far as her mouth has said them, in their full
+    # width; the errand she gave is taken, in silver.
+    assert_equal(game.talker, 0)
+    var said = game.speech()
+    assert_equal(said.byte_length(), game.talk.speech.byte_length())
+    assert_true(said != game.talk.speech)
+    assert_equal(game.compass_marks()[0].color.r, SILVER_MARK.r)
+    for _ in range(40):
+        _ = game.tick(scene, assets, no_input(), Duration(0.1, SECOND))
+    assert_equal(game.speech(), game.talk.speech)
+    # An errand done is not pointed to.
+    game.talk.states[0] = DONE
+    assert_equal(len(game.compass_marks()), 0)
+    game.talk.states[0] = TAKEN
+    # The compass's caption and strip draw over the frame.
+    game.render(scene, assets)
+
+
+def test_the_players_face_shows_the_fight() raises:
+    var life = FaceLife(1)
+    var fighter = Fighter(FighterParameters())
+    player_mood(life, fighter)
+    assert_equal(life.goal_strength, 0)
+    assert_equal(life.breath, 0)
+    var moods: List[CombatMove] = [
+        LIGHT_ONE,
+        HEAVY,
+        WHIRLWIND,
+        FLINCH,
+        STAGGER,
+        FALL,
+    ]
+    var felt: List[FacialExpression] = [
+        ANGER,
+        ANGER,
+        ANGER,
+        FEAR,
+        FEAR,
+        SADNESS,
+    ]
+    var strong: List[Float32] = [0.55, 0.9, 0.9, 0.7, 0.7, 1]
+    for k in range(len(moods)):
+        fighter.move = moods[k]
+        player_mood(life, fighter)
+        assert_true(life.goal == felt[k])
+        assert_almost_equal(life.goal_strength, strong[k], atol=1e-6)
+        assert_almost_equal(life.holding, GRIMACE, atol=1e-6)
+    # A dodge shows nothing new.
+    fighter.move = DODGE
+    life.feel(SMILE, 0.2)
+    player_mood(life, fighter)
+    assert_true(life.goal == SMILE)
+    # Out of stamina, the player pants; with none to lose, never.
+    fighter.stamina = 0
+    player_mood(life, fighter)
+    assert_equal(life.breath, 1)
+    fighter.stamina = fighter.parameters.stamina * WINDED
+    player_mood(life, fighter)
+    assert_equal(life.breath, 0)
+    fighter.parameters.stamina = 0
+    player_mood(life, fighter)
+    assert_equal(life.breath, 0)
+
+
+def test_the_compass_points_to_the_nearest_foe_that_stands() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.gathering.spots = []
+    parameters.battle.bandits = [
+        Bandit(
+            HumanoidSpec(Length(60.0, INCH), FEMALE),
+            Outfit(),
+            -4,
+            -9,
+            Angle(0.0, DEGREE),
+            5,
+            bandit_fighter(),
+            False,
+        )
+    ]
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        64,
+        36,
+    )
+    assert_equal(len(game.battle.foes), 1)
+    var marks = game.compass_marks()
+    assert_equal(len(marks), 1)
+    assert_equal(marks[0].color.r, DANGER.r)
+    # A fallen foe, or one past the compass's sight, is not pointed to.
+    game.battle.foes[0].down = 1
+    assert_equal(len(game.compass_marks()), 0)
+    game.battle.foes[0].down = -1
+    game.battle.foes[0].character.position.z -= FOE_SIGHT * 2
+    assert_equal(len(game.compass_marks()), 0)
 
 
 def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
@@ -561,7 +727,7 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     before.specialty = MAGIC
     before.style = MAGIC
     game.battle.parameters.styles = [SWORD, MAGIC]
-    game.restore(unpack_progress(pack_progress(before)))
+    game.restore(scene, unpack_progress(pack_progress(before)))
     assert_true(game.battle.fighter.style == MAGIC)
     assert_equal(game.battle.style_at, 1)
     assert_true(game.battle.book.specialty == MAGIC)
@@ -574,15 +740,257 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     # A style the player does not carry is not taken up; nor one while
     # the player makes a move.
     before.style = ARCHERY
-    game.restore(before)
+    game.restore(scene, before)
     assert_true(game.battle.fighter.style == MAGIC)
     before.style = SWORD
     game.battle.fighter.move = LIGHT_ONE
-    game.restore(before)
+    game.restore(scene, before)
     assert_true(game.battle.fighter.style == MAGIC)
+    # The world as the game left it comes back too: where the player
+    # stood, the hour, the weather, the errands and the spots used up.
+    var world = game.progress()
+    assert_equal(len(world.place), 4)
+    world.place[0] = PLACE_SHIFT + 150
+    world.place[1] = PLACE_SHIFT - 220
+    world.place[2] = PLACE_SHIFT + 20500
+    world.place[3] = 2
+    world.spent = [0, 99]
+    game.restore(scene, unpack_progress(pack_progress(world)))
+    assert_almost_equal(game.player.position.x, 1.5, atol=1e-4)
+    assert_almost_equal(game.player.position.z, -2.2, atol=1e-4)
+    assert_almost_equal(game.day.hour, 20.5, atol=1e-4)
+    assert_equal(game.weather.kind.value, 2)
+    # A place far away, an hour or a weather that is not one keeps the
+    # game's own.
+    world.place = [0, 0, PLACE_SHIFT + 30000, 9]
+    game.restore(scene, world)
+    assert_almost_equal(game.day.hour, 20.5, atol=1e-4)
+    # The errands come back to a game of as many speakers. A state that
+    # is not one is let go, and so is an hour that is not one, or a place
+    # far away.
+    game.talk.states = [TAKEN, TAKEN]
+    game.talk.rounds = [0, 0]
+    world.errands = [2, 9]
+    world.rounds = [3, 1]
+    world.place = [PLACE_SHIFT, PLACE_SHIFT + 2000000, PLACE_SHIFT - 1000, 2]
+    game.restore(scene, world)
+    assert_true(game.talk.states[0] == DONE)
+    assert_true(game.talk.states[1] == TAKEN)
+    assert_equal(game.talk.rounds[0], 3)
+    assert_equal(game.progress().errands[0], 2)
+    assert_almost_equal(game.day.hour, 20.5, atol=1e-4)
+    assert_almost_equal(game.player.position.x, 1.5, atol=1e-4)
+    # A game of other speakers keeps its own errands.
+    world.errands = [1]
+    world.rounds = [0]
+    game.restore(scene, world)
+    assert_true(game.talk.states[0] == DONE)
     _ = before.mastery.pop()
     with assert_raises(contains="mastery"):
-        game.restore(before)
+        game.restore(scene, before)
+
+
+def test_a_game_builds_its_animals_no_finer_than_its_quality() raises:
+    var game = PlayParameters(game_quality(LOW))
+    game.residents = ResidentsParameters()
+    assert_almost_equal(game.residents.animal_coarseness, 1, atol=1e-9)
+    # The low preset's animals are three times coarser.
+    var built = game_residents(game)
+    assert_almost_equal(built.animal_coarseness, 3, atol=1e-6)
+    # A coarser choice of the game's own is kept.
+    game.residents.animal_coarseness = 5
+    assert_almost_equal(game_residents(game).animal_coarseness, 5, atol=1e-9)
+
+
+def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.gathering.spots = [
+        Spot(HERBS, -4, -3, Angle(0.0, RADIAN)),
+        Spot(FISH, -4.5, 4, Angle(0.0, RADIAN)),
+    ]
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        32,
+        18,
+    )
+    assert_equal(len(game.gathering.spots), 2)
+    var step = Duration(0.25, SECOND)
+    scene.update()
+    # A downpour rings the pond.
+    game.weather.look.rain = 1
+    game.ripple_pond(scene, step)
+    var rained = len(game.village.water._drops)
+    assert_true(rained > 0)
+    # It rains on the frame, and not under the house's roof.
+    game.render(scene, assets)
+    assert_equal(game.window.width, 32)
+    rained = len(game.village.water._drops)
+    # A player who wades in the pond leaves a wake, a few taps a second.
+    game.player.position = Vector3(0, game.village.level.to(METER) - 0.3, 4)
+    game.player.velocity = Vector3(1, 0, 0)
+    game.weather.look.rain = 0
+    game.ripple_pond(scene, step)
+    assert_equal(len(game.village.water._drops), rained + 1)
+    game.ripple_pond(scene, Duration(0.01, SECOND))
+    assert_equal(len(game.village.water._drops), rained + 1)
+    # A player who leaps over the pond leaves none.
+    game.wake = 0
+    game.player.position.y = game.village.level.to(METER) + 1
+    game.ripple_pond(scene, step)
+    assert_equal(len(game.village.water._drops), rained + 1)
+    game.player.position.y = game.village.level.to(METER) - 0.3
+    # A fish that bites jerks its float.
+    for index in range(len(game.gathering.spots)):
+        if game.gathering.spots[index].spot.kind == FISH:
+            game.gathering.spots[index].phase = BITING
+    game.player.velocity = Vector3(0, 0, 0)
+    game.ripple_pond(scene, step)
+    assert_true(len(game.village.water._drops) >= rained + 1)
+    # The game hears a wading footfall, a swing, and coins.
+    game.player.position = Vector3(0, game.village.level.to(METER) - 0.3, 4)
+    game.player.velocity = Vector3(2, 0, 0)
+    game.player.grounded = True
+    game.stride = 0
+    game.coins_were = 0
+    game.gathering.satchel.counts[CHEST.value] = 5
+    game.battle.fighter.move = LIGHT_ONE
+    game.swinging = False
+    game.foes_health = 1000
+    game.hear(step)
+    var kinds = List[Int]()
+    for voice in game.sounds.voices:
+        kinds.append(voice.kind.value)
+    assert_true(SPLASH.value in kinds)
+    assert_true(SWING.value in kinds)
+    assert_true(HIT.value in kinds)
+    assert_true(COIN.value in kinds)
+    assert_equal(len(game.audio(100)), 200)
+    # A hard blow stops the world a moment, and a roll kicks up dust.
+    assert_almost_equal(game.hitstop, HITSTOP, atol=1e-6)
+    game.battle.fighter.move = DODGE
+    game.was_kicking = False
+    game.hear(step)
+    assert_true(game.dust_since < 1)
+    # A roll kicks up dust once, as it begins.
+    var since = game.dust_since
+    game.hear(step)
+    assert_true(game.dust_since > since)
+    # A light blow is heard, and does not stop the world.
+    game.hitstop = 0
+    game.foes_health = 1
+    game.hear(step)
+    assert_equal(game.hitstop, 0)
+    # A blow on a dummy takes no foe's health, and it is heard too.
+    game.sounds.voices.clear()
+    game.foes_health = 0
+    game.combo_was = 0
+    game.battle.fighter.combo = 1
+    game.hear(step)
+    var knocks = 0
+    for voice in game.sounds.voices:
+        if voice.kind == HIT:
+            knocks += 1
+    assert_equal(knocks, 1)
+    assert_equal(game.hitstop, 0)
+    # The stop wears off as the world moves on.
+    game.hitstop = HITSTOP
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_true(game.hitstop <= 0)
+    # Near falling, and as a blow lands, the frame's edges redden.
+    game.battle.fighter.health = 10
+    assert_true(game.vignette() > 0.5)
+    game.battle.fighter.health = game.battle.fighter.parameters.health
+    assert_equal(game.vignette(), 0)
+    game.battle.hurts.append(Hurt(Vector3(1, 0, 0), 0.1))
+    assert_true(game.vignette() > 0.4)
+    game.battle.hurts.clear()
+    game.battle.fighter.move = FREE
+    # Paused, nothing moves; the map and the pause panel show.
+    var before_pause = game.player.position
+    game.paused = True
+    game.show_map = True
+    var push = no_input()
+    push.forward = 1
+    _ = game.tick(scene, assets, push, step)
+    assert_almost_equal(game.player.position.x, before_pause.x, atol=1e-6)
+    game.render(scene, assets)
+    assert_equal(game.window.width, 32)
+    var marks = game.map_marks(scene)
+    assert_equal(len(marks.houses), len(game.village.houses))
+    # A frame with no depths cannot show what is sheltered.
+    var bare = Framebuffer(4, 4, Color(0, 0, 0, 255))
+    bare.depth = List[Float32]()
+    with assert_raises(contains="depth"):
+        _ = game.sheltered(bare)
+    game.paused = False
+    game.show_map = False
+    # A fall costs a quarter of the coins the player carries.
+    game.gathering.satchel.counts[CHEST.value] = 100
+    game.battle.fell = True
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.gathering.satchel.count(CHEST), 75)
+    assert_false(game.battle.fell)
+    assert_equal(game.note, "YOU LOSE 25 COINS")
+    # With no coins, a fall costs nothing.
+    game.gathering.satchel.counts[CHEST.value] = 0
+    game.battle.fell = True
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.gathering.satchel.count(CHEST), 0)
+
+
+def test_the_camera_comes_in_before_a_trunk() raises:
+    var trunks: List[Obstacle] = [Obstacle(0, 5, 0.5)]
+    var focus = Vector3(0, 1.5, 0)
+    # A trunk halfway along the sight brings the eye in before it.
+    var reach = trunks_reach(trunks, focus, Vector3(0, 2, 10), 0.3)
+    assert_almost_equal(reach, 0.45 - 0.03, atol=1e-4)
+    # No trunk in the way, or the eye on the focus, is the whole way.
+    assert_equal(trunks_reach(trunks, focus, Vector3(10, 2, 0), 0.3), 1)
+    assert_equal(trunks_reach(trunks, focus, focus, 0.3), 1)
+    # A trunk past the eye, or round the focus, stops nothing.
+    assert_equal(trunks_reach(trunks, focus, Vector3(0, 2, 2), 0.3), 1)
+    var round: List[Obstacle] = [Obstacle(0, 0, 1)]
+    assert_equal(trunks_reach(round, focus, Vector3(0, 2, 10), 0.3), 1)
+    # A trunk just past the margin leaves none of the way.
+    var near: List[Obstacle] = [Obstacle(0, 0.6, 0.5)]
+    assert_equal(trunks_reach(near, focus, Vector3(0, 2, 10), 0.3), 0)
+    # A trunk behind the focus, or no trunk at all, stops nothing.
+    var behind: List[Obstacle] = [Obstacle(0, -5, 0.5)]
+    assert_equal(trunks_reach(behind, focus, Vector3(0, 2, 10), 0.3), 1)
+    assert_equal(
+        trunks_reach(List[Obstacle](), focus, Vector3(0, 2, 10), 0.3), 1
+    )
+
+
+def test_the_village_s_mood_and_its_props_stops() raises:
+    assert_true(village_mood(0.2, 0, 0) == NIGHT)
+    assert_true(village_mood(1, 0, 0.5) == SNOWY)
+    assert_true(village_mood(1, 0.6, 0) == WET)
+    assert_true(village_mood(1, 0, 0) == FAIR)
+    var turn = Angle(0.0, DEGREE)
+    var stops = prop_stops(
+        [
+            Prop(BENCH, 0, 0, turn, 1.6),
+            Prop(WOODPILE, 5, 0, turn, 2),
+            Prop(CROPS, 10, 0, turn, 3),
+            Prop(WELL, 15, 0, turn, 0.8),
+            Prop(BARREL, 20, 0, turn, 0.3),
+        ]
+    )
+    assert_equal(len(stops), 4)
+    assert_true(stops[0].activity == SIT)
+    assert_true(stops[1].activity == WORK)
+    assert_true(stops[3].activity == WORK)
+    # A seat is before the bench, and the well's place beside it.
+    assert_almost_equal(stops[0].z, 0.45, atol=1e-5)
+    assert_almost_equal(stops[3].x, 15 + 0.8 + 0.7, atol=1e-5)
 
 
 def main() raises:

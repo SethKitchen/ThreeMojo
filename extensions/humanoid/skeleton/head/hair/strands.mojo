@@ -180,44 +180,10 @@ struct HairStrands(Movable):
                 raise Error("The stored hair geometry belongs to another owner")
 
     def _shadow_depths(mut self, lights: List[HairLight]) raises:
-        """Fill the retained point-major optical-depth workspace.
-
-        `shade` rebuilt the density first, which refuses a nonfinite point,
-        and the retained groom is never empty. So the checks that
-        `optical_depth` repeats for each point reduce to each light's
-        direction and one validation, in the serial loop's order. Then
-        disjoint runs of points march in parallel.
-        """
-        var count = len(self.groom.points)
-        var depth_count = count * len(lights)
-        if len(self._optical_depths) != depth_count:
-            self._optical_depths = List[Float32](length=depth_count, fill=0)
-        for light in range(len(lights)):
-            var d = lights[light].direction
-            require_hair_direction(d)
-            if light == 0:
-                self.density.validate()
-        if depth_count == 0:
-            return
-        # Each task gets at least one point, because tasks <= count.
-        var tasks = min(num_logical_cores(), count)
-        var group = TaskGroup()
-        for task in range(tasks):  # pragma: no branch
-            group.create_task(
-                _depth_task(
-                    Pointer(to=self.density).unsafe_origin_cast[MutAnyOrigin](),
-                    Pointer(to=self.groom.points).unsafe_origin_cast[
-                        MutAnyOrigin
-                    ](),
-                    Pointer(to=lights).unsafe_origin_cast[ImmutAnyOrigin](),
-                    self._optical_depths.unsafe_ptr().unsafe_origin_cast[
-                        MutAnyOrigin
-                    ](),
-                    task * count // tasks,
-                    (task + 1) * count // tasks,
-                )
-            )
-        group.wait()
+        """Fill the retained point-major optical-depth workspace."""
+        hair_shadow_depths(
+            self.density, self.groom.points, lights, self._optical_depths
+        )
 
     def _upload(mut self, mut assets: Assets) raises:
         """Write current positions and colors into the retained CPU buffer."""
@@ -250,9 +216,62 @@ struct HairStrands(Movable):
             self._installed = True
 
 
+def hair_shadow_depths(
+    mut density: HairDensity,
+    points: List[Vector3],
+    lights: List[HairLight],
+    mut depths: List[Float32],
+) raises:
+    """Fill a point-major workspace with each point's depth toward each
+    light.
+
+    The density must already be rebuilt from the points, as `shade`
+    rebuilds it first, which refuses a nonfinite point. So the checks
+    that `optical_depth` repeats for each point reduce to each light's
+    direction and one validation, in the serial loop's order. Then
+    disjoint runs of points march in parallel.
+
+    Args:
+        density: The hair's density, rebuilt from `points`.
+        points: The strands' points.
+        lights: The distant lights.
+        depths: Resized to one depth per point and light, and filled.
+
+    Raises:
+        Error: If a light's direction or the density's settings are
+            refused.
+    """
+    var count = len(points)
+    var depth_count = count * len(lights)
+    if len(depths) != depth_count:
+        depths = List[Float32](length=depth_count, fill=0)
+    for light in range(len(lights)):
+        var d = lights[light].direction
+        require_hair_direction(d)
+        if light == 0:
+            density.validate()
+    if depth_count == 0:
+        return
+    # Each task gets at least one point, because tasks <= count.
+    var tasks = min(num_logical_cores(), count)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _depth_task(
+                Pointer(to=density).unsafe_origin_cast[MutAnyOrigin](),
+                Pointer(to=points).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=lights).unsafe_origin_cast[ImmutAnyOrigin](),
+                depths.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task * count // tasks,
+                (task + 1) * count // tasks,
+            )
+        )
+    group.wait()
+
+
 __async def _depth_task(
     density: Pointer[HairDensity, MutAnyOrigin],
-    points: Pointer[List[Vector3], MutAnyOrigin],
+    points: Pointer[List[Vector3], ImmutAnyOrigin],
     lights: Pointer[List[HairLight], ImmutAnyOrigin],
     depths: MutPointer[Float32, MutAnyOrigin],
     first: Int,

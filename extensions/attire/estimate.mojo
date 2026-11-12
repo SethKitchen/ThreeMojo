@@ -53,11 +53,15 @@ from extensions.anatomy.inertia import InertiaTally
 from extensions.attire.cover import cover_values, dominant_joints, joint_cover
 from extensions.attire.fabric import Fabric, fabric
 from extensions.attire.kinds import (
+    FELT,
+    FUR,
     LEATHER,
     MAIL,
     PADDING,
     PLATE,
+    SCALE,
     SILK,
+    STRAW,
     SLOT_COUNT,
     VELVET,
     WOOL,
@@ -409,6 +413,14 @@ def piercing_energy(cloth: Fabric) raises -> Energy:
     elif cloth.kind == PLATE:
         var t = Float32(cloth.thickness.to(MILLIMETER)) / PLATE_REFERENCE_MM
         joules = 175 * t * t
+    elif cloth.kind == FUR:
+        joules = 15
+    elif cloth.kind == FELT:
+        joules = 10
+    elif cloth.kind == STRAW:
+        joules = 3
+    elif cloth.kind == SCALE:
+        joules = 60
     return Energy(joules, JOULE)
 
 
@@ -508,6 +520,8 @@ def noise(outfit: Outfit) raises -> Float32:
             total += 0.5
         elif kind == MAIL:
             total += 0.3
+        elif kind == SCALE:
+            total += 0.25
         elif kind == LEATHER:
             total += 0.06
         elif kind == PADDING:
@@ -552,7 +566,7 @@ def visibility(outfit: Outfit) raises -> Float32:
             + 0.7152 * Float32(dye.g)
             + 0.0722 * Float32(dye.b)
         ) / 255
-        if garment.fabric == PLATE:
+        if garment.fabric == PLATE or garment.fabric == SCALE:
             light = min(Float32(1), light + 0.3)
         total += light
     if slots == 0:

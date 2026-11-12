@@ -333,13 +333,19 @@ CPU test groups use imported source size. Coverage groups use `tools/coverage_sh
 
 Ties use the suite path and group number. Every affected suite stays in exactly one group. CI uses eight groups and a budget of 9000 seconds a group. The budget is a hang detector, not a target. Hosted runners differ: one took a quarter longer than another on the same group.
 
-The current profile uses attempt 1 of [CI run 37725421233](https://github.com/SethKitchen/ThreeMojo/actions/runs/37725421233), from October 8, 2026. Its source commit is `6c0391ea03bfe4ec28b3ae23e497f51e1ba43806`; its merge checkout is `fdd972921b9f179119815acd4e10f1486786d9f8`. It used Mojo `1.1.0` (`8189361e`), the `aot-hits` profile, eight groups and four capture workers per runner. The profile contains 717 successful capture durations and one explicit scheduling estimate.
+The current profile uses attempt 1 of [CI run 41231829187](https://github.com/SethKitchen/ThreeMojo/actions/runs/41231829187), from October 31, 2026. Its source commit is `f761375eeddd092dc1c804792d1d1d7bb82bfd3c`; its merge checkout is `9b9357b5ccf690bbf83c734af77198ec74153fa0`. It used Mojo `1.2.0` (`2016d0cd`), the `aot-hits` profile, eight groups and four capture workers per runner. The profile contains 1171 completed capture durations and three explicit scheduling estimates.
 
-The recorder-world capture stopped at the group deadline after 8281.5 seconds. It did not complete. Its profile value is a lower bound used to start that expensive suite first, not a measured successful duration or a completion forecast. The JSON labels this estimate separately.
+The older profile held no time for 468 of the suites. Their source-size estimates put several of the heaviest in two groups, and both reached the deadline. With the current profile, each of the eight groups holds about 24,200 seconds of captures.
 
-Its previous successful capture in [CI run 37638046555](https://github.com/SethKitchen/ThreeMojo/actions/runs/37638046555), at commit `b96ba07ecd0ccba732f5e5d81a4e3bb2fe62b2bc`, took 6622.2 seconds. Different source versions and runner contention limit direct timing comparisons. New complete captures must verify that the current work fits the unchanged budget.
+The group deadline stopped two captures before completion: `test_village_battle_raid` after 6784.0 seconds and `test_capi_water` after 2275.8 seconds. Their profile values are lower bounds used to start those suites first. They are not measured successful durations or completion forecasts. The JSON labels these estimates separately.
 
-The previous profile used [CI run 37301265769](https://github.com/SethKitchen/ThreeMojo/actions/runs/37301265769), from October 5, 2026, at commit `c115c0f51f601638bc7fc22dae04d70e7382ded3`.
+`test_capi_village` is newer than that run, so the profile had no time for it. A source-size estimate started it 54 minutes into its group in [CI run 41340404746](https://github.com/SethKitchen/ThreeMojo/actions/runs/41340404746). The deadline stopped it after 5709.6 seconds. That lower bound is the third estimate, so the suite now starts first in its group.
+
+In that run, `test_anatomy_overlaps_tool` and `test_anatomy_report_binding_tool` completed, but one test failed in each, because their evidence was stale. Their durations stay in the profile. New complete captures must verify that the current work fits the unchanged budget.
+
+The profile before it used attempt 1 of [CI run 37725421233](https://github.com/SethKitchen/ThreeMojo/actions/runs/37725421233), from October 8, 2026, at commit `6c0391ea03bfe4ec28b3ae23e497f51e1ba43806`. It held 717 successful capture durations. Its one estimate was a lower bound of 8281.5 seconds for `test_carla_recorder_world`. That suite completed in 6455.3 seconds in the current run.
+
+An earlier profile used [CI run 37301265769](https://github.com/SethKitchen/ThreeMojo/actions/runs/37301265769), from October 5, 2026, at commit `c115c0f51f601638bc7fc22dae04d70e7382ded3`.
 
 The first profile used [CI run 36903778725](https://github.com/SethKitchen/ThreeMojo/actions/runs/36903778725), from October 1, 2026. Its costs are estimates from artifact completion times, at two-second precision.
 

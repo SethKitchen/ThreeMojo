@@ -12,8 +12,9 @@
  * AppKit, supplies a surface, the events and the time.
  *
  *   threemojo_host LIBRARY [WIDTH HEIGHT] [--frames N] [--dump FILE.ppm]
- *                          [--chdir DIR] [--headless] [--crisp] [--cpu]
- *                          [--scan FILE]
+ *                          [--chdir DIR] [--headless] [--crisp] [--cpu] [--gpu]
+ *                          [--scan FILE] [--quality NAME] [--hour H] [--weather NAME]
+ *                          [--scale N|native]
  *
  * Start a window with run.sh, which launches ThreeMojo.app through Launch
  * Services. Since macOS 14 an app that a shell starts cannot take focus: its
@@ -44,11 +45,37 @@
  * splat library, a scan of any format whose first bytes name it, such as a
  * scan that tools/building_scans.mojo fetched into .cache/building-scans/.
  *
- * Keys: the arrow keys and the space bar go to the app. Escape quits.
+ * --quality NAME sets the environment variable THREEMOJO_QUALITY before the
+ * app is made. The village library reads it: low, medium, high or ultra.
+ *
+ * --hour H and --weather NAME set THREEMOJO_HOUR and THREEMOJO_WEATHER, which
+ * the village library reads too: the hour the game begins at, from 0 to less
+ * than 24, and its weather: clear, overcast, rain, fog or snow.
+ *
+ * --save FILE sets THREEMOJO_PROGRESS: the village reads the player's and the
+ * world's progress from FILE as it begins, and writes it there as it ends.
+ *
+ * --gpu draws the village on Metal (macos_village.m). The library still does the
+ * shadow maps, the light at the vertices and the setup of each triangle. Metal
+ * draws the triangles, the weather and the night over the sky, the pond's water,
+ * and the smoothing of edges. The library adds the rain and the heads-up display
+ * after. The game then draws at the window's size, whatever the quality asks. The
+ * frame is shown as the CPU's frames are, so --dump and the frame hash work.
+ *
+ * --scale N makes the frame N times as wide and as high as the window, so the
+ * app draws N * WIDTH by N * HEIGHT pixels in a window of WIDTH by HEIGHT
+ * points. --scale native takes the main screen's backing scale: 2 on a Retina
+ * display, where each point is two pixels, and a frame of the window's own
+ * size is a blurry stretch. A CPU app pays for the pixels it draws.
+ *
+ * Keys: every key that types an ASCII character goes to the app, as do the
+ * arrow keys and Shift (TM_KEY_SHIFT). The village library plays with them.
+ * Escape quits.
  */
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #include <dlfcn.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -59,6 +86,7 @@
 
 #include "host_scan.h"
 #include "macos_splat.h"
+#include "macos_village.h"
 #include "threemojo.h"
 
 #define DEFAULT_WIDTH 480
@@ -91,8 +119,10 @@ typedef struct {
   tm_app *app;
   const char *name;
   const char *dump;
-  int width;
+  int width;       /* the frame's size, in pixels */
   int height;
+  int view_width;  /* the window's size, in points, or 0 if it is the frame's */
+  int view_height;
   uint64_t limit;  /* frames to run, or 0 for no limit */
   bool crisp;      /* scale the frame with blocks, not smoothly */
   bool cpu;        /* --cpu: draw on the CPU even where Metal could */
@@ -100,6 +130,11 @@ typedef struct {
   bool has_splat;
   bool use_metal;  /* the app is drawn on Metal */
   SplatMetal *metal; /* the GPU that draws it, once the window has a layer */
+  bool gpu;          /* --gpu: the village is drawn on Metal */
+  VillageApi village; /* the library's village functions, if it has them all */
+  bool has_village;
+  VillageMetal *vmetal; /* the GPU that draws the village's triangles */
+  uint64_t window_village_gpu_ns; /* the village's GPU time at the start of the second */
   int want_width, want_height; /* the window's size in pixels, under the lock */
   uint64_t window_gpu_ns;      /* the GPU's time at the start of the current second */
   double gpu_ms;               /* GPU milliseconds a frame, the last whole second */
@@ -195,6 +230,27 @@ static void advance_metal(Host *host, int32_t microseconds) {
   host->window_frames++;
 }
 
+/* Move the village on, and draw it on the GPU: the library does its share, the
+ * GPU rasterizes and shades the triangles, and the library adds the water, the
+ * weather and the heads-up display. All of it counts as the library's time,
+ * except the GPU's own. A frame that the library cannot prepare is drawn on the
+ * CPU. */
+static const uint8_t *advance_village(Host *host, int32_t microseconds) {
+  uint64_t start = now_ns();
+  host->api.step(host->app, microseconds);
+  if (host->village.prepare(host->app) == 1 && village_metal_draw(host->vmetal) == 0) {
+    host->last = host->village.finish(host->app);
+  } else {
+    host->last = host->api.frame(host->app);
+  }
+  uint64_t took = now_ns() - start;
+  host->library_ns += took;
+  host->window_library_ns += took;
+  host->frames++;
+  host->window_frames++;
+  return host->last;
+}
+
 /* Close the current second when it is over. Returns whether it was. */
 static bool roll_window(Host *host) {
   uint64_t now = now_ns();
@@ -203,6 +259,7 @@ static bool roll_window(Host *host) {
   host->fps = (double)host->window_frames / seconds;
   host->ms = (double)host->window_library_ns / 1e6 / (double)host->window_frames;
   double library_ms = host->ms;
+  double frames = (double)host->window_frames;
   if (host->metal) {
     /* The CPU and the GPU work on different frames at once, so the slower of
      * the two sets the pace. */
@@ -214,7 +271,14 @@ static bool roll_window(Host *host) {
   host->window_start_ns = now;
   host->window_frames = 0;
   host->window_library_ns = 0;
-  if (host->metal) {
+  if (host->vmetal) {
+    /* The GPU's time is inside the library's, because the call waits for it. */
+    uint64_t gpu_ns = village_metal_gpu_ns(host->vmetal);
+    host->gpu_ms = (double)(gpu_ns - host->window_village_gpu_ns) / 1e6 / frames;
+    host->window_village_gpu_ns = gpu_ns;
+    printf("%.1f fps, %.2f ms a frame (CPU %.2f, GPU %.2f; up to %.0f fps)\n", host->fps, host->ms,
+           host->ms - host->gpu_ms, host->gpu_ms, host->ms > 0 ? 1000.0 / host->ms : 0.0);
+  } else if (host->metal) {
     printf("%.1f fps, %.2f ms a frame (library %.2f, GPU %.2f; up to %.0f fps)\n", host->fps,
            host->ms, library_ms, host->gpu_ms, host->ms > 0 ? 1000.0 / host->ms : 0.0);
   } else {
@@ -239,6 +303,10 @@ static void finish(Host *host) {
     if (host->metal) {
       printf(", %.2f ms a frame on the GPU",
              (double)splat_metal_gpu_ns(host->metal) / 1e6 / (double)host->frames);
+    }
+    if (host->vmetal) {
+      printf(" (%.2f ms of it on the GPU)",
+             (double)village_metal_gpu_ns(host->vmetal) / 1e6 / (double)host->frames);
     }
     if (host->last) {
       printf(", frame hash %llu",
@@ -316,6 +384,7 @@ static void *run_app(void *argument) {
      * picture that the display takes. */
     CGImageRef image = NULL;
     if (host->metal) advance_metal(host, microseconds);
+    else if (host->vmetal) image = make_image(advance_village(host, microseconds), host->width, host->height);
     else image = make_image(advance(host, microseconds), host->width, host->height);
     pthread_mutex_lock(&host->lock);
     bool second = roll_window(host);
@@ -354,13 +423,15 @@ static int key_code(NSEvent *event) {
   Host *_host;
   int _held; /* the button that is down, or -1 */
   double _wheel;
+  bool _shift; /* whether the app was told that Shift is down */
 }
 - (instancetype)initWithHost:(Host *)host;
 @end
 
 @implementation TMView
 - (instancetype)initWithHost:(Host *)host {
-  self = [super initWithFrame:NSMakeRect(0, 0, host->width, host->height)];
+  self = [super initWithFrame:NSMakeRect(0, 0, host->view_width ? host->view_width : host->width,
+                                         host->view_height ? host->view_height : host->height)];
   if (self) {
     _host = host;
     _held = -1;
@@ -474,6 +545,13 @@ static int key_code(NSEvent *event) {
   int code = key_code(event);
   if (code >= 0) post(_host, TM_KEY_UP, 0, 0, code);
 }
+/* Shift is a modifier, so it comes as a change of flags, not as a key. */
+- (void)flagsChanged:(NSEvent *)event {
+  bool down = (event.modifierFlags & NSEventModifierFlagShift) != 0;
+  if (down == _shift) return;
+  _shift = down;
+  post(_host, down ? TM_KEY_DOWN : TM_KEY_UP, 0, 0, TM_KEY_SHIFT);
+}
 @end
 
 /* The application: a window, a label, a display link and the app thread. */
@@ -563,7 +641,9 @@ static int key_code(NSEvent *event) {
   frame_size(_host, &width, &height);
   NSString *where = _host->metal
                         ? [NSString stringWithFormat:@"Metal, %s", splat_metal_name(_host->metal)]
-                        : @"CPU";
+                        : (_host->vmetal ? [NSString stringWithFormat:@"CPU and Metal, %s",
+                                                                      village_metal_name(_host->vmetal)]
+                                         : @"CPU");
   _label.stringValue =
       [NSString stringWithFormat:@"%.1f fps\n%.2f ms a frame, up to %.0f fps\n%s  %dx%d  %@",
                                  fps, ms, up_to, _host->name, width, height, where];
@@ -628,6 +708,7 @@ static int key_code(NSEvent *event) {
   }
   finish(_host);
   splat_metal_destroy(_host->metal);
+  village_metal_destroy(_host->vmetal);
   _host->api.destroy(_host->app);
 }
 @end
@@ -635,7 +716,9 @@ static int key_code(NSEvent *event) {
 static void usage(void) {
   fprintf(stderr,
           "usage: threemojo_host LIBRARY [WIDTH HEIGHT] [--frames N] [--dump FILE.ppm] "
-          "[--chdir DIR] [--headless] [--crisp] [--cpu] [--scan FILE]\n");
+          "[--chdir DIR] [--headless] [--crisp] [--cpu] [--gpu] [--scan FILE] "
+          "[--quality NAME] [--hour H] [--weather NAME] [--save FILE] "
+          "[--scale N|native]\n");
 }
 
 static bool load_symbols(Host *host, void *library) {
@@ -663,6 +746,15 @@ static bool load_symbols(Host *host, void *library) {
   host->splat.resize = dlsym(library, "tm_resize");
   host->has_splat = host->splat.prepare && host->splat.part && host->splat.words &&
                     host->splat.info && host->splat.resize;
+  /* So are the village's, for a GPU that draws its triangles. */
+  host->village.passes = dlsym(library, "tm_village_passes");
+  host->village.prepare = dlsym(library, "tm_village_prepare");
+  host->village.ints = dlsym(library, "tm_village_ints");
+  host->village.floats = dlsym(library, "tm_village_floats");
+  host->village.pointers = dlsym(library, "tm_village_pointers");
+  host->village.finish = dlsym(library, "tm_village_finish");
+  host->has_village = host->village.prepare && host->village.ints && host->village.floats &&
+                      host->village.pointers && host->village.finish;
   return true;
 }
 
@@ -677,6 +769,7 @@ int main(int argc, char **argv) {
     host.height = DEFAULT_HEIGHT;
     const char *path = NULL;
     const char *scan = NULL;
+    const char *scale = NULL;
     bool headless = false;
     int sizes = 0;
     for (int index = 1; index < argc; index++) {
@@ -687,12 +780,27 @@ int main(int argc, char **argv) {
         host.crisp = true;
       } else if (!strcmp(argument, "--cpu")) {
         host.cpu = true;
+      } else if (!strcmp(argument, "--gpu")) {
+        /* The village library reads this when it makes the game: a game for a
+         * GPU draws at the window's size. */
+        host.gpu = true;
+        setenv("THREEMOJO_GPU", "1", 1);
       } else if (!strcmp(argument, "--frames") && index + 1 < argc) {
         host.limit = strtoull(argv[++index], NULL, 10);
       } else if (!strcmp(argument, "--dump") && index + 1 < argc) {
         host.dump = argv[++index];
       } else if (!strcmp(argument, "--scan") && index + 1 < argc) {
         scan = argv[++index];
+      } else if (!strcmp(argument, "--quality") && index + 1 < argc) {
+        setenv("THREEMOJO_QUALITY", argv[++index], 1);
+      } else if (!strcmp(argument, "--hour") && index + 1 < argc) {
+        setenv("THREEMOJO_HOUR", argv[++index], 1);
+      } else if (!strcmp(argument, "--weather") && index + 1 < argc) {
+        setenv("THREEMOJO_WEATHER", argv[++index], 1);
+      } else if (!strcmp(argument, "--save") && index + 1 < argc) {
+        setenv("THREEMOJO_PROGRESS", argv[++index], 1);
+      } else if (!strcmp(argument, "--scale") && index + 1 < argc) {
+        scale = argv[++index];
       } else if (!strcmp(argument, "--chdir") && index + 1 < argc) {
         if (chdir(argv[++index]) != 0) {
           fprintf(stderr, "threemojo_host: cannot enter %s\n", argv[index]);
@@ -714,6 +822,25 @@ int main(int argc, char **argv) {
     if (!path || sizes == 1) {
       usage();
       return 2;
+    }
+    if (scale) {
+      int factor = 0;
+      if (!strcmp(scale, "native")) {
+        [NSApplication sharedApplication];
+        factor = (int)ceil(NSScreen.mainScreen.backingScaleFactor);
+      } else {
+        factor = atoi(scale);
+      }
+      if (factor < 1 || factor > 4) {
+        fprintf(stderr, "threemojo_host: --scale takes 1 to 4 or native, not %s\n", scale);
+        return 2;
+      }
+      host.view_width = host.width;
+      host.view_height = host.height;
+      host.width *= factor;
+      host.height *= factor;
+      printf("threemojo_host: a %dx%d window shows a %dx%d frame\n", host.view_width,
+             host.view_height, host.width, host.height);
     }
     void *library = dlopen(path, RTLD_NOW);
     if (!library) {
@@ -755,16 +882,29 @@ int main(int argc, char **argv) {
       }
     }
 
+    if (host.gpu) {
+      char reason[512] = "";
+      if (!host.has_village) {
+        fprintf(stderr, "threemojo_host: --gpu needs the village library; drawing on the CPU\n");
+      } else if ((host.vmetal = village_metal_create(&host.village, host.app, reason, sizeof reason))) {
+        printf("threemojo_host: drawing the village on Metal, %s\n", village_metal_name(host.vmetal));
+      } else {
+        fprintf(stderr, "threemojo_host: drawing on the CPU, no Metal: %s\n", reason);
+      }
+    }
+
     if (headless) {
       if (host.limit == 0) host.limit = 60;
       host.started_ns = host.window_start_ns = now_ns();
       while (host.frames < host.limit) {
         if (host.metal) advance_metal(&host, FIXED_STEP_US);
+        else if (host.vmetal) advance_village(&host, FIXED_STEP_US);
         else advance(&host, FIXED_STEP_US);
         roll_window(&host);
       }
       finish(&host);
       splat_metal_destroy(host.metal);
+      village_metal_destroy(host.vmetal);
       host.api.destroy(host.app);
       return 0;
     }

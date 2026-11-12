@@ -29,8 +29,10 @@ A `Garment` holds no mesh. `dress` makes its mesh from the skin of the person wh
 | `pattern`, `dyes` | `DyePattern`, four `Color` values | How it is dyed. |
 | `drape`, `ease` | `Int`, `Length` | Smoothing passes of its shell, and how loose it is cut. |
 | `form`, `flare` | `Form`, `Float32` | How its shell is shaped where it does not follow the skin, and how far a skirt widens for each meter it falls. |
+| `design` | `Design` | The design woven or embroidered over its dyes. Plain by default. |
+| `ruffles` | `Ruffles` | Where it wears frills: at its cuffs, its collar or its hem. None by default. |
 
-Every slot, layer, fabric, articulation, pattern, form, dye channel and wear channel is a type with `is_valid`. A bare integer does not compile.
+Every slot, layer, fabric, articulation, pattern, form, design, set of ruffles, dye channel and wear channel is a type with `is_valid`. A bare integer does not compile.
 
 ## Cover
 
@@ -61,6 +63,20 @@ A layer under a garment lifts it in full inside and at that layer's hem. The lif
 
 A garment is cut where a layer over it covers it past 0.75. That layer's hem lies at 0.5, so the garment ends under it. The cut runs along the iso-line, as a hem does, and not along the edges of triangles. So no whole triangle of an inner layer reaches out past the hem of the layer over it.
 
+Under a layer with no opening, the garment is cut deeper, past 0.55. A raised arm bends the skin hard, and there the inner layer can cross the outer one near that layer's edge. The deeper cut keeps the inner layer out of that band. A garment that lies wholly under such a layer, such as a shirt under a doublet, is cut away and draws nothing. A coat parted below the waist is cut open. Under such a layer, the shallower cut keeps the garment that shows at the opening whole to its edge.
+
+A loose garment hangs from the chest. A shell follows the skin into each hollow, such as under the bust, over the small of the back and below the chest. A loose robe does not: its cloth falls from the widest point above and spans the hollow.
+
+`hangs_loose` says which garments hang. Each is a closed garment of cloth, skirted, that covers the chest, with a round or a slit neck. A robe, a tunic, a gown and a surcoat hang. A tailored coat, a ball gown, a bodice and armor are fitted.
+
+`hang_lifts` adds a standoff to each vertex of a hanging garment, as a full sleeve does:
+
+1. It cuts the trunk into 36 sectors round a vertical axis through the hips. The span runs from the waist joint up to halfway from the chest joint to the neck.
+2. In each sector, from the top down, the cloth hangs as far out as the widest point above it. It draws in 20 cm for each meter it falls.
+3. A vertex inside that curtain is lifted out to it. The lift fades to none over the lowest 35% of the span. So the garment comes back to the body at the waist, where a belt cinches it.
+
+Each lift is scaled by the weight of the trunk's bones on the vertex, so an arm beside the body is not lifted. Each layer stands off the layer under it, so a belt or a cloak over a robe stays clear of it.
+
 The hands' skins are meshes of their own, and each layer stands off only the layers under it on the same skin. So at the wrist a glove on the hand's skin can still show past a vambrace on the arm's.
 
 A shell is one face of its fabric, so a hem has no thickness of its own. `add_rim` gives each open edge a rim: a strip of two triangles from the edge in along the normals, facing out of the edge. `dress` rims each fabric 1.5 mm thick or more, at its own thickness and at most 6 mm deep. So the hems of leather, padding, mail and plate, and the edge of each lame, show their thickness and catch the light. Copies of a vertex at one position are one vertex, so a seam where the skin was parted takes no rim.
@@ -78,6 +94,16 @@ A shell made from the skin follows each thigh and each toe. A skirt and a boot d
 | `SHOD` | closes each foot in a smooth last | boots, sabatons |
 | `COWLED` | closes the head in a loose cowl, open at the face | a hood |
 | `BANDED` | is drawn as a taut band round the body, level at its top and its bottom | a belt |
+| `HATTED` | is drawn as the hat or the helmet its headwear names, round the head | a great helm, a crown, a wizard's hat |
+| `DOMED` | closes each shoulder in one smooth dome that stands well off it | great pauldrons |
+
+A garment cut from the skin has as many triangles as the skin under it. A skirt's rings and a hat's rings and sectors do not. On a coarse skin they would keep their full count and draw more triangles than the body. So `dress` gives them a share of their full detail, as `garment_detail` reads it off the skin:
+
+- A skin of 10,000 triangles or more takes the full detail: the body's share of a 16,000-triangle budget.
+- A coarser skin takes less, as the square root of its triangles over 10,000, and one half at the least.
+- A skirt's rings then lie farther apart, 6 cm at one half. A hat keeps fewer sectors and rings: 24 sectors and 12 rings at one half.
+
+At a 4,000-triangle budget, a robe draws 7,900 triangles, not 11,200, and a straw hat 2,900, not 5,400.
 
 ### Bands
 
@@ -95,26 +121,43 @@ A band hides nothing under it: the tunic under a belt is drawn whole.
 
 1. `skirt_top` is 3 cm below the hip joints on the template, above the crotch. There the shell is one tube round the pelvis. The shell of the trunk and the legs is cut there.
 2. `skirt_envelope` slices the garment's own shell at rings 3 cm apart, from the top to the lowest point of the shell on the legs. That point is the hem. Each slice is closed as a convex hull, so it spans the gap between the thighs.
-3. Each ring is at least as wide as the ring above it, plus the flare times the drop. So the cloth falls straight or flares, and does not tuck in between the legs. A skirt under it lifts it by that skirt's thickness and this garment's clearance.
-4. `skirt_mesh` lofts the rings on 40 sides. The top ring reaches 1.5 cm up inside the shell, so no gap opens at the cut.
+3. Each ring is at least as wide as the ring above it, plus the flare times the drop. So the cloth falls straight or flares, and does not tuck in between the legs. A skirt under it lifts it by that skirt's thickness and this garment's clearance. So does metal on the legs under it, such as plate legs, which stands off the thighs.
+4. `skirt_mesh` lofts the rings on 48 sides. The top ring reaches 1.5 cm up inside the shell, so no gap opens at the cut.
 
-Ten folds run down each skirt. They stand only out of the rings, so no fold dips into a skirt under it. They deepen as the cloth falls, from none at the top to their whole depth at the hem. Every skirt's folds lie at the same sides, so a skirt over another folds over its folds. `fold_depth` gives the depth at the hem.
+About ten folds run down each skirt. They bunch together and spread apart round the skirt, and some stand out further than others, as cloth falls. `fold_profile` gives each side's share of the deepest fold. The folds stand only out of the rings, so no fold dips into a skirt under it. They deepen as the cloth falls, from none at the top to their whole depth at the hem. Every skirt's folds lie at the same sides, so a skirt over another folds over its folds.
+
+`fold_depth` gives the depth of a straight skirt's deepest fold at the hem. A wide skirt has more cloth to fold, so its folds stand `FLARE_FOLDS` times its flare deeper. A skirt that flares 0.5 folds twice as deep as a straight one.
 
 | Fabric | Fold at the hem |
 |---|---|
 | `LINEN`, `SILK` | 18 mm |
 | `WOOL`, `VELVET` | 25 mm |
-| `LEATHER`, `MAIL` | 6 mm |
-| `PADDING` | 4 mm |
+| `LEATHER`, `MAIL`, `SCALE` | 6 mm |
+| `PADDING`, `STRAW` | 4 mm |
+| `FUR`, `FELT` | 10 mm |
 | `PLATE` | none |
 
 A drawn skirt is lined: it has an inner face one fabric thickness inside, and a strip across its hem. So the hem shows its thickness, and the inside of the skirt draws when it is seen from below.
 
+A long skirt, whose hem falls below the knees, hides the legs inside it from 15 cm over its hem (`SKIRT_SHOW`). A shorter skirt with no opening, such as a tunic's or a surcoat's, hides them from 6 cm over its hem (`SHORT_SKIRT_SHOW`). Both thighs share the middle of its front. So a thigh that lifts would push out through it as the person runs or jumps. With the legs hidden, nothing is left to push out. The skin and every garment under the skirt are hidden there.
+
+So are the legs of a garment dressed after the skirt, such as a boot's shaft or a greave inside a robe.
+
+A short skirt, as a tunic's, hides no leg: a kick lifts the thigh out under its hem. A skirt parted open, as a frock coat's, shows the legs, so it hides none.
+
 Each vertex at the top takes the weights of the nearest vertex of the shell. Down the skirt the weights pass to the thighs: at the hem the thighs hold 0.9 of each vertex. The right thigh turns the right side and the left thigh the left side. The two share a band 10 cm wide at the middle of the front and the back. So the skirt opens as a leg lifts.
+
+A skirt close over the body moves with the cloth under it. Where the gap is 2 cm or less, the skirt's vertex takes the weights of the shell's nearest vertex. From 2 cm to 6 cm, it passes smoothly back to its own blend. So a short tunic over trousers turns with each thigh. A thigh that swings 35 degrees forward or back does not pass out through it. Between the legs and at a flared hem, the skirt hangs free and keeps its blend.
+
+The gap is the closer of two measures. One is to the shell's nearest vertex. The other runs along the side's ray from the axis, to where the ray crosses the shell.
+
+A skirt is not simulated. A thigh that swings far past a stride, as in a high kick, can still pass out through a short skirt near its top.
 
 The cover value falls from one to one half over the 4 cm above the hem. So a trim lies along a skirt's hem, as along any hem.
 
 Below the top, a skirt hangs clear of the legs. So it hides neither the skin nor the garments under it there, and the hose and the legs draw under it. A band 6 cm deep below the top stays hidden, so no triangle that crosses the top shows through the shell over it. A skirt over another that falls as far hides it. The inner skirt is then not drawn.
+
+A shorter skirt with no opening over another hides that skirt's top. The inner skirt is cut `SKIRT_UNDERLAP`, 3 cm, over the hem of the skirt over it. Only the part below is drawn. The two skirts take their weights apart, so they cross as the legs swing. Then the inner skirt's hidden top would show through.
 
 ### Lasts
 
@@ -138,6 +181,97 @@ Each vertex of a last takes the weights of the nearest vertex of the shell. So t
 
 `face_oval` gives the oval's distance without the clamp of `face_opening`. So the cut runs smoothly through triangles larger than the opening's ramp.
 
+### Domes
+
+A pauldron made from the skin follows the shoulder's muscles, and reads as a sleeve. `extensions/attire/dome.mojo` closes each shoulder of a `DOMED` garment in one dome, as a heroic harness's pauldrons are.
+
+1. The shell is split at the middle of the chest into each shoulder's part.
+2. Each part's vertices are closed in their convex hull.
+3. A sphere of 16 rings and 24 sectors, stretched to the part's box, is cast from the hull's middle. It stands 2.2 cm out of the hull.
+4. The dome is cut where it turns in toward the body, past a third of its half width from its middle, and under the armpit. The band along that edge takes the trim.
+5. A lining a fabric's thickness inside it shows under its edge.
+
+Each vertex takes the skin weights of the nearest vertex of the shell. So a lamed dome rides the chest at its top and opens as the arm rises. A dome hides none of the skin or the garments under it.
+
+### Necklines, openings and sleeves
+
+A cover says which bones a garment covers. It cannot leave the front of the neck bare, part a coat's skirts or swell a sleeve. Three kinds on a garment do, in `extensions/attire/opening.mojo`.
+
+| Kind | Values | Shape on the template |
+|---|---|---|
+| `Neckline` | `ROUND_NECK` | as the cover cuts it |
+| | `V_NECK` | a V to 17 cm below the neck's joint, 14 cm wide at the neck |
+| | `SQUARE_NECK` | 14 cm below the neck's joint, 22 cm wide |
+| | `SCOOP_NECK` | an oval 30 cm wide and 13 cm deep under the neck |
+| | `SLIT_NECK` | a slit 14 cm deep, 5 cm wide at the top |
+| `Opening` | `CLOSED` | closed all round |
+| | `OPEN_FRONT` | a gap 12 cm wide down the front, from the neck to the hem |
+| | `OPEN_BELOW` | open below the waist, 6 cm wide there and parting by a quarter of the fall |
+| | `FRONT_ONLY` | the part 3 cm or more in front of the trunk's middle |
+| `Sleeve` | `FITTED_SLEEVE` | as the arm is |
+| | `BISHOP_SLEEVE` | 3.5 cm fuller round the forearm at most, gathered at the cuff |
+| | `PUFFED_SHOULDER` | 2.4 cm fuller round the top two fifths of the upper arm at most |
+
+A neckline and an opening are one field over space, positive where the garment stays. `dress` multiplies the garment's cover by `opening_mask`, which falls from one to nothing over 12 cm into the cut. So the garment is cut on the field's line, and the garment under it shows through. Its cover falls to the trim's level along the cut, so the trim runs round a neckline and down an opening. A skirt's tube is cut on the same line by `cut_open`.
+
+A sleeve's lift is added to the garment's standoff at each vertex of the skin, shared by the skin weights. So it fades into the shoulder and the hand.
+
+A cut narrower than the skin's triangles cannot be drawn: a triangle whose corners all lie outside it bridges it. At a 9,000-triangle budget the last few centimeters of a V's point are bridged so.
+
+### Ruffles
+
+A ruffle is a frill: a strip of cloth gathered along one edge. A garment's `ruffles` name where it wears frills. Join places with `|`.
+
+```mojo
+var linen = shirt()
+linen.ruffles = CUFF_RUFFLES | COLLAR_RUFFLE
+```
+
+| Place | Where | How it grows | Width | Flutes |
+|---|---|---|---|---|
+| `CUFF_RUFFLES` | the end of each sleeve | down the arm, over the hand | 4.5 cm | 2.6 cm apart, 8 mm deep |
+| `COLLAR_RUFFLE` | the neckline | out and down, over the shoulders and the chest | 5 cm | 3 cm apart, 1 cm deep |
+| `HEM_RUFFLE` | a hem below the hips | down from the hem | 7 cm | 4.5 cm apart, 1.4 cm deep |
+
+`ruffle_mesh` grows a frill from each open edge at a named place. An edge is a cuff when an arm weighs most on it and it runs across the bone. An edge is a collar when it is about level, above the waist joint and close to the neck. An edge is a hem when it is about level, below the hip joints and in the lowest 35% of the garment. So the front edges of a coat grow no frill.
+
+A frill grows only from an edge that shows. When a garment over it hides the edge, the edge grows no frill. A lined skirt's hem is closed, so the frill grows from the hem of the garment's whole shell.
+
+The frill flares as it grows. Its flutes deepen from none at the seam to their whole depth at its edge, and each loop holds a whole number of flutes. The frill is two sheets back to back, so it draws from both sides. It takes the skin weights of the edge it grows from, so it moves with the garment. Its cover value is below the trim's level, so it takes the trim's dye.
+
+A chemise has frills at its cuffs and its collar. A ball gown has frills at the ends of its sleeves. Some callings add frills to a shirt, a gown or a skirt; see [Outfits and armor](Outfits-and-armor#crowds).
+
+`examples/fabrics.mojo` dresses five people whose cloth shows its character, and writes `out/fabrics.png`. A barbarian wears fur. A goodwife wears a frilled chemise and a skirt with a flounce at its hem. A lady wears lace at her elbows, and a courtier wears a frilled shirt. A hunter wears leather of hide under a pale fur mantle.
+
+![Five people in fur, frills, a flounced skirt, a damask ball gown and leather](out/fabrics.png)
+
+### Hats and helmets
+
+A garment made from the skin follows the face and the ears. A hat stands on the head, over the hair. `extensions/attire/headwear.mojo` draws a `HATTED` garment as the hat or the helmet its `headwear` names.
+
+1. The shell's vertices above the base of the neck are closed in their convex hull, as a cowl's are.
+2. `HeadFrame` reads the hull: its middle, its top, and its width at each height and each way round. A hat's band lies 10 cm below the top of the head, just over the brows. It stands 1.2 cm out of the hull, so it sits over the hair.
+3. The hat is built round the band, scaled to the stature.
+
+| Headwear | Shape |
+|---|---|
+| `GREAT_HELM` | the hull, cast out of its middle 1.6 cm off it, down to the base of the neck; a flat top, a ridge down the front, and an eye slit on each side of it |
+| `HALF_HELM` | the same cast, 1.2 cm off the hull, cut level just over the brows, with a nasal and a ridge over the crown |
+| `HORNED_HELM` | a half helm with a horn on each side that curves out, up and forward |
+| `WIZARD_HAT` | a brim 8.5 cm wide that droops at its edge, and a cone 30 cm tall whose tip bends back and down |
+| `STRAW_HAT` | a brim 9.5 cm wide that turns up at its edge, and a round crown 2.5 cm over the head |
+| `FEATHERED_CAP` | a crown that rises 4 cm over the head to a point over the brow, a brim that turns up behind, and a feather |
+| `CROWN` | a band 4 cm deep that flares a little, with eight points, a stone at the foot of each and a larger one in front |
+| `CIRCLET` | a band 1.2 cm deep that dips to a point over the brow, with a stone there |
+
+Each hat has an inner face a fabric's thickness in, so it shows from below. A crown of a hat stands clear of the head under it at every height. Its band, rims and ridges take the trim dye. Its stones, horns and feather take the accent dye: their `accent` attribute is one. A hat rides the head, and hides none of the face under it.
+
+`examples/headwear.mojo` draws each hat and helmet on a head of its own, and writes `out/headwear.png`.
+
+![Eight busts, each in one of the eight hats and helmets](out/headwear.png)
+
+A great helm hides the hair. Every other hat keeps it: `press_hair` draws each point of the strands and cards over the band in under the hat. A hat that closes over the head cuts the hair's shell away over its band. The shell can stand out of the hat over the ears. A crown and a circlet are open over the hair, so they keep the shell whole.
+
 ## Fabrics
 
 `fabric(kind)` gives the constants of a fabric. `fabric_material(kind, tint)` gives its physically based look, with vertex colors on and the scene's environment reflected.
@@ -152,8 +286,34 @@ Each vertex of a last takes the weights of the nearest vertex of the shell. So t
 | `PADDING` | 2.4 kg/m² | 15 mm | 6 | sheen |
 | `MAIL` | 8.5 kg/m² | 3 mm | 3 | rough metal |
 | `PLATE` | 15.7 kg/m² | 2 mm | 24 | polished metal under a clear coat |
+| `FUR` | 1.4 kg/m² | 12 mm | 6 | matte, with a broad sheen |
+| `FELT` | 600 g/m² | 3 mm | 4 | matte, with a faint sheen |
+| `STRAW` | 350 g/m² | 2 mm | 6 | dull, with a faint clear coat |
+| `SCALE` | 10.5 kg/m² | 4 mm | 4 | its metal, a little rougher than plate |
 
 `ArealDensity` is a `Quantity[-2, 1, 0, 0]`, in `extensions/attire/quantities.mojo`. Its units are `KILOGRAM_PER_SQUARE_METER`, `GRAM_PER_SQUARE_METER` and `OUNCE_PER_SQUARE_YARD`. A metal shows what it reflects, so give the scene an environment.
+
+### Metals
+
+Mail and plate are made of a `Metal`. A garment's `metal` is steel unless it names another. The metal sets the look: plate takes the metal's roughness and metalness, and mail is a quarter rougher, because its rings scatter the light. The code is in `extensions/attire/metal.mojo`.
+
+| Metal | Color | Roughness | Metalness |
+|---|---|---|---|
+| `IRON` | dark gray | 0.5 | 0.9 |
+| `STEEL` | bright gray | 0.3 | 0.9 |
+| `BLACKENED` | near black | 0.55 | 0.7 |
+| `BLUED` | deep blue | 0.28 | 0.9 |
+| `BRONZE` | brown gold | 0.35 | 0.9 |
+| `COPPER` | red brown | 0.35 | 0.9 |
+| `BRASS` | pale gold | 0.3 | 0.9 |
+| `SILVER` | white | 0.18 | 0.95 |
+| `GOLD` | deep yellow | 0.2 | 0.95 |
+
+`forged(garment, metal, trim)` makes a mail or plate garment of a metal. Its primary and secondary dyes take the metal's color. Its trim takes the color of the trim's metal, or of its own metal when no trim is given. Its accent dye is left for stones and horns. `forged` refuses cloth.
+
+```mojo
+var helm = forged(bascinet(), BLUED, GOLD)
+```
 
 ## Surface
 
@@ -164,7 +324,11 @@ Each vertex of a last takes the weights of the nearest vertex of the shell. So t
 | `MAIL` | riveted rings, four in one | 4 cm | 0.6 |
 | `PADDING` | diamond quilting | 6 cm | 1.0 |
 | `LINEN`, `WOOL`, `SILK`, `VELVET` | two-over-two twill | 4 mm | 0.15 |
-| `LEATHER`, `PLATE` | none | | |
+| `FUR` | locks that fall down the garment | 3 cm | 1.6 |
+| `STRAW` | flat straws plaited over and under | 1.2 cm | 0.5 |
+| `LEATHER` | pebbled grain, rounded cells parted by creases | 1.2 cm | 0.35 |
+| `SCALE` | rounded scales, each rising to its lower edge over the row below | 5 cm, two scales across | 1.2 |
+| `PLATE`, `FELT` | none | | |
 
 `garment_uvs(piece, rig)` makes the coordinates in three steps.
 
@@ -173,6 +337,20 @@ Each vertex of a last takes the weights of the nearest vertex of the shell. So t
 3. It sets `u` to the arc round the bone, at the chain's mean radius. It sets `v` to the distance down the chain.
 
 So `v` runs on across the elbow and the knee, and no triangle mixes two chains. A pattern meets itself at the back seams and where a sleeve meets the body, as the panels of a sewn garment do.
+
+### Fur
+
+A fur garment stands in strands. `fur_shells` stacks copies of the garment's `outer_face` over it, each farther out along the normals, up to a pile of 1.6 cm. The outer face is where the normals point away from the bones, so no strands stand on a skirt's lining. Each copy draws only the strands that reach it. Its `alpha_map` is `fur_texture`, a tile of strands, and its `alpha_test` is its height in the pile. A strand is a cone, so a higher copy draws it thinner, and it ends in a point.
+
+| Value | Size |
+|---|---|
+| Pile | 1.6 cm |
+| Shells | 3 at full detail, 2 at the least, as `fur_shell_count` says |
+| Strands | 10 across a 3 cm tile, 3 mm apart |
+| Comb | the tips fall 40% of the pile down |
+| Root | the root is drawn at 55% of the dye's shade |
+
+The roots are darker than the tips, because the strands around a root shade it. The strand texture has no mip chain. Averaged strands turn to a haze that falls under the test, and the fur goes bald at a distance.
 
 `SurfaceMaps` makes each bump map once and gives it to every material that needs it. Each map is a 64-texel height image with a mip chain. In a full-body view a ring of mail is smaller than a pixel, and the mip chain turns the rings into a fine glint.
 
@@ -186,8 +364,23 @@ A garment has four dye channels: primary, secondary, trim and accent. A pattern 
 | `PARTY` | the wearer's right side | the left side |
 | `STRIPES` | even bands round the body | odd bands |
 | `QUARTERLY` | upper right and lower left | upper left and lower right |
+| `CHEVRON` | the field | a band like an inverted V, its point on the chest |
+| `CROSS` | the field | an upright cross, crossed on the chest |
+| `SALTIRE` | the field | a diagonal cross, crossed on the chest |
+| `BEND` | the field | a band from the right shoulder to the left hip |
+| `PALY` | even upright bands | odd upright bands |
+| `CHECKY` | even squares | odd squares |
+| `FRONT_PANEL` | the rest | a panel down the front, 11 cm wide over the chest and widening down a skirt |
+| `SLEEVES` | the body | the sleeves |
+| `BANDED_SLEEVES` | the body, and even bands of the sleeves | odd bands of the sleeves |
 
-Every pattern puts the trim dye along each hem. `dye_pattern` cuts the garment along each boundary, so a boundary is a crisp line. Each vertex keeps its channel weights in a `dye` attribute.
+A charge lies on the front and the back alike, as a tabard's does. A front panel lies on the front alone, and the skin weights of the arms say where the sleeves are. Each band of a cross, a saltire, a chevron or a bend is 11 cm wide on the template. A pattern is a field over the body whose sign says the dye, so each charge has a crisp edge.
+
+`examples/heraldry.mojo` dresses ten men in surcoats, one in each pattern, and writes `out/heraldry.png`.
+
+![Ten men in surcoats, one in each of the ten dye patterns](out/heraldry.png)
+
+Every pattern puts the trim dye along each hem. `dye_pattern` cuts the garment along each boundary, so a boundary is a crisp line. A vertex whose `accent` attribute is one half or more takes the accent dye: a hat's stones, horns and feather. Each vertex keeps its channel weights in a `dye` attribute.
 
 Wear is four more channels in a `wear` attribute: dirt, blood, wet and damage. `soil` lays dirt from the lowest point up. `stain` lays any channel round a point. `paint` mixes the dyes, then the wear, into the `color` attribute.
 
@@ -196,6 +389,53 @@ stain(piece, BLOOD, Vector3(0.1, 1.2, 0.15), Length(0.08, METER), 0.9)
 soil(piece, Length(0.3, METER), 0.6)
 paint(piece, garment.dyes)
 ```
+
+## Designs
+
+A design is a texture that tiles over a garment's dyes. A dye pattern is cut on the skin's triangles, so it cannot show a detail smaller than a triangle. A design can show a flower 4 cm wide. It tiles in the garment's texture coordinates, which run in meters round its bones. See [Surface](#surface).
+
+```mojo
+var coat = doublet()
+coat.design = BROCADE
+```
+
+| Design | Tile | What it shows |
+|---|---|---|
+| `PLAIN` | | the dyes alone |
+| `DAMASK` | 14 cm | rosettes in an ogee lattice, lighter than the ground |
+| `BROCADE` | 12 cm | the same, in the trim's dye |
+| `TARTAN` | 16 cm | bands of the primary and secondary dyes, with thin lines of the trim's dye, in a twill |
+| `PINSTRIPE` | 8 cm | four thin stripes of the trim's dye in each tile |
+| `DIAPER` | 7 cm | a lattice of diamonds in the trim's dye, with a dot in each diamond |
+| `FLORAL` | 12 cm | three flowers of the trim's dye, with hearts of the secondary dye |
+| `CHECK` | 8 cm | checks of the trim's dye, and a blend where the bands cross |
+| `HERRINGBONE` | 4 cm | a zigzag twill, lighter and darker than the dye |
+| `HIDE` | 25 cm | the mottle and the creases of tanned hide |
+
+A tonal design is damask, herringbone or hide. It is a texture of shades, and the dye under it is multiplied by the shade. So it lightens and darkens every dye that it lies on. A tonal design shows less on a dark dye, as real damask does.
+
+A design in colors is drawn in the garment's own dyes. The primary dye is its ground, the trim's dye is its motif, and the secondary dye is its third color. A motif that is nearly the ground's color does not show. `contrast` then draws it in a lighter shade of a dark ground, or a darker shade of a light ground.
+
+`worn_design` says which design a fabric shows. Linen, wool, silk, velvet, padding and felt show their design. Plain leather shows hide. Mail, plate, scale, fur and straw show no design.
+
+Hide's mottle is also the roughness map of its material, so leather shines where it is dark and worn smooth. A hide's edges are burnished 30% darker than its face, unless its trim has a dye of its own.
+
+### Parts and braids
+
+A skinned mesh has one material, and a material has one color map. So `dress` cuts a garment in a design into up to three parts, and adds each part as a skinned mesh. `Dressed.parts` holds every part of each garment. `Dressed.meshes` holds the first part.
+
+| Design | Designed part | Plain part | Braided part |
+|---|---|---|---|
+| `PLAIN`, `HERRINGBONE`, `HIDE` | all | none | none |
+| `DAMASK` | all but the trim | none | the trim |
+| `BROCADE`, `DIAPER`, `FLORAL` | the primary dye | the secondary and accent dyes | the trim |
+| `TARTAN`, `PINSTRIPE`, `CHECK` | the primary dye | the rest | none |
+
+A design in colors paints its primary part white, so the texture gives the color and the vertex colors give the wear. A braid is a tonal cable of two strands, 4 cm a tile. Only the designs of fine cloth braid their trim. `DesignMaps` makes each texture once for each call to `dress`. A texture in colors is made once for each set of three dyes.
+
+`examples/designs.mojo` dresses nine people, each in one design, and writes `out/designs.png`.
+
+![Nine people in damask, brocade, tartan, pinstripe, diaper, floral, check, herringbone and hide](out/designs.png)
 
 ## The wardrobe
 
@@ -228,6 +468,73 @@ paint(piece, garment.dyes)
 | `gauntlets` | hands | armor | plate, rigid on each hand | fitted |
 | `sabatons` | feet | armor | plate, rigid on each foot and its toes | shod |
 
+### The armory
+
+`armory()` in `extensions/attire/armory.mojo` gives more armor and three helmets. Each piece of plate replaces the wardrobe's piece in its slot and layer. Plate legs replace greaves, a platebody a cuirass, and a plate skirt a fauld.
+
+| Garment | Slot | Layer | Fabric | Articulation | Form |
+|---|---|---|---|---|---|
+| `platebody` | torso | armor | plate | five lames from the chest | fitted |
+| `plate_legs` | legs | armor | plate | rigid on each thigh and shin | fitted |
+| `plate_skirt` | waist | armor | plate | six lames from the hips | skirted, flare 0.18 |
+| `arm_harness` | arms | armor | plate | rigid on each upper arm and forearm | fitted |
+| `great_pauldrons` | shoulders | armor | plate | four lames from the chest | domed |
+| `chain_shirt` | torso | outer | mail, short sleeves | flexible | skirted, flare 0.1 |
+| `scale_shirt` | torso | armor | scale, short sleeves | flexible | skirted, flare 0.12 |
+| `mail_chausses` | legs | outer | mail | flexible | fitted |
+| `bracers` | arms | outer | leather | flexible | fitted |
+| `great_helm` | head | armor | plate, brass trim | rigid on the head | hatted |
+| `half_helm` | head | armor | plate | rigid on the head | hatted |
+| `horned_helm` | head | armor | plate, ivory horns | rigid on the head | hatted |
+
+### The apparel
+
+`apparel()` in `extensions/attire/apparel.mojo` gives work clothes, furs, robes, boots and five hats.
+
+| Garment | Slot | Layer | Fabric | Form |
+|---|---|---|---|---|
+| `smock` | torso | mid | linen, cut loose, to mid-thigh | skirted, flare 0.3 |
+| `bodice` | torso | outer | velvet, over a gown | fitted |
+| `trousers` | legs | mid | wool, cut loose, to the ankle | fitted |
+| `fur_kilt` | waist | outer | fur, to above the knee | skirted, flare 0.25 |
+| `fur_mantle` | shoulders | over | fur | fitted |
+| `hood_cape` | shoulders | over | wool, a short cape to mid-chest, worn with a hood | fitted |
+| `royal_mantle` | shoulders | over | velvet, edged in white fur | fitted |
+| `wizard_robe` | torso | mid | wool, cut loose, to the floor | skirted, flare 0.35 |
+| `cassock` | torso | mid | wool, a high collar, to the ankles | skirted, flare 0.2 |
+| `tall_boots` | feet | outer | leather, to the knee | shod |
+| `fur_boots` | feet | outer | fur, to mid-shin | shod |
+| `sash` | waist | over | silk | banded |
+| `wizard_hat` | head | over | felt | hatted |
+| `straw_hat` | head | over | straw | hatted |
+| `feathered_cap` | head | over | felt, a red feather | hatted |
+| `crown` | head | over | gold plate, rubies | hatted |
+| `circlet` | head | over | silver plate, a sapphire | hatted |
+
+### The tailor
+
+`extensions/attire/tailor.mojo` cuts and shapes tops and bottoms.
+
+| Garment | Slot | Layer | Fabric | Shape |
+|---|---|---|---|---|
+| `chemise` | torso | under | linen | scoop neck, bishop sleeves, to mid-thigh |
+| `laced_shirt` | torso | under | linen | slit neck, bishop sleeves, to the hip |
+| `skirt` | legs | mid | wool | skirted from the waist to the ankle, flare 0.28 |
+| `apron` | waist | outer | linen | skirted, the front alone, to mid-calf |
+| `laced_bodice` | torso | outer | wool | square neck, from the waist to under the arms, no sleeves |
+| `doublet` | torso | mid | wool | a high collar, puffed shoulders, a placket of gold lace, to the hip |
+| `waistcoat` | torso | mid | silk | V neck, no sleeves, to below the waist |
+| `frock_coat` | torso | outer | wool | a collar, to below the knee, open below the waist, flare 0.22 |
+| `long_coat` | torso | outer | velvet | a collar, to below the knee, open down the front, flare 0.25 |
+| `open_robe` | torso | over | velvet | open down the front, to the ankle, flare 0.3 |
+| `ball_gown` | torso | mid | silk | square neck, puffed shoulders, sleeves to the elbow, to the floor, flare 0.6, a front panel |
+
+A waistcoat's V shows the shirt under it, and a frock coat's parted skirts show the breeches. A ball gown's square neck shows the chemise, and so does its sleeve's end at the elbow.
+
+`examples/tailoring.mojo` dresses eight people in the tailor's garments, and writes `out/tailoring.png`. Most of the garments wear a design.
+
+![Eight people in chemises, bodices, skirts, aprons, laced shirts, doublets, coats and gowns](out/tailoring.png)
+
 ## Garments made elsewhere
 
 An artist can model a garment on one body and export it to glTF. `bind_garment` reads where each vertex lies against that body's skin. It stores the joint that weighs most there and where the skin point stands from that joint, in statures. It also stores how far the vertex stands off the skin.
@@ -248,4 +555,4 @@ Roblox's cages and MakeHuman's `mhclo` files bind a garment to a body mesh from 
 
 ## Tests
 
-`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_garment.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.
+`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_metal.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_dome.mojo`, `test_attire_headwear.mojo`, `test_attire_surface.mojo`, `test_attire_hang.mojo`, `test_attire_fur.mojo`, `test_attire_ruffle.mojo`, `test_attire_dye.mojo`, `test_attire_design.mojo`, `test_attire_garment.mojo`, `test_attire_armory.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.

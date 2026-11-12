@@ -385,6 +385,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_castle_material_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[2]' value to 'Material'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_catmull_rom_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -403,6 +413,16 @@
         "column": 22,
         "line": 12,
         "message": "cannot implicitly convert 'IntLiteral[0]' value to 'CellId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_check_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Check'"
       }
     ],
     "notes": []
@@ -952,6 +972,18 @@
         "column": 47,
         "line": 13,
         "message": "invalid call to 'depth_material': value passed to 'depth_packing' cannot be converted from 'IntLiteral[3201]' to 'DepthPacking'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_design_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 20,
+        "message": "invalid call to 'require_design': value passed to 'design' cannot be converted from 'IntLiteral[1]' to 'Design'"
       }
     ],
     "notes": [
@@ -1893,6 +1925,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_hazard_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Hazard'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_head_bone_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1971,6 +2013,18 @@
         "column": 29,
         "line": 14,
         "message": "invalid call to 'head_vessel_label': value passed to 'part' cannot be converted from 'IntLiteral[1]' to 'HeadVessel'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_headwear_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_headwear': value passed to 'headwear' cannot be converted from 'IntLiteral[1]' to 'Headwear'"
       }
     ],
     "notes": [
@@ -2503,6 +2557,18 @@
       "candidate not viable: value passed to 'message_id' cannot be converted from 'IntLiteral[2]' to 'MessageId'"
     ]
   },
+  "tests/compile_fail/a_metal_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'require_metal': value passed to 'metal' cannot be converted from 'IntLiteral[1]' to 'Metal'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_mirror_side_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2527,6 +2593,18 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'MissileKind'"
+    ]
+  },
+  "tests/compile_fail/a_mood_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'mood_line': value passed to 'mood' cannot be converted from 'IntLiteral[1]' to 'Mood'"
+      }
+    ],
+    "notes": [
+      "function declared here"
     ]
   },
   "tests/compile_fail/a_motion_vector_space_is_not_a_bare_int.mojo": {
@@ -2634,6 +2712,18 @@
         "column": 11,
         "line": 16,
         "message": "invalid call to 'check': value passed to 'value' cannot be converted from 'IntLiteral[0]' to 'NavigationSearchStatus'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_neckline_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_neckline': value passed to 'neckline' cannot be converted from 'IntLiteral[1]' to 'Neckline'"
       }
     ],
     "notes": [
@@ -3004,6 +3094,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_phase_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Phase'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_pipe_run_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3146,6 +3246,20 @@
     ],
     "notes": [
       "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_provenance_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 22,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'provenance' cannot be converted from 'IntLiteral[0]' to 'Provenance'"
     ]
   },
   "tests/compile_fail/a_quality_is_not_a_bare_int.mojo": {
@@ -3310,6 +3424,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_requirement_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 33,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'RequirementKind'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_road_geometry_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3346,6 +3470,34 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'road_option' cannot be converted from 'IntLiteral[4]' to 'RoadOption'"
+    ]
+  },
+  "tests/compile_fail/a_roof_covering_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 32,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'covering' cannot be converted from 'IntLiteral[3]' to 'RoofCovering'"
+    ]
+  },
+  "tests/compile_fail/a_roof_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 22,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'roof' cannot be converted from 'IntLiteral[1]' to 'RoofKind'"
     ]
   },
   "tests/compile_fail/a_route_node_id_is_not_a_bare_int.mojo": {
@@ -3683,6 +3835,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_sleeve_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 20,
+        "message": "invalid call to 'require_sleeve': value passed to 'sleeve' cannot be converted from 'IntLiteral[1]' to 'Sleeve'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_slot_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3754,6 +3918,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_sound_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'sound_length': value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'SoundKind'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_space_id_is_not_a_bare_int.mojo": {
     "errors": [
@@ -3948,6 +4124,16 @@
         "column": 24,
         "line": 12,
         "message": "cannot implicitly convert 'IntLiteral[0]' value to 'StoreyId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_stream_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'StreamId'"
       }
     ],
     "notes": []
@@ -4372,6 +4558,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_unit_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'UnitKind'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_usd_asset_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4737,6 +4933,66 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_warp_axis_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 33,
+        "message": "invalid call to 'derivative': value passed to 'axis' cannot be converted from 'IntLiteral[1]' to 'Axis'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_warp_coordinate_system_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 19,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'CoordinateSystem'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_warp_difference_order_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 17,
+        "column": 40,
+        "message": "invalid call to 'stress_energy': value passed to 'order' cannot be converted from 'IntLiteral[1]' to 'DifferenceOrder'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_warp_energy_condition_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 18,
+        "column": 57,
+        "message": "invalid call to 'energy_condition': value passed to 'condition' cannot be converted from 'IntLiteral[0]' to 'EnergyCondition'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_warp_frame_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 20,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'frame' cannot be converted from 'IntLiteral[1]' to 'Frame'"
+    ]
+  },
   "tests/compile_fail/a_warp_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4749,6 +5005,32 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'WarpKind'"
+    ]
+  },
+  "tests/compile_fail/a_warp_speed_is_not_a_bare_float.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 30,
+        "message": "invalid call to 'alcubierre_comoving': value passed to 'speed' cannot be converted from 'FloatLiteral[0.5]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_warp_tensor_index_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 20,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'index' cannot be converted from 'IntLiteral[0]' to 'TensorIndex'"
     ]
   },
   "tests/compile_fail/a_water_view_is_not_a_bare_int.mojo": {
@@ -4986,6 +5268,20 @@
     ],
     "notes": [
       "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_activity_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 20,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'activity' cannot be converted from 'IntLiteral[1]' to 'Activity'"
     ]
   },
   "tests/compile_fail/an_actor_attribute_type_is_not_a_bare_int.mojo": {
@@ -5436,6 +5732,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/an_element_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[22]' value to 'Element'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/an_element_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -5704,6 +6010,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/an_opening_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_opening': value passed to 'opening' cannot be converted from 'IntLiteral[1]' to 'Opening'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/an_opening_kind_is_not_a_bare_int.mojo": {
     "errors": [
@@ -9385,6 +9703,18 @@
         "column": 24,
         "line": 12,
         "message": "invalid call to 'rotation_z': value passed to 'angle' cannot be converted from 'FloatLiteral[90]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/ruffles_are_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_ruffles': value passed to 'ruffles' cannot be converted from 'IntLiteral[1]' to 'Ruffles'"
       }
     ],
     "notes": [

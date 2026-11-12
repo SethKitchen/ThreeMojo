@@ -5,14 +5,15 @@
 
 """`exporters.exr` against three.js's `EXRExporter`.
 
-`assets/exr_export/three.json` holds the files that three.js 0.180
-writes for data textures of four sizes, float and half, with each
-compression and sample type. The texels come from a xorshift generator
-that is the same here and in node.
+`assets/exr_export/three.json` holds the files that three.js r187
+writes for data textures, with each of its five compressions and both
+sample types. `assets/exr_export/three_exr_export.mjs` writes it. The
+texels come from a xorshift generator and from smooth images that are
+the same here and in node. A large file is held by its size and
+SHA-256.
 """
 
-from core.binary import little_endian_u32
-from std.math import isnan
+from std.math import floor, isnan
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from std.utils.numerics import inf, nan
 
@@ -24,6 +25,8 @@ from render.exr import (
     HALF_SAMPLES,
     NO_COMPRESSION,
     PIZ_COMPRESSION,
+    PXR24_COMPRESSION,
+    RLE_COMPRESSION,
     UINT_SAMPLES,
     ZIPS_COMPRESSION,
     ZIP_COMPRESSION,
@@ -32,6 +35,7 @@ from render.exr import (
     decode,
 )
 from render.float_image import FloatImage
+from tools._sha256 import sha256_hex
 
 
 struct _Random(Movable):
@@ -87,6 +91,57 @@ def _floats(n: Int, seed: Int) -> List[Float32]:
     return out^
 
 
+def _smooth(width: Int, height: Int, seed: Int) -> List[Float32]:
+    """Return the script's `smooth`."""
+    var out = List[Float32]()
+    for y in range(height):
+        for x in range(width):
+            var run = x < (seed % 7) + 3
+            var wave = abs(Float64((y + seed) % 6) / 3 - 1)
+            var ramp = (
+                floor(64 * (Float64(x) / Float64(width) + 0.5 * wave) + 0.5)
+                / 64
+            )
+            var rise = floor(Float64(256 * y) / Float64(height) + 0.5) / 64
+            out.append(Float32(0.25 if run else ramp))
+            out.append(Float32(0.25 if run else rise))
+            out.append(Float32(Float64((x + y + seed) % 9) / 8))
+            out.append(1)
+    return out^
+
+
+def _fine(width: Int, height: Int, seed: Int) -> List[Float32]:
+    """Return the script's `fine`."""
+    var out = List[Float32]()
+    for y in range(height):
+        for x in range(width):
+            var h0 = Float64((x * 7919 + y * 104729 + seed) % 65521)
+            var h1 = Float64((x * 104729 + y * 7919 + seed) % 65521)
+            var h2 = Float64((x * 31337 + y * 271 + seed) % 65521)
+            var fx = Float64(x)
+            var fy = Float64(y)
+            out.append(Float32(fx * 0.0123 + fy * 0.0071 + h0 * 1e-8))
+            out.append(
+                Float32(
+                    (fx - 192) * (fx - 192) * 0.0001 - fy * 0.02 + h1 * 1e-8
+                )
+            )
+            out.append(Float32(fx * fy * 0.0002 + 0.5 + h2 * 1e-8))
+            out.append(1)
+    return out^
+
+
+def _texels(input: String, width: Int, height: Int, seed: Int) -> List[Float32]:
+    """Return the float texels of one of the script's inputs."""
+    if input == "zero":
+        return List[Float32](length=width * height * 4, fill=0)
+    if input == "smooth":
+        return _smooth(width, height, seed)
+    if input == "fine":
+        return _fine(width, height, seed)
+    return _floats(width * height * 4, seed)
+
+
 def _halves(n: Int, seed: Int) -> List[UInt16]:
     """Return the script's `halves`."""
     var random = _Random(seed)
@@ -123,95 +178,46 @@ def test_files_match_three_js() raises:
         var height = doc.integer(doc.get(entry, "height"))
         var seed = doc.integer(doc.get(entry, "seed"))
         var code = doc.integer(doc.get(entry, "compression"))
+        var input = doc.string(doc.get(entry, "input"))
         var name = doc.string(doc.get(entry, "type"))
-        var expected = decode_base64(doc.string(doc.get(entry, "bytes")))
         var compression = ExrCompression(code)
         var type = FLOAT_SAMPLES if name == "float" else HALF_SAMPLES
         var n = width * height * 4
         var got: List[UInt8]
         var plain: List[UInt8]
         if code == -1:
-            got = export_exr(width, height, _floats(n, seed))
-            compression = ZIP_COMPRESSION
-            plain = export_exr(width, height, _floats(n, seed), NO_COMPRESSION)
-        elif doc.string(doc.get(entry, "input")) == "float":
-            got = export_exr(width, height, _floats(n, seed), compression, type)
+            # three.js's defaults: ZIP and halves.
+            got = export_exr(width, height, _texels(input, width, height, seed))
             plain = export_exr(
-                width, height, _floats(n, seed), NO_COMPRESSION, type
+                width,
+                height,
+                _texels(input, width, height, seed),
+                NO_COMPRESSION,
             )
-        else:
+        elif input == "half":
             got = export_exr_half(
                 width, height, _halves(n, seed), compression, type
             )
             plain = export_exr_half(
                 width, height, _halves(n, seed), NO_COMPRESSION, type
             )
-        _same_blocks(got, expected, width, height, compression, type)
+        else:
+            var texels = _texels(input, width, height, seed)
+            got = export_exr(width, height, texels, compression, type)
+            plain = export_exr(width, height, texels, NO_COMPRESSION, type)
+        if doc.has(entry, "bytes"):
+            var expected = decode_base64(doc.string(doc.get(entry, "bytes")))
+            assert_equal(len(got), len(expected))
+            for i in range(len(expected)):
+                assert_equal(got[i], expected[i])
+        else:
+            assert_equal(len(got), doc.integer(doc.get(entry, "size")))
+            assert_equal(
+                sha256_hex(Span(got)), doc.string(doc.get(entry, "sha256"))
+            )
         # The file reads back to the values of the one with no
         # compression.
         _same_image(decode(got), decode(plain))
-
-
-def _offset(bytes: List[UInt8], at: Int, count: Int) -> Int:
-    """Return a little-endian number."""
-    var value = 0
-    for k in range(count):
-        value |= Int(bytes[at + k]) << (8 * k)
-    return value
-
-
-def _same_blocks(
-    got: List[UInt8],
-    expected: List[UInt8],
-    width: Int,
-    height: Int,
-    compression: ExrCompression,
-    type: ExrPixelType,
-) raises:
-    """Assert that a file is three.js's, but for the blocks that three.js
-    writes wrong: a block not smaller than its lines, and the short last
-    block of a ZIP file."""
-    var table = _header_length(expected)
-    assert_equal(_header_length(got), table)
-    for i in range(table):
-        assert_equal(got[i], expected[i])
-    var lines = 16 if compression == ZIP_COMPRESSION else 1
-    var blocks = (height + lines - 1) // lines
-    for b in range(blocks):
-        var mine = _offset(got, table + 8 * b, 8)
-        var theirs = _offset(expected, table + 8 * b, 8)
-        assert_equal(_offset(got, mine, 4), b * lines)
-        assert_equal(_offset(expected, theirs, 4), b * lines)
-        var size = _offset(expected, theirs + 4, 4)
-        var real = min(lines, height - b * lines) * width * 4 * 2 * type.value
-        var mine_size = _offset(got, mine + 4, 4)
-        if compression == NO_COMPRESSION or (
-            size < real and real == lines * width * 4 * 2 * type.value
-        ):
-            assert_equal(mine_size, size)
-            for i in range(size):
-                assert_equal(got[mine + 8 + i], expected[theirs + 8 + i])
-        else:
-            assert_true(mine_size <= real)
-    var last = _offset(got, table + 8 * (blocks - 1), 8)
-    assert_equal(len(got), last + 8 + _offset(got, last + 4, 4))
-
-
-def _header_length(bytes: List[UInt8]) -> Int:
-    """Return where the offset table of a file starts: after the header's
-    two zero bytes that end the channel list and the header."""
-    # Past the magic number and the version, then each attribute.
-    var at = 8
-    while bytes[at] != 0:
-        while bytes[at] != 0:
-            at += 1
-        at += 1
-        while bytes[at] != 0:
-            at += 1
-        at += 1
-        var size = little_endian_u32(bytes, at)
-        at += 4 + size
-    return at + 1
 
 
 def test_images_read_back() raises:
@@ -219,7 +225,13 @@ def test_images_read_back() raises:
     for i in range(5 * 21 * 4):
         pixels.append(Float32(i % 41) / 4)
     var image = FloatImage(5, 21, pixels.copy())
-    for compression in [NO_COMPRESSION, ZIPS_COMPRESSION, ZIP_COMPRESSION]:
+    for compression in [
+        NO_COMPRESSION,
+        RLE_COMPRESSION,
+        ZIPS_COMPRESSION,
+        ZIP_COMPRESSION,
+        PIZ_COMPRESSION,
+    ]:
         _same_image(
             decode(export_exr_image(image, compression, FLOAT_SAMPLES)), image
         )
@@ -237,8 +249,10 @@ def test_refusals() raises:
         _ = export_exr(1, 0, List[Float32]())
     with assert_raises(contains="not 4 values"):
         _ = export_exr(2, 1, four)
-    with assert_raises(contains="none, ZIPS or ZIP"):
-        _ = export_exr(1, 1, four, PIZ_COMPRESSION)
+    with assert_raises(contains="none, RLE, ZIPS, ZIP or PIZ"):
+        _ = export_exr(1, 1, four, PXR24_COMPRESSION)
+    with assert_raises(contains="none, RLE, ZIPS, ZIP or PIZ"):
+        _ = export_exr(1, 1, four, ExrCompression(-1))
     with assert_raises(contains="HALF or FLOAT"):
         _ = export_exr(1, 1, four, ZIP_COMPRESSION, UINT_SAMPLES)
     with assert_raises(contains="HALF or FLOAT"):

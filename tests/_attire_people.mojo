@@ -23,7 +23,7 @@ def coarse_spec() -> HumanoidSpec:
 
 
 def coarse_person(
-    mut scene: Scene, mut assets: Assets, guides: Int = 0
+    mut scene: Scene, mut assets: Assets, guides: Int = 0, cards: Int = 0
 ) raises -> GameHumanoid:
     """Return a coarse game humanoid in `scene`: detail 12, 3000 triangles.
 
@@ -31,6 +31,7 @@ def coarse_person(
         scene: The scene.
         assets: The store.
         guides: Guide strands of hair, or none.
+        cards: Cards of hair, or none.
 
     Returns:
         The humanoid.
@@ -48,4 +49,5 @@ def coarse_person(
         guides=guides,
         followers=1 if guides > 0 else 0,
         workers=num_logical_cores(),
+        cards=cards,
     )

@@ -377,6 +377,9 @@ def test_a_bandit_comes_and_strikes_and_a_guard_blocks() raises:
             blocked = True
     assert_true(blocked)
     assert_almost_equal(arena.battle.fighter.health, health, atol=1e-3)
+    # A blocked blow takes no health, so the display marks none; the
+    # marks of the blows before have faded.
+    assert_equal(len(arena.battle.hurts), 0)
 
 
 def test_a_pierce_goes_through_a_guard_and_a_heavy_cut_counters_it() raises:
@@ -387,6 +390,11 @@ def test_a_pierce_goes_through_a_guard_and_a_heavy_cut_counters_it() raises:
     for _ in range(6):
         arena.tick(guard)
     assert_true(arena.battle.fighter.health < 500)
+    # The display marks the way the blow came from: the bandit's.
+    assert_true(len(arena.battle.hurts) > 0)
+    var from_foe = arena.battle.hurts[0].source
+    var foe_at = arena.battle.foes[0].character.position
+    assert_true((from_foe - foe_at).length() < 1)
     assert_false(holds_text(popup_texts(arena.battle), "PARRY"))
     assert_false(holds_text(popup_texts(arena.battle), "BLOCKED"))
     # A heavy cut that lands in the wind-up counters it.

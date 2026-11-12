@@ -8,7 +8,9 @@
 from core.assets import Assets
 from core.scene import Scene
 from core.user_data import UserData
+from extensions.attire.metal import BRONZE, STEEL
 from extensions.attire.garment import (
+    forged,
     bascinet,
     boots,
     coif,
@@ -25,7 +27,22 @@ from extensions.attire.garment import (
     surcoat,
     vambraces,
 )
-from extensions.attire.kinds import FITTED
+from extensions.attire.kinds import (
+    COLLAR_RUFFLE,
+    CUFF_RUFFLES,
+    NO_RUFFLES,
+    BROCADE,
+    PLAIN,
+    BISHOP_SLEEVE,
+    CLOSED,
+    FITTED,
+    FITTED_SLEEVE,
+    NO_HEADWEAR,
+    OPEN_BELOW,
+    ROUND_NECK,
+    SCOOP_NECK,
+)
+from extensions.attire.tailor import chemise, frock_coat
 from extensions.attire.outfit import Outfit, dress
 from extensions.attire.preset import (
     OUTFIT_KEY,
@@ -212,6 +229,26 @@ def test_an_outfit_saved_before_forms_is_fitted() raises:
     assert_equal(again.garments[0].flare, 0)
 
 
+def test_an_outfit_keeps_its_metals_and_its_headwear() raises:
+    var outfit = Outfit()
+    outfit.add(forged(hauberk(), BRONZE))
+    var text = outfit_json(outfit)
+    assert_true(text.find('"metal":"bronze"') >= 0)
+    assert_true(text.find('"headwear":"none"') >= 0)
+    var again = outfit_from_json(text)
+    assert_equal(again.garments[0].metal, BRONZE)
+    assert_equal(again.garments[0].headwear, NO_HEADWEAR)
+    # One saved before metals and headwear is steel and bareheaded.
+    var old = outfit_from_json(_drop(_drop(text, "metal"), "headwear"))
+    assert_equal(old.garments[0].metal, STEEL)
+    with assert_raises(contains="No metal"):
+        _ = outfit_from_json(_swap(text, '"metal":"bronze"', '"metal":"tin"'))
+    with assert_raises(contains="No headwear"):
+        _ = outfit_from_json(
+            _swap(text, '"headwear":"none"', '"headwear":"fez"')
+        )
+
+
 def test_a_dressed_bake_remembers_its_outfit_and_its_body() raises:
     var scene = Scene()
     var assets = Assets()
@@ -253,6 +290,62 @@ def test_a_dressed_bake_remembers_its_outfit_and_its_body() raises:
     )
     with assert_raises(contains="needs an outfit"):
         _ = stored_outfit(hollow, coarse_spec())
+
+
+def test_an_outfit_keeps_its_cuts_and_its_sleeves() raises:
+    var outfit = Outfit()
+    outfit.add(chemise())
+    outfit.add(frock_coat())
+    var text = outfit_json(outfit)
+    assert_true(text.find('"neckline":"scoop"') >= 0)
+    assert_true(text.find('"opening":"open below"') >= 0)
+    assert_true(text.find('"sleeve":"bishop"') >= 0)
+    var again = outfit_from_json(text)
+    assert_equal(again.garments[0].neckline, SCOOP_NECK)
+    assert_equal(again.garments[0].sleeve, BISHOP_SLEEVE)
+    assert_equal(again.garments[1].opening, OPEN_BELOW)
+    # One saved before cuts and sleeves is round-necked, closed and
+    # fitted.
+    var stripped = text
+    for key in ["neckline", "opening", "sleeve"]:
+        # Each garment carries its own: drop both.
+        stripped = _drop(_drop(stripped, key), key)
+    var old = outfit_from_json(stripped)
+    assert_equal(old.garments[0].neckline, ROUND_NECK)
+    assert_equal(old.garments[1].opening, CLOSED)
+    assert_equal(old.garments[0].sleeve, FITTED_SLEEVE)
+
+
+def test_an_outfit_keeps_its_designs() raises:
+    var outfit = Outfit()
+    outfit.add(chemise())
+    var coat = frock_coat()
+    coat.design = BROCADE
+    outfit.add(coat^)
+    var text = outfit_json(outfit)
+    assert_true(text.find('"design":"plain"') >= 0)
+    assert_true(text.find('"design":"brocade"') >= 0)
+    var again = outfit_from_json(text)
+    assert_equal(again.garments[0].design, PLAIN)
+    assert_equal(again.garments[1].design, BROCADE)
+    # One saved before designs is plain.
+    var old = outfit_from_json(_drop(_drop(text, "design"), "design"))
+    assert_equal(old.garments[1].design, PLAIN)
+
+
+def test_an_outfit_keeps_its_ruffles() raises:
+    var outfit = Outfit()
+    outfit.add(chemise())
+    outfit.add(frock_coat())
+    var text = outfit_json(outfit)
+    assert_true(text.find('"ruffles":"cuffs+collar"') >= 0)
+    assert_true(text.find('"ruffles":"none"') >= 0)
+    var again = outfit_from_json(text)
+    assert_equal(again.garments[0].ruffles, CUFF_RUFFLES | COLLAR_RUFFLE)
+    assert_equal(again.garments[1].ruffles, NO_RUFFLES)
+    # One saved before ruffles has none.
+    var old = outfit_from_json(_drop(_drop(text, "ruffles"), "ruffles"))
+    assert_equal(old.garments[0].ruffles, NO_RUFFLES)
 
 
 def main() raises:

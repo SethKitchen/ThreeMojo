@@ -3,6 +3,7 @@
 **Tutorials**
 - [First scene](Tutorial-Render-your-first-scene)
 - [Light, texture, animate](Tutorial-Light-texture-and-animate)
+- [Analyze a warp drive](Tutorial-Analyze-a-warp-drive)
 
 **How-to**
 - [Install](How-to-install)
@@ -76,6 +77,9 @@
 - [Continuous collision](Continuous-collision)
 - [Tick force restoration](Tick-force-restoration)
 - [Water](Water)
+- [Warp drives](Warp-drives)
+  - [Tutorial: Analyze a warp drive](Tutorial-Analyze-a-warp-drive)
+  - [Why the energy conditions use the Eulerian frame](Why-the-energy-conditions-use-the-Eulerian-frame)
 - [Vegetation](Vegetation)
   - [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters)
 - [Village](Village)
@@ -111,6 +115,10 @@
   - [Scan parts](Scan-parts)
   - [Cleaning and orienting scans](Cleaning-and-orienting-scans)
   - [Walking through a scan](Walking-through-a-scan)
+  - [Virtual scans](Virtual-scans)
+- [Castle](Castle)
+  - [Castle analysis](Castle-analysis)
+  - [Landscape](Landscape)
 - [CARLA](CARLA)
   - [CARLA geometry](CARLA-geometry)
   - [CARLA maps](CARLA-maps)
@@ -154,6 +162,16 @@
 - [Cloth and spring bones](Cloth-and-spring-bones)
 - [Attire estimates](Attire-estimates)
 - [Segment inertia](Segment-inertia)
+- [Process chemistry](Process-chemistry)
+- [Thermochemical data](Thermochemical-data)
+- [Chemical equilibrium](Chemical-equilibrium)
+- [Process maps](Process-maps)
+- [Rates and transport](Rates-and-transport)
+- [Electrolysis and film color](Electrolysis-and-film-color)
+- [Binary solutions](Binary-solutions)
+- [Flowsheets and routes](Flowsheets-and-routes)
+- [Materials and coatings](Materials-and-coatings)
+- [Crystals and figures](Crystals-and-figures)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)
@@ -171,6 +189,7 @@
 - [Bands and threads](Why-the-CPU-renderer-uses-bands)
 - [PNG structure](Why-the-PNG-reader-checks-structure)
 - [Extensions beside the port](Why-extensions-sit-beside-the-port)
+- [Process temperatures](Why-a-process-runs-where-it-does)
 - [Scans as building models](Why-scans-become-building-models)
 - [CUDA teardown hang](The-CUDA-teardown-hang)
 - [Mojo compiler hang](The-Mojo-compiler-hang)

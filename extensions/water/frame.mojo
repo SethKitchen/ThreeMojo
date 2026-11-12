@@ -24,11 +24,14 @@ from extensions.water.filter import (
 from extensions.water.glare import GlareKernels, apply_glare, glare_kernels
 from extensions.water.pebbles import PebbleBed, PebbleTexels
 from extensions.water.optics import (
+    BASIN_MUD,
+    Basin,
     Refracted,
     aces_channel,
+    basin_depth,
+    basin_mud,
     bed_color,
     beckmann,
-    floor_depth,
     fresnel,
     hash12,
     max,
@@ -42,11 +45,12 @@ from extensions.water.optics import (
 )
 from extensions.water.resolution import SpectrumResolution
 from extensions.water.ripple import (
+    RippleDrop,
     RippleField,
     RippleTexels,
     clearwater_ripple_size,
     sample_ripple,
-    step_ripple,
+    step_ripple_drops,
 )
 from extensions.water.post import RadianceView, blur_texel, highlight_texel
 from extensions.water.rows import row_tasks
@@ -539,6 +543,7 @@ def _radiance_image(
     height: Int,
     shown: List[Bool],
     workers: Int = 0,
+    basin: Basin = Basin(),
 ) -> List[Float32]:
     """Shade every pixel, or the pixels `shown` marks, into linear RGB.
 
@@ -563,6 +568,7 @@ def _radiance_image(
         0,
         height,
         workers,
+        basin,
     )
     return hdr^
 
@@ -583,6 +589,7 @@ def _radiance_band(
     first: Int,
     past: Int,
     workers: Int,
+    basin: Basin,
 ):
     """Shade the marked pixels of rows `first` up to `past` into `hdr`, as
     `_radiance_image` shades them. `hdr` holds three floats for each pixel,
@@ -610,6 +617,7 @@ def _radiance_band(
                 hdr.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 first + task * count // tasks,
                 first + (task + 1) * count // tasks,
+                basin,
             )
         )
     group.wait()
@@ -630,6 +638,7 @@ __async def _radiance_task(
     hdr: MutPointer[Float32, MutAnyOrigin],
     first: Int,
     past: Int,
+    basin: Basin,
 ):
     _radiance_rows(
         look,
@@ -646,6 +655,7 @@ __async def _radiance_task(
         hdr,
         first,
         past,
+        basin,
     )
 
 
@@ -664,6 +674,7 @@ def _radiance_rows(
     hdr: MutPointer[Float32, MutAnyOrigin],
     first: Int,
     past: Int,
+    basin: Basin = Basin(),
 ):
     """Shade rows `first` up to `past` into `hdr`."""
     var every = len(shown) == 0
@@ -686,6 +697,7 @@ def _radiance_rows(
                 2.0 / Float32(width),
                 2.0 / Float32(height),
                 sun,
+                basin,
             )
             var p = (y * width + x) * 3
             hdr[unsafe_offset=p] = rgb.x
@@ -879,6 +891,7 @@ def lit_radiance[
     pixel_x: Float32,
     pixel_y: Float32,
     sun: Vector3,
+    basin: Basin = Basin(),
 ) -> Vector3:
     """Shade one view ray under the sun toward `sun`.
 
@@ -904,6 +917,8 @@ def lit_radiance[
         pixel_x: Normalized width of one pixel. Zero skips the mip footprint.
         pixel_y: Normalized height of one pixel. Zero skips the mip footprint.
         sun: The unit direction toward the sun. Y is up.
+        basin: The basin that holds the water. The default is no basin:
+            the water keeps Clearwater's shelving bed.
 
     Returns:
         Linear radiance before grading.
@@ -973,6 +988,7 @@ def lit_radiance[
         foot[2],
         foot[3],
         t,
+        basin,
     )
     var open = 1.0 - f
     var color = refl * f + under * open + sun_rgb
@@ -1090,6 +1106,7 @@ def _underwater[
     dpy_x: Float32,
     dpy_z: Float32,
     camera_t: Float32,
+    basin: Basin,
 ) -> Vector3:
     # Air into water cannot totally reflect, and a downward view stays downward.
     var ray = refract(
@@ -1099,7 +1116,7 @@ def _underwater[
     var bed_z = z
     var travel = Float32(0.0)
     for _i in range(2):  # pragma: no branch
-        var depth = floor_depth(bed_x, bed_z)
+        var depth = basin_depth(basin, bed_x, bed_z)
         travel = (-depth - height) / ray.y
         if travel < 0.0:
             travel = 0.0
@@ -1120,9 +1137,15 @@ def _underwater[
     )
     var sun_ray = refracted_sun(sun)
     var ts = 1.0 - fresnel(sun.y, water_ior())
-    var column = height - (-floor_depth(bed_x, bed_z))
+    var bed_depth = basin_depth(basin, bed_x, bed_z)
+    var column = height - (-bed_depth)
     if column < 0.0:
         column = 0.0
+    # A basin's bed turns to mud where its water is shallow.
+    var mud = basin_mud(basin, bed_depth)
+    bed.r = bed.r + (BASIN_MUD.x - bed.r) * mud
+    bed.g = bed.g + (BASIN_MUD.y - bed.g) * mud
+    bed.b = bed.b + (BASIN_MUD.z - bed.b) * mud
     var nudge = (bed.height - 0.35) * 0.05 / -sun_ray.y
     var caustic_patch = caustics.caustic_patch()
     var cu = (
@@ -1568,6 +1591,10 @@ struct WaterScene(Movable):
     four samples round each, as a game draws costly water at a lower
     resolution. It also tests the water's depth where the still plane is,
     not where the waves are."""
+    var basin: Basin
+    """The basin that holds the water. The default is no basin: the bed
+    shelves as Clearwater's does. A pond sets its own, so the water grows
+    shallow toward its shore and its bed turns to mud there."""
     var refresh_every: Int
     """How many `compose` calls share one ocean surface and its caustics.
     One, the default, finds them again for every frame. A larger count
@@ -1578,6 +1605,8 @@ struct WaterScene(Movable):
     for the two together after the first."""
     var _spectrum: ComplexField
     var _ripples: RippleField
+    # The drops that `splash` queued for the next `advance`.
+    var _drops: List[RippleDrop]
     # True when a step has left every ripple height and speed at zero:
     # the next step without a drop would give the same window again.
     var _calm: Bool
@@ -1588,6 +1617,11 @@ struct WaterScene(Movable):
     # next call.
     var _surface_next: Optional[SurfaceField]
     var _composed: Int
+    # How many times the kept surface and caustics were replaced, and how
+    # many times the ripple window changed: a GPU that holds copies of
+    # them looks at these to see if its copies are old.
+    var _kept_made: Int
+    var _ripples_made: Int
     # The radiance that `compose` shades and the mix it fills, kept from
     # frame to frame so that a frame does not fault in fresh pages. A
     # frame reads only the pixels it writes.
@@ -1627,17 +1661,21 @@ struct WaterScene(Movable):
         self.sun = sun_direction()
         self.workers = 0
         self.shade_step = 1
+        self.basin = Basin()
         self.refresh_every = 1
         self._surface_kept = None
         self._caustics_kept = None
         self._surface_next = None
         self._composed = 0
+        self._kept_made = 0
+        self._ripples_made = 0
         self._hdr = List[Float32]()
         self._mixed = List[Float32]()
         self._spectrum = build_spectrum(
             ocean, Length(_PATCH_METERS), _TARGET_SLOPE
         )
         self._ripples = RippleField(ocean, clearwater_ripple_size())
+        self._drops = List[RippleDrop]()
         self._calm = False
         self._glare = None
 
@@ -1645,15 +1683,83 @@ struct WaterScene(Movable):
         """Return the simulation to its start: calm ripples, `start` clock.
 
         The spectrum and any glare kernels stay; they do not depend on time.
+        The ripple window keeps its place and its size.
 
         Raises:
             Error: If the ripple window cannot be allocated.
         """
-        self._ripples = RippleField(self.ocean, clearwater_ripple_size())
+        var x = self._ripples.center_x
+        var z = self._ripples.center_z
+        self._ripples = RippleField(self.ocean, Length(self._ripples.size))
+        self._ripples.center_x = x
+        self._ripples.center_z = z
+        self._drops.clear()
+        self._ripples_made += 1
         self._calm = False
         self.clock = self.start
         self.steps = 0
         self._forget()
+
+    def place_ripples(mut self, x: Length, z: Length, size: Length) raises:
+        """Move the ripple window over a part of the water, calm.
+
+        The window is a square that the drops of `splash` ripple. Out of
+        it, the water has only its waves. Clearwater's window is 7 meters
+        on a side round the origin.
+
+        Args:
+            x: The window's middle x.
+            z: The window's middle z.
+            size: The window's side. It must be from 1 to 200 meters.
+
+        Raises:
+            Error: If the middle is not finite, or the side is out of range.
+        """
+        require_finite(Float64(x.value), "A ripple window must be finite")
+        require_finite(Float64(z.value), "A ripple window must be finite")
+        var side = size.value
+        if not (side >= 1.0 and side <= 200.0):
+            raise Error("A ripple window must be from 1 to 200 meters across")
+        self._ripples = RippleField(self.ocean, size)
+        self._ripples.center_x = x.value
+        self._ripples.center_z = z.value
+        self._ripples_made += 1
+        self._drops.clear()
+        self._calm = False
+
+    def splash(
+        mut self, x: Length, z: Length, radius: Length, strength: Float32
+    ) raises:
+        """Queue a drop that taps the water at a point on the next
+        `advance`.
+
+        A drop out of the ripple window is let go, as are drops past the
+        64th of one step.
+
+        Args:
+            x: The point's x.
+            z: The point's z.
+            radius: The drop's radius. It must be from 0 to 10 meters.
+            strength: How far the drop pulls the water down, from 0 to 1.
+                Clearwater's tap is 0.07.
+
+        Raises:
+            Error: If the point is not finite, or a value is out of range.
+        """
+        require_finite(Float64(x.value), "A splash must be finite")
+        require_finite(Float64(z.value), "A splash must be finite")
+        if not (radius.value >= 0.0 and radius.value <= 10.0):
+            raise Error("A splash must be from 0 to 10 meters across")
+        if not (strength >= 0.0 and strength <= 1.0):
+            raise Error("A splash's strength must be from 0 to 1")
+        var size = self._ripples.size
+        var u = (x.value - self._ripples.center_x) / size + 0.5
+        var v = (z.value - self._ripples.center_z) / size + 0.5
+        if u < 0.0 or u > 1.0 or v < 0.0 or v > 1.0:
+            return
+        if len(self._drops) >= 64:
+            return
+        self._drops.append(RippleDrop(u, v, radius.value / size, strength))
 
     def _forget(mut self):
         """Drop the kept surface and caustics, so the next `compose` finds
@@ -1694,6 +1800,7 @@ struct WaterScene(Movable):
             dt: The simulated time this step covers. It must be finite and
                 nonnegative.
             drop: True taps the middle of the ripple window this step.
+                The drops that `splash` queued tap it too.
 
         A window whose heights and speeds are all zero gives the same
         window again without a drop, so its step is skipped.
@@ -1711,9 +1818,12 @@ struct WaterScene(Movable):
             Float64(next_clock), "The next water clock must be finite"
         )
         # A calm window stays calm without a drop, so its step is skipped.
-        if drop or not self._calm:
-            var strength = Float32(0.07) if drop else Float32(0.0)
-            step_ripple(self._ripples, 0.0, 0.0, 0.5, 0.5, 0.022, strength)
+        if drop:
+            self._drops.append(RippleDrop(0.5, 0.5, 0.022, 0.07))
+        if len(self._drops) > 0 or not self._calm:
+            step_ripple_drops(self._ripples, 0.0, 0.0, self._drops)
+            self._drops.clear()
+            self._ripples_made += 1
             self._calm = _at_rest(self._ripples)
         self.clock = Duration(next_clock, SECOND)
         self.steps += 1
@@ -1772,8 +1882,8 @@ struct WaterScene(Movable):
         Raises:
             Error: If the camera is not a centered perspective camera, it
                 is not above the water, is attached, or a matrix is invalid;
-                or if `shade_step` is not from 1 to 64, or `refresh_every`
-                is below one.
+                or if `shade_step` is not from 1 to 64, `refresh_every` is
+                below one, or `image` has no depth for each pixel.
         """
         return self._compose_view(
             image,
@@ -1817,8 +1927,8 @@ struct WaterScene(Movable):
             Error: If the camera's view is invalid, its node is absent, or
                 the attached scene is stale. Also if the projection is not
                 centered perspective, the camera is not above the water,
-                `shade_step` is not from 1 to 64, or `refresh_every` is
-                below one.
+                `shade_step` is not from 1 to 64, `refresh_every` is below
+                one, or `image` has no depth for each pixel.
         """
         return self._compose_view(
             image,
@@ -1838,23 +1948,14 @@ struct WaterScene(Movable):
     ) raises -> Int:
         # Both public paths resolve exactly one view before any image writes.
         var plan = _compose_plan(image, projection, view, water_level)
+        # The water reads and writes a depth for each pixel.
+        if len(image.depth) != image.width * image.height:
+            raise Error("Water composition needs a depth for each pixel")
         if self.shade_step < 1 or self.shade_step > 64:
             raise Error("The water's shade step must be from 1 to 64 pixels")
         if self.refresh_every < 1:
             raise Error("The water's refresh must come every frame or more")
-        var phase = self._composed % self.refresh_every
-        # The kept surface and its caustics are set together.
-        if self.refresh_every == 1 or not self._surface_kept:
-            var fresh = self._surface()
-            self._caustics_kept = self._caustics(fresh)
-            self._surface_kept = fresh^
-        elif phase == 0:
-            self._surface_next = self._surface()
-        elif phase == 1 and self._surface_next:
-            var fresh = self._surface_next.take()
-            self._caustics_kept = self._caustics(fresh)
-            self._surface_kept = fresh^
-        self._composed += 1
+        self._refresh_kept()
         ref surface = self._surface_kept.value()
         ref caustics = self._caustics_kept.value()
         var shown = self._compose_depth(image, plan, surface)
@@ -1888,6 +1989,7 @@ struct WaterScene(Movable):
             band[0],
             band[1],
             self.workers,
+            self.basin,
         )
         if step == 1:
             return self._compose_write(image, self._hdr, shown)
@@ -1902,6 +2004,26 @@ struct WaterScene(Movable):
             self.workers,
         )
         return self._compose_write(image, self._mixed, shown)
+
+    def _refresh_kept(mut self) raises:
+        """Find the surface and the caustics that this `compose` call shows,
+        or keep the ones it showed last. `refresh_every` must be one or more.
+        """
+        var phase = self._composed % self.refresh_every
+        # The kept surface and its caustics are set together.
+        if self.refresh_every == 1 or not self._surface_kept:
+            var fresh = self._surface()
+            self._caustics_kept = self._caustics(fresh)
+            self._surface_kept = fresh^
+            self._kept_made += 1
+        elif phase == 0:
+            self._surface_next = self._surface()
+        elif phase == 1 and self._surface_next:
+            var fresh = self._surface_next.take()
+            self._caustics_kept = self._caustics(fresh)
+            self._surface_kept = fresh^
+            self._kept_made += 1
+        self._composed += 1
 
     def _compose_depth(
         self, mut image: Framebuffer, plan: _ComposePlan, surface: SurfaceField
@@ -2023,6 +2145,7 @@ struct WaterScene(Movable):
             height,
             List[Bool](),
             self.workers,
+            self.basin,
         )
         return self._finish(hdr, width, height, view)
 

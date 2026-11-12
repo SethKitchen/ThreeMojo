@@ -14,9 +14,24 @@ pattern says where each lies:
 | `PARTY` | the wearer's right side | the left side |
 | `STRIPES` | even bands round the body | odd bands |
 | `QUARTERLY` | upper right and lower left | upper left and lower right |
+| `CHEVRON` | the field | a band like an inverted V, its point on the chest |
+| `CROSS` | the field | an upright cross, crossed on the chest |
+| `SALTIRE` | the field | a diagonal cross, crossed on the chest |
+| `BEND` | the field | a band from the right shoulder to the left hip |
+| `PALY` | even upright bands | odd upright bands |
+| `CHECKY` | even squares | odd squares |
+| `FRONT_PANEL` | the rest | a panel down the front, widening down a skirt |
+| `SLEEVES` | the body | the sleeves |
+| `BANDED_SLEEVES` | the body, and even bands of the sleeves | odd bands of the sleeves |
 
-Every pattern puts the trim dye along each hem. The accent dye is for a
-caller's own use.
+The charges lie on the front and the back alike, as a tabard's do. A
+front panel lies on the front alone. The sleeves are found by the skin
+weights of the arms, so they part from the body at the shoulder's seam. Each
+band is `CHARGE` wide on the template, about a hand's breadth.
+
+Every pattern puts the trim dye along each hem. A vertex whose `accent`
+attribute is one or more half takes the accent dye: a hat's stones, horns
+and feather.
 
 `dye_pattern` cuts the garment along each boundary of its pattern, so a
 boundary is a crisp line and not a blend across a triangle. Each vertex
@@ -41,11 +56,21 @@ from std.math import pi, sin
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from extensions.attire.kinds import (
+    ACCENT_DYE,
     DIRT,
     DYE_CHANNEL_COUNT,
+    BANDED_SLEEVES,
+    BEND,
+    CHECKY,
+    FRONT_PANEL,
+    SLEEVES,
+    CHEVRON,
+    CROSS,
+    PALY,
     PARTY,
     PRIMARY_DYE,
     QUARTERLY,
+    SALTIRE,
     SECONDARY_DYE,
     STRIPES,
     TRIM_DYE,
@@ -56,15 +81,18 @@ from extensions.attire.kinds import (
     require_dye_pattern,
     require_wear_kind,
 )
-from extensions.attire.mesh_ops import cut, merge
+from extensions.attire.mesh_ops import ACCENT, cut, merge
 from extensions.attire.shell import COVER
 from extensions.humanoid.rig.joints import (
+    CHEST,
     HIPS,
+    LEFT_HAND,
     RIGHT_UPPER_ARM,
     SPINE,
     HumanoidRig,
 )
 from math.utils import clamp
+from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from render.srgb import srgb_to_linear
@@ -80,6 +108,21 @@ comptime STRIPE = Float32(0.09)
 """The height of one stripe, in meters on the template."""
 comptime PATTERN_STATURE = Float32(1.8288)
 """The template stature patterns are sized for, in meters."""
+comptime DIAGONAL = Float32(0.70710678)
+"""One over the square root of two: a distance across a diagonal line."""
+comptime PANEL = Float32(0.11)
+"""How wide a front panel is above the waist, in meters on the template."""
+comptime PANEL_FLARE = Float32(0.55)
+"""How much wider a front panel grows for each meter it falls below the
+waist."""
+comptime SLEEVE_BANDS = Float32(0.6)
+"""How tall a band of a banded sleeve is, as a share of a stripe."""
+comptime CHARGE = Float32(0.11)
+"""How wide a cross's, a saltire's, a chevron's or a bend's band is, in
+meters on the template."""
+comptime CHEVRON_RISE = Float32(0.06)
+"""How far above the chest's joint a chevron's point lies, in meters on
+the template."""
 
 
 def _linear(color: Color) -> Vector3:
@@ -91,10 +134,21 @@ def _linear(color: Color) -> Vector3:
     )
 
 
-def _with_channel(
+def with_channel(
     var piece: BufferGeometry, channel: DyeChannel
 ) raises -> BufferGeometry:
-    """Return `piece` with every vertex wholly in one dye channel."""
+    """Return `piece` with every vertex wholly in one dye channel.
+
+    Args:
+        piece: A mesh with positions.
+        channel: A named channel.
+
+    Returns:
+        The mesh, with a `dye` attribute of four weights a vertex.
+
+    Raises:
+        Error: If the mesh has no positions.
+    """
     var count = piece.vertex_count()
     var weights = List[Float32](capacity=4 * count)
     for _ in range(count):
@@ -112,17 +166,49 @@ def _negated(values: List[Float32]) -> List[Float32]:
     return out^
 
 
-def _split(
+def split_dyes(
     piece: BufferGeometry,
     values: List[Float32],
     above: DyeChannel,
     below: DyeChannel,
 ) raises -> BufferGeometry:
-    """Cut `piece` along the zero iso-line of `values`, and give each side
-    its own channel."""
-    var high = _with_channel(cut(piece, values, 0), above)
-    var low = _with_channel(cut(piece, _negated(values), 0), below)
+    """Cut a mesh along the zero line of `values`, and give each side its
+    own channel.
+
+    Args:
+        piece: A mesh with positions.
+        values: One value a vertex.
+        above: The channel of the side at or above zero.
+        below: The channel of the side below zero.
+
+    Returns:
+        Both sides, merged, with a `dye` attribute.
+
+    Raises:
+        Error: If the values do not match the vertices.
+    """
+    var high = with_channel(cut(piece, values, 0), above)
+    var low = with_channel(cut(piece, _negated(values), 0), below)
     return merge(high, low)
+
+
+def _arm_weights(piece: BufferGeometry) raises -> List[Float32]:
+    """Return how much the arms weigh on each vertex of a piece, or zero
+    for each when it has no skin weights."""
+    ref placed = piece.attribute_view(String(POSITION))
+    var arms = List[Float32](length=placed.count(), fill=0)
+    if not piece.has_attribute(String(SKIN_WEIGHT)):
+        return arms^
+    ref bones = piece.attribute_view(String(SKIN_INDEX))
+    ref weights = piece.attribute_view(String(SKIN_WEIGHT))
+    for v in range(placed.count()):
+        for k in range(4):  # pragma: no branch
+            # The arms' bones run from the right upper arm to the left
+            # hand.
+            var joint = Int(bones.component(v, k))
+            if joint >= RIGHT_UPPER_ARM.value and joint <= LEFT_HAND.value:
+                arms[v] += weights.component(v, k)
+    return arms^
 
 
 def pattern_values(
@@ -150,19 +236,93 @@ def pattern_values(
     if rig.joints[RIGHT_UPPER_ARM.value].x < middle:
         right = -1
     var waist = rig.joints[SPINE.value].y
-    var stripe = STRIPE * rig.stature / PATTERN_STATURE
+    var chest = rig.joints[CHEST.value].y
+    var s = rig.stature / PATTERN_STATURE
+    var stripe = STRIPE * s
+    var half = CHARGE * s / 2
+    var front = rig.joints[HIPS.value].z
+    var arms = _arm_weights(piece)
     var values = List[Float32](capacity=placed.count())
     for v in range(placed.count()):
         var p = placed.vector3(v)
-        var value = Float32(1)
-        if pattern == PARTY:
-            value = right * (p.x - middle)
-        elif pattern == STRIPES:
-            value = sin(Float32(pi) * (p.y - waist) / stripe)
-        elif pattern == QUARTERLY:
-            value = right * (p.x - middle) * (p.y - waist)
-        values.append(value)
+        if pattern == FRONT_PANEL:
+            var wide = PANEL * s + PANEL_FLARE * max(Float32(0), waist - p.y)
+            values.append(max(abs(p.x - middle) - wide / 2, front - p.z))
+            continue
+        if pattern == SLEEVES:
+            values.append(0.5 - arms[v])
+            continue
+        if pattern == BANDED_SLEEVES:
+            values.append(
+                max(
+                    0.5 - arms[v],
+                    sin(Float32(pi) * (p.y - waist) / (stripe * SLEEVE_BANDS)),
+                )
+            )
+            continue
+        values.append(
+            charge_value(
+                pattern,
+                right * (p.x - middle),
+                p.y - chest,
+                p.y - waist,
+                CHEVRON_RISE * s,
+                half,
+                stripe,
+            )
+        )
     return values^
+
+
+def charge_value(
+    pattern: DyePattern,
+    across: Float32,
+    up: Float32,
+    over: Float32,
+    rise: Float32,
+    half: Float32,
+    stripe: Float32,
+) -> Float32:
+    """Return a value whose sign says which dye a point of a pattern takes.
+
+    A garment and a shield share it, each in its own lengths.
+
+    Args:
+        pattern: A named pattern.
+        across: How far toward the bearer's right the point lies from the
+            middle.
+        up: How far above the point where the charges cross it lies.
+        over: How far above the line where quarters, stripes and checks
+            cross it lies.
+        rise: How far above the crossing a chevron's point lies.
+        half: Half the width of a charge's band.
+        stripe: How wide a stripe, a pale or a check is.
+
+    Returns:
+        At or above zero for the primary dye, below it for the secondary.
+        One for `SOLID`, and for a pattern that is not named.
+    """
+    var u = across
+    var w = up
+    if pattern == PARTY:
+        return u
+    if pattern == STRIPES:
+        return sin(Float32(pi) * over / stripe)
+    if pattern == QUARTERLY:
+        return u * over
+    if pattern == CHEVRON:
+        return abs(w - (rise - abs(u))) * DIAGONAL - half
+    if pattern == CROSS:
+        return min(abs(u), abs(w)) - half
+    if pattern == SALTIRE:
+        return min(abs(u - w), abs(u + w)) * DIAGONAL - half
+    if pattern == BEND:
+        return abs(u - w) * DIAGONAL - half
+    if pattern == PALY:
+        return sin(Float32(pi) * u / stripe)
+    if pattern == CHECKY:
+        return sin(Float32(pi) * u / stripe) * sin(Float32(pi) * over / stripe)
+    return 1
 
 
 def dye_pattern(
@@ -191,11 +351,28 @@ def dye_pattern(
     for v in range(covered.count()):
         trim.append(covered.component(v, 0) - TRIM_LEVEL)
     var body = cut(piece, trim, 0)
-    var hem = _with_channel(cut(piece, _negated(trim), 0), TRIM_DYE)
-    var dyed = _split(
-        body, pattern_values(body, rig, pattern), PRIMARY_DYE, SECONDARY_DYE
+    var hem = with_channel(cut(piece, _negated(trim), 0), TRIM_DYE)
+    var dyed = merge(
+        split_dyes(
+            body,
+            pattern_values(body, rig, pattern),
+            PRIMARY_DYE,
+            SECONDARY_DYE,
+        ),
+        hem,
     )
-    return merge(dyed, hem)
+    # A hat's stones, horns and feather take the accent dye.
+    if dyed.has_attribute(String(ACCENT)):
+        ref marks = dyed.attribute_view(String(ACCENT))
+        var weights = dyed.clone_attribute(String(DYE))
+        for v in range(marks.count()):  # pragma: no branch
+            if marks.component(v, 0) >= 0.5:
+                for c in range(DYE_CHANNEL_COUNT):  # pragma: no branch
+                    weights.set_component(
+                        v, c, Float32(1) if c == ACCENT_DYE.value else 0
+                    )
+        dyed.set_attribute(String(DYE), weights^)
+    return dyed^
 
 
 def _wear_of(mut piece: BufferGeometry) raises:

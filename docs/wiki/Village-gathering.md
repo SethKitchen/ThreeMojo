@@ -24,6 +24,8 @@ A held button gathers once. Let it go and press it again to gather again.
 | `TRINKET` | A gold ring hung with a gem, which bobs and turns 90 centimeters up | 1 trinket | Never |
 | `FISH` | An oak stake and a creel on the pond's shore | 1 fish, when hooked | It is never used up |
 
+The satchel holds one more kind, `SEAL`: a bandit's seal. No spot gives one. Each bandit that the player fells gives a seal. `SPOT_KINDS`, seven, counts the kinds a spot can be, and `KINDS`, eight, the kinds the satchel holds.
+
 A boulder, a chest and a berry bush stop a character. `Gathering.obstacles` gives each as round: 0.6, 0.45 and 0.4 meters across. A character walks through herbs, mushrooms and trinkets.
 
 ## Fishing
@@ -80,11 +82,21 @@ The player's skills change three settings of `Gathering`: `ore_strikes`, `forage
 | The satchel | The bottom left | A swatch and a count for each kind the player holds |
 | The prompt | The bottom middle | What the use button does at the focus, such as `E  MINE ORE 1/3` |
 | The note | Over the prompt | What the player gathered, such as `+3 BERRIES`, for 2 seconds. It fades over its last half second. |
-| The speech | Over the note | What a villager said, for 5 seconds. See [Village errands](Village-errands). |
+| The speech | Over the note | What a villager said, for 5 seconds. The words show as far as the villager's mouth has said them, and keep their width as they show. See [Village errands](Village-errands). |
 | The errands | The top right | Each errand taken and not done |
 | The skills | The top left | Each skill's level and experience. See [Village skills](Village-skills). |
 
-The font has 5 by 7 dots and needs no font file. It draws capitals, digits, and `+ / : . , ! ? ' -`. A dot is `hud_scale` pixels on a side: one pixel for each 270 pixels of the frame's height. So the text keeps its size on the screen. Each line has a dark shadow, so it reads over the sky and the grass.
+The font has 5 by 7 dots and needs no font file. It draws capitals, small letters, digits, and `+ / : . , ! ? ' -`. A dot is `hud_scale` pixels on a side: one pixel for each 270 pixels of the frame's height. So the text keeps its size on the screen. Each line has a dark shadow, so it reads over the sky and the grass.
+
+`draw_compass`, in `extensions/village/compass.mojo`, writes a compass at the top middle:
+
+- A strip of 120° of the turn round the player, 36 % of the frame's width, centered on the way the camera looks. A tick shows each 15°, and `N`, `E`, `S` and `W` show at the four points. North is minus z.
+- A gold mark at each villager with an errand to offer, and a silver mark at each villager whose errand is taken.
+- A red mark at the nearest foe that stands, within `FOE_SIGHT`, 60 meters.
+- A mark past the strip's end stands at that end, half as bright, so the player knows which way to turn.
+- Under the strip, the hour as a twelve-hour clock and the weather, such as `2:00 PM  CLEAR`.
+
+While a warden fights, its bars take the top of the frame. The compass then stands `BOSS_ROOM`, 40 dots of the font, lower, under the bars. It shows no hour and no weather then, so the numbers of the blows over the warden do not cross them.
 
 Set `PlayParameters.hud` to False for a frame with no display.
 
@@ -93,4 +105,4 @@ Set `PlayParameters.hud` to False for a frame with no display.
 - A spot does not stop the camera.
 - The satchel counts things. It does not hold items with their own state. An errand takes things out of it: see [Village errands](Village-errands).
 - The note shows the last thing gathered only.
-- Coins are spent nowhere yet.
+- Coins buy herbs only, from Edith: see [Village errands](Village-errands#trade).

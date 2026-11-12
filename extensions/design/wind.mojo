@@ -52,7 +52,7 @@ def exposure_coefficient(
     """Return Kz, the velocity pressure exposure coefficient.
 
     Args:
-        height: z, the height above ground. Heights under 15 ft use 15 ft.
+        height: `z`, the height above ground. Heights under 15 ft use 15 ft.
         exposure: B, C or D.
 
     Returns:
@@ -77,7 +77,7 @@ def elevation_factor(ground_elevation: Length64) raises -> Float64:
         ground_elevation: The ground's height above sea level.
 
     Returns:
-        e^(-0.0000362 z_e) with z_e in feet.
+        `e^(-0.0000362 z_e)` with z_e in feet.
 
     Raises:
         Error: If the elevation is not finite.
@@ -165,7 +165,7 @@ def wall_net_pressure(
         depth_over_width: L / B.
 
     Returns:
-        q G (0.8 - Cp,leeward), with G = 0.85.
+        `q G (0.8 - Cp,leeward)`, with G = 0.85.
 
     Raises:
         Error: If the velocity pressure or L / B is not positive.

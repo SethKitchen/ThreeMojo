@@ -216,6 +216,20 @@ def _sample_height(
     )
 
 
+@fieldwise_init
+struct RippleDrop(Copyable, ImplicitlyCopyable):
+    """A drop that taps a ripple window in one step."""
+
+    var u: Float32
+    """The drop's position across the window, from 0 to 1."""
+    var v: Float32
+    """The drop's position along the window, from 0 to 1."""
+    var radius: Float32
+    """The drop's radius, in window lengths."""
+    var strength: Float32
+    """How far the drop pulls the surface down. Zero has no effect."""
+
+
 def step_ripple(
     mut field: RippleField,
     shift_u: Float32,
@@ -235,6 +249,27 @@ def step_ripple(
         drop_v: Drop position in window coordinates, 0 to 1.
         drop_radius: Drop radius in window coordinates.
         drop_strength: How far the drop pulls the surface down. Zero skips it.
+    """
+    var drops = List[RippleDrop]()
+    if drop_strength != 0.0:
+        drops.append(RippleDrop(drop_u, drop_v, drop_radius, drop_strength))
+    step_ripple_drops(field, shift_u, shift_v, drops)
+
+
+def step_ripple_drops(
+    mut field: RippleField,
+    shift_u: Float32,
+    shift_v: Float32,
+    drops: List[RippleDrop],
+):
+    """Advance the wave equation one step under several drops, and rebuild
+    the normal texture.
+
+    Args:
+        field: The window. Height and velocity are replaced.
+        shift_u: How far the window scrolled, in texels over `n`.
+        shift_v: The same scroll on z.
+        drops: The drops of this step, in the order they tap the window.
     """
     var n = field.n
     var next_h = List[Float32](length=n * n, fill=0.0)
@@ -257,15 +292,15 @@ def step_ripple(
             vel *= 0.9955
             var h = c.height + vel
             h *= 0.9985
-            if drop_strength != 0.0:
-                var du = u - drop_u
-                var dv = v - drop_v
+            for drop in drops:
+                var du = u - drop.u
+                var dv = v - drop.v
                 var d = sqrt(squared_length2[DType.float32](du, dv))
-                if d < drop_radius:
+                if d < drop.radius:
                     var lobe = 0.5 + 0.5 * cos(
-                        Float32(3.141592653589793) * d / drop_radius
+                        Float32(3.141592653589793) * d / drop.radius
                     )
-                    h -= drop_strength * lobe
+                    h -= drop.strength * lobe
             var edge_u = u
             if edge_u > 0.5:
                 edge_u = 1.0 - edge_u

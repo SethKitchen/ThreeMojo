@@ -35,7 +35,9 @@ two differ: see the wiki page Game renderer.
 
 **What is drawn.** `scene.meshes` and `scene.skinned_meshes`, opaque, with
 `BASIC`, `LAMBERT`, `PHONG`, `STANDARD` and `PHYSICAL` materials, vertex
-colors, a color and an emissive color. A standard or physical material is
+colors, a color and an emissive color. A mesh's morph targets move its
+vertices as three.js's do, the targets it wears and only those: see
+`_Shape.wear`. A standard or physical material is
 lit as a Lambert one. A map is read at each vertex, or, with `pixel_maps`
 set, at each pixel: see `_PixelMaps`. A map read at each pixel scales all
 the light of its vertices, so a material that glows or shines, an emissive
@@ -63,10 +65,11 @@ from objects.skinned_mesh import (
 from core.fog import EXP2_FOG, NO_FOG, exp2_veil
 from core.geometry_store import GeometryId
 from core.layers import Layers
+from core.morph import MorphInfluences
 from core.object3d import NodeId
 from core.ordinal import ordinal_valid
 from core.scene import Scene
-from lights.lighting import Lighting
+from lights.lighting import FALLOFF_FLOOR, Lighting
 from materials.material import (
     BASIC,
     DOUBLE_SIDE,
@@ -84,6 +87,52 @@ from math.bounds import Sphere
 from math.cross import cross_vectors
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor, Framebuffer, SrgbBytes
+from renderers.game_gpu import (
+    address,
+    FLOAT_BIAS,
+    FLOAT_EXPOSURE,
+    FLOAT_FOG_BLUE,
+    FLOAT_FOG_GREEN,
+    FLOAT_FOG_RED,
+    FLOAT_MOVING_PER_METER,
+    FLOAT_STILL_PER_METER,
+    GpuFrame,
+    INT_FOG,
+    INT_HEIGHT,
+    INT_MAP_FLOATS,
+    INT_MAP_LEVELS,
+    INT_MAP_SLOTS,
+    INT_MOVING_MADE,
+    INT_MOVING_ON,
+    INT_MOVING_SIZE,
+    INT_MOVING_STRIDE,
+    INT_SKY_COLUMNS,
+    INT_SKY_ROWS,
+    INT_SKY_STEP,
+    INT_STILL_MADE,
+    INT_STILL_ON,
+    INT_STILL_SIZE,
+    INT_STILL_STRIDE,
+    INT_TRIANGLES,
+    INT_VERTICES,
+    INT_WIDTH,
+    POINTER_CODES,
+    POINTER_CORNERS,
+    POINTER_MAP_COUNTS,
+    POINTER_MAP_FIRSTS,
+    POINTER_MAP_HEIGHTS,
+    POINTER_MAP_STARTS,
+    POINTER_MAP_TEXELS,
+    POINTER_MAP_WIDTHS,
+    POINTER_MAP_WRAPS_S,
+    POINTER_MAP_WRAPS_T,
+    POINTER_MOVING_CLIP,
+    POINTER_MOVING_DEPTH,
+    POINTER_SKY,
+    POINTER_STILL_CLIP,
+    POINTER_STILL_DEPTH,
+    POINTER_VERTICES,
+)
 from render.game_math import (
     GAME_LANES,
     fast_sin,
@@ -96,24 +145,31 @@ from render.texture import MIRROR, REPEAT, Texture
 from render.cube_texture import CubeTexture
 from render.texture_store import TextureId
 from std.math import ceil, exp2, floor, inf, log2, max, min, sqrt
-from std.memory import unsafe_memcpy
+from std.memory import stack_allocation, unsafe_memcpy
 from std.time import perf_counter_ns
 from units.si import PER_METER, SECOND, Duration
 
+comptime POSE_REACH = Float32(1.5)
+"""How many times its bound at rest a skinned mesh's bound is grown, so
+any pose of a person stays inside it: an arm raised over the head, or a
+body that lies on the ground after a fall."""
 comptime TILE = 64
 """The side of a tile, in pixels."""
 comptime STRIDE = 16
 """Floats a vertex takes in the frame's vertex array: its clip position,
 its ambient and sun light, its shadow coordinates and spare room."""
-comptime PLANE = 16
+comptime PLANE = 18
 """Floats a triangle takes in the frame's plane array: three edges, the
-depth plane and the inverse w of each corner."""
+depth plane, the inverse w of each corner, its map's code, and the pixel
+its planes are measured from."""
 comptime CHUNK = 4096
 """The most vertices or triangles one task of the vertex or the setup
 stage takes."""
 comptime NO_TRIANGLE = Int32(-1)
 """The visibility buffer's mark for a pixel no triangle covers."""
 comptime F = SIMD[DType.float32, GAME_LANES]
+comptime GAME_LAMPS = 8
+"""The most point lights the game renderer draws."""
 comptime I = SIMD[DType.int32, GAME_LANES]
 comptime _FRESNEL_SLOPE = Float32(-5.55473)
 comptime _FRESNEL_OFFSET = Float32(-6.98316)
@@ -344,13 +400,33 @@ struct _Shape(Movable):
     # Baked light by attribute name, read on demand.
     var baked_names: List[String]
     var baked: List[List[Float32]]
+    # The morph targets, read the first time a mesh wears one: per target,
+    # the vertices it moves and, six floats each, how far it moves their
+    # positions and normals. The positions and normals at rest, and the
+    # weights the shape wears now.
+    var morph_vertices: List[List[Int32]]
+    var morph_deltas: List[List[Float32]]
+    var rest: List[List[Float32]]
+    var worn: List[Float32]
+    # A fingerprint of the triangles: the vertex count, the index and the
+    # groups. A geometry replaced by one of the same triangles keeps its
+    # parts, and only its values are read again.
+    var topology: UInt64
 
-    def __init__(out self, geometry: BufferGeometry, generation: Int) raises:
+    def __init__(
+        out self,
+        geometry: BufferGeometry,
+        generation: Int,
+        previous: Optional[_Shape] = None,
+    ) raises:
         """Read a geometry.
 
         Args:
             geometry: The geometry.
             generation: Its generation in the store.
+            previous: The shape the geometry was read into before, if any.
+                If the triangles are the same, its parts are kept, and
+                only the values are read again, as wind moves grass.
 
         Raises:
             Error: If it has no positions, or an index or a group is out of
@@ -389,16 +465,26 @@ struct _Shape(Movable):
         self.v = List[Float32](length=self.count, fill=0)
         if geometry.has_attribute(String(UV)):
             ref uv = geometry.attribute_view(String(UV))
-            for i in range(self.count):
-                self.u[i] = uv.component(i, 0)
-                self.v[i] = uv.component(i, 1)
+            _read_component(uv, self.u, 0)
+            _read_component(uv, self.v, 1)
         self.parts = List[_Part]()
+        self.topology = _topology(geometry, self.count)
         var corners = (
             len(geometry.index) if len(geometry.index) > 0 else self.count
         )
-        if len(geometry.groups) == 0:
+        var kept = False
+        if previous:
+            ref before = previous.value()
+            if before.topology == self.topology:
+                for p in range(len(before.parts)):  # pragma: no branch
+                    var part = _Part(before.parts[p].slot)
+                    part.vertices = before.parts[p].vertices.copy()
+                    part.triangles = before.parts[p].triangles.copy()
+                    self.parts.append(part^)
+                kept = True
+        if not kept and len(geometry.groups) == 0:
             self.parts.append(_part(geometry, 0, corners, 0, self.count))
-        else:
+        elif not kept:
             for g in geometry.groups:  # pragma: no branch
                 var start = max(0, g.start)
                 var past = min(corners, g.start + g.count)
@@ -434,6 +520,15 @@ struct _Shape(Movable):
         self.radius = sqrt(reach)
         self.baked_names = List[String]()
         self.baked = List[List[Float32]]()
+        self.morph_vertices = List[List[Int32]]()
+        self.morph_deltas = List[List[Float32]]()
+        self.rest = List[List[Float32]]()
+        self.worn = List[Float32]()
+        self._regather()
+
+    def _regather(mut self):
+        """Gather each part's positions, normals and colors from the
+        shape's."""
         for p in range(len(self.parts)):  # pragma: no branch
             ref part = self.parts[p]
             _gather_into(part.px, self.px, part.vertices)
@@ -445,6 +540,126 @@ struct _Shape(Movable):
             _gather_into(part.cr, self.cr, part.vertices)
             _gather_into(part.cg, self.cg, part.vertices)
             _gather_into(part.cb, self.cb, part.vertices)
+
+    def _read_morphs(mut self, geometry: BufferGeometry) raises:
+        """Read the geometry's morph targets, keeping only the vertices
+        each moves, and the positions and normals at rest."""
+        self.rest = [
+            self.px.copy(),
+            self.py.copy(),
+            self.pz.copy(),
+            self.nx.copy(),
+            self.ny.copy(),
+            self.nz.copy(),
+        ]
+        var normals = geometry.has_morph_normals()
+        for t in range(geometry.morph_count()):  # pragma: no branch
+            var moved = geometry.morph_positions[t].packed()
+            var turned = List[Float32]()
+            if normals:
+                turned = geometry.morph_normals[t].packed()
+            var vertices = List[Int32]()
+            var deltas = List[Float32]()
+            for i in range(self.count):  # pragma: no branch
+                var d = SIMD[DType.float32, 8](0)
+                d[0] = moved[3 * i]
+                d[1] = moved[3 * i + 1]
+                d[2] = moved[3 * i + 2]
+                if not geometry.morph_relative:
+                    d[0] -= self.px[i]
+                    d[1] -= self.py[i]
+                    d[2] -= self.pz[i]
+                if normals:
+                    d[3] = turned[3 * i]
+                    d[4] = turned[3 * i + 1]
+                    d[5] = turned[3 * i + 2]
+                    if not geometry.morph_relative:
+                        d[3] -= self.nx[i]
+                        d[4] -= self.ny[i]
+                        d[5] -= self.nz[i]
+                if abs(d).reduce_max() == 0:
+                    continue
+                vertices.append(Int32(i))
+                for c in range(6):  # pragma: no branch
+                    deltas.append(d[c])
+            self.morph_vertices.append(vertices^)
+            self.morph_deltas.append(deltas^)
+
+    def wear(
+        mut self, geometry: BufferGeometry, influences: MorphInfluences
+    ) raises:
+        """Move the shape's vertices by the morph targets a mesh wears, as
+        three.js's `morphtarget_vertex` and `morphnormal_vertex` do.
+
+        The shape is moved again only when the weights change. A geometry
+        that two meshes wear at once in different weights shows the
+        weights of the mesh drawn last.
+
+        Args:
+            geometry: The geometry the shape was read from.
+            influences: How much of each target the mesh wears.
+
+        Raises:
+            Error: If a morph target does not cover every vertex.
+        """
+        var targets = geometry.morph_count()
+        var same = len(self.worn) == targets
+        if same:
+            for t in range(targets):  # pragma: no branch
+                if self.worn[t] != influences[t]:
+                    same = False
+                    break
+        if same:
+            return
+        if len(self.rest) == 0:
+            self._read_morphs(geometry)
+        self.worn = List[Float32](length=targets, fill=0)
+        self.px = self.rest[0].copy()
+        self.py = self.rest[1].copy()
+        self.pz = self.rest[2].copy()
+        self.nx = self.rest[3].copy()
+        self.ny = self.rest[4].copy()
+        self.nz = self.rest[5].copy()
+        var turned = False
+        for t in range(targets):  # pragma: no branch
+            var w = influences[t]
+            self.worn[t] = w
+            if w == 0:
+                continue
+            ref vertices = self.morph_vertices[t]
+            ref deltas = self.morph_deltas[t]
+            for k in range(len(vertices)):  # pragma: no branch
+                var i = Int(vertices[k])
+                self.px[i] += w * deltas[6 * k]
+                self.py[i] += w * deltas[6 * k + 1]
+                self.pz[i] += w * deltas[6 * k + 2]
+                self.nx[i] += w * deltas[6 * k + 3]
+                self.ny[i] += w * deltas[6 * k + 4]
+                self.nz[i] += w * deltas[6 * k + 5]
+                turned = True
+        # The light stage reads unit normals.
+        if turned:
+            for i in range(self.count):  # pragma: no branch
+                var n = max(
+                    sqrt(
+                        self.nx[i] * self.nx[i]
+                        + self.ny[i] * self.ny[i]
+                        + self.nz[i] * self.nz[i]
+                    ),
+                    Float32(1.0e-12),
+                )
+                self.nx[i] /= n
+                self.ny[i] /= n
+                self.nz[i] /= n
+        # A moved vertex can stand past the bounding sphere at rest.
+        var reach = Float32(0)
+        for i in range(self.count):  # pragma: no branch
+            var dx = self.px[i] - self.center.x
+            var dy = self.py[i] - self.center.y
+            var dz = self.pz[i] - self.center.z
+            reach = max(reach, dx * dx + dy * dy + dz * dz)
+        self.radius = sqrt(reach)
+        self._regather()
 
     def baked_values(
         mut self, geometry: BufferGeometry, name: String
@@ -469,8 +684,7 @@ struct _Shape(Movable):
             raise Error("A geometry has no attribute '", name, "' to light by")
         ref values = geometry.attribute_view(name)
         var out = List[Float32](length=self.count, fill=0)
-        for i in range(self.count):
-            out[i] = values.component(i, 0)
+        _read_component(values, out, 0)
         for p in range(len(self.parts)):  # pragma: no branch
             var gathered = List[Float32]()
             _gather_into(gathered, out, self.parts[p].vertices)
@@ -546,6 +760,38 @@ def _gather_into(
     var at = order.unsafe_ptr()
     for k in range(count):
         out[unsafe_offset=k] = src[unsafe_offset=Int(at[unsafe_offset=k])]
+
+
+def _topology(geometry: BufferGeometry, count: Int) -> UInt64:
+    """Return a fingerprint of a geometry's triangles: its vertex count,
+    its index and its groups. It is not a cryptographic digest."""
+    var h = UInt64(14695981039346656037)
+    var prime = UInt64(1099511628211)
+    h = (h ^ UInt64(count)) * prime
+    h = (h ^ UInt64(len(geometry.index))) * prime
+    for i in geometry.index:
+        h = (h ^ UInt64(i)) * prime
+    for g in geometry.groups:
+        h = (h ^ UInt64(g.start)) * prime
+        h = (h ^ UInt64(g.count)) * prime
+        h = (h ^ UInt64(g.material_index.value)) * prime
+    return h
+
+
+def _read_component(
+    attribute: BufferAttribute, mut out: List[Float32], component: Int
+) raises:
+    """Read one component of each item of an attribute, as many items as
+    `out` holds."""
+    var count = min(attribute.count(), len(out))
+    var size = attribute.item_size
+    # A plain attribute is read straight from its buffer.
+    var plain = not attribute.is_interleaved()
+    var data = attribute.data.unsafe_ptr()
+    for i in range(count):
+        out[i] = data[
+            unsafe_offset=i * size + component
+        ] if plain else attribute.component(i, component)
 
 
 def _read3(
@@ -667,6 +913,32 @@ struct _Frame(ImplicitlyCopyable):
     # it culls faces by their facing.
     var depth_only: Bool
     var cull: Bool
+    # The point lights, at most `GAME_LAMPS`: how many, where each is,
+    # what it carries, scaled as the other lights are, how it falls off,
+    # and where it stops.
+    var lamps: Int
+    var lamp_x: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_y: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_z: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_r: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_g: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_b: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_decay: SIMD[DType.float32, GAME_LAMPS]
+    var lamp_cutoff: SIMD[DType.float32, GAME_LAMPS]
+
+
+@fieldwise_init
+struct _Prepared(Copyable, Movable):
+    """What the stages that the CPU and a GPU share leave: the frame, whether
+    the sun's shadows shade it, and the time each stage ended, in
+    nanoseconds."""
+
+    var frame: _Frame
+    var shadowing: Bool
+    var mapped: Int
+    var gathered: Int
+    var lit: Int
+    var set_up: Int
 
 
 @fieldwise_init
@@ -837,6 +1109,19 @@ struct GameRenderer(Movable):
     # the maps read so.
     var pixel_maps: Bool
     var _pixel: _PixelMaps
+    # What `prepare_gpu` leaves for a GPU: the triangles' corners and map
+    # codes, packed one after another; the sky's grid; how many vertices
+    # the frame holds; whether the sun's shadows shade it; and how many
+    # times each shadow map has been drawn.
+    var _gpu_corners: List[Int32]
+    var _gpu_codes: List[Float32]
+    var _gpu_sky: List[Float32]
+    var _gpu_vertices: Int
+    var _gpu_shadowing: Bool
+    var _gpu_fog: Bool
+    var _gpu_fog_color: SIMD[DType.float32, 4]
+    var _still_made: Int
+    var _moving_made: Int
 
     def __init__(
         out self, width: Int, height: Int, exposure: Float32 = 1
@@ -893,6 +1178,15 @@ struct GameRenderer(Movable):
         self._moving_map = _SunMap(1)
         self.pixel_maps = False
         self._pixel = _PixelMaps()
+        self._gpu_corners = List[Int32]()
+        self._gpu_codes = List[Float32]()
+        self._gpu_sky = List[Float32]()
+        self._gpu_vertices = 0
+        self._gpu_shadowing = False
+        self._gpu_fog = False
+        self._gpu_fog_color = SIMD[DType.float32, 4](0)
+        self._still_made = 0
+        self._moving_made = 0
 
     def register(mut self, program: Int, var shading: GameShading):
         """Say what a node program does, so materials naming it are drawn.
@@ -935,6 +1229,58 @@ struct GameRenderer(Movable):
                 a geometry or a node is not there.
         """
         var began = perf_counter_ns()
+        var ready = self._prepare(scene, assets, camera, time)
+        var set_up = ready.set_up
+        var shadowing = ready.shadowing
+        var frame = ready.frame
+        var bins = self._bin(self.width, self.height)
+        var binned = perf_counter_ns()
+        self._raster(
+            bins,
+            self.width,
+            self.height,
+            self._stride,
+            self._depth.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            self._ids.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        )
+        # The buffer holds whole tiles, so it holds whole runs of lanes.
+        comptime assert TILE % GAME_LANES == 0, "A tile must hold whole runs"
+        var named = self._ids.unsafe_ptr()
+        var counts = I(0)
+        for i in range(0, len(self._ids), GAME_LANES):  # pragma: no branch
+            counts += (
+                named.unsafe_load[width=GAME_LANES](i)
+                .ne(NO_TRIANGLE)
+                .select(I(1), I(0))
+            )
+        self.drawn = Int(counts.reduce_add())
+        var rastered = perf_counter_ns()
+        var sky = self._sky(scene, assets, camera)
+        var skied = perf_counter_ns()
+        var image = self._resolve(frame, sky, shadowing)
+        var resolved = perf_counter_ns()
+        self.timings = [
+            _ms(ready.mapped - began),
+            _ms(ready.gathered - ready.mapped),
+            _ms(ready.lit - ready.gathered),
+            _ms(set_up - ready.lit),
+            _ms(binned - set_up),
+            _ms(rastered - binned),
+            _ms(skied - rastered),
+            _ms(resolved - skied),
+        ]
+        return image^
+
+    def _prepare(
+        mut self,
+        scene: Scene,
+        assets: Assets,
+        camera: PerspectiveCamera,
+        time: Duration,
+    ) raises -> _Prepared:
+        """Do the stages that the CPU and a GPU share: the shadow maps, the
+        gathering, the light at the vertices and the setup of each triangle.
+        """
         self._looks.clear()
         self._skins = [[Float32(0)]]
         self._skin_of.clear()
@@ -959,12 +1305,14 @@ struct GameRenderer(Movable):
                 self._draw_map(
                     scene, assets, frame, False, center, reach, layers
                 )
+                self._still_made += 1
             if self.shadows != STILL_SHADOWS:
                 if self._moving_map.size != self.moving_size:
                     self._moving_map = _SunMap(self.moving_size)
                 var focus = self.focus
                 var reach = self.moving_reach
                 self._draw_map(scene, assets, frame, True, focus, reach, layers)
+                self._moving_made += 1
         var mapped = perf_counter_ns()
         var view = camera.view_matrix()
         var clip = camera.projection_matrix()
@@ -985,38 +1333,162 @@ struct GameRenderer(Movable):
         self._light_vertices(draws, assets, scene, frame)
         var lit = perf_counter_ns()
         self._setup(draws, frame)
-        var set_up = perf_counter_ns()
-        var bins = self._bin(self.width, self.height)
-        var binned = perf_counter_ns()
-        self._raster(
-            bins,
-            self.width,
-            self.height,
-            self._stride,
-            self._depth.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-            self._ids.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        return _Prepared(
+            frame, shadowing, mapped, gathered, lit, perf_counter_ns()
         )
-        var drawn = 0
-        for i in range(len(self._ids)):  # pragma: no branch
-            if self._ids[i] != NO_TRIANGLE:
-                drawn += 1
-        self.drawn = drawn
-        var rastered = perf_counter_ns()
-        var sky = self._sky(scene, assets, camera)
+
+    def prepare_gpu(
+        mut self,
+        scene: Scene,
+        assets: Assets,
+        camera: PerspectiveCamera,
+        time: Duration,
+    ) raises:
+        """Do the work of `render` that a CPU does best, and leave the rest
+        for a GPU: the shadow maps, the gathering, the light at the vertices
+        and the setup of each triangle, and the sky's grid. The triangles are
+        packed one after another. `gpu_frame` then describes the frame.
+
+        The GPU does what `render` does after the setup: it rasters the
+        triangles, shades each pixel from its vertices, the shadow maps and
+        the maps, tone maps it, and encodes it. The image is as large as the
+        renderer.
+
+        Args:
+            scene: The scene, updated.
+            assets: The stores.
+            camera: The camera, placed.
+            time: The time of the frame, for the wind's sway.
+
+        Raises:
+            Error: If a drawn material cannot be drawn by this renderer, or
+                a geometry or a node is not there.
+        """
+        var began = perf_counter_ns()
+        var ready = self._prepare(scene, assets, camera, time)
+        self._pack()
+        var packed = perf_counter_ns()
+        self._gpu_sky = self._sky(scene, assets, camera)
+        self._gpu_shadowing = ready.shadowing
+        self._gpu_fog = ready.frame.fog
+        self._gpu_fog_color = ready.frame.fog_color
         var skied = perf_counter_ns()
-        var image = self._resolve(frame, sky, shadowing)
-        var resolved = perf_counter_ns()
         self.timings = [
-            _ms(mapped - began),
-            _ms(gathered - mapped),
-            _ms(lit - gathered),
-            _ms(set_up - lit),
-            _ms(binned - set_up),
-            _ms(rastered - binned),
-            _ms(skied - rastered),
-            _ms(resolved - skied),
+            _ms(ready.mapped - began),
+            _ms(ready.gathered - ready.mapped),
+            _ms(ready.lit - ready.gathered),
+            _ms(ready.set_up - ready.lit),
+            _ms(packed - ready.set_up),
+            0,
+            _ms(skied - packed),
+            0,
         ]
-        return image^
+
+    def _pack(mut self):
+        """Copy the frame's triangles, which the setup left in batches with
+        gaps between, into arrays with none: their corners, and their map
+        codes from the planes."""
+        var total = self.triangles
+        if len(self._gpu_corners) < total * 3:
+            _grow(self._gpu_corners, total * 3)
+        if len(self._gpu_codes) < total:
+            _grow(self._gpu_codes, total)
+        var corners = self._gpu_corners.unsafe_ptr()
+        var codes = self._gpu_codes.unsafe_ptr()
+        var planes = self._planes.unsafe_ptr()
+        var at = 0
+        for j in range(self._jobs):
+            ref batch = self._batches[j]
+            unsafe_memcpy(
+                dest=corners.unsafe_offset(at * 3),
+                src=self._corners.unsafe_ptr().unsafe_offset(batch.first * 3),
+                count=batch.count * 3,
+            )
+            for k in range(batch.count):
+                codes[unsafe_offset=at + k] = planes[
+                    unsafe_offset=(batch.first + k) * PLANE + 15
+                ]
+            at += batch.count
+
+    def gpu_frame(self) -> GpuFrame:
+        """Describe the frame that `prepare_gpu` left, for a GPU.
+
+        Returns:
+            The counts, the scalars and the addresses of the data. The data
+            stays valid until the next frame is drawn or prepared.
+        """
+        var out = GpuFrame()
+        var step = max(1, self.sky_step)
+        var columns = (self.width + step - 1) // step + 1
+        var rows = (self.height + step - 1) // step + 1
+        out.ints[INT_WIDTH] = Int64(self.width)
+        out.ints[INT_HEIGHT] = Int64(self.height)
+        out.ints[INT_VERTICES] = Int64(self._gpu_vertices)
+        out.ints[INT_TRIANGLES] = Int64(self.triangles)
+        out.ints[INT_SKY_COLUMNS] = Int64(columns)
+        out.ints[INT_SKY_ROWS] = Int64(rows)
+        out.ints[INT_SKY_STEP] = Int64(step)
+        out.ints[INT_FOG] = Int64(1 if self._gpu_fog else 0)
+        var moving = self._gpu_shadowing and self.shadows != STILL_SHADOWS
+        out.ints[INT_STILL_ON] = Int64(1 if self._gpu_shadowing else 0)
+        out.ints[INT_STILL_SIZE] = Int64(self._still_map.size)
+        out.ints[INT_STILL_STRIDE] = Int64(self._still_map.stride)
+        out.ints[INT_STILL_MADE] = Int64(self._still_made)
+        out.ints[INT_MOVING_ON] = Int64(1 if moving else 0)
+        out.ints[INT_MOVING_SIZE] = Int64(self._moving_map.size)
+        out.ints[INT_MOVING_STRIDE] = Int64(self._moving_map.stride)
+        out.ints[INT_MOVING_MADE] = Int64(self._moving_made)
+        out.ints[INT_MAP_SLOTS] = Int64(len(self._pixel.levels))
+        out.ints[INT_MAP_LEVELS] = Int64(len(self._pixel.starts))
+        out.ints[INT_MAP_FLOATS] = Int64(len(self._pixel.texels))
+        out.floats[FLOAT_EXPOSURE] = self.exposure
+        out.floats[FLOAT_BIAS] = self.shadow_bias
+        out.floats[FLOAT_FOG_RED] = self._gpu_fog_color[0]
+        out.floats[FLOAT_FOG_GREEN] = self._gpu_fog_color[1]
+        out.floats[FLOAT_FOG_BLUE] = self._gpu_fog_color[2]
+        out.floats[FLOAT_STILL_PER_METER] = self._still_map.per_meter
+        out.floats[FLOAT_MOVING_PER_METER] = self._moving_map.per_meter
+        out.pointers[POINTER_VERTICES] = address(self._vertices.unsafe_ptr())
+        out.pointers[POINTER_CORNERS] = address(self._gpu_corners.unsafe_ptr())
+        out.pointers[POINTER_CODES] = address(self._gpu_codes.unsafe_ptr())
+        out.pointers[POINTER_SKY] = address(self._gpu_sky.unsafe_ptr())
+        out.pointers[POINTER_STILL_DEPTH] = address(
+            self._still_map.depth.unsafe_ptr()
+        )
+        out.pointers[POINTER_STILL_CLIP] = address(
+            self._still_map.clip.elements.unsafe_ptr()
+        )
+        out.pointers[POINTER_MOVING_DEPTH] = address(
+            self._moving_map.depth.unsafe_ptr()
+        )
+        out.pointers[POINTER_MOVING_CLIP] = address(
+            self._moving_map.clip.elements.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_TEXELS] = address(
+            self._pixel.texels.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_STARTS] = address(
+            self._pixel.starts.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_WIDTHS] = address(
+            self._pixel.widths.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_HEIGHTS] = address(
+            self._pixel.heights.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_FIRSTS] = address(
+            self._pixel.firsts.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_COUNTS] = address(
+            self._pixel.levels.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_WRAPS_S] = address(
+            self._pixel.wraps_s.unsafe_ptr()
+        )
+        out.pointers[POINTER_MAP_WRAPS_T] = address(
+            self._pixel.wraps_t.unsafe_ptr()
+        )
+        return out^
 
     def set_moving(mut self, scene: Scene, roots: List[NodeId]) raises:
         """Say which nodes move, so their meshes cast into the moving map.
@@ -1198,8 +1670,29 @@ struct GameRenderer(Movable):
             toward = SIMD[DType.float32, 4](d.x, d.y, d.z, 0)
             sun = _rgb(lights.radiances[index])
             has_sun = True
-        if len(lights.positions) > 0 or len(lights.spot_positions) > 0:
-            raise Error("The game renderer draws no point or spot light")
+        if len(lights.spot_positions) > 0:
+            raise Error("The game renderer draws no spot light")
+        if len(lights.positions) > GAME_LAMPS:
+            raise Error("The game renderer draws at most 8 point lights")
+        var lamp_x = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_y = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_z = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_r = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_g = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_b = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_decay = SIMD[DType.float32, GAME_LAMPS](0)
+        var lamp_cutoff = SIMD[DType.float32, GAME_LAMPS](0)
+        for index in range(len(lights.positions)):
+            ref at = lights.positions[index]
+            var carries = _rgb(lights.point_radiances[index]) * lights.scale
+            lamp_x[index] = at.x
+            lamp_y[index] = at.y
+            lamp_z[index] = at.z
+            lamp_r[index] = carries[0]
+            lamp_g[index] = carries[1]
+            lamp_b[index] = carries[2]
+            lamp_decay[index] = lights.decays[index]
+            lamp_cutoff[index] = lights.cutoffs[index]
         var fog = scene.fog.kind == EXP2_FOG
         if not fog and scene.fog.kind != NO_FOG:
             raise Error("The game renderer draws only exponential fog")
@@ -1228,20 +1721,32 @@ struct GameRenderer(Movable):
             time.to(SECOND),
             False,
             True,
+            len(lights.positions),
+            lamp_x,
+            lamp_y,
+            lamp_z,
+            lamp_r,
+            lamp_g,
+            lamp_b,
+            lamp_decay,
+            lamp_cutoff,
         )
 
     def _shape(mut self, assets: Assets, id: GeometryId) raises -> Int:
         """Return the shape of a geometry, reading it if it is new or was
-        replaced."""
+        replaced. A replaced geometry of the same triangles keeps its
+        shape's parts."""
         while len(self._shapes) <= id.value:
             self._shapes.append(None)
         var generation = assets.geometries.generation(id)
-        if (
-            not self._shapes[id.value]
-            or self._shapes[id.value].value().generation != generation
-        ):
+        if not self._shapes[id.value]:
             self._shapes[id.value] = _Shape(
                 assets.geometries.get(id), generation
+            )
+        elif self._shapes[id.value].value().generation != generation:
+            var previous = self._shapes[id.value].take()
+            self._shapes[id.value] = _Shape(
+                assets.geometries.get(id), generation, previous^
             )
         return id.value
 
@@ -1325,6 +1830,15 @@ struct GameRenderer(Movable):
                 continue
             var world = scene.world_matrix(mesh.node)
             var shape = self._shape(assets, mesh.geometry)
+            # A mesh that wears its morph targets, or wore them, moves its
+            # shape's vertices: see `_Shape.wear`.
+            if mesh.morph_influences.is_worn() or (
+                len(self._shapes[shape].value().worn) > 0
+            ):
+                self._shapes[shape].value().wear(
+                    assets.geometries.get(mesh.geometry),
+                    mesh.morph_influences,
+                )
             if not _seen(self._shapes[shape].value(), world, frustum):
                 continue
             first = self._add_parts(
@@ -1350,6 +1864,12 @@ struct GameRenderer(Movable):
                 continue
             var world = scene.world_matrix(skinned.node)
             var shape = self._shape(assets, skinned.geometry)
+            # A pose moves the skin about its node: the bound at rest,
+            # grown by `POSE_REACH`, holds it.
+            if not _seen(
+                self._shapes[shape].value(), world, frustum, POSE_REACH
+            ):
+                continue
             first = self._add_parts(
                 draws,
                 assets,
@@ -1686,25 +2206,38 @@ struct GameRenderer(Movable):
             next_extra += made // STRIDE
         self._jobs = len(jobs)
         self.triangles = triangles
+        self._gpu_vertices = next_extra
 
     def _bin(self, width: Int, height: Int) raises -> List[List[Int32]]:
-        """List each tile's triangles, in order, for an image of a size."""
+        """List each tile's triangles, in order, for an image of a size.
+
+        Each row of tiles is listed by its own task. A task reads every
+        triangle's bounds and keeps those that reach its row, so each tile
+        lists its triangles in the order they were set up."""
         var tiles_x = (width + TILE - 1) // TILE
         var tiles_y = (height + TILE - 1) // TILE
         var bins = List[List[Int32]](
             length=tiles_x * tiles_y, fill=List[Int32]()
         )
-        var bounds = self._bounds.unsafe_ptr()
-        for j in range(self._jobs):
-            var first = self._batches[j].first
-            for t in range(first, first + self._batches[j].count):
-                var bx0 = Int(bounds[unsafe_offset=t * 4]) // TILE
-                var by0 = Int(bounds[unsafe_offset=t * 4 + 1]) // TILE
-                var bx1 = Int(bounds[unsafe_offset=t * 4 + 2]) // TILE
-                var by1 = Int(bounds[unsafe_offset=t * 4 + 3]) // TILE
-                for by in range(by0, by1 + 1):  # pragma: no branch
-                    for bx in range(bx0, bx1 + 1):  # pragma: no branch
-                        bins[by * tiles_x + bx].append(Int32(t))
+        var group = TaskGroup()
+        for row in range(tiles_y):  # pragma: no branch
+            group.create_task(
+                _bin_task(
+                    bins.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    Pointer(to=self._batches)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    self._jobs,
+                    self._bounds.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    row,
+                    tiles_x,
+                )
+            )
+        group.wait()
+        _ = len(self._batches)
+        _ = len(self._bounds)
         return bins^
 
     def _raster(
@@ -2023,15 +2556,20 @@ def _rgb(c: FloatColor) -> SIMD[DType.float32, 4]:
     return SIMD[DType.float32, 4](c.r, c.g, c.b, 0)
 
 
-def _seen(shape: _Shape, world: Matrix4, frustum: Frustum) -> Bool:
-    """Return whether a shape's bounding sphere, placed, is in the view."""
+def _seen(
+    shape: _Shape, world: Matrix4, frustum: Frustum, grow: Float32 = 1
+) -> Bool:
+    """Return whether a shape's bounding sphere, placed and grown `grow`
+    times, is in the view."""
     var center = world.transform_point(shape.center)
     ref e = world.elements
     var sx = sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2])
     var sy = sqrt(e[4] * e[4] + e[5] * e[5] + e[6] * e[6])
     var sz = sqrt(e[8] * e[8] + e[9] * e[9] + e[10] * e[10])
     var scale = max(sx, max(sy, sz))
-    return frustum.intersects_sphere(Sphere(center, shape.radius * scale))
+    return frustum.intersects_sphere(
+        Sphere(center, shape.radius * scale * grow)
+    )
 
 
 struct _Batch(Copyable, Movable):
@@ -2192,6 +2730,16 @@ def _light_range(
     var crs = part.cr.unsafe_ptr()
     var cgs = part.cg.unsafe_ptr()
     var cbs = part.cb.unsafe_ptr()
+    # A skinned part has four bones and four weights for each of its
+    # vertices, so these reads stay inside the lists.
+    var bones = part.bones.unsafe_ptr()
+    var weights = part.weights.unsafe_ptr()
+    var us = shape.u.unsafe_ptr()
+    var vs = shape.v.unsafe_ptr()
+    # Each vertex's `STRIDE` floats, as rows of lanes and then as one row
+    # for each vertex.
+    var rows = stack_allocation[STRIDE, F]()
+    var turned = stack_allocation[STRIDE, F]()
     var sun_values = px
     var sky_values = px
     if d.sunlit >= 0:
@@ -2232,8 +2780,10 @@ def _light_range(
                     # `core.deform.skin_carriers` makes it.
                     var m = SIMD[DType.float32, 16](0)
                     for slot in range(BONES_PER_VERTEX):  # pragma: no branch
-                        var w = part.weights[(k + lane) * 4 + slot]
-                        var bone = Int(part.bones[(k + lane) * 4 + slot])
+                        var w = weights[unsafe_offset=(k + lane) * 4 + slot]
+                        var bone = Int(
+                            bones[unsafe_offset=(k + lane) * 4 + slot]
+                        )
                         m += carriers.unsafe_load[width=16](bone * 12) * w
                     var lx = x[lane]
                     var ly = y[lane]
@@ -2277,14 +2827,36 @@ def _light_range(
             x = x + (s.along_x * swing) * weight
             y = y + (s.flutter * flutter) * weight
             z = z + (s.along_z * swing) * weight
-        # The world position, the clip position and the view depth.
-        var wx = x * w0[0] + y * w0[1] + z * w0[2] + w0[3]
-        var wy = x * w1[0] + y * w1[1] + z * w1[2] + w1[3]
-        var wz = x * w2[0] + y * w2[1] + z * w2[2] + w2[3]
+        # The clip position.
         var cx = x * c0[0] + y * c0[1] + z * c0[2] + c0[3]
         var cy = x * c1[0] + y * c1[1] + z * c1[2] + c1[3]
         var cz = x * c2[0] + y * c2[1] + z * c2[2] + c2[3]
         var cw = x * c3[0] + y * c3[1] + z * c3[2] + c3[3]
+        if fr.depth_only:
+            # A shadow map needs only where each vertex is: its first four
+            # floats, interleaved so that each lane's four are together.
+            var front = cx.interleave(cz)
+            var back = cy.interleave(cw)
+            var low = front.slice[GAME_LANES, offset=0]().interleave(
+                back.slice[GAME_LANES, offset=0]()
+            )
+            var high = front.slice[GAME_LANES, offset=GAME_LANES]().interleave(
+                back.slice[GAME_LANES, offset=GAME_LANES]()
+            )
+            var records = rows.unsafe_bitcast[Float32]()
+            records.unsafe_store(low)
+            records.unsafe_offset(2 * GAME_LANES).unsafe_store(high)
+            var at = dest.unsafe_offset((d.first + k) * STRIDE)
+            for lane in range(lanes):  # pragma: no branch
+                at.unsafe_offset(lane * STRIDE).unsafe_store(
+                    records.unsafe_load[width=4](lane * 4)
+                )
+            k += lanes
+            continue
+        # The world position and the view depth.
+        var wx = x * w0[0] + y * w0[1] + z * w0[2] + w0[3]
+        var wy = x * w1[0] + y * w1[1] + z * w1[2] + w1[3]
+        var wz = x * w2[0] + y * w2[1] + z * w2[2] + w2[3]
         var depth = -(x * v2[0] + y * v2[1] + z * v2[2] + v2[3])
         var mx = nx * n0[0] + ny * n0[1] + nz * n0[2]
         var my = nx * n1[0] + ny * n1[1] + nz * n1[2]
@@ -2294,16 +2866,6 @@ def _light_range(
         mx *= inv
         my *= inv
         mz *= inv
-        if fr.depth_only:
-            # A shadow map needs only where each vertex is.
-            for lane in range(lanes):  # pragma: no branch
-                var at = dest.unsafe_offset((d.first + k + lane) * STRIDE)
-                at[unsafe_offset=0] = cx[lane]
-                at[unsafe_offset=1] = cy[lane]
-                at[unsafe_offset=2] = cz[lane]
-                at[unsafe_offset=3] = cw[lane]
-            k += lanes
-            continue
         var albedo_r = r * look.color[0] * look.map_color[0]
         var albedo_g = g * look.color[1] * look.map_color[1]
         var albedo_b = b * look.color[2] * look.map_color[2]
@@ -2341,6 +2903,24 @@ def _light_range(
                     ib = ib + (
                         fr.ground[2] + (fr.sky[2] - fr.ground[2]) * share
                     )
+                # Each lamp lights what faces it, as three.js's point light
+                # does, with no shadow.
+                for lamp in range(fr.lamps):
+                    var lx = F(fr.lamp_x[lamp]) - wx
+                    var ly = F(fr.lamp_y[lamp]) - wy
+                    var lz = F(fr.lamp_z[lamp]) - wz
+                    var d2 = lx * lx + ly * ly + lz * lz
+                    var reach = fr.lamp_cutoff[lamp]
+                    if reach > 0 and not d2.lt(reach * reach).reduce_or():
+                        continue
+                    var d = sqrt(max(d2, F(1.0e-8)))
+                    var facing = max(F(0), (fx * lx + fy * ly + fz * lz) / d)
+                    var reaching = (
+                        _lamp_falloff(d, fr.lamp_decay[lamp], reach) * facing
+                    )
+                    ir = ir + reaching * fr.lamp_r[lamp]
+                    ig = ig + reaching * fr.lamp_g[lamp]
+                    ib = ib + reaching * fr.lamp_b[lamp]
                 ar = albedo_r * ir * skylit + look.emissive[0]
                 ag = albedo_g * ig * skylit + look.emissive[1]
                 ab = albedo_b * ib * skylit + look.emissive[2]
@@ -2376,33 +2956,93 @@ def _light_range(
             var lookup = Float32(-1) if (
                 d.sunlit >= 0 or not d.receives
             ) else Float32(0)
-            for lane in range(lanes):  # pragma: no branch
-                var at = base.unsafe_offset(lane * STRIDE)
-                if pixel:
-                    # The fog's share kept, for a lookup, or -1 less it,
-                    # for none; and the texture coordinates.
+            var code = F(lookup)
+            var u = F(0)
+            var v = F(0)
+            if pixel:
+                # The fog's share kept, for a lookup, or -1 less it, for
+                # none; and the texture coordinates.
+                code = keep if lookup == 0 else -1 - keep
+                for lane in range(lanes):  # pragma: no branch
                     var src = Int(verts[unsafe_offset=k + lane])
-                    at[unsafe_offset=13] = (
-                        keep[lane] if lookup == 0 else -1 - keep[lane]
-                    )
-                    at[unsafe_offset=14] = shape.u[src]
-                    at[unsafe_offset=15] = shape.v[src]
-                else:
-                    at[unsafe_offset=13] = lookup
-                at[unsafe_offset=0] = cx[lane]
-                at[unsafe_offset=1] = cy[lane]
-                at[unsafe_offset=2] = cz[lane]
-                at[unsafe_offset=3] = cw[lane]
-                at[unsafe_offset=4] = ar[lane]
-                at[unsafe_offset=5] = ag[lane]
-                at[unsafe_offset=6] = ab[lane]
-                at[unsafe_offset=7] = sr[lane]
-                at[unsafe_offset=8] = sg[lane]
-                at[unsafe_offset=9] = sb[lane]
-                at[unsafe_offset=10] = wx[lane]
-                at[unsafe_offset=11] = wy[lane]
-                at[unsafe_offset=12] = wz[lane]
+                    u[lane] = us[unsafe_offset=src]
+                    v[lane] = vs[unsafe_offset=src]
+            rows[unsafe_offset=0] = cx
+            rows[unsafe_offset=1] = cy
+            rows[unsafe_offset=2] = cz
+            rows[unsafe_offset=3] = cw
+            rows[unsafe_offset=4] = ar
+            rows[unsafe_offset=5] = ag
+            rows[unsafe_offset=6] = ab
+            rows[unsafe_offset=7] = sr
+            rows[unsafe_offset=8] = sg
+            rows[unsafe_offset=9] = sb
+            rows[unsafe_offset=10] = wx
+            rows[unsafe_offset=11] = wy
+            rows[unsafe_offset=12] = wz
+            rows[unsafe_offset=13] = code
+            rows[unsafe_offset=14] = u
+            rows[unsafe_offset=15] = v
+            var row = _transpose(
+                rows.unsafe_origin_cast[MutAnyOrigin](),
+                turned.unsafe_origin_cast[MutAnyOrigin](),
+            )
+            for lane in range(lanes):  # pragma: no branch
+                base.unsafe_offset(lane * STRIDE).unsafe_store(
+                    row[unsafe_offset=lane]
+                )
         k += lanes
+
+
+@always_inline
+def _lamp_falloff(distance: F, decay: Float32, cutoff: Float32) -> F:
+    """Return how much of a lamp's light survives each distance, as
+    `lights.lighting.falloff` finds it, for a run of lanes."""
+    var power = F(1)
+    if decay != 0:
+        power = exp2(decay * log2(distance))
+    var kept = 1 / max(power, F(FALLOFF_FLOOR))
+    if cutoff > 0:
+        var ratio = distance / cutoff
+        var quartic = ratio * ratio * ratio * ratio
+        var edge = min(F(1), max(F(0), 1 - quartic))
+        kept = kept * edge * edge
+    return kept
+
+
+@always_inline
+def _transpose(
+    rows: MutPointer[F, MutAnyOrigin], scratch: MutPointer[F, MutAnyOrigin]
+) -> MutPointer[F, MutAnyOrigin]:
+    """Transpose `STRIDE` rows of `GAME_LANES` floats, as a square.
+
+    Four rounds each interleave row `i` with row `i + 8`. After the fourth,
+    row `j` holds lane `j` of every row in order. The rounds use `rows` and
+    `scratch` in turn, so both are changed.
+
+    Args:
+        rows: The rows, one for each of a vertex's floats.
+        scratch: Room for as many rows.
+
+    Returns:
+        Where the transposed rows are: one for each vertex.
+    """
+    comptime assert STRIDE == GAME_LANES, "The vertex record must be square"
+    var a = rows
+    var b = scratch
+    comptime for _round in range(4):
+        comptime for i in range(STRIDE // 2):
+            var pair = a[unsafe_offset=i].interleave(
+                a[unsafe_offset=i + STRIDE // 2]
+            )
+            b[unsafe_offset=2 * i] = pair.slice[GAME_LANES, offset=0]()
+            b[unsafe_offset=2 * i + 1] = pair.slice[
+                GAME_LANES, offset=GAME_LANES
+            ]()
+        var t = a
+        a = b
+        b = t
+    return a
 
 
 @always_inline
@@ -2635,15 +3275,26 @@ def _emit(
     if mnx > mxx or mny > mxy:
         return
     var inv = 1 / area
+    # The planes are measured from the triangle's own corner of the
+    # screen, its box's least pixel. Measured from the screen's corner, a
+    # small triangle far from it has constant terms a thousand times its
+    # area, which cancel: the rounding left over opens pinholes between
+    # triangles that share an edge, and what is behind shows through.
+    var lx0 = x0 - mnx
+    var ly0 = y0 - mny
+    var lx1 = x1 - mnx
+    var ly1 = y1 - mny
+    var lx2 = x2 - mnx
+    var ly2 = y2 - mny
     var a0 = (y1 - y2) * inv
     var b0 = (x2 - x1) * inv
-    var c0 = (x1 * y2 - x2 * y1) * inv
+    var c0 = (lx1 * ly2 - lx2 * ly1) * inv
     var a1 = (y2 - y0) * inv
     var b1 = (x0 - x2) * inv
-    var c1 = (x2 * y0 - x0 * y2) * inv
+    var c1 = (lx2 * ly0 - lx0 * ly2) * inv
     var a2 = (y0 - y1) * inv
     var b2 = (x1 - x0) * inv
-    var c2 = (x0 * y1 - x1 * y0) * inv
+    var c2 = (lx0 * ly1 - lx1 * ly0) * inv
     var z0 = a[unsafe_offset=2] * iw0
     var z1 = b[unsafe_offset=2] * iw1
     var z2 = c[unsafe_offset=2] * iw2
@@ -2686,12 +3337,38 @@ def _emit(
         var level = 0.5 * log2(max(mapped, Float32(1.0e-20)) / abs(area))
         code = slot * LEVEL_CODE + min(LEVEL_CODE - 1, max(Float32(0), level))
     plane[unsafe_offset=15] = code
+    plane[unsafe_offset=16] = mnx
+    plane[unsafe_offset=17] = mny
     var bound = bounds.unsafe_offset(n * 4)
     bound[unsafe_offset=0] = Int32(Int(mnx))
     bound[unsafe_offset=1] = Int32(Int(mny))
     bound[unsafe_offset=2] = Int32(Int(mxx))
     bound[unsafe_offset=3] = Int32(Int(mxy))
     bt.count += 1
+
+
+__async def _bin_task(
+    bins: MutPointer[List[Int32], MutAnyOrigin],
+    batches: Pointer[List[_Batch], ImmutAnyOrigin],
+    jobs: Int,
+    bounds: Pointer[Int32, ImmutAnyOrigin],
+    row: Int,
+    tiles_x: Int,
+):
+    """List the triangles of the first `jobs` batches that reach each tile
+    of a row of tiles, in order."""
+    var line = bins.unsafe_offset(row * tiles_x)
+    for j in range(jobs):
+        ref batch = batches[][j]
+        for t in range(batch.first, batch.first + batch.count):
+            var by0 = Int(bounds[unsafe_offset=t * 4 + 1]) // TILE
+            var by1 = Int(bounds[unsafe_offset=t * 4 + 3]) // TILE
+            if by0 > row or by1 < row:
+                continue
+            var bx0 = Int(bounds[unsafe_offset=t * 4]) // TILE
+            var bx1 = Int(bounds[unsafe_offset=t * 4 + 2]) // TILE
+            for bx in range(bx0, bx1 + 1):  # pragma: no branch
+                line[unsafe_offset=bx].append(Int32(t))
 
 
 __async def _raster_task(
@@ -2737,17 +3414,19 @@ __async def _raster_task(
         var za = p[unsafe_offset=9]
         var zb = p[unsafe_offset=10]
         var zc = p[unsafe_offset=11]
+        var ox = p[unsafe_offset=16]
+        var oy = p[unsafe_offset=17]
         var id = I(Int32(t))
         var start = tx0 + (bx0 - tx0) // GAME_LANES * GAME_LANES
         for y in range(by0, by1 + 1):  # pragma: no branch
-            var py = Float32(y) + 0.5
+            var py = Float32(y) + 0.5 - oy
             var r0 = py * b0 + c0
             var r1 = py * b1 + c1
             var r2 = py * b2 + c2
             var rz = py * zb + zc
             var x = start
             while x <= bx1:
-                var px = lanes + (Float32(x) + 0.5)
+                var px = lanes + (Float32(x) + 0.5 - ox)
                 var e0 = px * a0 + r0
                 var e1 = px * a1 + r1
                 var e2 = px * a2 + r2
@@ -2974,8 +3653,8 @@ __async def _resolve_task(
                 # Lanes that all show one triangle read its floats once.
                 var one = drawn.reduce_and() and t.eq(t[0]).reduce_and()
                 var p = tri * PLANE
-                var px = lane_f + (Float32(x) + 0.5)
-                var py = F(Float32(y) + 0.5)
+                var px = lane_f + (Float32(x) + 0.5) - _pick(planes, p, 16, one)
+                var py = F(Float32(y) + 0.5) - _pick(planes, p, 17, one)
                 var q0 = (
                     _pick(planes, p, 0, one) * px
                     + _pick(planes, p, 1, one) * py
@@ -3072,11 +3751,26 @@ __async def _resolve_task(
             var green = _encode_bytes(toned[1], buckets, thresholds)
             var blue = _encode_bytes(toned[2], buckets, thresholds)
             var kept = drawn.select(here, infinite)
-            for k in range(lanes):  # pragma: no branch
-                var out = pixels.unsafe_offset((at + k) * 4)
-                out[unsafe_offset=0] = UInt8(red[k])
-                out[unsafe_offset=1] = UInt8(green[k])
-                out[unsafe_offset=2] = UInt8(blue[k])
-                out[unsafe_offset=3] = 255
-                out_depth[unsafe_offset=at + k] = kept[k]
+            # Each pixel's four bytes together: red with blue and green
+            # with alpha, then the two pairs.
+            if lanes == GAME_LANES:
+                var rgba = (
+                    red.cast[DType.uint8]()
+                    .interleave(blue.cast[DType.uint8]())
+                    .interleave(
+                        green.cast[DType.uint8]().interleave(
+                            SIMD[DType.uint8, GAME_LANES](255)
+                        )
+                    )
+                )
+                pixels.unsafe_offset(at * 4).unsafe_store(rgba)
+                out_depth.unsafe_offset(at).unsafe_store(kept)
+            else:
+                for k in range(lanes):  # pragma: no branch
+                    var out = pixels.unsafe_offset((at + k) * 4)
+                    out[unsafe_offset=0] = UInt8(red[k])
+                    out[unsafe_offset=1] = UInt8(green[k])
+                    out[unsafe_offset=2] = UInt8(blue[k])
+                    out[unsafe_offset=3] = 255
+                    out_depth[unsafe_offset=at + k] = kept[k]
             x += lanes

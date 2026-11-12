@@ -19,6 +19,9 @@ from extensions.vegetation.checks import (
     require_count_between,
 )
 from extensions.vegetation.ground import (
+    GRIME,
+    GRIME_REACH,
+    lot_grime,
     APRON,
     APRON_EDGE,
     PATH_APRON,
@@ -1088,6 +1091,19 @@ def test_a_footpath_is_a_narrow_bare_lot() raises:
         atol=1e-5,
     )
     assert_true(ground.bare(x, z) > ground.bare(x + 3, z))
+
+
+def test_the_ground_is_grimy_at_a_building_s_foot() raises:
+    var house = Lot(0, 0, 3, 2, 0)
+    var path = footpath(0, 3, 0, 9, 0.8)
+    var lots: List[Lot] = [house, path]
+    # Darkest at the wall's foot, and clean past the grime's reach.
+    assert_almost_equal(lot_grime(lots, 3, 0), GRIME, atol=1e-6)
+    assert_equal(lot_grime(lots, 3 + GRIME_REACH + 0.1, 0), 0)
+    var mid = lot_grime(lots, 3 + GRIME_REACH / 2, 0)
+    assert_true(mid > 0 and mid < GRIME)
+    # A footpath has none.
+    assert_equal(lot_grime(lots, 0.5, 6), 0)
 
 
 def main() raises:

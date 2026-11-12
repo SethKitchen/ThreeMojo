@@ -14,6 +14,17 @@ What the villager says shows in a panel over the prompt for `SPEECH_SECONDS`, 5 
 
 The villager stops for the same time and turns to face the player. `Residents.hold` stops a person and turns them toward a point at 4 radians a second. Their route waits for them.
 
+The villager's mouth says the words, and their face shows what they feel. `Talk.words` holds the words alone, and `Talk.feeling` and `Talk.strength` the expression. The face holds the expression for `SPEECH_SECONDS`, and then eases back to rest.
+
+| The words | The expression |
+|---|---|
+| The speaker asks for the things | A smile at `ASKING`, 0.3 |
+| The speaker still needs some | Sadness at `WANTING`, 0.35 |
+| The speaker takes the things and pays | A smile at `THANKFUL`, 0.8 |
+| A line | A smile at `CHATTING`, 0.25 |
+
+See [Village walk](Village-walk#faces) for how the faces move.
+
 ## Errands
 
 A `Speaker` is a villager, a name and lines. A speaker can also have an `Errand`. An errand holds the kind of thing wanted, how many, and the coins paid. It also holds what the speaker says to ask and to thank.
@@ -28,22 +39,47 @@ A `Speaker` is a villager, a name and lines. A speaker can also have an `Errand`
 
 A speaker with no errand says their lines, one after another. The markers are unlit, so they show in shade and in rain.
 
+### The village's mood
+
+`Talk.mood` is a `Mood`: what the village is like now. The game sets it each frame with `village_mood`:
+
+| Mood | When |
+|---|---|
+| `NIGHT` | The daylight is below a half |
+| `SNOWY` | Snow covers more than 30 percent of the village |
+| `WET` | The village is more than 40 percent soaked |
+| `FAIR` | Any other time |
+
+When the mood changes, each speaker remarks on it once, in their own words, before their next line. `mood_line` gives the remark. A fair day brings no remark.
+
 The heads-up display lists each errand that is taken and not done in the top right, such as `HERBS FOR MAUD 2/5`. See [Village gathering](Village-gathering#the-heads-up-display).
 
 ## The default speakers
 
 `default_speakers` gives these speakers:
 
-| Speaker | Villager | Errand | Reward |
-|---|---|---|---|
-| Maud | The woman by the brick house | Five herbs | 20 coins |
-| Osric | The man on the trail | Three ore | 30 coins |
-| Wren | The child by the pond | Six berries | 8 coins |
-| Aldous | The old man by the framed cottage | Four mushrooms | 15 coins |
-| Edith | The woman by the framed house | None | None |
+| Speaker | Villager | Errand | Reward | The errand after it | Reward |
+|---|---|---|---|---|---|
+| Maud | The woman by the brick house | Five herbs | 20 coins | Five herbs again | 20 coins |
+| Osric | The man on the trail | Three ore | 30 coins | Three bandits' seals | 45 coins |
+| Wren | The child by the pond | Six berries | 8 coins | Two fish | 12 coins |
+| Aldous | The old man by the framed cottage | Four mushrooms | 15 coins | A trinket | 30 coins |
+| Edith | The woman by the framed house | None, she trades | None | None | None |
+
+### Errands come back
+
+`ERRAND_AGAIN`, 180 seconds, after an errand is done, its speaker offers one again. `Speaker.again` is the errand that they give every other time. With none, they give the first again. `Talk.rounds` counts each speaker's errands done, and `Talk.errand_of` gives the errand that they give now.
+
+### Trade
+
+A speaker whose `trades` is true trades with each word:
+
+1. They buy each fish the player carries for `FISH_PRICE`, 6 coins, and each trinket for `TRINKET_PRICE`, 25.
+2. With nothing to sell, a player who carries fewer than three herbs buys one for `HERB_PRICE`, 5 coins.
+3. With nothing to trade, the speaker says their line.
 
 A speaker whose villager is not in the village is left out. Two speakers of one villager are refused. An errand must want one thing or more, and not coins. Its reward must not be negative.
 
 ## Limits
 
-- An errand is given once. The speaker does not give another after it is done.
+- A speaker has two errands at most. Each comes back the same: its count and its reward do not grow.

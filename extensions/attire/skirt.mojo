@@ -19,8 +19,10 @@ part of a garment's shell below the hips with such a tube:
    a convex hull, so it spans the gap between the thighs. Each ring is at
    least as wide as the ring above it, plus the flare, so the cloth falls
    and does not tuck in between the legs. A skirt under it lifts it.
-   Folds stand out of the rings, `SKIRT_FOLDS` of them round the skirt,
-   from none at the top to their whole depth at the hem.
+   Folds stand out of the rings, about `SKIRT_FOLDS` of them round the
+   skirt, from none at the top to their whole depth at the hem. They
+   bunch and spread, and some stand out further than others, as
+   `fold_profile` says.
 3. `skirt_mesh` lofts the rings into a tube on `SKIRT_SIDES` sides. The
    top of the tube reaches up inside the shell, so no gap opens at the
    cut. A lined skirt has an inner face one fabric thickness inside, and
@@ -30,7 +32,13 @@ part of a garment's shell below the hips with such a tube:
    Down the tube the weights pass over to the thighs: the right thigh
    turns the right side, the left thigh the left side, and the two share
    the middle of the front and the back. So the skirt opens as a leg
-   lifts.
+   lifts. Where the tube lies within `SKIRT_HUG` of the shell under it,
+   it takes the weights of the shell's nearest vertex instead, and it
+   passes back to its own blend by `SKIRT_FREE`. The gap is the closer
+   of the distance to that vertex and the gap along the side's ray from
+   the axis to where the ray crosses the shell. So a skirt close over a thigh or a hip moves
+   with the cloth under it, and a swinging thigh does not pass out
+   through it.
 
 The skirt keeps the shell's `cover` attribute, falling to one half at the
 hem, so a hem trim lies along it as along any hem.
@@ -64,10 +72,14 @@ comptime SKIRT_STATURE = Float32(1.8288)
 comptime SKIRT_TOP = Float32(0.03)
 """How far below the hip joints a skirt hangs from, in meters on the
 template. The legs part 6 cm below them."""
-comptime SKIRT_SIDES = 40
+comptime SKIRT_SIDES = 48
 """How many sides a skirt's tube has."""
 comptime SKIRT_FOLDS = 10
-"""How many folds run down a skirt."""
+"""How many folds run down a skirt, on the mean."""
+comptime FLARE_FOLDS = Float32(2)
+"""How much deeper a skirt's folds stand for each unit of its flare: a
+wide skirt has more cloth to fold. A skirt that flares 0.5 folds twice as
+deep as a straight one."""
 comptime SKIRT_RING = Float32(0.03)
 """The most a skirt's rings lie apart, in meters on the template."""
 comptime SKIRT_TUCK = Float32(0.015)
@@ -83,6 +95,17 @@ comptime SKIRT_LEG_SHARE = Float32(0.9)
 comptime SKIRT_HEM_RAMP = Float32(0.04)
 """Over how many meters above the hem the cover value climbs from one
 half to one."""
+comptime SKIRT_HUG = Float32(0.02)
+"""How close over the cloth under it, in meters on the template, a skirt
+takes that cloth's weights in full."""
+comptime SKIRT_FREE = Float32(0.06)
+"""How far from the cloth under it, in meters on the template, a skirt
+keeps its own blend of weights in full."""
+comptime SKIRT_UNDERLAP = Float32(0.03)
+"""How far up inside a shorter skirt over it a skirt reaches, in meters
+on the template. Above that the skirt over it hides it, so it is cut
+away: two tubes weighted apart cross as the legs swing, and the inner
+one would show through."""
 comptime SKIRT_SHORTEST = Float32(0.01)
 """A garment that reaches less than this below the top, in meters, hangs
 no skirt."""
@@ -104,6 +127,11 @@ struct SkirtEnvelope(Copyable, Movable):
     """The radius of each side of the tucked ring, in meters."""
     var thickness: Float32
     """How thick the skirt's fabric is, in meters."""
+    var cloth: List[Float32]
+    """Where the garment's own shell crosses each side of each ring, in
+    the order of `radii`, in meters: the farthest crossing of the ray from
+    the axis, or zero where the ray crosses only a gap, such as between
+    the legs."""
 
     def __init__(out self, center: Vector3, thickness: Float32):
         """Hold no rings: a garment that hangs no skirt.
@@ -118,6 +146,7 @@ struct SkirtEnvelope(Copyable, Movable):
         self.tuck = center.y
         self.tucked = List[Float32]()
         self.thickness = thickness
+        self.cloth = List[Float32]()
 
     def rings(self) -> Int:
         """Return how many rings the skirt has.
@@ -159,18 +188,47 @@ struct SkirtEnvelope(Copyable, Movable):
         return 0
 
 
+def _crest(side: Int) -> Float32:
+    """Return how far a side stands out in its fold, before the deepest
+    crest is scaled to one."""
+    var turn = 2 * Float32(pi) * Float32(side) / Float32(SKIRT_SIDES)
+    # Folds bunch and spread round the skirt, and some stand out further
+    # than others, as cloth falls.
+    var bunched = Float32(SKIRT_FOLDS) * turn + 0.9 * sin(3 * turn)
+    var main = Float32(0.5) + Float32(0.5) * cos(bunched)
+    var swell = Float32(0.5) + Float32(0.5) * cos(7 * turn + 1.7)
+    return main * (Float32(0.55) + Float32(0.45) * swell)
+
+
+def fold_profile(side: Int) -> Float32:
+    """Return how far a side of a skirt stands out in its fold at the hem,
+    in the depth of the deepest fold.
+
+    About `SKIRT_FOLDS` folds run round the skirt. They bunch and spread,
+    and some stand out further than others. Every skirt's folds lie at
+    the same sides, so a skirt over another folds over its folds.
+
+    Args:
+        side: A side, zero through `SKIRT_SIDES - 1`.
+
+    Returns:
+        Zero through one: one on the deepest crest, near zero in the
+        troughs.
+    """
+    var deepest = Float32(0)
+    for k in range(SKIRT_SIDES):  # pragma: no branch
+        deepest = max(deepest, _crest(k))
+    return _crest(side) / deepest
+
+
 def _fold(side: Int, fall: Float32) -> Float32:
     """Return how far a side stands out in its fold, in a fold's depth.
 
     The folds deepen as the cloth falls, from none at the top to their
     whole depth at the hem, and stand only out, so no fold dips into a
-    skirt under it. Every skirt's folds lie at the same sides, so a skirt
-    over another folds over its folds.
+    skirt under it.
     """
-    var turn = (
-        2 * Float32(pi) * Float32(SKIRT_FOLDS * side) / Float32(SKIRT_SIDES)
-    )
-    return fall * sqrt(fall) * (Float32(0.5) + Float32(0.5) * cos(turn))
+    return fall * sqrt(fall) * fold_profile(side)
 
 
 def skirt_scale(rig: HumanoidRig) -> Float32:
@@ -426,6 +484,7 @@ def skirt_envelope(
     clearance: Float32,
     thickness: Float32,
     folds: Float32 = 0,
+    detail: Float32 = 1,
 ) raises -> SkirtEnvelope:
     """Return the rings a garment's skirt hangs on.
 
@@ -439,6 +498,10 @@ def skirt_envelope(
         thickness: Its fabric's thickness, in meters.
         folds: How deep its folds stand out at the hem, in meters. None
             by default.
+        detail: The share of its rings it keeps, above zero and one at
+            the most: its rings lie `SKIRT_RING` over `detail` apart at
+            the most. One by default. A coarse skin's garments take less,
+            as `garment_detail` says.
 
     Returns:
         The envelope. It has no rings when the garment reaches less than
@@ -446,8 +509,11 @@ def skirt_envelope(
         ring falls from the ring above as it was before its folds.
 
     Raises:
-        Error: If the mesh has no positions or skin weights.
+        Error: If the mesh has no positions or skin weights, or `detail`
+            is out of range.
     """
+    if not (detail > 0 and detail <= 1):
+        raise Error("A skirt's detail must be above zero, one at the most")
     var hips = rig.joints[HIPS.value]
     var top = skirt_top(rig)
     var envelope = SkirtEnvelope(Vector3(hips.x, top, hips.z), thickness)
@@ -456,7 +522,7 @@ def skirt_envelope(
     if top - hem < SKIRT_SHORTEST:
         return envelope^
     var scale = skirt_scale(rig)
-    var spacing = SKIRT_RING * scale
+    var spacing = SKIRT_RING * scale / detail
     var rings = Int((top - hem) / spacing) + 2
     var above = List[Float32]()
     var fallen = List[Float32]()
@@ -465,9 +531,17 @@ def skirt_envelope(
         envelope.heights.append(y)
         # A level at the hem itself touches only its lowest point.
         var sliced = max(y, hem + Float32(0.002))
-        var radii = hull_radii(
-            level_hull(slice_segments(whole, legs, sliced)), envelope.center
-        )
+        var segments = slice_segments(whole, legs, sliced)
+        var radii = hull_radii(level_hull(segments), envelope.center)
+        var crossed = segment_radii(segments, envelope.center)
+        # A ray that passes through a corner of the shell can miss both of
+        # its edges: a side that both its neighbors cross crosses too.
+        for side in range(SKIRT_SIDES):  # pragma: no branch
+            var before = crossed[(side + SKIRT_SIDES - 1) % SKIRT_SIDES]
+            var after = crossed[(side + 1) % SKIRT_SIDES]
+            if crossed[side] <= 0 and before > 0 and after > 0:
+                crossed[side] = (before + after) / 2
+        envelope.cloth.extend(crossed^)
         for side in range(SKIRT_SIDES):  # pragma: no branch
             var r = radii[side]
             if k > 0:
@@ -531,12 +605,14 @@ def skirt_mesh(
         The skirt, with the garment's attributes and normals.
 
     Raises:
-        Error: If the envelope has fewer than two rings, or the mesh has
-            no positions or skin weights.
+        Error: If the envelope has fewer than two rings or not one cloth
+            radius a radius, or the mesh has no positions or skin weights.
     """
     var rings = envelope.rings()
     if rings < 2:
         raise Error("A skirt needs two rings or more")
+    if len(envelope.cloth) != len(envelope.radii):
+        raise Error("A skirt needs where its shell crosses each side")
     var legs = leg_side(piece)
     ref placed = piece.attribute_view(String(POSITION))
     ref bones = piece.attribute_view(String(SKIN_INDEX))
@@ -544,6 +620,10 @@ def skirt_mesh(
     var points = List[Vector3](capacity=placed.count())
     for v in range(placed.count()):
         points.append(placed.vector3(v))
+    # The cloth under the skirt: the shell's own vertices below its top.
+    var under = List[Bool](capacity=placed.count())
+    for v in range(placed.count()):
+        under.append(legs[v] and points[v].y <= envelope.tuck)
     var top = envelope.heights[0]
     var hem = envelope.hem()
     var scale = skirt_scale(rig)
@@ -572,7 +652,10 @@ def skirt_mesh(
                 r = envelope.radii[k * SKIRT_SIDES + side]
             var p = envelope.center + direction * r
             p.y = y
-            # The weights of the shell at the top of this side.
+            # The weights of the shell at the top of this side, passing to
+            # the thighs as the cloth falls: right on the right, left on
+            # the left, and the two sharing the middle.
+            var share = clamp(0.5 + right * (p.x - hips.x) / (2 * split), 0, 1)
             var all = List[Float32](length=JOINT_COUNT, fill=0)
             var source = _nearest(
                 points,
@@ -586,10 +669,35 @@ def skirt_mesh(
                     ) * weights.component(source, c)
             else:
                 all[HIPS.value] += 1 - fall
-            var share = clamp(0.5 + right * (p.x - hips.x) / (2 * split), 0, 1)
             all[HIPS.value] += fall * (1 - SKIRT_LEG_SHARE)
             all[RIGHT_THIGH.value] += fall * SKIRT_LEG_SHARE * share
             all[LEFT_THIGH.value] += fall * SKIRT_LEG_SHARE * (1 - share)
+            # Where the skirt lies close over the cloth under it, it takes
+            # that cloth's weights, so it moves with it and a swinging
+            # thigh does not pass out through it. Where it hangs free,
+            # between the legs and out at a flared hem, it keeps the blend.
+            # How close the skirt lies over the cloth: along its side's
+            # ray from the axis, where the ray crosses the cloth, and to
+            # the cloth's nearest vertex, whichever is closer.
+            var below = _nearest(points, under, p)
+            if below >= 0:
+                var gap = (points[below] - p).length()
+                var at = max(k, 0) * SKIRT_SIDES + side
+                if envelope.cloth[at] > 0:
+                    gap = min(gap, envelope.radii[at] - envelope.cloth[at])
+                var hug = clamp(
+                    (SKIRT_FREE * scale - gap)
+                    / ((SKIRT_FREE - SKIRT_HUG) * scale),
+                    0,
+                    1,
+                )
+                hug = hug * hug * (3 - 2 * hug)
+                for b in range(JOINT_COUNT):  # pragma: no branch
+                    all[b] *= 1 - hug
+                for c in range(4):  # pragma: no branch
+                    all[
+                        Int(bones.component(below, c))
+                    ] += hug * weights.component(below, c)
             var chosen = top_four(all)
             outer.append(builder.add(p, cover, chosen[0], chosen[1]))
             var q = p - direction * envelope.thickness
@@ -627,6 +735,7 @@ def hang_skirt(
     rig: HumanoidRig,
     lined: Bool,
     shown: Bool = True,
+    covered: Float32 = Float32.MAX,
 ) raises -> BufferGeometry:
     """Return a garment with its shell below the top replaced by a skirt.
 
@@ -639,6 +748,8 @@ def hang_skirt(
             hem.
         shown: Whether to add the skirt. False cuts the shell at the top
             and adds nothing, for a skirt a longer one over it hides.
+        covered: The height of the hem of a shorter skirt over this one.
+            The skirt is cut `SKIRT_UNDERLAP` over it, and drawn below.
 
     Returns:
         The garment: its shell above the top, on the arms and the rest,
@@ -661,4 +772,12 @@ def hang_skirt(
     var kept = cut(piece, values, 0)
     if not shown:
         return kept^
-    return merge(kept, skirt_mesh(envelope, piece, rig, lined))
+    var skirt = skirt_mesh(envelope, piece, rig, lined)
+    var reach = covered + SKIRT_UNDERLAP * skirt_scale(rig)
+    if reach < top:
+        ref rings = skirt.attribute_view(String(POSITION))
+        var below = List[Float32](capacity=rings.count())
+        for v in range(rings.count()):  # pragma: no branch
+            below.append(reach - rings.vector3(v).y)
+        skirt = cut(skirt, below, 0)
+    return merge(kept, skirt)

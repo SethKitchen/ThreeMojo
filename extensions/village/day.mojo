@@ -36,11 +36,13 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.fog import exp2_fog
 from core.scene import Scene
 from extensions.vegetation.noise import hash01
-from lights.light import DIRECTIONAL
+from lights.light import DIRECTIONAL, POINT
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
-from std.math import floor, isinf
+from render.tasks import TaskGroup
+from std.math import cos, floor, isinf, pi, sin
+from std.sys import num_logical_cores
 from units.si import PER_METER, SECOND, Duration, InverseLength
 
 comptime SUNRISE = Float32(6)
@@ -56,6 +58,17 @@ comptime MOON = Float32(0.15)
 """The share of the sun's light that the moon gives at night."""
 comptime LAMPLIT = Vector3(1.0, 0.8, 0.6)
 """The tint of a room's light at night, from its lamps and its fire."""
+comptime NOON_HEIGHT = Float32(38)
+"""How high the sun stands at 14:00, in degrees: the meadow's sun."""
+comptime AFTERNOON_AZIMUTH = Float32(-30)
+"""Which way the sun stands at 14:00, in degrees from +x toward +z: the
+meadow's sun."""
+comptime SKY_TURN = Float32(15)
+"""How far the sun and the moon turn round the sky in an hour, in
+degrees."""
+comptime LOWEST_LIGHT = Float32(8)
+"""The lowest the sun or the moon stands, in degrees, so its shadows stay
+on the ground."""
 comptime MOON_BLUE = Vector3(0.62, 0.72, 1.0)
 """The tint of moonlight."""
 comptime DUSK_ORANGE = Vector3(1.0, 0.58, 0.32)
@@ -70,6 +83,37 @@ comptime STAR_GRID = Float32(220)
 axis of a unit direction."""
 comptime STARS = Float32(0.004)
 """The share of the sky's cells that hold a star."""
+comptime MOON_DISK = Float32(0.99975)
+"""The cosine of the angle from the moon's middle to where its disk
+begins to fade."""
+comptime MOON_RIM = Float32(0.99955)
+"""The cosine of the angle from the moon's middle to its rim."""
+comptime MOON_GLOW = Float32(0.995)
+"""The cosine of the angle from the moon's middle that its glow reaches."""
+comptime MOON_FACE = Vector3(238, 234, 214)
+"""The color of the moon's disk, in sRGB bytes."""
+
+
+@fieldwise_init
+struct NightLook(ImplicitlyCopyable):
+    """What `DayCycle.night_sky` mixes a sky pixel with."""
+
+    # Whether the sky changes at all: it does not by full day.
+    var on: Bool
+    # The hour's daylight and dusk, as `DayCycle` gives them.
+    var day: Float32
+    var dusk: Float32
+    # How bright the stars show, from 0 to 1.
+    var stars: Float32
+    # The direction through the frame's top left corner, and the steps
+    # across and down to the other corners.
+    var d00: Vector3
+    var across: Vector3
+    var down: Vector3
+    # The direction toward the moon, and how much its disk shows, from 0
+    # to 1.
+    var moon: Vector3
+    var moonlit: Float32
 
 
 struct DayCycle(ImplicitlyCopyable):
@@ -137,6 +181,32 @@ struct DayCycle(ImplicitlyCopyable):
         var hour = self.hour + self.hours_a_second * seconds
         self.hour = hour - 24 * floor(hour / 24)
 
+    def sun_toward(self) -> Vector3:
+        """Return the unit direction toward the light of the sky's disk at
+        this hour: the sun by day, and the moon by night.
+
+        The sun rises in the east at `SUNRISE`, and climbs to its height
+        halfway to `SUNSET`. It turns `SKY_TURN` degrees an hour, so at 14:00
+        it stands where the meadow baked it: `NOON_HEIGHT` up, and
+        `AFTERNOON_AZIMUTH` round. At night the moon crosses the sky as the
+        sun does twelve hours later. Neither goes lower than `LOWEST_LIGHT`,
+        so the shadows stay on the ground.
+
+        Returns:
+            The direction, with y up.
+        """
+        var hour = self.hour
+        if hour < SUNRISE or hour >= SUNSET:
+            hour = hour + 12 - 24 * floor((hour + 12) / 24)
+        var span = SUNSET - SUNRISE
+        var arc = sin(Float32(pi) * (hour - SUNRISE) / span)
+        var afternoon = sin(Float32(pi) * (14 - SUNRISE) / span)
+        var height = max(LOWEST_LIGHT, NOON_HEIGHT * arc / afternoon)
+        var round = AFTERNOON_AZIMUTH + SKY_TURN * (hour - 14)
+        var up = height * Float32(pi) / 180
+        var turn = round * Float32(pi) / 180
+        return Vector3(cos(up) * cos(turn), sin(up), cos(up) * sin(turn))
+
     def sky_light(self) -> Float32:
         """Return the share of the sky's light at this hour.
 
@@ -184,6 +254,9 @@ struct DayCycle(ImplicitlyCopyable):
                 Float32(light.color.g),
                 Float32(light.color.b),
             )
+            if light.kind == POINT:
+                # A lamp keeps its own light whatever the hour.
+                continue
             if light.kind == DIRECTIONAL:
                 light.intensity *= day + (1 - day) * MOON
                 c = c * (white + (DUSK_ORANGE - white) * dusk)
@@ -198,6 +271,52 @@ struct DayCycle(ImplicitlyCopyable):
         scene.fog = exp2_fog(
             _color(fog),
             InverseLength(scene.fog.density.value, PER_METER),
+        )
+
+    def night_look(
+        self, camera: PerspectiveCamera, clear: Float32
+    ) raises -> NightLook:
+        """Find what `night_sky` mixes a sky pixel with.
+
+        Args:
+            camera: The camera that draws the frame.
+            clear: The share of the sky that clouds leave clear, from 0 to
+                1: the stars show through it.
+
+        Returns:
+            The hour's light and dusk, the stars' share, and the
+            directions through three corners of the frame. `on` is False
+            by day, when the sky is left as it is.
+
+        Raises:
+            Error: If the camera's matrices cannot be made.
+        """
+        var day = self.daylight()
+        var dusk = self.dusk()
+        var none = Vector3(0, 0, 0)
+        if day >= 1 and dusk <= 0:
+            return NightLook(
+                False, day, dusk, 0, none, none, none, Vector3(0, 1, 0), 0
+            )
+        var inverse = camera.projection_matrix()
+        inverse.multiply(camera.view_matrix())
+        inverse.invert()
+        var eye = camera.position
+        var d00 = inverse.transform_point(Vector3(-1, 1, 1)) - eye
+        var across = inverse.transform_point(Vector3(1, 1, 1)) - eye - d00
+        var down = inverse.transform_point(Vector3(-1, -1, 1)) - eye - d00
+        # The stars come out once the twilight has mostly gone.
+        var stars = (1 - smoothstep(0, 0.4, day)) * clear
+        return NightLook(
+            True,
+            day,
+            dusk,
+            stars,
+            d00,
+            across,
+            down,
+            self.sun_toward(),
+            (1 - smoothstep(0, 0.5, day)) * clear,
         )
 
     def night_sky(
@@ -222,56 +341,147 @@ struct DayCycle(ImplicitlyCopyable):
         """
         if len(image.depth) != image.width * image.height:
             raise Error("A frame needs a depth for each pixel")
-        var day = self.daylight()
-        var dusk = self.dusk()
-        if day >= 1 and dusk <= 0:
+        var look = self.night_look(camera, clear)
+        if not look.on:
             return
-        var inverse = camera.projection_matrix()
-        inverse.multiply(camera.view_matrix())
-        inverse.invert()
-        var eye = camera.position
-        var d00 = inverse.transform_point(Vector3(-1, 1, 1)) - eye
-        var across = inverse.transform_point(Vector3(1, 1, 1)) - eye - d00
-        var down = inverse.transform_point(Vector3(-1, -1, 1)) - eye - d00
+        var day = look.day
+        var dusk = look.dusk
+        var d00 = look.d00
+        var across = look.across
+        var down = look.down
+        var stars = look.stars
+        var moon = look.moon
+        var moonlit = look.moonlit
         var w = image.width
         var h = image.height
-        # The stars come out once the twilight has mostly gone.
-        var stars = (1 - smoothstep(0, 0.4, day)) * clear
-        for y in range(h):  # pragma: no branch
-            var fy = Float32(y) / Float32(h)
-            for x in range(w):  # pragma: no branch
-                var at = y * w + x
-                if not isinf(image.depth[at]):
-                    continue
-                var d = d00 + across * (Float32(x) / Float32(w)) + down * fy
-                d = d / d.length()
-                var p = at * 4
-                var c = Vector3(
-                    Float32(image.pixels[p]),
-                    Float32(image.pixels[p + 1]),
-                    Float32(image.pixels[p + 2]),
+        # Each pixel is its own, so the rows are cut over the cores.
+        var tasks = max(1, min(h, num_logical_cores()))
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _night_rows(
+                    image.depth.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    image.pixels.unsafe_ptr().unsafe_origin_cast[
+                        MutAnyOrigin
+                    ](),
+                    w,
+                    h,
+                    d00,
+                    across,
+                    down,
+                    day,
+                    dusk,
+                    stars,
+                    moon,
+                    moonlit,
+                    task * h // tasks,
+                    (task + 1) * h // tasks,
                 )
-                # Low in the sky, the dusk's glow; and night over all.
-                var low = 1 - smoothstep(0, 0.35, d.y)
-                c = c * (
-                    Vector3(1, 1, 1)
-                    + (DUSK_ORANGE * 1.15 - Vector3(1, 1, 1)) * (dusk * low)
-                )
-                c = c + (NIGHT_SKY - c) * (1 - day)
-                var cell = hash01(
-                    Int(floor(d.x * STAR_GRID)),
-                    Int(floor(d.z * STAR_GRID)) * 977
-                    + Int(floor(d.y * STAR_GRID)),
-                    83,
-                )
-                if cell < STARS:
-                    # A star fades into the haze near the horizon.
-                    var bright = 120 + 135 * hash01(Int(cell * 1.0e7), 1, 84)
-                    var seen = stars * smoothstep(0.03, 0.12, d.y)
-                    c = c + (Vector3(bright, bright, bright * 0.95) - c) * seen
-                image.pixels[p] = UInt8(Int(min(Float32(255), c.x)))
-                image.pixels[p + 1] = UInt8(Int(min(Float32(255), c.y)))
-                image.pixels[p + 2] = UInt8(Int(min(Float32(255), c.z)))
+            )
+        group.wait()
+        _ = len(image.depth)
+        _ = len(image.pixels)
+
+
+def moon_sky(
+    c: Vector3, d: Vector3, moon: Vector3, moonlit: Float32
+) -> Vector3:
+    """Return a sky pixel's color with the moon over it: its disk, and the
+    glow round it.
+
+    Args:
+        c: The pixel's color, in sRGB bytes.
+        d: The unit direction through the pixel.
+        moon: The unit direction toward the moon.
+        moonlit: How much the moon shows, from 0 to 1.
+
+    Returns:
+        The color, in sRGB bytes.
+    """
+    if moonlit <= 0:
+        return c
+    var near = d.x * moon.x + d.y * moon.y + d.z * moon.z
+    if near < MOON_GLOW:
+        return c
+    # The glow round the disk, and the disk with a soft rim.
+    var glow = smoothstep(MOON_GLOW, 1, near) * 0.35
+    var disk = smoothstep(MOON_RIM, MOON_DISK, near)
+    var seen = min(Float32(1), (glow + disk) * moonlit)
+    return c + (MOON_FACE - c) * seen
+
+
+def star_at(d: Vector3) -> Float32:
+    """Return how bright the star is that a direction meets.
+
+    The sky is cut into cells of `1 / STAR_GRID` along each axis, and a
+    `STARS` share of them hold a star.
+
+    Args:
+        d: A unit direction.
+
+    Returns:
+        The star's brightness, from 120 to 255 sRGB, or zero for none.
+    """
+    var cell = hash01(
+        Int(floor(d.x * STAR_GRID)),
+        Int(floor(d.z * STAR_GRID)) * 977 + Int(floor(d.y * STAR_GRID)),
+        83,
+    )
+    if cell < STARS:
+        return 120 + 135 * hash01(Int(cell * 1.0e7), 1, 84)
+    return 0
+
+
+__async def _night_rows(
+    depth: Pointer[Float32, ImmutAnyOrigin],
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    w: Int,
+    h: Int,
+    d00: Vector3,
+    across: Vector3,
+    down: Vector3,
+    day: Float32,
+    dusk: Float32,
+    stars: Float32,
+    moon: Vector3,
+    moonlit: Float32,
+    first: Int,
+    past: Int,
+):
+    """Darken, warm and star rows `first` to `past` of a frame's sky, as
+    `DayCycle.night_sky` does."""
+    for y in range(first, past):  # pragma: no branch
+        var fy = Float32(y) / Float32(h)
+        for x in range(w):  # pragma: no branch
+            var at = y * w + x
+            if not isinf(depth[unsafe_offset=at]):
+                continue
+            var d = d00 + across * (Float32(x) / Float32(w)) + down * fy
+            d = d / d.length()
+            var p = at * 4
+            var c = Vector3(
+                Float32(pixels[unsafe_offset=p]),
+                Float32(pixels[unsafe_offset=p + 1]),
+                Float32(pixels[unsafe_offset=p + 2]),
+            )
+            # Low in the sky, the dusk's glow; and night over all.
+            var low = 1 - smoothstep(0, 0.35, d.y)
+            c = c * (
+                Vector3(1, 1, 1)
+                + (DUSK_ORANGE * 1.15 - Vector3(1, 1, 1)) * (dusk * low)
+            )
+            c = c + (NIGHT_SKY - c) * (1 - day)
+            var bright = star_at(d)
+            if bright > 0:
+                # A star fades into the haze near the horizon.
+                var seen = stars * smoothstep(0.03, 0.12, d.y)
+                c = c + (Vector3(bright, bright, bright * 0.95) - c) * seen
+            c = moon_sky(c, d, moon, moonlit)
+            pixels[unsafe_offset=p] = UInt8(Int(min(Float32(255), c.x)))
+            pixels[unsafe_offset=p + 1] = UInt8(Int(min(Float32(255), c.y)))
+            pixels[unsafe_offset=p + 2] = UInt8(Int(min(Float32(255), c.z)))
 
 
 def dim_water(

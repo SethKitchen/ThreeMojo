@@ -5,8 +5,8 @@
 
 """The seam between a program and whatever upscales its frames.
 
-`Upscaler` is the trait a program draws through. A native Streamline binding
-will implement it for DLSS. `SpatialUpscaler` implements it with FSR1's EASU
+`Upscaler` is the trait a program draws through. DLSS runs in a separate
+Windows program, through `extensions/streamline/bundle.mojo`. `SpatialUpscaler` implements it with FSR1's EASU
 and RCAS from `postprocessing.upscaling`, on the CPU, so a program runs on a
 machine without an RTX GPU, and a test has a reference to compare a binding
 with.

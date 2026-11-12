@@ -12,18 +12,23 @@ from core.object3d import Object3D
 from core.scene import Scene
 from extensions.village.weather import (
     CLEAR,
+    CLOUD_STEP,
     CYCLE_SECONDS,
     DROPS,
     FOG,
     OVERCAST,
     RAIN,
+    SNOW,
+    SOAK_SECONDS,
+    SNOW_SECONDS,
     Weather,
     WeatherKind,
     cloud_cover,
     next_weather,
+    weather_label,
     weather_look,
 )
-from lights.light import ambient_light, directional_light
+from lights.light import ambient_light, directional_light, point_light
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from std.math import inf
@@ -38,9 +43,22 @@ from std.testing import (
 from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
 
 
+def test_each_weather_has_its_name() raises:
+    assert_equal(weather_label(CLEAR), "CLEAR")
+    assert_equal(weather_label(OVERCAST), "OVERCAST")
+    assert_equal(weather_label(RAIN), "RAIN")
+    assert_equal(weather_label(FOG), "FOG")
+    assert_equal(weather_label(SNOW), "SNOW")
+    assert_equal(weather_label(WeatherKind(9)), "")
+
+
 def test_each_weather_has_its_look() raises:
     assert_true(FOG.is_valid())
-    assert_false(WeatherKind(4).is_valid())
+    assert_true(SNOW.is_valid())
+    assert_false(WeatherKind(5).is_valid())
+    var snow = weather_look(SNOW)
+    assert_equal(snow.snow, 1)
+    assert_equal(snow.rain, 0)
     var clear = weather_look(CLEAR)
     var overcast = weather_look(OVERCAST)
     var rain = weather_look(RAIN)
@@ -50,7 +68,7 @@ def test_each_weather_has_its_look() raises:
     assert_equal(clear.rain, 0)
     assert_equal(rain.rain, 1)
     assert_true(fog.fog > rain.fog and rain.fog > clear.fog)
-    with assert_raises(contains="one of the four"):
+    with assert_raises(contains="one of the five"):
         _ = weather_look(WeatherKind(9))
     # A look moves a share of the way to another.
     var half = clear.mixed(rain, 0.5)
@@ -125,7 +143,7 @@ def test_the_weather_sets_the_lights_and_the_fog() raises:
     assert_true(Int(blue.b) - Int(blue.r) < 30)
     # In rain the lightning has flashed.
     assert_true(weather.flashes > 0)
-    with assert_raises(contains="one of the four"):
+    with assert_raises(contains="one of the five"):
         weather.set(WeatherKind(8))
     with assert_raises(contains="negative"):
         weather.update(scene, Duration(-1.0, SECOND), Angle(0.0, DEGREE))
@@ -137,8 +155,80 @@ def test_the_weather_sets_the_lights_and_the_fog() raises:
     var dark = Weather(bare, FOG)
     dark.update(bare, Duration(0.1, SECOND), Angle(0.0, DEGREE))
     assert_equal(len(dark.bases), 0)
-    with assert_raises(contains="one of the four"):
+    with assert_raises(contains="one of the five"):
         _ = Weather(bare, WeatherKind(5))
+
+
+def test_a_lamp_burns_as_bright_in_the_rain() raises:
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_light(point_light(Color(255, 180, 100), node, 6))
+    scene.update()
+    var weather = Weather(scene, RAIN)
+    for _ in range(10):
+        weather.update(scene, Duration(0.2, SECOND), Angle(0.0, DEGREE))
+    assert_almost_equal(scene.lights[0].intensity, 6, atol=1e-5)
+    assert_equal(Int(scene.lights[0].color.b), 100)
+
+
+def test_rain_soaks_the_village_and_snow_covers_it() raises:
+    var scene = Scene()
+    var weather = Weather(scene, RAIN)
+    for _ in range(Int(SOAK_SECONDS) + 5):
+        weather.update(scene, Duration(1.0, SECOND), Angle(0.0, DEGREE))
+    assert_almost_equal(weather.wet, 1, atol=1e-6)
+    assert_equal(weather.snowed, 0)
+    # It dries once the rain stops; and snow covers it.
+    weather.set(SNOW)
+    weather.look = weather_look(SNOW)
+    for _ in range(Int(SNOW_SECONDS) + 5):
+        weather.update(scene, Duration(1.0, SECOND), Angle(0.0, DEGREE))
+    assert_true(weather.wet < 1)
+    assert_almost_equal(weather.snowed, 1, atol=1e-6)
+    # The flakes fall slower than the drops, and show on the window.
+    weather.drops[0].y = 0.1
+    weather.update(scene, Duration(0.1, SECOND), Angle(0.0, DEGREE))
+    var fell = weather.drops[0].y - 0.1
+    var window = Framebuffer(64, 48, Color(0, 0, 0, 255))
+    weather.rain(window)
+    var lit = 0
+    for k in range(64 * 48):
+        if window.pixels[k * 4] > 0:
+            lit += 1
+    assert_true(lit > 0)
+    var rainy = Weather(scene, RAIN)
+    rainy.drops[0].y = 0.1
+    rainy.update(scene, Duration(0.1, SECOND), Angle(0.0, DEGREE))
+    assert_true(fell > 0 and fell < rainy.drops[0].y - 0.1)
+    # Under a roof, no drop or flake is drawn.
+    var covered = Framebuffer(64, 48, Color(0, 0, 0, 255))
+    weather.rain(covered, List[Bool](length=4, fill=True), 2, 2)
+    rainy.rain(covered, List[Bool](length=4, fill=True), 2, 2)
+    for k in range(64 * 48):
+        assert_equal(covered.pixels[k * 4], 0)
+    # Half under a roof, the drops and flakes show on the open half; a
+    # flake off the window's left edge is not drawn.
+    var half = Framebuffer(64, 48, Color(0, 0, 0, 255))
+    var roofed: List[Bool] = [True, False, True, False]
+    weather.drops[0].x = -0.2
+    weather.rain(half, roofed, 2, 2)
+    rainy.rain(half, roofed, 2, 2)
+    var open = 0
+    for y in range(48):
+        for x in range(64):
+            if half.pixels[(y * 64 + x) * 4] > 0:
+                assert_true(x >= 32)
+                open += 1
+    assert_true(open > 0)
+    # A grid that does not fit shelters nothing.
+    var bare = Framebuffer(64, 48, Color(0, 0, 0, 255))
+    rainy.look.rain = 1
+    rainy.rain(bare, List[Bool](length=3, fill=True), 2, 2)
+    var wet = 0
+    for k in range(64 * 48):
+        if bare.pixels[k * 4] > 0:
+            wet += 1
+    assert_true(wet > 0)
 
 
 def test_the_weather_cycles_by_itself() raises:
@@ -225,6 +315,53 @@ def test_clouds_cover_only_the_sky() raises:
     flat.depth = List[Float32]()
     with assert_raises(contains="depth for each pixel"):
         weather.cover(flat, _camera())
+
+
+def test_the_cover_look_follows_the_weather_and_the_flash() raises:
+    var scene = _scene()
+    var clear = Weather(scene, CLEAR).cover_look()
+    var rain = Weather(scene, RAIN)
+    var stormy = rain.cover_look()
+    # Rain clouds are darker than a clear sky's, and hide more of it.
+    assert_true(stormy.gloom > clear.gloom)
+    assert_true(stormy.gray.x < clear.gray.x)
+    assert_true(stormy.veil > clear.veil)
+    assert_almost_equal(clear.bright, 1)
+    assert_almost_equal(clear.gray.z, clear.gray.x + 6)
+    # The mist is the fog's share, and a flash of lightning brightens.
+    var misty = Weather(scene, FOG).cover_look()
+    assert_true(misty.mist > clear.mist)
+    rain.flash = 1
+    assert_almost_equal(rain.cover_look().bright, 2.5)
+
+
+def test_the_cloud_grid_holds_the_cover_of_the_sky() raises:
+    var scene = _scene()
+    var weather = Weather(scene, OVERCAST)
+    var grid = weather.cloud_grid(_camera(), 64, 32)
+    assert_equal(grid.columns, (64 + CLOUD_STEP - 1) // CLOUD_STEP + 1)
+    assert_equal(grid.rows, (32 + CLOUD_STEP - 1) // CLOUD_STEP + 1)
+    assert_equal(len(grid.cover), grid.columns * grid.rows)
+    # The row at the top of the frame sees cloud. The bottom row looks
+    # at the ground, and sees none.
+    var top = 0.0
+    for column in range(grid.columns):
+        top += Float64(grid.cover[column])
+    assert_true(top > 1)
+    var last = (grid.rows - 1) * grid.columns
+    for column in range(grid.columns):
+        assert_equal(grid.cover[last + column], 0)
+    for value in grid.cover:
+        assert_true(value >= 0 and value <= 1)
+    # A clear sky has less cloud than an overcast one.
+    var clear = Weather(scene, CLEAR).cloud_grid(_camera(), 64, 32)
+    var thin = Float32(0)
+    for value in clear.cover:
+        thin += value
+    var thick = Float32(0)
+    for value in grid.cover:
+        thick += value
+    assert_true(thin < thick)
 
 
 def test_rain_streaks_the_window_and_clear_skies_do_not() raises:

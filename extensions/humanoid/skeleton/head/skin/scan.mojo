@@ -626,6 +626,100 @@ def place(
     return points^
 
 
+def _worn(
+    model: FaceModel, base: List[Vector3], expression: List[Float32]
+) -> List[Vector3]:
+    """Return `base` with each expression shape's moves added, as
+    `FaceModel.shape` adds them after the identity modes."""
+    var points = base.copy()
+    var n = len(points)
+    for shape in range(len(expression)):  # pragma: no branch
+        var w = expression[shape] * model.expression_scales[shape]
+        if w == 0:
+            continue
+        var words = model.bytes.unsafe_ptr().unsafe_bitcast[UInt16]()
+        var moves = model.bytes.unsafe_ptr().unsafe_bitcast[Int8]()
+        var first = model.expression_vertices[shape] // 2
+        var start = model.expression_moves[shape]
+        for k in range(model.expression_counts[shape]):  # pragma: no branch
+            var v = Int(words[unsafe_offset=first + k])
+            if v >= n:
+                continue
+            var at = start + k * 3
+            points[v] = (
+                points[v]
+                + Vector3(
+                    Float32(moves[unsafe_offset=at]),
+                    Float32(moves[unsafe_offset=at + 1]),
+                    Float32(moves[unsafe_offset=at + 2]),
+                )
+                * w
+            )
+    return points^
+
+
+def place_each(
+    h: HeadDimensions,
+    model: FaceModel,
+    count: Int,
+    expressions: List[List[Float32]],
+    first: Int = 0,
+) raises -> List[List[Vector3]]:
+    """Return the model placed as `place` places it, once for each of
+    several expressions.
+
+    The identity modes are blended once, and each expression's sparse
+    moves are added to a copy, in the order `FaceModel.shape` adds them:
+    the points are bitwise those of `place`.
+
+    Args:
+        h: Head landmarks, with the genome.
+        model: The face model, with its expressions.
+        count: How many of the first vertices.
+        expressions: One weight per expression shape, for each placement.
+        first: The first vertex placed. The vertices before it are left
+            at the origin, for a caller that reads only a later run.
+
+    Returns:
+        One list of `count` points per expression, in the pelvis frame,
+        in meters.
+
+    Raises:
+        Error: If an expression is not one weight per shape.
+    """
+    var genome = h.torso.genome
+    var size = genome.get(EAR_SIZE)
+    var protrusion = genome.get(EAR_PROTRUSION)
+    var lobe = genome.get(EAR_LOBE)
+    var still = List[Float32](length=model.expressions(), fill=0)
+    var bare = model.shape(model.no_identity(), still, count)
+    var identity = h.frame.morph.identity_weights(model.identities())
+    var shaped = False
+    for w in identity:  # pragma: no branch
+        if w != 0:
+            shaped = True
+    var fitted = bare.copy()
+    if shaped:
+        fitted = model.shape(identity, still, count)
+    var out = List[List[Vector3]](capacity=len(expressions))
+    for expression in expressions:  # pragma: no branch
+        if len(expression) != model.expressions():
+            raise Error("A face needs one weight per expression")
+        var shape = _worn(model, bare, expression)
+        if shaped:
+            var other = _worn(model, fitted, expression)
+            for v in range(first, len(shape)):  # pragma: no branch
+                var y = scan_to_template(shape[v]).y
+                var k = clamped_smoothstep(IDENTITY_FROM, IDENTITY_TO, y)
+                shape[v] = mix_delta3(shape[v], other[v], k)
+        var points = List[Vector3](length=len(shape), fill=Vector3(0, 0, 0))
+        for v in range(first, len(shape)):  # pragma: no branch
+            var t = warp_ear(scan_to_template(shape[v]), size, protrusion, lobe)
+            points[v] = h.at(t.x, t.y, t.z)
+        out.append(points^)
+    return out^
+
+
 struct ScannedHead(Copyable, Movable):
     """The face model's head placed on one person's template.
 
@@ -947,16 +1041,23 @@ def rig_expressions(
     """
     var count = EYE_SOCKETS.end
     var total = surface.attribute_view(String(POSITION)).count()
-    var rest = place(h, model, count)
+    # Every shape is placed at once: the identity is blended only once.
+    var weights = List[List[Float32]](capacity=len(shapes) + 1)
+    weights.append(rest_expression(model))
+    for name in shapes:  # pragma: no branch
+        var worn = rest_expression(model)
+        worn[model.expression(name)] = 1
+        weights.append(worn^)
+    var each = place_each(h, model, count, weights)
+    ref rest = each[0]
     var still = _area_normals(points, indices)
     var fade = List[Float32](capacity=len(points))
     for p in points:  # pragma: no branch
         fade.append(clamped_smoothstep(floor, floor + h.cm(RIG_FADE), p.y))
     surface.morph_relative = True
-    for name in shapes:  # pragma: no branch
-        var weights = rest_expression(model)
-        weights[model.expression(name)] = 1
-        var moved = place(h, model, count, weights)
+    for k in range(len(shapes)):  # pragma: no branch
+        ref name = shapes[k]
+        ref moved = each[k + 1]
         var shifts = List[Vector3](length=len(points), fill=Vector3(0, 0, 0))
         for v in range(count):  # pragma: no branch
             if remap[v] >= 0:

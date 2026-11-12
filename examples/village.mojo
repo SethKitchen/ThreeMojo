@@ -6,7 +6,7 @@
 """A village on the meadow: houses, a scanned building and a pond, in the
 wind-bent grass.
 
-    mojo run -I . examples/village.mojo [path.png] [SCAN]
+    mojo run -I . examples/village.mojo [path.png] [SCAN] [--hour=H]
 
 The page is Village. With no SCAN the village has a brick house, a timber
 barn and a pond, so it runs with no download and its picture is always
@@ -17,11 +17,11 @@ stands on the meadow too. Fetch a scan first:
 
     sh tools/tool.sh .venv/bin/mojo building_scans fetch seem-church
 
-The program prints, as JSON, how long each step took and what the frame
-drew.
+With `--hour=H` the picture is drawn at the hour H, from 0 to less than
+24: the sun or the moon stands where the hour puts it, and at night the
+lamps are lit and the stars show. The program prints, as JSON, how long
+each step took and what the frame drew.
 """
-
-from tools._example_output import example_destination
 
 from core.assets import Assets
 from core.clock import Clock
@@ -34,6 +34,7 @@ from extensions.building.scan.catalog import (
 from extensions.scan.files import read_scan
 from extensions.scan.frame import supersplat_frame
 from extensions.vegetation.meadow import meadow_camera, meadow_renderer
+from extensions.village.day import DayCycle
 from extensions.village.scanned import CutBuilding, cut_building
 from extensions.village.village import Village, VillageParameters
 from extensions.water.pebbles import pebble_bed
@@ -88,11 +89,23 @@ def _scan(words: List[String]) raises -> Optional[CutBuilding]:
     )
 
 
+def _hour(words: List[String]) raises -> Optional[DayCycle]:
+    """Return the hour that `--hour=H` names, or None."""
+    for word in words:
+        if word.startswith("--hour="):
+            return DayCycle(Float32(atof(String(word[byte=7:]))))
+    return None
+
+
 def main() raises:
     var words = List[String]()
+    var given = List[String]()
     for word in argv():
-        words.append(String(word))
-    var destination = example_destination(String(DEFAULT_OUTPUT))
+        given.append(String(word))
+        if not String(word).startswith("--"):
+            words.append(String(word))
+    var day = _hour(given)
+    var destination = words[1] if len(words) > 1 else String(DEFAULT_OUTPUT)
     var clock = Clock()
     clock.start()
     var scan = _scan(words)
@@ -103,6 +116,8 @@ def main() raises:
     var parameters = VillageParameters()
     var bed = pebble_bed(decode(Path(PEBBLES).read_bytes()))
     var village = Village(scene, assets, renderer, parameters, bed^, scan^)
+    if day:
+        village.keep_hour(scene, day.value())
     var built = clock.elapsed().to(MILLISECOND) - cut
     var camera = meadow_camera(
         parameters.meadow, WIDTH, HEIGHT, Length(0.0, METER)
@@ -110,8 +125,11 @@ def main() raises:
     var frame = Clock()
     frame.start()
     var stats = village.update(scene, assets, camera, Duration(2.0, SECOND))
+    # The meadow's sun set its lights again: scale them for the hour.
+    if day:
+        day.value().light(scene)
     var prepared = frame.elapsed().to(MILLISECOND)
-    var image = village.render(renderer, scene, assets, camera)
+    var image = village.render(renderer, scene, assets, camera, day)
     var drawn = frame.elapsed().to(MILLISECOND) - prepared
     Path(destination).write_bytes(encode(image))
     print(

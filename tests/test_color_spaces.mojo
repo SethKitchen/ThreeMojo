@@ -1201,8 +1201,8 @@ def test_matrix_element_refusals() raises:
 def test_conversion_matrix_is_what_convert_applies() raises:
     """Linear sRGB red in linear Display P3, by the matrix and by convert.
 
-    three.js's `_getMatrix` gives 0.738, -0.060, -0.017 for this: the two
-    matrices multiplied the other way round.
+    three.js r187's `_getMatrix` gives the same. Before r187 it gave
+    0.738, -0.060, -0.017: the two matrices multiplied the other way round.
     """
     var m = conversion_matrix(
         LINEAR_SRGB_COLOR_SPACE, LINEAR_DISPLAY_P3_COLOR_SPACE

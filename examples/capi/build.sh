@@ -9,8 +9,8 @@
 #   build.sh [native] [web] [host] [gpu]   default: everything this machine can,
 #                                          and gpu only if you name it
 #
-#   native  libthreemojo_core, libthreemojo_scene, libthreemojo_water and
-#           libthreemojo_splat, shared libraries
+#   native  libthreemojo_core, libthreemojo_scene, libthreemojo_water,
+#           libthreemojo_splat and libthreemojo_village, shared libraries
 #   web     threemojo_core.wasm, threemojo_water.wasm and threemojo_splat.wasm,
 #           and the page that runs them, in out/capi/web. The water also builds for many threads
 #           as threemojo_water_threads.wasm, which a page can run only when
@@ -28,7 +28,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 OUT=$REPO/out/capi
 MOJO=${MOJO:-$REPO/.venv/bin/mojo}
-APPS=${APPS:-core scene water splat}
+APPS=${APPS:-core scene water splat village}
 # The apps that need MAX and a GPU. They are built only when asked for.
 GPU_APPS=${GPU_APPS:-water_gpu}
 # The apps that build for WebAssembly. capi_scene needs the whole renderer.
@@ -187,13 +187,16 @@ build_host() {
   # The Mojo libraries need the runtime libraries that come with the compiler.
   runtime=$(ls -d "$REPO"/.venv/lib/python3*/site-packages/modular/lib 2>/dev/null | head -n 1)
   [ -n "$runtime" ] || die "no Mojo runtime libraries under $REPO/.venv"
-  # The splat shaders go into the host as a C string, and compile when a window
+  # The splat and village shaders go into the host as C strings, and compile when a window
   # opens, so the build needs no Metal toolchain.
   mkdir -p "$OUT/host"
   "$MOJO" run -I "$REPO" "$REPO/tools/capi_metal_string.mojo" "$HERE/splat.metal" "$OUT/host/splat_msl.h"
+  # The village's shaders are two files: the water, then the passes that use it.
+  cat "$HERE/village_water.metal" "$HERE/village.metal" > "$OUT/host/village.metal"
+  "$MOJO" run -I "$REPO" "$REPO/tools/capi_metal_string.mojo" "$OUT/host/village.metal" "$OUT/host/village_msl.h"
   cc -O2 -fobjc-arc -mmacosx-version-min=14.0 -I "$REPO/window" -I "$HERE" -I "$OUT/host" \
     -framework Cocoa -framework QuartzCore -framework Metal -Wl,-rpath,"$runtime" \
-    -o "$OUT/threemojo_host" "$HERE/macos_host.m" "$HERE/macos_splat.m"
+    -o "$OUT/threemojo_host" "$HERE/macos_host.m" "$HERE/macos_splat.m" "$HERE/macos_village.m"
   # The window runs from a bundle. See Info.plist.
   app=$OUT/ThreeMojo.app
   rm -rf "$app"

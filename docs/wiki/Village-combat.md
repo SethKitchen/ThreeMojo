@@ -12,7 +12,7 @@ This page gives the rules that every style shares, with the sword's moves. The o
 - [Village walk](Village-walk#the-players-movement): the sprint, the brakes, strafing and the jump's grace.
 - [Village netcode](Village-netcode): the hooks that a networking layer builds on, and a sample layer in the tests.
 
-![A man in red fights hooded bandits beside a woman in blue: he cuts, spins and sends a wave, and she casts bolts of light](out/village_combat.png)
+![A man in red fights barbarians in fur beside a ranger: he cuts, spins and sends a wave, and she casts bolts of light](out/village_combat.png)
 
 `examples/village_combat.mojo` draws this picture. A gamepad of the web backend plays a fixed script against the bandits, and the companion fights beside the player. To fight with your own gamepad or keyboard, run `examples/village_walk.mojo --play`: see [Village walk](Village-walk#play-the-game).
 
@@ -147,9 +147,9 @@ A strong blow stops the whole fight for 0.06 seconds, as action games freeze a f
 
 ## The bandits
 
-The module is `extensions/village/foes.mojo`. Three hooded bandits keep a camp about 25 meters north-west of the start. A bandit is a person with a sword, as the player is. It has 300 health and 70 stamina, and its blows do 55 percent of a move's damage. Their captain, taller and in red, stands behind them. The captain has 650 health and 120 stamina, and its blows do 80 percent of a move's damage.
+The module is `extensions/village/foes.mojo`. Three barbarians in fur keep a camp about 25 meters north-west of the start, each with the hair and the beard of a barbarian. A bandit is a person with a sword, as the player is. It has 300 health and 70 stamina, and its blows do 55 percent of a move's damage. Their captain, a taller warlock, stands behind them. The captain has 650 health and 120 stamina, and its blows do 80 percent of a move's damage.
 
-A fourth bandit, in gray and weld yellow, throws knives. A thrower keeps 8 meters from the player, and never takes the attack token. About every 3.5 seconds, it draws its free arm back and throws a knife at the player's chest. The knife flies straight at 18 meters a second. A dodge evades it, and a guard blocks it or parries it, as it does a cut.
+A fourth bandit, in a ranger's green, throws knives. A thrower keeps 8 meters from the player, and never takes the attack token. About every 3.5 seconds, it draws its free arm back and throws a knife at the player's chest. The knife flies straight at 18 meters a second. A dodge evades it, and a guard blocks it or parries it, as it does a cut.
 
 Below half its health, the captain rages. `RAGE` shows over it as it begins, and under its bars while it lasts. A raging fighter's attacks take 80 percent of their time. A raging bandit's dice roll high. It makes no plan of two light attacks, and twice as many piercing attacks.
 
@@ -186,7 +186,7 @@ A fallen wolf lies on its side. It gives no coins, but it trains swordplay as a 
 
 ## The companion
 
-The module is `extensions/village/companion.mojo`. A swordswoman in woad blue starts beside the player, and fights with them. The foes do not attack her: she keeps out of their way.
+The module is `extensions/village/companion.mojo`. A swordswoman dressed as a ranger starts beside the player, and fights with them. A foe goes for her when she stands nearer it than the player by `ALLY_SHY`, 1.5 meters, or more. Struck down, she lies still until the fight round her is over, and then rises.
 
 Out of a fight, she follows the player. She walks to them from more than 3 meters, and runs from more than 7. In a fight, she faces the player's foe, and stands 6 meters from it, 70 degrees off the line from the foe to the player. So she keeps out of the way of the camera.
 
@@ -207,10 +207,13 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 - **The companion's assist gauge**, in the bottom left. It says `ASSIST READY` when it is full.
 - **The gauges**, in the bottom right: the stance, the health, the stamina, the limit gauge, and the special gauge as a row of points. The health turns red below a quarter. In a surge, the limit gauge turns gold, says `SURGE`, and empties as the time runs out. Through an ultimate's start-up, its name stands large in the middle of the frame, and a gold star grows at the sword hand.
 - **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
+- **The red edges.** Below `VIGNETTE_HEALTH`, 35 percent, of their health, the edges of the player's frame redden, more the nearer they are to falling. A blow that lands on the player flashes them red for 0.4 seconds. `draw_vignette` draws them.
 - **Each bandit's health and stamina**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a piercing attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under its bars.
 - **A dummy's stamina**, over its head, while its stamina is not full.
 - **The lock's mark**: four gold dots around the locked target's chest.
-- **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `PIERCE BREAK`. They rise and fade.
+- **The way of each blow on the player**: a red arc near the edge of the frame, toward where the blow came from. It tells the player which way to turn. It fades in `HURT_SECONDS`, 1.2 seconds. A blow that a guard blocks takes no health, so it shows no arc. `hurt_way` gives the way on the frame.
+- **The target panel**, under the compass: the locked foe's name, such as `BANDIT` or `WOLF`, and its health bar. `draw_target` writes it, and `target_name` gives the name. While a warden fights, the panel and the compass stand under the warden's bars: `hud_drop` gives how far down.
+- **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `PIERCE BREAK`. They rise and fade. They stand under `TOP_BAND`, 46 dots of the font, so they do not cross the compass or the target panel. They move down together, so they keep their order.
 - **The edges of the frame**, tinted. They turn blue while the player's perfect dodge slows the foes. They turn gold through an ultimate, and red below a quarter of the player's health. A stamina recovery rings the player's feet with blue light.
 
 For the styles, the combos and the raid, `draw_battle` also writes:
@@ -231,6 +234,10 @@ The game's renderer draws every surface opaque, so `draw_battle` adds the trails
 
 The sword hangs at the hip until the fight starts. It is in the hand while a bandit within 10 meters fights, or the player fights. It goes back to the hip 6 seconds later.
 
+### How a blow feels
+
+A blow that takes `HITSTOP_BLOW`, 40, of a foe's health or more all but stops the world for `HITSTOP`, 0.07 seconds. A foe is a bandit, a wolf or a warden. The world then moves at `HITSTOP_PACE`, 0.15, of its speed. A knock sounds as each blow lands, on a foe or on a dummy: see [Village walk](Village-walk#sound). `Battle.foes_health` gives the health that the foes have left, all told. A hard landing and a roll kick up dust from the ground, which settles in a second.
+
 ## One frame of the fight
 
 `VillageGame.tick` calls `Battle.tick` in place of the player's own step. The module is `extensions/village/battle.mojo`. `Battle.tick` does these steps:
@@ -240,7 +247,7 @@ The sword hangs at the hip until the fight starts. It is in the hand while a ban
 3. **An attack turns.** Through its start-up, an attack turns the player toward the locked target. With no lock, it turns toward the nearest target within 4 meters before them.
 4. **The bandits and the companion think and move.** Each bandit's brain decides, and its character steps or is carried by its move. The companion's mind decides where she goes, and when she casts and heals.
 5. **The blows.** In steps of at most 1/60 second, each fighter's clock runs, and each swing gives its blow to the fighters that it reaches. A strong blow stops the next frames of the fight for 0.06 seconds.
-6. **The fallen.** A fallen player comes to at the start after 4 seconds. A fallen bandit lies, then comes back to its post.
+6. **The fallen.** A fallen player loses `FALL_COST`, 25 percent, of the coins they carry, and comes to at the start after 4 seconds. A fallen bandit lies, then comes back to its post. Each bandit felled gives 8 coins and a seal.
 
 `Character.drive` carries a character at a set speed over the ground. An attack's lunge, a dodge and a blow's push use it. The walls, the water and the obstacles still stop the character.
 
@@ -268,6 +275,10 @@ The module is `extensions/humanoid/rig/sword_clips.mojo`. Each clip is worked ou
 | `flinch_clip` | 0.4 | The head and the chest thrown back |
 | `stagger_clip` | 1.6 | Bent over, the sword low, swaying for breath |
 | `fall_clip` | 2.0 | The knees give, and the body falls on its back |
+
+A fighter in a closed skirt that covers the shins, such as a robe or a gown, is hobbled. `hobbles` tells. In the hand-to-hand style, such a fighter swings the haymaker where others kick, and the uppercut where others spin and kick. A kicking leg would pass out through the front of the skirt. The moves keep their timing and their damage.
+
+The scabbard and the sheathed sword hang back and down from the hip, on the side of the right thigh. A leg that kicks or lunges back would pass through them. So, each frame, `Arms` turns them away from that thigh, in the plane of the two, until they are `SHEATH_CLEARANCE`, 40°, apart. `sheath_turn` gives the turn.
 
 The rig faces plus z, and calls the side on plus x its right. A camera behind the rig sees plus x on its own left. So the poses are written for a sword arm on plus x, and `mirrored` turns them over. The sword is in `LEFT_HAND`, the hand a player sees as the right.
 
@@ -298,7 +309,7 @@ The rig faces plus z, and calls the side on plus x its right. A camera behind th
 
 - The fight is not saved. A new game starts with full health, and every bandit at its post.
 - A blow lands where its arc meets a fighter's circle. The blade's own path does not decide it.
-- The foes do not attack the companion, and she is never hurt. Only the Stone Warden attacks the raiders.
+- Only the Stone Warden attacks the raiders.
 - Only the player has specials. A bandit makes light attacks, heavy attacks and piercing attacks only.
 - The bandits fight with the sword alone.
 - A trail is a flat ribbon, not the blade's exact path. It is added over the frame, so a wall does not hide it.

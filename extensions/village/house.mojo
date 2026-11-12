@@ -191,6 +191,32 @@ comptime BOARDED = Facade(3)
 
 
 @fieldwise_init
+struct RoofCovering(Equatable, ImplicitlyCopyable, Writable):
+    """What covers a house's roof, as a type rather than a bare int."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the four coverings there are.
+
+        Returns:
+            Whether the value names a covering.
+        """
+        return ordinal_valid(self.value, 3)
+
+
+# The covering that the facade gives: slates over fieldstone, and clay
+# tiles over every other facade.
+comptime BY_FACADE = RoofCovering(0)
+# Clay tiles in staggered courses.
+comptime TILES = RoofCovering(1)
+# Gray slates in staggered courses.
+comptime SLATES = RoofCovering(2)
+# Straw thatch, laid in courses.
+comptime THATCH = RoofCovering(3)
+
+
+@fieldwise_init
 struct HouseUse(Equatable, ImplicitlyCopyable, Writable):
     """What a house is for, as a type rather than a bare int."""
 
@@ -276,6 +302,8 @@ struct HouseParameters(Copyable, Movable):
     var seed: Int
     # What the house is for.
     var use: HouseUse
+    # What covers the roof.
+    var covering: RoofCovering
 
     def __init__(
         out self,
@@ -291,6 +319,7 @@ struct HouseParameters(Copyable, Movable):
         trim: Vector3 = PAINT,
         seed: Int = 1,
         use: HouseUse = DWELLING,
+        covering: RoofCovering = BY_FACADE,
     ):
         """Create a house's parameters.
 
@@ -308,6 +337,8 @@ struct HouseParameters(Copyable, Movable):
             trim: The linear color of the doors, shutters and frames.
             seed: Which furniture, and which weathering of the walls.
             use: What the house is for: a dwelling or a barn.
+            covering: What covers the roof. `BY_FACADE` covers it as the
+                facade does.
         """
         self.name = name^
         self.width = width
@@ -321,6 +352,7 @@ struct HouseParameters(Copyable, Movable):
         self.trim = trim
         self.seed = seed
         self.use = use
+        self.covering = covering
 
     def check(self) raises:
         """Refuse a house that cannot be built.
@@ -330,7 +362,8 @@ struct HouseParameters(Copyable, Movable):
                 there are not from 1 to 6 stories, a story is not from
                 2.4 to 6 meters tall, the facade is not one, the pitch is
                 not from 0 to 60 degrees, or a color channel is not from
-                0 to 1. Also if the use is not one, or a barn is narrower
+                0 to 1. Also if the use or the roof's covering is not
+                one, or a barn is narrower
                 than `BARN_WIDTH` or its story lower than `BARN_STORY`.
         """
         require_between(
@@ -358,6 +391,8 @@ struct HouseParameters(Copyable, Movable):
             raise Error("A facade must be one of the four")
         if not self.use.is_valid():
             raise Error("A house's use must be a dwelling or a barn")
+        if not self.covering.is_valid():
+            raise Error("A roof's covering must be one of the four")
         if self.use == BARN:
             require_between(
                 self.width.to(METER),
@@ -381,6 +416,19 @@ struct HouseParameters(Copyable, Movable):
             require_between(color.x, 0, 1, "A color must be 0 to 1")
             require_between(color.y, 0, 1, "A color must be 0 to 1")
             require_between(color.z, 0, 1, "A color must be 0 to 1")
+
+    def roof_covering(self) -> RoofCovering:
+        """Return what covers the roof.
+
+        Returns:
+            The covering, with `BY_FACADE` resolved: `SLATES` over
+            fieldstone, and `TILES` over every other facade.
+        """
+        if self.covering != BY_FACADE:
+            return self.covering
+        if self.facade == STONE_FACADE:
+            return SLATES
+        return TILES
 
     def chambered(self) -> Bool:
         """Return whether the ground story has a chamber beside the hall.

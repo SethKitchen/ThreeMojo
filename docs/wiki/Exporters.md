@@ -330,7 +330,7 @@ With faces, each mesh must be whole triangles. three.js checks only the total co
 
 ## EXR
 
-`exporters/exr.mojo` writes RGBA texels as an OpenEXR file. three.js: `EXRExporter`. `render.exr.decode` reads the file back.
+`exporters/exr.mojo` writes RGBA texels as an OpenEXR file, byte for byte as three.js r187 writes it. three.js: `EXRExporter`. `render.exr.decode` reads the file back.
 
 ```mojo
 var bytes = export_exr_image(image, ZIP_COMPRESSION, HALF_SAMPLES)
@@ -338,20 +338,30 @@ var bytes = export_exr_image(image, ZIP_COMPRESSION, HALF_SAMPLES)
 
 - `export_exr` takes the `Float32` texels of a three.js `FloatType` data texture. `export_exr_half` takes the half bits of a `HalfFloatType` one. Both take four values a texel, from the bottom row up.
 - `export_exr_image` takes a `FloatImage`, from the top row down. `decode` gives the same image back.
-- The compression is `NO_COMPRESSION`, `ZIPS_COMPRESSION` (one line a block) or `ZIP_COMPRESSION` (sixteen lines a block, the default).
+- The compression is one of the five in the table below.
 - The sample type is `HALF_SAMPLES` (the default) or `FLOAT_SAMPLES`. A half is made as three.js's `DataUtils.toHalfFloat` makes it: the extra bits are cut off, and a value is clamped to 65,504.
 - The channels are `A`, `B`, `G` and `R`. The header has the attributes that three.js writes, in its order.
 
-zlib is a port of fflate 0.8.2, the library that three.js exports with. `render/deflate.mojo` gives the same bytes as fflate at each level from 0 to 9.
+| Compression | Lines a block | What it does |
+|---|---|---|
+| `NO_COMPRESSION` | 1 | Writes the lines as they are. |
+| `RLE_COMPRESSION` | 1 | Splits and predicts the bytes, then codes runs as OpenEXR's `rleCompress` does. |
+| `ZIPS_COMPRESSION` | 1 | Splits and predicts the bytes, then compresses them with zlib. |
+| `ZIP_COMPRESSION` | 16 | The same as ZIPS, sixteen lines at a time. This is the default. |
+| `PIZ_COMPRESSION` | 32 | Maps the sixteen-bit words through a table, applies a Haar wavelet to each channel, then Huffman codes them, as OpenEXR's `PizCompressor` does. |
 
-### Differences from three.js
+A block that its compression does not make smaller is written as raw lines. A reader takes such a block as raw lines.
 
-three.js writes two kinds of block that its own `EXRLoader` reads wrong values from. This port writes them as OpenEXR says:
+zlib is a port of fflate 0.8.2, the library that three.js exports with. `render/deflate.mojo` gives the same bytes as fflate at each level from 0 to 9. three.js r187 ships fflate 0.8.3. Its changes are to the streaming API, so the bytes of `zlibSync` are the same.
 
-- The last block of a `ZIP_COMPRESSION` file, when the height is not a multiple of 16. three.js compresses it at the size of a full block, with bytes of the block before it. This port compresses only the real lines.
-- A block that zlib does not make smaller, for example in a small image. A reader takes such a block as raw lines. three.js writes the zlib stream. This port writes the raw lines.
+A NaN is written as three.js writes it on x86-64: `0xFE00` as a half, and `0x7FC00000` as a float. An image with no texels, or data of the wrong length, is refused. An image whose byte buffer does not fit in an integer is refused.
 
-Every other block, and the header, are the bytes that three.js writes. A NaN is written as three.js writes it on x86-64: `0xFE00` as a half, and `0x7FC00000` as a float. An image with no texels, or data of the wrong length, is refused. An image whose byte buffer does not fit in an integer is refused.
+### three.js before r187
+
+three.js r186 and earlier wrote two kinds of block that its own `EXRLoader` read wrong values from. This port always wrote them as OpenEXR says, and r187 writes them the same way:
+
+- The last block of a `ZIP_COMPRESSION` file, when the height is not a multiple of 16. three.js r186 compressed it at the size of a full block, with bytes of the block before it.
+- A block that zlib does not make smaller, for example in a small image. three.js r186 wrote the zlib stream.
 
 ## KTX2
 
@@ -554,7 +564,7 @@ The writers raise for:
 - A PLY mesh that is not whole triangles, when the file has faces.
 - A `max_texture_size` below one, or a `gltfExtensions` that is not an object when `include_custom_extensions` is on.
 - An EXR image with no texels, or data that is not four values a texel.
-- An EXR compression other than none, ZIPS or ZIP, or a sample type other than HALF or FLOAT.
+- An EXR compression other than none, RLE, ZIPS, ZIP or PIZ, or a sample type other than HALF or FLOAT.
 - A DEFLATE level that is not from 0 to 9.
 - A KTX2 texture that is blank, or a channel count that is not 1, 2 or 4.
 - A KTX2 byte texture asked for halves, or a float texture that is `SRGB`.
@@ -570,7 +580,7 @@ The writers raise for:
 
 ## Example
 
-`tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js 0.180 writes, in `assets/exr_export/three.json`. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`.
+`tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js r187 writes, in `assets/exr_export/three.json`. `assets/exr_export/three_exr_export.mjs` writes that fixture. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`.
 
 `tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
 

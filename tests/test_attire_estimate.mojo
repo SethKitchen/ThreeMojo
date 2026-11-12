@@ -32,6 +32,7 @@ from extensions.attire.estimate import (
     visibility,
     worn_tallies,
 )
+from extensions.attire.armory import scale_shirt
 from extensions.attire.fabric import fabric
 from extensions.attire.garment import (
     bascinet,
@@ -50,6 +51,7 @@ from extensions.attire.kinds import (
     MAIL,
     PADDING,
     PLATE,
+    SCALE,
     FabricKind,
 )
 from extensions.attire.outfit import Dressed, Outfit, dress
@@ -169,6 +171,7 @@ def test_each_fabric_has_a_piercing_energy() raises:
         _ = piercing_source(kind)
     # Plate at 2 mm takes 175 J; at 1 mm a quarter of that.
     assert_almost_equal(piercing_energy(fabric(PLATE)).value, 175, atol=1e-3)
+    assert_almost_equal(piercing_energy(fabric(SCALE)).value, 60, atol=1e-3)
     var thin = fabric(PLATE)
     thin.thickness = Length(1, MILLIMETER)
     assert_almost_equal(piercing_energy(thin).value, 43.75, atol=1e-3)
@@ -208,6 +211,15 @@ def test_noise_and_visibility_are_game_hooks() raises:
     ) / 255
     assert_almost_equal(shown, expected, atol=1e-5)
     assert_true(visibility(loud) > visibility(quiet))
+    # Scales clatter, and glint as plate does.
+    var scaled = Outfit()
+    scaled.add(scale_shirt())
+    assert_almost_equal(noise(scaled), 0.25)
+    var dull = surcoat()
+    dull.fabric = SCALE
+    var lone = Outfit()
+    lone.add(dull^)
+    assert_true(visibility(lone) > visibility(coated))
     assert_equal(visibility(Outfit()), 0)
     var refused = Outfit()
     refused.garments.append(hose())

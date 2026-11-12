@@ -2268,6 +2268,16 @@ def test_cheaper_water_shades_a_grid_and_keeps_its_surface() raises:
         _ = coarse.compose(sky, camera, Length(0.0, METER), stones)
 
 
+def test_composition_refuses_a_frame_without_a_depth_for_each_pixel() raises:
+    var stones = _stones()
+    var camera = _page_camera(8, 6)
+    var scene = _scene(Duration(5.0, SECOND))
+    var frame = Framebuffer(8, 6, Color(0, 0, 0))
+    frame.depth = List[Float32](length=1, fill=0)
+    with assert_raises(contains="a depth for each pixel"):
+        _ = scene.compose(frame, camera, Length(0.0, METER), stones)
+
+
 def test_calm_ripples_skip_their_step_and_caustics_split_by_channel() raises:
     var water = _scene(Duration(5.0, SECOND))
     water.advance(Duration(1.0 / 60.0, SECOND), False)
