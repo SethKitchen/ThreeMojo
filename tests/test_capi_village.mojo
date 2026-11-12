@@ -159,9 +159,15 @@ comptime UNKNOWN_KIND = 99
 
 
 def _make() raises -> Handle:
-    """Make an app of the tiny village, which the test needs to succeed."""
+    """Make an app of the tiny village, which the test needs to succeed.
+
+    Its frame keeps one size. A window draws more or fewer pixels by the
+    time that its last frame took. A test's frame must not follow the time
+    that the machine takes."""
     var app = new_app(WIDTH, HEIGHT, tiny_game(), pebble_bed(gray_photograph()))
-    return Handle(unsafe_from_address=Int(app))
+    var handle = Handle(unsafe_from_address=Int(app))
+    _state(handle)[].game.set_dynamic(False)
+    return handle
 
 
 def _state(app: Handle) -> Pointer[VillageApp, MutUntrackedOrigin]:
@@ -567,17 +573,25 @@ def test_a_game_that_a_gpu_does_not_draw_prepares_no_frame() raises:
     _step(app, 2)
     assert_equal(tm_village_prepare(app), Int32(0))
     assert_false(_state(app)[].gpu)
-    # The CPU's frame draws more of the window when there is time.
-    assert_true(_state(app)[].game.dynamic)
     tm_destroy(app)
+
+
+def test_a_cpu_window_sizes_its_frame_by_time_and_a_gpu_window_does_not() raises:
+    # The CPU's frame draws more of the window when there is time.
+    var app = new_app(WIDTH, HEIGHT, tiny_game(), pebble_bed(gray_photograph()))
+    var cpu = Handle(unsafe_from_address=Int(app))
+    assert_true(_state(cpu)[].game.dynamic)
+    tm_destroy(cpu)
+    # A GPU draws into an image of a fixed size, so the frame keeps its
+    # size.
+    var gpu = _make_gpu()
+    assert_false(_state(gpu)[].game.dynamic)
+    tm_destroy(gpu)
 
 
 def test_a_prepared_frame_is_described_to_the_host() raises:
     var app = _make_gpu()
     assert_true(_state(app)[].gpu)
-    # A GPU draws into an image of a fixed size, so the frame keeps its
-    # size.
-    assert_false(_state(app)[].game.dynamic)
     _step(app, 3)
     assert_equal(tm_village_prepare(app), Int32(1))
     var ints = tm_village_ints(app)
