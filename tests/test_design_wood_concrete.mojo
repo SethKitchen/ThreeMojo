@@ -24,6 +24,7 @@ from std.testing import (
 )
 from extensions.design.concrete import (
     cantilever_wall_effects,
+    fixed_base_moment,
     minimum_wall_steel,
     one_way_shear_strength,
     plain_flexural_strength,
@@ -33,6 +34,7 @@ from extensions.design.concrete import (
     strip_footing_width,
     tension_strain,
     two_way_shear_stress,
+    wall_section_effects,
 )
 from extensions.design.quantities import (
     POUND64,
@@ -42,11 +44,16 @@ from extensions.design.quantities import (
 )
 from extensions.design.wood import (
     Lumber,
+    SAWN_COLUMN_C,
+    beam_column_ratio,
     bearing_stress_ratio,
     bolt_lateral_value,
+    column_buckling_stress,
+    column_stability_factor,
     dowel_bearing_strength,
     dressed_depth,
     joist_line_load,
+    nail_lateral_value,
     simple_span_check,
     southern_pine_no2,
 )
@@ -57,6 +64,7 @@ from extensions.geotech.quantities import (
     PCF,
     PLF,
     PSF,
+    MomentPerLength64,
     UnitWeight64,
 )
 from units.si import (
@@ -265,6 +273,41 @@ def test_sill_bolt_into_concrete() raises:
         )
 
 
+def test_nail_through_osb_into_pine() raises:
+    # 10d common (0.148 in., Fyb 90 ksi) through 23/32 OSB (G 0.50) into
+    # SYP (G 0.55), 3 in. long: Fe = 16,600 G^1.84, Rd = 2.2. By hand,
+    # mode IIIs governs at 106.2 lb.
+    var z = nail_lateral_value(
+        _in(0.148),
+        _in(3.0 - 23.0 / 32),
+        _in(23.0 / 32),
+        0.55,
+        0.50,
+        Pressure64(90000, PSI),
+    )
+    assert_almost_equal(z.lateral.to(POUND64), 106.2, atol=0.2)
+    assert_almost_equal(z.lateral.to(POUND64), z.mode_iiis.to(POUND64))
+    assert_almost_equal(z.mode_is.to(POUND64), 224.2, atol=0.2)
+    assert_true(z.mode_iv.value > z.mode_iiis.value)
+    var f = Pressure64(90000, PSI)
+    with assert_raises(contains="nail diameter"):
+        _ = nail_lateral_value(_in(0.25), _in(2), _in(0.5), 0.55, 0.5, f)
+    with assert_raises(contains="nail diameter"):
+        _ = nail_lateral_value(_in(0), _in(2), _in(0.5), 0.55, 0.5, f)
+    with assert_raises(contains="specific gravity"):
+        _ = nail_lateral_value(_in(0.148), _in(2), _in(0.5), 1.2, 0.5, f)
+    with assert_raises(contains="specific gravity"):
+        _ = nail_lateral_value(_in(0.148), _in(2), _in(0.5), 0.55, 0, f)
+    with assert_raises(contains="main member"):
+        _ = nail_lateral_value(_in(0.148), _in(0), _in(0.5), 0.55, 0.5, f)
+    with assert_raises(contains="side member"):
+        _ = nail_lateral_value(_in(0.148), _in(2), _in(0), 0.55, 0.5, f)
+    with assert_raises(contains="nail yield"):
+        _ = nail_lateral_value(
+            _in(0.148), _in(2), _in(0.5), 0.55, 0.5, Pressure64(0)
+        )
+
+
 def test_propped_wall_matches_triangular_closed_form() raises:
     var l = 8.0
     var g = UnitWeight64(60, PCF)
@@ -433,6 +476,125 @@ def test_footing_sizes() raises:
     with assert_raises(contains="under the allowable"):
         _ = strip_footing_width(LineLoad64(1), Pressure64(1), Pressure64(-1))
     assert_false(False)
+
+
+def _lbft(m: MomentPerLength64) -> Float64:
+    return m.value / 4.4482216152605
+
+
+def test_fixed_base_moment_closed_forms() raises:
+    var g = UnitWeight64(60, PCF)
+    var none = Pressure64(0)
+    # A triangle over the span: w L^2 / 15, with w = 480 psf.
+    assert_almost_equal(
+        _lbft(fixed_base_moment(_ft(8), _ft(8), g, none)), 2048, atol=1e-6
+    )
+    # A uniform load: q L^2 / 8.
+    var q = fixed_base_moment(
+        _ft(8), _ft(8), UnitWeight64(0), Pressure64(100, PSF)
+    )
+    assert_almost_equal(_lbft(q), 800, atol=1e-6)
+    # Soil 2 ft above the top support: a 120 psf uniform part plus the
+    # triangle, 960 + 2048.
+    assert_almost_equal(
+        _lbft(fixed_base_moment(_ft(8), _ft(10), g, none)), 3008, atol=1e-6
+    )
+    assert_almost_equal(_lbft(fixed_base_moment(_ft(8), _ft(0), g, none)), 0)
+    with assert_raises(contains="wall span"):
+        _ = fixed_base_moment(_ft(0), _ft(1), g, none)
+
+
+def test_wall_section_effects_between_pin_and_fixed() raises:
+    var g = UnitWeight64(60, PCF)
+    var none = Pressure64(0)
+    var pin = MomentPerLength64(0)
+    var fixed = MomentPerLength64(2048 * 4.4482216152605)
+    # Pinned base: the reactions of propped_wall_effects.
+    var base = wall_section_effects(_ft(8), _ft(8), g, none, pin, _ft(0))
+    assert_almost_equal(base.bottom_reaction.to(PLF), 1280, atol=1e-6)
+    assert_almost_equal(base.top_reaction.to(PLF), 640, atol=1e-6)
+    assert_almost_equal(base.shear.to(PLF), 1280, atol=1e-6)
+    assert_almost_equal(_lbft(base.moment), 0)
+    var top = wall_section_effects(_ft(8), _ft(8), g, none, pin, _ft(8))
+    assert_almost_equal(_lbft(top.moment), 0, atol=1e-6)
+    assert_almost_equal(top.shear.to(PLF), -640, atol=1e-6)
+    # Fixed base: 0.4 w L at the base and w L / 10 at the top.
+    var f0 = wall_section_effects(_ft(8), _ft(8), g, none, fixed, _ft(0))
+    assert_almost_equal(f0.bottom_reaction.to(PLF), 1536, atol=1e-6)
+    assert_almost_equal(f0.top_reaction.to(PLF), 384, atol=1e-6)
+    assert_almost_equal(_lbft(f0.moment), -2048, atol=1e-6)
+    # At mid-height: -2048 + 1536 (4) - (1440 (4) - 2560).
+    var mid = wall_section_effects(_ft(8), _ft(8), g, none, fixed, _ft(4))
+    assert_almost_equal(_lbft(mid.moment), 896, atol=1e-6)
+    assert_almost_equal(mid.shear.to(PLF), 96, atol=1e-6)
+    # Above the soil the moment falls in a line to the top support.
+    var low = wall_section_effects(_ft(8), _ft(4), g, none, pin, _ft(6))
+    assert_almost_equal(_lbft(low.moment), 160, atol=1e-6)
+    assert_almost_equal(low.shear.to(PLF), -80, atol=1e-6)
+    with assert_raises(contains="base moment"):
+        _ = wall_section_effects(
+            _ft(8), _ft(8), g, none, MomentPerLength64(Float64.MAX * 2), _ft(1)
+        )
+    with assert_raises(contains="section height"):
+        _ = wall_section_effects(_ft(8), _ft(8), g, none, pin, _ft(-1))
+    with assert_raises(contains="section height"):
+        _ = wall_section_effects(_ft(8), _ft(8), g, none, pin, _ft(9))
+    with assert_raises(contains="surcharge"):
+        _ = wall_section_effects(_ft(8), _ft(8), g, Pressure64(-1), pin, _ft(1))
+
+
+def test_column_stability_and_beam_column() raises:
+    var emin = Pressure64(510000, PSI)
+    var fce = column_buckling_stress(emin, 25)
+    assert_almost_equal(fce.to(PSI), 670.752, atol=1e-9)
+    var cp = column_stability_factor(Pressure64(1050, PSI), fce, SAWN_COLUMN_C)
+    assert_almost_equal(cp, 0.52366908, atol=1e-7)
+    # A very stiff column reaches Fc*.
+    var stiff = column_stability_factor(
+        Pressure64(1050, PSI), Pressure64(1e9, PSI), SAWN_COLUMN_C
+    )
+    assert_almost_equal(stiff, 1.0, atol=1e-5)
+    # 0.04 + 600 / (1000 (1 - 0.25)).
+    var ratio = beam_column_ratio(
+        Pressure64(100, PSI),
+        Pressure64(500, PSI),
+        Pressure64(600, PSI),
+        Pressure64(1000, PSI),
+        Pressure64(400, PSI),
+    )
+    assert_almost_equal(ratio, 0.84, atol=1e-12)
+    with assert_raises(contains="minimum modulus"):
+        _ = column_buckling_stress(Pressure64(0), 10)
+    with assert_raises(contains="slenderness"):
+        _ = column_buckling_stress(emin, 0)
+    with assert_raises(contains="slenderness"):
+        _ = column_buckling_stress(emin, 51)
+    with assert_raises(contains="Fc*"):
+        _ = column_stability_factor(Pressure64(0), fce, 0.8)
+    with assert_raises(contains="buckling stress"):
+        _ = column_stability_factor(Pressure64(1, PSI), Pressure64(0), 0.8)
+    with assert_raises(contains="column factor"):
+        _ = column_stability_factor(Pressure64(1, PSI), fce, 1.0)
+    with assert_raises(contains="column factor"):
+        _ = column_stability_factor(Pressure64(1, PSI), fce, 0.0)
+    var one = Pressure64(1, PSI)
+    with assert_raises(contains="member stress"):
+        _ = beam_column_ratio(Pressure64(-1, PSI), one, one, one, one)
+    with assert_raises(contains="member stress"):
+        _ = beam_column_ratio(one, one, Pressure64(-1, PSI), one, one)
+    with assert_raises(contains="allowable axial"):
+        _ = beam_column_ratio(one, Pressure64(0), one, one, Pressure64(9, PSI))
+    with assert_raises(contains="allowable bending"):
+        _ = beam_column_ratio(one, one, one, Pressure64(0), Pressure64(9, PSI))
+    with assert_raises(contains="FcE1"):
+        _ = beam_column_ratio(one, one, one, one, one)
+    var inf = Pressure64(Float64.MAX * 2)
+    with assert_raises(contains="member stress"):
+        _ = beam_column_ratio(inf, one, one, one, one)
+    with assert_raises(contains="member stress"):
+        _ = beam_column_ratio(one, one, inf, one, one)
+    with assert_raises(contains="FcE1"):
+        _ = beam_column_ratio(one, one, one, one, inf)
 
 
 def main() raises:

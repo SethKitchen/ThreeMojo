@@ -20,6 +20,9 @@ those values.
 - `bolt_lateral_value`: the single-shear yield limit equations (NDS
   12.3.1), the reference lateral value Z and the governing mode's value
   of each of the six modes.
+- `column_buckling_stress`, `column_stability_factor` and
+  `beam_column_ratio`: a member in compression, and in compression and
+  bending, by NDS 3.7.1 and equation 3.9-3.
 """
 
 from std.math import cos, pi, sin, sqrt
@@ -420,24 +423,96 @@ def bolt_lateral_value(
     if not (theta >= 0 and theta <= pi / 2 + 1e-12):
         raise Error("A grain angle must be from 0 to 90 degrees")
     var k_theta = 1 + 0.25 * theta / (pi / 2)
+    return _yield_limit(
+        d, lm, ls, fem, fes, fyb, 4 * k_theta, 3.6 * k_theta, 3.2 * k_theta
+    )
+
+
+def nail_lateral_value(
+    diameter: Length64,
+    penetration: Length64,
+    side_thickness: Length64,
+    main_gravity: Float64,
+    side_gravity: Float64,
+    nail_yield: Pressure64,
+) raises -> BoltValue:
+    """Return the reference lateral value of a nail in single shear.
+
+    NDS 12.3.1 with Rd = 2.2 in every mode (Table 12.3.1B, D of 0.17 in.
+    or less), and Fe = 16,600 G^1.84 psi for each member (Table 12.3.3,
+    D under 1/4 in.), so the value holds at any angle to the grain.
+
+    Args:
+        diameter: D, more than 0 and 0.17 in. or less.
+        penetration: lm, the nail's length in the main member.
+        side_thickness: ls, the side member thickness.
+        main_gravity: G of the main member, from 0 to 1.
+        side_gravity: G of the side member, from 0 to 1. NDS Table
+            12.3.3B gives 0.50 for OSB.
+        nail_yield: Fyb, 90,000 psi for a 10d common nail.
+
+    Returns:
+        Z and the value of each mode.
+
+    Raises:
+        Error: If D is outside the range, a G is not between 0 and 1, or
+            a length or strength is not positive.
+    """
+    var d = diameter.to(INCH64)
+    if not (d > 0 and d <= 0.17):
+        raise Error("A nail diameter must be over 0 and 0.17 in. or less")
+    for g in [main_gravity, side_gravity]:
+        if not (g > 0 and g < 1):
+            raise Error("A specific gravity must be between 0 and 1")
+    var lm = penetration.to(INCH64)
+    var ls = side_thickness.to(INCH64)
+    var fyb = nail_yield.to(PSI)
+    require_positive(lm, "A main member length must be positive")
+    require_positive(ls, "A side member thickness must be positive")
+    require_positive(fyb, "A nail yield strength must be positive")
+    return _yield_limit(
+        d,
+        lm,
+        ls,
+        16600 * main_gravity**1.84,
+        16600 * side_gravity**1.84,
+        fyb,
+        2.2,
+        2.2,
+        2.2,
+    )
+
+
+def _yield_limit(
+    d: Float64,
+    lm: Float64,
+    ls: Float64,
+    fem: Float64,
+    fes: Float64,
+    fyb: Float64,
+    rd_one: Float64,
+    rd_two: Float64,
+    rd_three: Float64,
+) -> BoltValue:
+    # The six yield limit equations of NDS 12.3.1, in inches, psi and lb.
     var re = fem / fes
     var rt = lm / ls
-    var z_im = d * lm * fem / (4 * k_theta)
-    var z_is = d * ls * fes / (4 * k_theta)
+    var z_im = d * lm * fem / rd_one
+    var z_is = d * ls * fes / rd_one
     var k1 = (
         sqrt(re + 2 * re * re * (1 + rt + rt * rt) + rt * rt * re**3)
         - re * (1 + rt)
     ) / (1 + re)
-    var z_ii = k1 * d * ls * fes / (3.6 * k_theta)
+    var z_ii = k1 * d * ls * fes / rd_two
     var k2 = -1 + sqrt(
         2 * (1 + re) + 2 * fyb * (1 + 2 * re) * d * d / (3 * fem * lm * lm)
     )
-    var z_iiim = k2 * d * lm * fem / ((1 + 2 * re) * 3.2 * k_theta)
+    var z_iiim = k2 * d * lm * fem / ((1 + 2 * re) * rd_three)
     var k3 = -1 + sqrt(
         2 * (1 + re) / re + 2 * fyb * (2 + re) * d * d / (3 * fem * ls * ls)
     )
-    var z_iiis = k3 * d * ls * fem / ((2 + re) * 3.2 * k_theta)
-    var z_iv = d * d / (3.2 * k_theta) * sqrt(2 * fem * fyb / (3 * (1 + re)))
+    var z_iiis = k3 * d * ls * fem / ((2 + re) * rd_three)
+    var z_iv = d * d / rd_three * sqrt(2 * fem * fyb / (3 * (1 + re)))
     var z = min(z_im, z_is, z_ii, z_iiim, z_iiis, z_iv)
     return BoltValue(
         Force64(z, POUND64),
@@ -448,3 +523,97 @@ def bolt_lateral_value(
         Force64(z_iiis, POUND64),
         Force64(z_iv, POUND64),
     )
+
+
+# The column factor c of NDS 3.7.1 for sawn lumber.
+comptime SAWN_COLUMN_C = 0.8
+
+
+def column_buckling_stress(
+    minimum_modulus: Pressure64, slenderness: Float64
+) raises -> Pressure64:
+    """Return the critical buckling stress FcE of NDS 3.7.1.
+
+    Args:
+        minimum_modulus: E'min, the adjusted modulus for stability.
+        slenderness: le / d about the axis of buckling, more than 0 and
+            50 or less (NDS 3.7.1.4).
+
+    Returns:
+        0.822 E'min / (le / d)^2.
+
+    Raises:
+        Error: If the modulus is not positive or the slenderness is
+            outside its range.
+    """
+    var e = minimum_modulus.to(PSI)
+    require_positive(e, "A minimum modulus must be positive")
+    if not (slenderness > 0 and slenderness <= 50):
+        raise Error("A column slenderness le/d must be over 0 and 50 or less")
+    return Pressure64(0.822 * e / (slenderness * slenderness), PSI)
+
+
+def column_stability_factor(
+    compression_star: Pressure64, buckling_stress: Pressure64, c: Float64
+) raises -> Float64:
+    """Return the column stability factor Cp of NDS equation 3.7-1.
+
+    Args:
+        compression_star: Fc*, the compression design value parallel to
+            grain times all its factors except Cp.
+        buckling_stress: FcE, from `column_buckling_stress`.
+        c: 0.8 for sawn lumber (`SAWN_COLUMN_C`), between 0 and 1.
+
+    Returns:
+        Cp, more than 0 and 1 or less.
+
+    Raises:
+        Error: If a stress is not positive or c is not between 0 and 1.
+    """
+    var fc = compression_star.to(PSI)
+    var fce = buckling_stress.to(PSI)
+    require_positive(fc, "Fc* must be positive")
+    require_positive(fce, "A buckling stress must be positive")
+    if not (c > 0 and c < 1):
+        raise Error("A column factor c must be between 0 and 1")
+    var r = fce / fc
+    var half = (1 + r) / (2 * c)
+    return half - sqrt(half * half - r / c)
+
+
+def beam_column_ratio(
+    axial_stress: Pressure64,
+    allowable_axial: Pressure64,
+    bending_stress: Pressure64,
+    allowable_bending: Pressure64,
+    buckling_stress: Pressure64,
+) raises -> Float64:
+    """Return the interaction ratio of NDS equation 3.9-3, one bending axis.
+
+    Args:
+        axial_stress: fc, the compression stress.
+        allowable_axial: F'c, with Cp.
+        bending_stress: fb1, about the strong axis.
+        allowable_bending: F'b1.
+        buckling_stress: FcE1, buckling in the plane of bending.
+
+    Returns:
+        (fc / F'c)^2 + fb1 / (F'b1 (1 - fc / FcE1)). The member is
+        adequate at 1 or less.
+
+    Raises:
+        Error: If a stress is negative, an allowable stress is not
+            positive, or fc is not less than FcE1.
+    """
+    var fc = axial_stress.to(PSI)
+    var fb = bending_stress.to(PSI)
+    var fca = allowable_axial.to(PSI)
+    var fba = allowable_bending.to(PSI)
+    var fce = buckling_stress.to(PSI)
+    if not (fc >= 0 and fb >= 0 and fc < Float64.MAX and fb < Float64.MAX):
+        raise Error("A member stress must be zero or more and finite")
+    require_positive(fca, "An allowable axial stress must be positive")
+    require_positive(fba, "An allowable bending stress must be positive")
+    if not (fc < fce and fce < Float64.MAX):
+        raise Error("The axial stress must be less than FcE1 (NDS 3.9.2)")
+    return (fc / fca) ** 2 + fb / (fba * (1 - fc / fce))
