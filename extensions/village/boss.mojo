@@ -60,6 +60,8 @@ so a party of five meets a boss of three times the health of one fighter's.
 from core.ordinal import ordinal_valid
 from extensions.vegetation.noise import hash01
 from extensions.village.combat import (
+    CHIP_DRAIN,
+    CHIP_HOLD,
     CRITICAL,
     DEFEATED,
     HIT,
@@ -502,6 +504,12 @@ struct Boss(Copyable, Movable):
 
     var health: Float32
     var most: Float32
+    # The health its bar shows: it holds a moment after a blow, then
+    # drains to the health, as a fighter's chip does. When it last saw a
+    # blow, and the health it saw.
+    var chip: Float32
+    var chip_hold: Float32
+    var chip_seen: Float32
     var poise: Float32
     # How long since a blow last took its poise, and how long it still
     # staggers, in seconds.
@@ -545,6 +553,9 @@ struct Boss(Copyable, Movable):
         """
         self.most = boss_health(members)
         self.health = self.most
+        self.chip = self.most
+        self.chip_hold = 0
+        self.chip_seen = self.most
         self.poise = BOSS_POISE
         self.poise_rest = 0
         self.staggered = 0
@@ -874,6 +885,7 @@ struct Boss(Copyable, Movable):
         """
         if seconds < 0:
             raise Error("A frame's time must not be negative")
+        self._drain_chip(seconds)
         var count = len(self.threat)
         if len(sight.members) != count or len(sight.up) != count:
             raise Error("A boss's sight must have one place for each member")
@@ -981,9 +993,25 @@ struct Boss(Copyable, Movable):
             self.attack = BossAttack(-1)
         return out^
 
+    def _drain_chip(mut self, seconds: Float32):
+        """Hold the shown health `CHIP_HOLD` after a blow, then drain it to
+        the health at `CHIP_DRAIN` of the most a second. It never shows less
+        than the health."""
+        if self.health < self.chip_seen:
+            self.chip_hold = CHIP_HOLD
+        self.chip_seen = self.health
+        if self.chip_hold > 0:
+            self.chip_hold = max(Float32(0), self.chip_hold - seconds)
+        else:
+            self.chip -= CHIP_DRAIN * self.most * seconds
+        self.chip = max(self.chip, self.health)
+
     def _reset(mut self):
         """Leave the fight: full health and poise, no threat, no attack."""
         self.health = self.most
+        self.chip = self.most
+        self.chip_seen = self.most
+        self.chip_hold = 0
         self.poise = BOSS_POISE
         self.staggered = 0
         self.linked = False

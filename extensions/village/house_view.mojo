@@ -29,11 +29,11 @@ it. It draws more of what an eye sees from close by:
 3. **Floors and ceilings.** Each room has a floor of planks and a
    plastered ceiling, or a ceiling of planks in a barn. The ground
    story's ceiling has oak joists.
-4. **The stair.** Where `house_stair` finds a stair, it has oak treads
-   and risers, a stringer on its open side, and a handrail on
-   balusters. Its well is cut out of the hall's ceiling and the floor
-   above, with oak trimmers around it. A balustrade guards the well
-   upstairs.
+4. **The stairs.** Each flight that `house_stairs` finds has oak treads
+   and risers, a stringer on its open side, a handrail on balusters, and
+   a plaster soffit under it. Its well is cut out of the ceiling of the room it rises
+   from and the floor above, with oak trimmers around it. A balustrade
+   guards the well upstairs, and crosses its foot on the top story.
 5. **The roof.** A gable roof covers the flat roof of the model: two
    slopes of tiles or slates with a thickness, weathered by
    `roof_shade` in cells no larger than `ROOF_CELL`, boards under the
@@ -117,6 +117,7 @@ from extensions.village.house import (
     footing,
     house_breast,
     house_stair,
+    house_stairs,
 )
 from extensions.village.interior import (
     HouseInterior,
@@ -1524,6 +1525,11 @@ struct _Rect(ImplicitlyCopyable):
     var z1: Float32
 
 
+comptime SOFFIT_DROP = Float32(0.2)
+"""How far under the line of a flight's nosings its soffit lies, in
+meters: under every tread and riser."""
+
+
 def _well(stair: Stair) -> _Rect:
     """Return a stair's well in the house's frame: where it rises through
     the floor above."""
@@ -1564,20 +1570,28 @@ def _ceiling(mut sheet: Sheet, r: _Rect, high: Float32, color: Vector3):
     )
 
 
+def _overlaps(room: _Rect, hole: _Rect) -> Bool:
+    """Return whether a hole cuts into a room."""
+    return min(room.x1, hole.x1) > max(room.x0, hole.x0) and min(
+        room.z1, hole.z1
+    ) > max(room.z0, hole.z0)
+
+
 def _rooms(
     mut sheets: _Sheets,
     building: Building,
-    stair: Optional[Stair],
+    stairs: List[Stair],
     barn: Bool,
 ) raises:
     """Add each room's floor of planks and its plastered ceiling, and the
-    ground story's joists. A barn's ceilings are planks. A stair's well
-    is cut out of the ceiling of the room it rises from and the floor of
-    the room above."""
+    ground story's joists. A barn's ceilings are planks. The stairs' well
+    is cut out of the ceiling of each room a flight rises from and the
+    floor of each room a flight arrives in, with trimmers round it."""
     var slab = Float32(0.2)
     var hole = _Rect(0, 0, 0, 0)
-    if stair:
-        hole = _well(stair.value())
+    var flights = len(stairs)
+    if flights > 0:
+        hole = _well(stairs[0])
     for s in range(len(building.spaces)):
         ref space = building.spaces[s]
         ref storey = building.storeys[space.storey.value]
@@ -1594,13 +1608,15 @@ def _rooms(
             y1 = max(y1, Float32(p.y))
         # The scene's z is the model's -y.
         var room = _Rect(x0, x1, -y1, -y0)
+        var level = space.storey.value
+        var cut = flights > 0 and _overlaps(room, hole)
         var floors: List[_Rect] = [room]
-        if Bool(stair) and space.storey.value == 1:
+        if cut and level >= 1 and level <= flights:
             floors = _around(room, hole)
-        # The stair rises from the hall, the first room of the ground
-        # story.
+        # A flight rises from the hall, the first room of the ground
+        # story, and from the room over it on each story with a flight.
         var ceilings: List[_Rect] = [room]
-        var under = Bool(stair) and s == 0
+        var under = cut and level < flights
         if under:
             ceilings = _around(room, hole)
         var floor = WHITE * 0.95
@@ -1627,7 +1643,11 @@ def _rooms(
                 _ceiling(sheets.planks, r, high, ceiling * 0.8)
             else:
                 _ceiling(sheets.plaster, r, high, ceiling)
-        if space.storey.value != 0:
+        if level != 0:
+            if under:
+                _trimmers(
+                    sheets, hole, high, low + Float32(storey.height.value)
+                )
             continue
         var z0 = room.z0
         var z1 = room.z1
@@ -1763,12 +1783,15 @@ def _trimmers(mut sheets: _Sheets, hole: _Rect, low: Float32, high: Float32):
         )
 
 
-def _stair_view(mut sheets: _Sheets, stair: Stair):
-    """Add a stair: its treads and risers, a stringer on its open side, a
-    handrail on balusters, and a balustrade around its well upstairs."""
+def _stair_view(mut sheets: _Sheets, stair: Stair, onward: Bool):
+    """Add a flight: its treads and risers, a stringer on its open side, a
+    handrail on balusters, and a balustrade along its well upstairs. The
+    balustrade crosses the well's foot too, unless `onward` says that the
+    next flight starts there."""
     var hole = _well(stair)
     var rise = Float32(stair.rise)
     var going = Float32(STAIR_GOING)
+    var base = Float32(stair.base)
     var top = Float32(stair.height())
     var middle_z = (hole.z0 + hole.z1) / 2
     var half_z = (hole.z1 - hole.z0) / 2
@@ -1776,7 +1799,7 @@ def _stair_view(mut sheets: _Sheets, stair: Stair):
     # `house_stair` gives a stair two risers or more: a tread or more.
     for k in range(treads):  # pragma: no branch
         var x = hole.x0 + Float32(k) * going
-        var height = Float32(k + 1) * rise
+        var height = base + Float32(k + 1) * rise
         # The tread, with a nosing over the riser below it.
         sheets.planks.box(
             Vector3(x + going / 2 - 0.015, height - 0.02, middle_z),
@@ -1794,7 +1817,7 @@ def _stair_view(mut sheets: _Sheets, stair: Stair):
         )
     # The last riser, up to the floor above.
     sheets.wood.box(
-        Vector3(hole.x1 + 0.01, top - rise / 2, middle_z),
+        Vector3(hole.x1 + 0.01, base + top - rise / 2, middle_z),
         Vector3(0.01, 0, 0),
         Vector3(0, rise / 2, 0),
         Vector3(0, 0, half_z),
@@ -1808,15 +1831,24 @@ def _stair_view(mut sheets: _Sheets, stair: Stair):
     var slope = Vector3(run / 2, top / 2, 0)
     var side = hole.z1 - 0.04
     sheets.wood.box(
-        Vector3(hole.x0 + run / 2, top / 2 - 0.05, side),
+        Vector3(hole.x0 + run / 2, base + top / 2 - 0.05, side),
         slope,
         up * 0.14,
         Vector3(0, 0, 0.03),
         OAK * 0.9,
     )
+    # A soffit of plaster under the flight, so that from the flight below
+    # the stair is a smooth slope, not the undersides of its steps.
+    sheets.plaster.box(
+        Vector3(hole.x0 + run / 2, base + top / 2 - SOFFIT_DROP, middle_z),
+        slope,
+        up * 0.015,
+        Vector3(0, 0, half_z),
+        INDOORS * 0.9,
+    )
     var rail = RAIL_HEIGHT - 0.1
     sheets.wood.box(
-        Vector3(hole.x0 + run / 2, top / 2 + rail, side),
+        Vector3(hole.x0 + run / 2, base + top / 2 + rail, side),
         slope,
         up * 0.035,
         Vector3(0, 0, 0.035),
@@ -1825,8 +1857,8 @@ def _stair_view(mut sheets: _Sheets, stair: Stair):
     # A baluster on every second tread, from the tread to the handrail.
     for k in range(0, treads, 2):  # pragma: no branch
         var x = hole.x0 + (Float32(k) + 0.5) * going
-        var foot = Float32(k + 1) * rise
-        var head = (x - hole.x0) / run * top + rail
+        var foot = base + Float32(k + 1) * rise
+        var head = base + (x - hole.x0) / run * top + rail
         sheets.wood.box(
             Vector3(x, (foot + head) / 2, side),
             Vector3(0.02, 0, 0),
@@ -1836,7 +1868,7 @@ def _stair_view(mut sheets: _Sheets, stair: Stair):
         )
     # A newel post at the foot.
     sheets.wood.box(
-        Vector3(hole.x0 - 0.05, (rail + 0.1) / 2, side),
+        Vector3(hole.x0 - 0.05, base + (rail + 0.1) / 2, side),
         Vector3(0.05, 0, 0),
         Vector3(0, (rail + 0.1) / 2, 0),
         Vector3(0, 0, 0.05),
@@ -1844,7 +1876,8 @@ def _stair_view(mut sheets: _Sheets, stair: Stair):
     )
     # Upstairs, a balustrade along the well's open side and across its
     # foot: a rail on posts, standing on the floor's edge.
-    var guard = top + RAIL_HEIGHT
+    var upper = base + top
+    var guard = upper + RAIL_HEIGHT
     var edge = hole.z1 + 0.04
     sheets.wood.box(
         Vector3(hole.x0 + run / 2, guard - 0.03, edge),
@@ -1853,27 +1886,30 @@ def _stair_view(mut sheets: _Sheets, stair: Stair):
         Vector3(0, 0, 0.04),
         OAK,
     )
-    sheets.wood.box(
-        Vector3(hole.x0 - 0.04, guard - 0.03, middle_z),
-        Vector3(0.04, 0, 0),
-        Vector3(0, 0.03, 0),
-        Vector3(0, 0, half_z),
-        OAK,
-    )
+    if not onward:
+        sheets.wood.box(
+            Vector3(hole.x0 - 0.04, guard - 0.03, middle_z),
+            Vector3(0.04, 0, 0),
+            Vector3(0, 0.03, 0),
+            Vector3(0, 0, half_z),
+            OAK,
+        )
     var posts = Int(run / 0.5)
     for k in range(posts + 1):  # pragma: no branch
         var x = hole.x0 + run * Float32(k) / Float32(posts)
         sheets.wood.box(
-            Vector3(x, top + RAIL_HEIGHT / 2, edge),
+            Vector3(x, upper + RAIL_HEIGHT / 2, edge),
             Vector3(0.025, 0, 0),
             Vector3(0, RAIL_HEIGHT / 2, 0),
             Vector3(0, 0, 0.025),
             OAK,
         )
+    if onward:
+        return
     for k in range(1, 3):  # pragma: no branch
         var z = hole.z1 - Float32(k) * (hole.z1 - hole.z0) / 3
         sheets.wood.box(
-            Vector3(hole.x0 - 0.04, top + RAIL_HEIGHT / 2, z),
+            Vector3(hole.x0 - 0.04, upper + RAIL_HEIGHT / 2, z),
             Vector3(0.025, 0, 0),
             Vector3(0, RAIL_HEIGHT / 2, 0),
             Vector3(0, 0, 0.025),
@@ -3146,14 +3182,15 @@ def stand_house(
     var half_z = parameters.depth.to(METER) / 2
     var top = parameters.story_height.to(METER) * Float32(parameters.stories)
     _walls(sheets, inside, building, parameters, top)
+    var stairs = house_stairs(building)
     var stair = house_stair(building)
     var barn = parameters.use == BARN
-    _rooms(inside, building, stair, barn)
+    _rooms(inside, building, stairs, barn)
     var glows = List[Glow]()
     if not barn:
         _dress_rooms(inside, building, stair, parameters.seed, glows)
-    if stair:
-        _stair_view(inside, stair.value())
+    for index in range(len(stairs)):
+        _stair_view(inside, stairs[index], index + 1 < len(stairs))
     var breast = house_breast(building)
     if breast:
         _breast_view(inside, building, breast.value(), glows)

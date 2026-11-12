@@ -306,7 +306,7 @@ struct VillageParameters(Copyable, Movable):
                     "brick house",
                     Length(9.0, METER),
                     Length(7.0, METER),
-                    2,
+                    3,
                     brick(),
                     BRICK_FACADE,
                     roof=Vector3(0.78, 0.66, 0.62),
@@ -670,23 +670,25 @@ def _hang_lamps(
     parameters: VillageParameters,
     houses: List[StandingHouse],
     ground: Ground,
-) raises -> NodeId:
+) raises -> Tuple[NodeId, List[NodeId]]:
     """Add a warm point light at each lamp, under one node hidden by day,
-    and return the node."""
+    and return the node and the node of each light."""
     var root = Object3D()
     root.visible = False
     var lamps = scene.add(root^)
+    var bulbs = List[NodeId]()
     for at in lamp_places(parameters, houses, ground):
         var node = Object3D()
         node.set_position(at.x, at.y, at.z)
         node.parent = lamps
         var bulb = scene.add(node^)
+        bulbs.append(bulb)
         scene.add_light(
             point_light(
                 LAMP_COLOR, bulb, LAMP_INTENSITY, PHYSICAL_DECAY, LAMP_REACH
             )
         )
-    return lamps
+    return (lamps, bulbs^)
 
 
 def _fill_pond(mut water: WaterScene, ground: Ground) raises:
@@ -739,6 +741,8 @@ struct Village(Movable):
     """The node of the lamps' lights: a light at each dwelling's door
     lantern and at each lamp post, at most `GAME_LAMPS`. It is hidden by
     day."""
+    var bulbs: List[NodeId]
+    """The node of each lamp's light, under `lamps`, in its order."""
 
     def __init__(
         out self,
@@ -817,7 +821,9 @@ struct Village(Movable):
                 parameters.scan_turn,
                 ground,
             )
-        self.lamps = _hang_lamps(scene, parameters, self.houses, ground)
+        var hung = _hang_lamps(scene, parameters, self.houses, ground)
+        self.lamps = hung[0]
+        self.bulbs = hung[1].copy()
         self.weathered = [
             looks.brick,
             looks.fieldstone,

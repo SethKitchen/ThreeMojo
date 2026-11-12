@@ -359,6 +359,9 @@ struct VillageApp(Movable):
             width,
             height,
         )
+        # A machine with time to spare draws more of the window's pixels,
+        # so a fight in motion is sharper.
+        self.game.set_dynamic(True)
         self.scene = scene^
         self.assets = assets^
         self.keys = HeldKeys(KEY_HOLD)

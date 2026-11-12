@@ -45,6 +45,7 @@ from extensions.village.house import (
     house_lot,
     house_model,
     house_stair,
+    house_stairs,
 )
 from extensions.village.house_view import (
     CREAM,
@@ -443,6 +444,26 @@ def test_a_stair_rises_through_its_well() raises:
     assert_true(more > 550)
     assert_true(more < 750)
     assert_equal(stair.meshes, plain.meshes)
+
+
+def test_a_stair_rises_through_each_story() raises:
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    var house = HouseParameters(
+        "tall house", Length(9.0, METER), Length(7.0, METER), 4, brick()
+    )
+    # The top story stands less than a riser over the third: two flights
+    # climb, and none reaches the top story's rooms.
+    var model = house_model(house)
+    model.storeys[3].elevation = Length64(5.6 + STAIR_RISE / 2, METER)
+    assert_equal(len(house_stairs(model)), 2)
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var scene = Scene()
+    var tall = stand_house(scene, assets, looks, house, model, lot, _flat())
+    # The ground floor, and for each flight its fourteen treads and the
+    # floor above around its well.
+    assert_equal(len(tall.interior.floors), 1 + 2 * 17)
+    assert_true(tall.triangles > 0)
 
 
 def test_a_brick_house_has_a_fireplace_and_a_chimney_over_it() raises:

@@ -172,7 +172,7 @@ A waiting bandit answers about one attack of the player's in three. Two answers 
 
 A bandit returns to its post when the player falls. It also returns when the player leads it more than 28 meters from its post. The dice that choose come from each bandit's seed, so a fight plays the same way each time.
 
-A fallen bandit gives 8 coins, which go into the satchel. One time in two, it also drops an herb. It lies for 10 seconds, and comes back to its post after a minute.
+A fallen bandit gives 8 coins, which go into the satchel. One time in two, it also drops an herb. It lies for 10 seconds, then goes in a cloud of dust, `VANISH_DUST`, three times a foot's, that settles in a second. `Battle.vanish_puffs` gives the dust. It comes back to its post after a minute, in a like cloud.
 
 Fighting trains the player's swordplay. Each level over 1 makes the player's blows 5 percent stronger: see [Village skills](Village-skills).
 
@@ -190,6 +190,22 @@ The module is `extensions/village/companion.mojo`. A swordswoman dressed as a ra
 
 Out of a fight, she follows the player. She walks to them from more than 3 meters, and runs from more than 7. In a fight, she faces the player's foe, and stands 6 meters from it, 70 degrees off the line from the foe to the player. So she keeps out of the way of the camera.
 
+When the player goes into a house and she is outside, she goes to its front door and in through it, then follows them inside. `follow_point` gives the point she walks to, and `Battle.doors` holds the houses' front doors.
+
+The door's jambs leave her 8 centimeters each side of its axis. When she stands farther off the axis, she walks onto it at 45 degrees first. `DOOR_LANE` is that width. A wall in her way then turns her along it to the door. Indoors, she does not stop within `DOOR_CLEAR`, 1.2 meters, of the door. She walks on in, so that the raiders behind her can come in too.
+
+When the player stands more than `CLIMB_RISE`, 1.5 meters, above her indoors, she climbs the house's stairs to them. She walks the house's way up point by point, from the foot of her own story's flight: `climb_step` gives the point. Once she climbs, she climbs on until she is within `CLIMB_REACH`, half a meter, of their height. She comes down the same way when the player stands that far below her. When the player goes out, she comes down to the foot of the stairs and out by the front door. `ally_goal` gives her goal, and `Climb` holds where she is on the stairs.
+
+Out of a fight, a raider of the party follows the player into a house, and up and down its stairs, the same way.
+
+Outdoors, she finds her way round the houses and the pond. `route_grid`, in `extensions/village/route.mojo`, lays a grid of 1-meter cells over the village. A cell is closed where a wall or a solid lot stands near its middle, or where the water is too deep to wade. When a house stands between her and the spot she walks to, `find_route` finds the shortest way over the open cells. `follow_route` then gives the furthest point of that way that she sees straight.
+
+She finds her way again each second, or when her goal moves 2 meters. Indoors, the door and the stairs give her way.
+
+Raiders on the stairs pass through each other and under the player, so a line of them does not jam a narrow flight.
+
+The pond is too deep to wade at its middle. When her straight way to her goal passes within `POND_MARGIN`, 1 meter, of the pond's edge, she walks round it. She goes first to a point that far outside the margin, on the side of the pond nearest her way. `around_pond` gives that point, and a raider walks round the pond the same way.
+
 She never strays more than 10 meters from the player. She casts at the locked target. With no lock, she casts at the nearest foe that fights within 15 meters of the player.
 
 Every 2.6 seconds, she points her sword and casts a bolt of light at a foe within 14 meters. The bolt flies at 16 meters a second, and follows its foe. It does 28 damage and 10 stamina damage. When the player's health falls below 40 percent, she heals 15 percent of it. Then she waits 15 seconds before she heals again.
@@ -204,31 +220,38 @@ Two straw dummies stand east of the start. A dummy is a post with a crossbar, a 
 
 The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these over the frame:
 
-- **The companion's assist gauge**, in the bottom left. It says `ASSIST READY` when it is full.
-- **The gauges**, in the bottom right: the stance, the health, the stamina, the limit gauge, and the special gauge as a row of points. The health turns red below a quarter. In a surge, the limit gauge turns gold, says `SURGE`, and empties as the time runs out. Through an ultimate's start-up, its name stands large in the middle of the frame, and a gold star grows at the sword hand.
-- **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
-- **The red edges.** Below `VIGNETTE_HEALTH`, 35 percent, of their health, the edges of the player's frame redden, more the nearer they are to falling. A blow that lands on the player flashes them red for 0.4 seconds. `draw_vignette` draws them.
-- **Each bandit's health and stamina**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a piercing attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under its bars.
+- **The companion's assist gauge**, in the bottom left. It says `ASSIST READY` when it is full, and the words glow gold.
+- **The gauges**, in the bottom right, on a panel of frosted glass. A line names the style and the stance, such as `SWORD  MID STANCE`, and gives the health as a large number, such as `478 / 500`. Under it are the health, the stamina, the mana for magic, and the limit gauge, then the special gauge as a row of points. The health turns red below a quarter, and the stamina turns amber below a quarter. The health's number turns red while what a blow took drains from the bar. In a surge, the limit gauge turns gold, says `SURGE`, and empties as the time runs out. Through an ultimate's start-up, its name stands large and leaning in the middle of the frame, and a gold star grows at the sword hand. The name lands larger and eases to its size.
+- **The combo**, such as `12 HITS`, on the right: the count large and leaning, and `HITS` small. Each hit pops the count, as a blow's number pops. It fades as the combo ends.
+- **The red edges.** Below `VIGNETTE_HEALTH`, 35 percent, of their health, the edges of the player's frame redden, more the nearer they are to falling. The red beats as a heart does, about 80 times a minute. A blow that lands on the player flashes them red for 0.4 seconds. `draw_vignette` draws them.
+- **Each bandit's health and stamina**, over its head, while it fights or is hurt. On each health bar, the health that a blow took stays pale for `CHIP_HOLD`, 0.45 seconds. Then it drains at `CHIP_DRAIN`, 60 percent of the bar a second. So a hit shows how much it took. The player's health bar and the target panel's show it too. `Fighter.chip` holds the health that the bar shows. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a piercing attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under its bars. A bandit captain or a knife thrower is named over its bars, small, unless it staggers or winds up a heavy attack. Where two bars would cover each other, the nearer foe's bar keeps its place. The farther one's stands over it.
 - **A dummy's stamina**, over its head, while its stamina is not full.
-- **The lock's mark**: four gold dots around the locked target's chest.
-- **The way of each blow on the player**: a red arc near the edge of the frame, toward where the blow came from. It tells the player which way to turn. It fades in `HURT_SECONDS`, 1.2 seconds. A blow that a guard blocks takes no health, so it shows no arc. `hurt_way` gives the way on the frame.
-- **The target panel**, under the compass: the locked foe's name, such as `BANDIT` or `WOLF`, and its health bar. `draw_target` writes it, and `target_name` gives the name. While a warden fights, the panel and the compass stand under the warden's bars: `hud_drop` gives how far down.
-- **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `PIERCE BREAK`. They rise and fade. They stand under `TOP_BAND`, 46 dots of the font, so they do not cross the compass or the target panel. They move down together, so they keep their order.
+- **The lock's mark**: a thin gold ring of four arcs around the locked target's chest, with a gold dot at its middle. The arcs leave gaps at the top, the foot and the two sides. A dark ring lies under the gold one, so it reads over any ground. `draw_arcs` draws each ring. The ring turns red while the locked bandit winds up a heavy attack.
+- **The way of each blow on the player**: a red crescent near the edge of the frame, toward where the blow came from. It is widest and strongest at its middle, and it tapers to nothing at its ends. It tells the player which way to turn. It fades in `HURT_SECONDS`, 1.2 seconds. A blow that a guard blocks takes no health, so it shows no arc. `hurt_way` gives the way on the frame.
+- **The target panel**, under the compass: the locked foe's name, such as `BANDIT` or `WOLF`, and its health and stamina bars. `draw_target` writes it, and `target_name` gives the name. While a warden fights, the panel and the compass stand under the warden's bars: `hud_drop` gives how far down.
+- **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `PIERCE BREAK`. They rise and fade. A word that shows, for less than `WORD_REPEAT`, 0.4 seconds, does not show again: a burst of critical blows says `CRITICAL` once. A dark ring surrounds each one, so it reads over the sky. A number is bold and leans, and a word stands upright. A critical blow's gold number glows: a faint gold halo, much bolder than the number, lies under it. A number is half again as large as a word, and a critical blow's gold number is twice as large. Each number appears 40 percent larger, `POP_GROW`, and eases back to its size over `POP_EASE`, 0.25 seconds: `pop_grow` gives how much. Its box stands larger for `POP_SECONDS`, 0.12 seconds. `popup_scale` gives the box's size. They stand under `TOP_BAND`, 46 dots of the font, so they do not cross the compass or the target panel. They move down together, so they keep their order. Two numbers that would cover each other stand one over the other. The newest stays by its fighter, and the older moves up. `stack_boxes` sets them. A number also moves up over a foe's bar, unless that would take it past the band. A number that newer numbers lift more than `POPUP_STACK`, three, of its own heights is not drawn. So a quick combo writes a short column, not a wall over the fighter.
 - **The edges of the frame**, tinted. They turn blue while the player's perfect dodge slows the foes. They turn gold through an ultimate, and red below a quarter of the player's health. A stamina recovery rings the player's feet with blue light.
+
+Each gauge is a bar that leans, on a dark plate. `draw_gauge` draws it. Its fill is shaded from light at its top to dark at its foot, and its leading edge is bright. A gauge `TICK_WIDTH`, 160 pixels, wide and `TICK_HEIGHT`, 5 pixels, tall or more has a mark at each tenth.
 
 For the styles, the combos and the raid, `draw_battle` also writes:
 
-- **The style's name**, over the gauges, and the mana for magic.
-- **The routes** of the combos that the string is on the way to, over the combo counter. `ON BEAT` shows after a press on the beat.
+- **The routes** of the combos that the string is on the way to, over the combo counter. Each is the combo's name, leaning, and a chip for each of its keys. A key's chip is gold once pressed, white for the next key, and dim after that. `ON BEAT` shows after a press on the beat.
 - **The combo book**, while it shows.
 - **The warden's bars**, at the top; **the party**, on the left; and **the zones** of the warden's attacks, in red light on the ground. See [Village raid](Village-raid#what-shows).
 - **The spells and the arrows**, as stars of light.
 
 The note over the prompt names each special as it starts, and each new stance. It says `SURGE!` when a surge begins, and `ASSIST ATTACK!` when the companion makes one. The companion's bolts are blue stars, and her assist attack's is gold. A thrown knife is a small orange star. A blow that lands bursts in sparks.
 
+A blow that lands also flashes. A star of light opens where it struck, and a ring of light grows from it. Both fade in `IMPACT_SECONDS`, 0.22 seconds.
+
+A plain blow's flash is a warm white, and a critical blow's, a finisher's or a pierce break's is gold and larger. A blow on the player flashes red. A blow that a guard blocks or parries gives a small blue flash, as steel strikes steel. `impact_color` and `impact_power` give the flash. `draw_impact` draws it.
+
+The body that a blow hurts glows white for `FLASH_SECONDS`, 0.08 seconds. Each `Body` keeps a copy of each of its materials that glows, at `FLASH_STRENGTH`, 0.12. `Body.flash` puts the copies on its skin and its clothes. `Arms.pose` calls it while `Fighter.struck_lately` holds.
+
 A swing leaves a trail of light: white for the player, gold in a surge, and orange for a bandit. A piercing attack's thrust leaves a red trail. The ultimate's spins leave a wide gold ring. A plunge rings the ground with light where it lands.
 
-Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds.
+Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade. Behind it, it fades as the square of the distance, so it is a bright streak with a faint wake. It is brightest along the path of the blade's tip, and faint by the hand. Near the blade, a thin white edge runs along its outer side, so the swing reads as a cut. After the active part, it fades away in 0.15 seconds.
 
 The game's renderer draws every surface opaque, so `draw_battle` adds the trails to the finished frame. See `extensions/village/slashes.mojo`.
 
@@ -236,7 +259,9 @@ The sword hangs at the hip until the fight starts. It is in the hand while a ban
 
 ### How a blow feels
 
-A blow that takes `HITSTOP_BLOW`, 40, of a foe's health or more all but stops the world for `HITSTOP`, 0.07 seconds. A foe is a bandit, a wolf or a warden. The world then moves at `HITSTOP_PACE`, 0.15, of its speed. A knock sounds as each blow lands, on a foe or on a dummy: see [Village walk](Village-walk#sound). `Battle.foes_health` gives the health that the foes have left, all told. A hard landing and a roll kick up dust from the ground, which settles in a second.
+A blow that takes `HITSTOP_BLOW`, 40, of a foe's health or more all but stops the world for `HITSTOP`, 0.07 seconds. A foe is a bandit, a wolf or a warden. The world then moves at `HITSTOP_PACE`, 0.15, of its speed. A knock sounds as each blow lands, on a foe or on a dummy: see [Village walk](Village-walk#sound).
+
+A strong blow shakes the camera, and narrows its field of view a moment: by `PUNCH`, 6 percent, at a finisher's shake. The view eases back as the shake dies. `Battle.foes_health` gives the health that the foes have left, all told. A hard landing and a roll kick up dust from the ground, which settles in a second.
 
 ## One frame of the fight
 

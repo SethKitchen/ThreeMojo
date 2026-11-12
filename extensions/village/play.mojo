@@ -37,6 +37,8 @@ and its animals, seen by a third-person camera.
    goes back out slowly when the wall is passed. Under a ceiling, the
    eye stays below it. It stays above the ground or the floor. The
    inside of each house further than `INSIDE_REACH` from the eye hides.
+   An eye that a wall brings within `CLOSE_EYE` of the player's head
+   hides the player's body, so it does not fill the frame.
 9. The village prepares the frame: the grass for the camera, and the
    water's clock.
 10. The weather moves on, and scales the lights and the fog: see
@@ -54,7 +56,7 @@ window, and writes the heads-up display over it: see
 from cameras.perspective_camera import PerspectiveCamera
 from controls.third_person_controls import ThirdPersonControls, yaw_of
 from core.assets import Assets
-from core.object3d import NodeId
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.animals.registry import (
     COW,
@@ -107,6 +109,7 @@ from extensions.village.gathering import (
     Gathering,
 )
 from extensions.village.battle_hud import DANGER, draw_target, hud_drop
+from extensions.village.route import ROUTE_REACH, route_grid
 from extensions.village.compass import CompassMark, clock_text, draw_compass
 from extensions.village.hud import (
     GOLD_TEXT,
@@ -208,15 +211,18 @@ from extensions.village.clothes import (
 )
 from extensions.village.quality import GameQuality, planted
 from extensions.village.scanned import CutBuilding
-from extensions.village.terrain import OPEN_SKY, Terrain
+from extensions.village.terrain import OPEN_SKY, Floor, FloorIndex, Terrain
 from extensions.village.interior import Doorway
 from extensions.village.village import Village, VillageParameters
 from extensions.water.pebbles import PebbleBed
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from render.framebuffer import Framebuffer
+from render.framebuffer import Color, Framebuffer
+from render.tasks import TaskGroup
 from render.game_smooth import smooth_edges
 from render.game_upscale import upscale_into
-from renderers.game_renderer import FULL_SHADOWS, GameRenderer
+from renderers.game_renderer import FULL_SHADOWS, GAME_LAMPS, GameRenderer
+from lights.light import PHYSICAL_DECAY, point_light
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, exp, isinf, sin, sqrt
 from std.time import perf_counter_ns
@@ -270,8 +276,51 @@ comptime INSIDE_REACH = Float32(18)
 drawn, in meters."""
 comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
+comptime HEART_RATE = Float32(8.4)
+"""How fast the red of a player near falling beats, in radians a second:
+about 80 beats a minute."""
+comptime HEART_DEPTH = Float32(0.25)
+"""How much of the red of a player near falling each beat takes away."""
+comptime DYNAMIC_BUDGET_MS = Float64(33.3)
+"""The time a frame may take before its size shrinks, in milliseconds: 30
+frames a second."""
+comptime DYNAMIC_ROOM = Float64(0.75)
+"""The share of the budget a frame must stay under to count as quick."""
+comptime DYNAMIC_QUICK = 30
+"""How many quick frames in a row grow the frame's size by a step."""
+comptime DYNAMIC_STEP = Float32(0.04)
+"""How much of the window's width a step adds to the frame, or takes."""
+comptime DYNAMIC_FLOOR = Float32(0.12)
+"""How much less of the window than the quality's share the frame can be
+drawn at, while frames are slow: a smooth frame shows motion more clearly
+than a sharp one that judders."""
+comptime DYNAMIC_LEAST = Float32(0.25)
+"""The least share of the window the frame is drawn at."""
+comptime DYNAMIC_REACH = Float32(0.24)
+"""How much more of the window than the quality's share the frame can be
+drawn at."""
+comptime CLOSE_EYE = Float32(1.2)
+"""How near the player's head, in meters, the camera's eye can come before
+the player's body hides: nearer, the head and the shoulders fill the
+frame."""
 comptime SHAKEN = Float32(1.0e-3)
 """A camera's shake of less than this, in meters, is not seen."""
+comptime LANTERN_COLOR = Color(255, 205, 150)
+"""The color of the lantern's light that follows the player by night."""
+comptime LANTERN_INTENSITY = Float32(5)
+"""How bright the player's lantern burns, as a point light's intensity:
+a little less than a lamp's."""
+comptime LANTERN_REACH = Float32(10)
+"""How far the player's lantern lights, in meters."""
+comptime LANTERN_HEIGHT = Float32(3)
+"""How high over the player's feet the lantern's light stands, in
+meters."""
+comptime PUNCH = Float32(0.06)
+"""The share by which a finisher's shake narrows the camera's field of
+view."""
+comptime PUNCH_SHAKE = Float32(0.12)
+"""The shake, in meters, at which the view narrows by `PUNCH` in full: a
+finisher's."""
 comptime SPECIALTY_MIGHT = Float32(0.1)
 """How much stronger the player's blows are in the style they specialize
 in."""
@@ -282,6 +331,8 @@ comptime FOE_SIGHT = Float32(60)
 """How near a foe must be for the compass to point to it, in meters."""
 comptime SILVER_MARK = Rgb(200, 205, 215)
 """The color of the compass's mark at an errand taken."""
+comptime WARDEN_MARK = Rgb(175, 110, 255)
+"""The color of the compass's mark at a raid's warden that stands."""
 comptime GRIMACE = Float32(0.5)
 """How long the player's face holds what a move shows, in seconds."""
 comptime WINDED = Float32(0.6)
@@ -289,6 +340,20 @@ comptime WINDED = Float32(0.6)
 comptime ARM_EASE = Float32(3)
 """How fast the eye goes back out once a wall is passed: each second it
 closes all but `exp(-ARM_EASE)` of its gap."""
+
+
+def shows_player(eye: Vector3, focus: Vector3) -> Bool:
+    """Return whether the camera's eye stands far enough from the player's
+    head to show the player's body.
+
+    Args:
+        eye: Where the camera's eye is.
+        focus: What it looks at: the player's head.
+
+    Returns:
+        True if the eye is `CLOSE_EYE` or more from the focus.
+    """
+    return (eye - focus).length() >= CLOSE_EYE
 
 
 def trunks_reach(
@@ -650,6 +715,10 @@ struct VillageGame(Movable):
     var player: Character
     var view: ThirdPersonControls
     var camera: PerspectiveCamera
+    # The camera's field of view while no blow tightens it.
+    var wide: Angle
+    # The node of the lantern's light that follows the player by night.
+    var lantern: NodeId
     var trees: List[Obstacle]
     # The ground, the houses' walls and floors, and the solid lots.
     var terrain: Terrain
@@ -701,8 +770,15 @@ struct VillageGame(Movable):
     var width: Int
     var height: Int
     var fast: GameRenderer
+    # Whether the frame's size follows the time a frame takes: see
+    # `adapt_scale`. Off unless the host turns it on.
+    var dynamic: Bool
+    # The share of the window the frame is drawn at now, and how many
+    # quick frames in a row have been drawn at it.
+    var scale: Float32
+    var quick: Int
     # How long the last frame's draw, its water, the smoothing of its edges
-    # and its stretch took, in milliseconds.
+    # and its stretch and sharpening took, in milliseconds.
     var render_ms: Float64
     var water_ms: Float64
     var smooth_ms: Float64
@@ -776,6 +852,9 @@ struct VillageGame(Movable):
         self.width = width
         self.height = height
         self.fast = GameRenderer(size[0], size[1], EXPOSURE)
+        self.dynamic = False
+        self.scale = self.quality.render_scale
+        self.quick = 0
         self.fast.sky_step = self.quality.sky_step
         # The houses' brick, plaster, wood and tiles show at each pixel.
         self.fast.pixel_maps = True
@@ -801,8 +880,11 @@ struct VillageGame(Movable):
         self.reach = 1
         # Each house's front door: the villagers' homes.
         var homes = List[Doorway]()
+        # And the way up each one's stairs, to bed by night.
+        var climbs = List[List[Vector3]]()
         for index in range(len(self.village.houses)):
             homes.append(self.village.houses[index].interior.front_door())
+            climbs.append(self.village.houses[index].interior.climb.copy())
         # The residents' points keep off the buildings and the props.
         var keep_off = field.lots.copy()
         keep_off.extend(self.village.props.lots.copy())
@@ -814,6 +896,7 @@ struct VillageGame(Movable):
             keep_off,
             homes,
             prop_stops(parameters.village.props),
+            climbs,
         )
         self.body = Body(
             scene,
@@ -825,6 +908,9 @@ struct VillageGame(Movable):
             speaks=parameters.residents.faces,
             seed=1,
         )
+        # The camera is close to the player: their skirt keeps out of
+        # their legs.
+        self.body.keep_hems(scene, assets)
         self.player = Character(
             player_movement(),
             parameters.start_x,
@@ -844,6 +930,18 @@ struct VillageGame(Movable):
             parameters.residents.triangles,
             parameters.residents.detail,
         )
+        # The fighters near the camera keep their skirts out of their
+        # legs too.
+        self.battle.keep_hems(scene, assets)
+        # The companion goes into a house by its front door.
+        self.battle.set_doors(homes.copy(), climbs.copy())
+        # She and the raiders find their ways round the houses and the pond.
+        var grid = route_grid(
+            self.terrain,
+            self.player.parameters.wade_depth.to(METER),
+            ROUTE_REACH,
+        )
+        self.battle.set_grid(grid^)
         self.village.meadow.grass_wind_every = self.quality.grass_wind_every
         # A still shadow map is drawn once, and the grass changes as the
         # player walks, so only full shadows take the grass.
@@ -855,6 +953,20 @@ struct VillageGame(Movable):
         self.face_reach = face_reach(size[1], parameters.field_of_view)
         self.talker = -1
         self.view = ThirdPersonControls(parameters.heading)
+        self.wide = parameters.field_of_view
+        # A lantern's light follows the player by night: see `tick`.
+        var holder = Object3D()
+        holder.visible = False
+        self.lantern = scene.add(holder^)
+        scene.add_light(
+            point_light(
+                LANTERN_COLOR,
+                self.lantern,
+                LANTERN_INTENSITY,
+                PHYSICAL_DECAY,
+                LANTERN_REACH,
+            )
+        )
         self.camera = PerspectiveCamera(
             parameters.field_of_view,
             Float32(width) / Float32(height),
@@ -1135,6 +1247,8 @@ struct VillageGame(Movable):
             people.append(self.residents.people[index].position)
         for index in range(len(self.residents.beasts)):
             people.append(self.residents.beasts[index].character.position)
+        # The companion and the raiders open the doors too.
+        people.extend(self.battle.friends())
         # A door the camera looks through stays open too: points along the
         # last frame's sight hold it, at the height of the player's feet.
         var sight = self.camera.position
@@ -1217,12 +1331,20 @@ struct VillageGame(Movable):
             Length(self.terrain.view_ceiling(focus, eye, feet.y), METER),
             self.reach,
         )
+        # An eye that a wall brings in close hides the player's body.
+        scene.node(self.body.carrier).visible = shows_player(
+            self.camera.position, self.view.focus
+        )
         # A strong blow shakes the camera, and what it looks at with it.
         var jolt = self.battle.shake
         if jolt > SHAKEN:
             var t = self.clock * 47
             var off = Vector3(sin(t) * jolt, cos(t * 1.3) * jolt * 0.7, 0)
             self.camera.place(self.camera.position + off, self.view.focus + off)
+        # It tightens the view a moment too, and the view eases back as the
+        # shake dies: a finisher's shake narrows it by `PUNCH` in full.
+        var punch = min(Float32(1), jolt / PUNCH_SHAKE) * PUNCH
+        self.camera.fov = Angle(self.wide.to(DEGREE) * (1 - punch), DEGREE)
         # The player's face shows the fight, and each face near the camera
         # moves.
         player_mood(self.body.life, self.battle.fighter)
@@ -1241,6 +1363,25 @@ struct VillageGame(Movable):
         ref eye_at = self.camera.position
         scene.node(self.village.props.lit).visible = lamps
         scene.node(self.village.lamps).visible = lamps
+        # By night a lantern's light follows the player, so a fight can be
+        # seen. When the lamps take every light the renderer draws, it
+        # takes the light of the lamp farthest from the camera.
+        scene.node(self.lantern).visible = lamps
+        ref held = self.player.position
+        scene.node(self.lantern).set_position(
+            held.x, held.y + LANTERN_HEIGHT, held.z
+        )
+        var spare = -1
+        if len(self.village.bulbs) >= GAME_LAMPS:
+            var farthest = Float32(-1)
+            for k in range(len(self.village.bulbs)):  # pragma: no branch
+                var p = scene.node(self.village.bulbs[k]).position
+                var d = (p - self.camera.position).length()
+                if d > farthest:
+                    farthest = d
+                    spare = k
+        for k in range(len(self.village.bulbs)):
+            scene.node(self.village.bulbs[k]).visible = k != spare
         scene.node(self.village.props.daylit).visible = not lamps
         for index in range(len(self.village.houses)):
             ref house = self.village.houses[index]
@@ -1252,6 +1393,10 @@ struct VillageGame(Movable):
             var near = house.radius + INSIDE_REACH
             scene.node(house.inside).visible = dx * dx + dz * dz < near * near
         scene.update()
+        # The player's skirt rides over their legs as the bones now stand,
+        # and so do the skirts of the fighters nearest the camera.
+        _ = self.body.push_hems(scene, assets)
+        _ = self.battle.push_hems(scene, assets, self.camera.position)
         self.clock += delta.to(SECOND)
         self.ripple_pond(scene, delta)
         self.hear(delta)
@@ -1356,6 +1501,8 @@ struct VillageGame(Movable):
     def follow_sun(mut self, mut scene: Scene) raises:
         """Turn the sun, or the moon, to the hour, once it has moved
         `SUN_STEP` degrees: its light, its shadows and the water's glints.
+        The scene is updated again once the sun has moved, so the frame
+        can read its world matrix.
 
         Args:
             scene: The scene: the sun's node is moved.
@@ -1375,6 +1522,9 @@ struct VillageGame(Movable):
         scene.node(self.village.meadow.sun.node).set_position(
             toward.x * 100, toward.y * 100, toward.z * 100
         )
+        # The frame reads the sun's world matrix to draw its shadows: it
+        # moved after the frame's update, so the scene is updated again.
+        scene.update()
         self.fast.refresh_shadows()
         self.village.water.set_sun(toward)
 
@@ -1400,16 +1550,36 @@ struct VillageGame(Movable):
         inverse.multiply(self.camera.view_matrix())
         inverse.invert()
         var under = List[Bool](length=w * h, fill=False)
-        for y in range(h):  # pragma: no branch
-            var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
-            for x in range(w):  # pragma: no branch
-                var z = image.depth[y * w + x]
-                if isinf(z):
-                    continue
-                var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
-                var at = inverse.transform_point(Vector3(nx, ny, z))
-                var ceiling = self.terrain.ceiling_over(at.x, at.z, at.y)
-                under[y * w + x] = at.y < ceiling
+        # The floors sorted into cells, and the rows shared over every
+        # core: a pixel tests only the floors over its point.
+        var index = FloorIndex(self.terrain.floors)
+        var tasks = max(1, min(available_workers() * 2, h))
+        var group = TaskGroup()
+        for t in range(tasks):  # pragma: no branch
+            group.create_task(
+                _shelter_task(
+                    image.depth.unsafe_ptr()
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    under.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    w,
+                    h,
+                    Pointer(to=inverse)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=index)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=self.terrain.floors)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    t * h // tasks,
+                    (t + 1) * h // tasks,
+                )
+            )
+        group.wait()
+        _ = inverse
+        _ = len(index.members)
         return under^
 
     def veil(self, mut image: Framebuffer, scene: Scene, day: Float32) raises:
@@ -1484,6 +1654,55 @@ struct VillageGame(Movable):
         for at in self.gathering.biting(scene):
             self.village.splash(at.x, at.z, Length(0.15, METER), 0.03)
 
+    def set_dynamic(mut self, on: Bool):
+        """Let the frame's size follow the time a frame takes, or keep it at
+        the quality's: see `adapt_scale`.
+
+        Args:
+            on: Whether the size follows the time.
+        """
+        self.dynamic = on
+
+    def adapt_scale(mut self, frame_ms: Float64) raises:
+        """Draw more of the window's pixels while frames are quick, and fewer
+        once one is slow, so a fast machine shows a sharper frame.
+
+        After `DYNAMIC_QUICK` frames in a row under `DYNAMIC_ROOM` of
+        `DYNAMIC_BUDGET_MS`, the share of the window the frame is drawn at
+        grows by `DYNAMIC_STEP`, to the quality's `render_scale` and
+        `DYNAMIC_REACH` more at the most. A frame over the budget shrinks
+        it by a step, to `DYNAMIC_FLOOR` less than the quality's at the
+        least, and never under `DYNAMIC_LEAST`. With `dynamic` off, nothing
+        changes.
+
+        Args:
+            frame_ms: How long the frame just drawn took, in milliseconds.
+
+        Raises:
+            Error: Never: the size is always positive.
+        """
+        if not self.dynamic:
+            return
+        var base = self.quality.render_scale
+        var top = min(Float32(1), base + DYNAMIC_REACH)
+        var least = max(DYNAMIC_LEAST, base - DYNAMIC_FLOOR)
+        var was = self.scale
+        if frame_ms > DYNAMIC_BUDGET_MS:
+            self.quick = 0
+            self.scale = max(least, self.scale - DYNAMIC_STEP)
+        elif frame_ms < DYNAMIC_BUDGET_MS * DYNAMIC_ROOM:
+            self.quick += 1
+            if self.quick >= DYNAMIC_QUICK:
+                self.quick = 0
+                self.scale = min(top, self.scale + DYNAMIC_STEP)
+        else:
+            self.quick = 0
+        if self.scale != was:
+            self.fast.resize(
+                max(1, Int(Float32(self.width) * self.scale + 0.5)),
+                max(1, Int(Float32(self.height) * self.scale + 0.5)),
+            )
+
     def render(mut self, scene: Scene, assets: Assets) raises:
         """Draw the frame that `tick` prepared into `window`.
 
@@ -1510,6 +1729,13 @@ struct VillageGame(Movable):
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
         self._finish(scene, assets, image, began, perf_counter_ns(), False)
+        self.adapt_scale(
+            self.render_ms
+            + self.water_ms
+            + self.smooth_ms
+            + self.upscale_ms
+            + self.weather_ms
+        )
 
     def prepare_gpu(
         mut self, scene: Scene, assets: Assets, passes: Bool = False
@@ -1636,6 +1862,8 @@ struct VillageGame(Movable):
             puffs.extend(
                 dust_puffs(self.dust_at, self.clock, self.dust_since, 7)
             )
+            # A fallen foe goes in a puff of dust.
+            puffs.extend(self.battle.vanish_puffs(self.clock))
             _ = draw_puffs(image, puffs, self.camera, light)
             self.veil(image, scene, day)
             covered = perf_counter_ns()
@@ -1658,7 +1886,11 @@ struct VillageGame(Movable):
             swap(self.window, image)
         else:
             var smoothed = perf_counter_ns()
-            upscale_into(image, self.window, available_workers())
+            # The stretch softens each edge: it sharpens back what it
+            # took as it writes the window.
+            upscale_into(
+                image, self.window, available_workers(), self.quality.sharpness
+            )
             self.upscale_ms = Float64(perf_counter_ns() - smoothed) / 1.0e6
         var raining = perf_counter_ns()
         # No rain falls before an eye under a roof.
@@ -1722,7 +1954,8 @@ struct VillageGame(Movable):
 
     def vignette(self) -> Float32:
         """Return how red the frame's edges are: the more, the nearer the
-        player is to falling, and in a flash as a blow lands.
+        player is to falling, and in a flash as a blow lands. The red of a
+        player near falling beats, `HEART_DEPTH` deep, at `HEART_RATE`.
 
         Returns:
             From 0 to 1.
@@ -1730,6 +1963,9 @@ struct VillageGame(Movable):
         ref f = self.battle.fighter
         var share = f.health / max(Float32(1), f.parameters.health)
         var low = max(Float32(0), (VIGNETTE_HEALTH - share) / VIGNETTE_HEALTH)
+        # Near falling, the red beats as a heart does.
+        var beat = 0.5 + 0.5 * sin(self.clock * HEART_RATE)
+        low *= 1 - HEART_DEPTH * beat
         var flash = Float32(0)
         for hurt in self.battle.hurts:
             flash = max(flash, max(Float32(0), 1 - hurt.age / 0.4) * 0.6)
@@ -1859,6 +2095,13 @@ struct VillageGame(Movable):
                     self.battle.foes[nearest].character.position, DANGER
                 )
             )
+        # Each warden that stands, so the player can find a raid.
+        for index in range(len(self.battle.wardens)):
+            ref warden = self.battle.wardens[index]
+            if not warden.boss.defeated():
+                marks.append(
+                    CompassMark(warden.character.position, WARDEN_MARK)
+                )
         return marks^
 
     def prompt(self) -> String:
@@ -1876,3 +2119,28 @@ struct VillageGame(Movable):
         return use_prompt(
             g.spot.kind, g.strikes, g.phase, self.gathering.ore_strikes
         )
+
+
+__async def _shelter_task(
+    depth: Pointer[Float32, ImmutAnyOrigin],
+    under: MutPointer[Bool, MutAnyOrigin],
+    w: Int,
+    h: Int,
+    inverse: Pointer[Matrix4, ImmutAnyOrigin],
+    index: Pointer[FloorIndex, ImmutAnyOrigin],
+    floors: Pointer[List[Floor], ImmutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Mark which pixels of rows `first` to `past` show a point under a
+    roof."""
+    for y in range(first, past):  # pragma: no branch
+        var ny = 1 - (Float32(y) + 0.5) / Float32(h) * 2
+        for x in range(w):  # pragma: no branch
+            var z = depth[unsafe_offset=y * w + x]
+            if isinf(z):
+                continue
+            var nx = (Float32(x) + 0.5) / Float32(w) * 2 - 1
+            var at = inverse[].transform_point(Vector3(nx, ny, z))
+            var ceiling = index[].ceiling_over(floors[], at.x, at.z, at.y)
+            under[unsafe_offset=y * w + x] = at.y < ceiling

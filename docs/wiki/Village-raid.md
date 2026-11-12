@@ -10,7 +10,7 @@ The Stone Warden is a giant who keeps a ring of standing stones behind the villa
 
 The modules are `extensions/village/boss.mojo` for the rules, `extensions/village/party.mojo` for the raiders' minds, and `extensions/village/raid.mojo` for the scene. `extensions/village/battle.mojo` runs the fight.
 
-1. The raiders wait at the stones. When the player comes within 30 meters of them, they join the party, and the note says `THE RAIDERS JOIN YOUR PARTY`. They go back when the player is further than 60 meters from them.
+1. The raiders wait at the stones. When the player comes within 30 meters of them, they join the party, and the note says `THE RAIDERS JOIN YOUR PARTY`. They go back when the player is further than 80 meters from them. So they follow the player into the houses of two stories, and up their stairs.
 2. The warden stands at home until a member comes within 16 meters, or strikes it. Then it walks to its target and makes the attacks of its phase, in turn.
 3. Each attack lays its zone on the ground in red light. The zone fills from its middle as the attack winds up, and strikes every member in it as the fill reaches its edge.
 4. The warden goes home and heals when every member has fallen, or when the party leads it further than 45 meters from home.
@@ -116,8 +116,8 @@ The fallen warden gives 60 coins, 3 herbs, and 400 experience to the style the p
 
 `extensions/village/raid_hud.mojo` draws these parts over the frame:
 
-- **The warden's bars**, at the top: its name, its health, its poise, its phase or `STAGGERED`, and the time to its enrage. While a linked strike is ready, `HEAVY: LINKED STRIKE` shows under them.
-- **The party**, on the left: each raider's role and health, or `DOWN` and how far a revive has gone.
+- **The warden's bars**, at the top: its name, its health, its poise, its phase or `STAGGERED`, and the time to its enrage. While a linked strike is ready, `HEAVY: LINKED STRIKE` shows under them. On its health bar, what a blow took stays pale a moment, then drains, as on every bar of health.
+- **The party**, on the left, on a glass panel: each raider's role and health, or `DOWN` and how far a revive has gone. What a blow took stays pale on a raider's bar, then drains. A number of a blow does not stand over the panel: it moves up clear of it, or is not drawn.
 - **The zones and the mark**, on the ground: see above.
 
 ## In a game of many players

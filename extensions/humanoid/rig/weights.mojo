@@ -560,6 +560,16 @@ def _forearm(joint: Int) -> Bool:
     )
 
 
+def _arm_side(joint: Int) -> Int:
+    """Return 1 for a joint of the right arm, 2 for one of the left arm,
+    and 0 for any other."""
+    if _same_arm(joint, RIGHT_UPPER_ARM.value):
+        return 1
+    if _same_arm(joint, LEFT_UPPER_ARM.value):
+        return 2
+    return 0
+
+
 def _same_arm(a: Int, b: Int) -> Bool:
     """Return True if two joints are both of one arm: its upper arm, its
     forearm or its hand."""
@@ -595,8 +605,8 @@ def part_arms(
     to a joint of one arm and another to a joint not of that arm, and
     either the arm's corner is given to its forearm or its hand, or the
     other corner lies below the armpit. The skin over the shoulder joins
-    the arm above the armpit, so it stays. Each hole the slit opens, in
-    the arm or in the trunk, is closed: see `close_holes`. Weigh the skin
+    the arm above the armpit, so it stays. The slit's hole is closed on
+    the arm and on the trunk, each alone: see `close_holes`. Weigh the skin
     after, with `skin_weights`, so no weight passes over the slit.
 
     Args:
@@ -640,7 +650,12 @@ def part_arms(
             kept.append(skin.index[t + c])
     skin.index = kept^
     if dropped > 0:
-        close_holes(skin, cut)
+        # The slit's hole runs down the arm and back up the trunk: close
+        # each side alone, so no fan joins them again.
+        var sides = List[Int](capacity=len(most))
+        for owner in most:  # pragma: no branch
+            sides.append(_arm_side(owner))
+        close_holes(skin, cut, sides)
     return dropped
 
 
@@ -658,6 +673,12 @@ def keep_arms_off(
     an arm's, in their shares, and they add up to one again. A vertex that
     held no other weight keeps its own.
 
+    A vertex whose every neighbor `part_arms` gives to one arm is that
+    arm's, wherever it lies. `close_holes` closes the slit along an arm by
+    a fan round the slit's middle, which can lie nearer the hip than the
+    arm: if the hip kept that vertex, the fan would stay at the hip as the
+    arm rose, and stretch into a web.
+
     Args:
         skin: A skin with `skinIndex` and `skinWeight`, in the pelvis
             frame.
@@ -671,12 +692,28 @@ def keep_arms_off(
     ref points = skin.attribute_view(String(POSITION))
     var bones = skin.clone_attribute(String(SKIN_INDEX))
     var weights = skin.clone_attribute(String(SKIN_WEIGHT))
-    for v in range(points.count()):  # pragma: no branch
+    var count = points.count()
+    var owners = List[Int](capacity=count)
+    for v in range(count):  # pragma: no branch
+        owners.append(_side_owner(skin, rig, v))
+    # The arm a vertex's every neighbor is given to, or -1: -2 for a vertex
+    # with no neighbor yet.
+    var ring = List[Int](length=count, fill=-2)
+    for t in range(0, len(skin.index) - 2, 3):  # pragma: no branch
+        for c in range(3):  # pragma: no branch
+            var v = skin.index[t + c]
+            for d in range(1, 3):  # pragma: no branch
+                var other = owners[skin.index[t + (c + d) % 3]]
+                if ring[v] == -2:
+                    ring[v] = other if _same_arm(other, other) else -1
+                elif ring[v] >= 0 and not _same_arm(ring[v], other):
+                    ring[v] = -1
+    for v in range(count):  # pragma: no branch
         var p = points.vector3(v)
         if p.y >= armpit:
             continue
-        var best = _side_owner(skin, rig, v)
-        if _same_arm(best, best):
+        var best = owners[v]
+        if _same_arm(best, best) or ring[v] >= 0:
             continue
         var kept = Float32(0)
         for k in range(4):  # pragma: no branch
@@ -694,7 +731,11 @@ def keep_arms_off(
     skin.set_attribute(String(SKIN_WEIGHT), weights^)
 
 
-def close_holes(mut skin: BufferGeometry, touched: List[Bool]) raises:
+def close_holes(
+    mut skin: BufferGeometry,
+    touched: List[Bool],
+    sides: List[Int] = List[Int](),
+) raises:
     """Close each hole of an indexed mesh whose edge passes a touched
     vertex, by a fan of triangles round a new vertex at its middle.
 
@@ -705,14 +746,26 @@ def close_holes(mut skin: BufferGeometry, touched: List[Bool]) raises:
     triangle runs the other way round its edge from the triangle that
     has it, so it faces the same way.
 
+    A slit cut between two parts, as between an arm and the trunk, opens
+    one hole: its edge runs down one part and back up the other. One fan
+    would join the parts again. So where `sides` gives the loop's
+    vertices more than one side, the loop is cut into runs of one side
+    each, and each run of three vertices or more is closed alone, by a
+    fan round its own middle. The edge from a run's last vertex back to
+    its first stays open.
+
     Args:
         skin: An indexed mesh.
         touched: Per vertex, whether a hole there is closed.
+        sides: Per vertex, the part it is on; empty for one part.
 
     Raises:
-        Error: If the mesh has no positions.
+        Error: If the mesh has no positions, or `sides` is given and
+            does not have one side per vertex.
     """
     var count = skin.attribute_view(String(POSITION)).count()
+    if len(sides) != 0 and len(sides) != count:
+        raise Error("A mesh's sides must give one side per vertex")
     # Each edge's count of triangles, and the way round the one triangle
     # that has a lone edge goes.
     var uses = Dict[Int, Int]()
@@ -751,15 +804,44 @@ def close_holes(mut skin: BufferGeometry, touched: List[Bool]) raises:
         # Where two holes meet at one vertex, a walk can end off its start.
         if v != start:
             continue
-        for k in range(len(names)):  # pragma: no branch
-            data[k].extend(_mean(data[k], sizes[k], loop, names[k]))
-        for i in range(len(loop)):  # pragma: no branch
-            skin.index.append(loop[i])
-            skin.index.append(loop[(i + 1) % len(loop)])
-            skin.index.append(made)
-        made += 1
+        for run in _runs(loop, sides):  # pragma: no branch
+            for k in range(len(names)):  # pragma: no branch
+                data[k].extend(_mean(data[k], sizes[k], run, names[k]))
+            for i in range(len(run)):  # pragma: no branch
+                skin.index.append(run[i])
+                skin.index.append(run[(i + 1) % len(run)])
+                skin.index.append(made)
+            made += 1
     for k in range(len(names)):  # pragma: no branch
         skin.set_attribute(names[k], BufferAttribute(data[k].copy(), sizes[k]))
+
+
+def _runs(loop: List[Int], sides: List[Int]) -> List[List[Int]]:
+    """Return the runs of a hole's loop to close alone: the whole loop when
+    it is all on one side, or else each run of one side of three vertices
+    or more, in the loop's order."""
+    var runs = List[List[Int]]()
+    var n = len(loop)
+    var first = -1
+    if len(sides) != 0:
+        for i in range(n):  # pragma: no branch
+            if sides[loop[i]] != sides[loop[(i + n - 1) % n]]:
+                first = i
+                break
+    if first < 0:
+        runs.append(loop.copy())
+        return runs^
+    var run = List[Int]()
+    for k in range(n):  # pragma: no branch
+        var v = loop[(first + k) % n]
+        if len(run) > 0 and sides[v] != sides[run[0]]:
+            if len(run) >= 3:
+                runs.append(run.copy())
+            run.clear()
+        run.append(v)
+    if len(run) >= 3:
+        runs.append(run^)
+    return runs^
 
 
 def _mean(

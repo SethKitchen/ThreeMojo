@@ -28,6 +28,8 @@ from extensions.village.combat import (
     FighterParameters,
 )
 from extensions.village.slashes import (
+    IMPACT_SECONDS,
+    Impact,
     PIERCE_TRAIL,
     PLAYER_TRAIL,
     SPARKS,
@@ -35,6 +37,7 @@ from extensions.village.slashes import (
     Sparks,
     Trail,
     arc_points,
+    draw_impact,
     draw_ring,
     draw_wave,
     glow_ribbon,
@@ -266,6 +269,55 @@ def test_a_star_of_light_is_brightest_at_its_middle() raises:
     assert_true(frame.pixels[middle] > frame.pixels[ray])
     # Between two rays, past their waists, it is dark.
     assert_equal(Int(frame.pixels[(23 * 40 + 29) * 4]), 0)
+
+
+def test_a_blow_flashes_and_rings_then_fades() raises:
+    var eye = Vector3(0, 1.5, 0)
+    var camera = _camera(eye)
+    var look = Vector3(0, -0.3, 4) / Vector3(0, -0.3, 4).length()
+    var at = Vector3(0, 1.2, 4)
+    var white = Vector3(255, 235, 190)
+    var lights = List[Int]()
+    for age in [Float32(0), IMPACT_SECONDS / 2, IMPACT_SECONDS * 0.9]:
+        var frame = Framebuffer(64, 64, Color(0, 0, 0))
+        draw_impact(frame, camera, look, Impact(at, white, 1, age))
+        lights.append(_light(frame))
+    # It is brightest as the blow lands, and dims as it fades.
+    assert_true(lights[0] > 0)
+    assert_true(lights[0] > lights[2])
+    assert_true(lights[1] > lights[2])
+    # A stronger blow's flash is larger.
+    var strong = Framebuffer(64, 64, Color(0, 0, 0))
+    draw_impact(strong, camera, look, Impact(at, white, 2, 0))
+    assert_true(_light(strong) > lights[0])
+    # A done impact, one behind the camera and one not yet begun are not
+    # drawn.
+    for impact in [
+        Impact(at, white, 1, IMPACT_SECONDS),
+        Impact(eye - Vector3(0, 0, 2), white, 1, 0),
+        Impact(at, white, 1, -1),
+    ]:
+        var none = Framebuffer(64, 64, Color(0, 0, 0))
+        draw_impact(none, camera, look, impact)
+        assert_equal(_light(none), 0)
+
+
+def test_a_ribbon_has_a_white_edge() raises:
+    var camera = _camera(Vector3(0, 1.5, 0))
+    var look = Vector3(0, -0.3, 4) / Vector3(0, -0.3, 4).length()
+    # A flat ribbon across the view: inner corners low, outer ones high.
+    var corners = List[Vector3]()
+    for k in range(3):
+        var x = Float32(k) * 0.5 - 0.5
+        corners.append(Vector3(x, 1.0, 4))
+        corners.append(Vector3(x, 1.6, 4))
+    var frame = Framebuffer(64, 64, Color(0, 0, 0))
+    glow_ribbon(frame, camera, look, corners, [1, 1, 1], PIERCE_TRAIL)
+    # The red trail's outer edge is lit white: green and blue light it
+    # too, where the trail's own light has none of them.
+    var top = camera.project(Vector3(0, 1.57, 4), 64, 64)
+    var at = (Int(top.y) * 64 + Int(top.x)) * 4
+    assert_true(frame.pixels[at + 1] > 100)
 
 
 def test_a_wave_stands_as_an_arch_of_light() raises:

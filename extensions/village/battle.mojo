@@ -117,6 +117,7 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     STAMINA_BREAK,
+    StrikeOutcome,
     AIMED_SHOT,
     ARROW_RAIN,
     HEAVY_BUTTON,
@@ -242,6 +243,7 @@ from extensions.village.boss import (
     rock_blow,
 )
 from extensions.village.party import (
+    FOLLOW_GAP,
     HEALER,
     MEND_BELOW,
     TANK,
@@ -268,14 +270,26 @@ from extensions.village.raid import (
     stone_places,
 )
 from extensions.village.boss import Boss, BOSS_WALK
+from extensions.village.route import (
+    Route,
+    RouteGrid,
+    follow_route,
+    no_route,
+)
 from extensions.village.companion import (
+    FOLLOW,
     ASSIST_PER_HIT,
     AllySight,
     Companion,
     MEND_SHARE,
     assist_blow,
+    Climb,
+    ally_goal,
+    around_pond,
     default_allies,
+    no_climb,
 )
+from extensions.village.interior import Doorway
 from extensions.village.foes import (
     POSTED,
     RETURNING,
@@ -306,16 +320,19 @@ from extensions.village.skills import (
     DEFEAT_EXPERIENCE,
     PRACTICE_EXPERIENCE,
 )
+from extensions.village.puffs import Puff, dust_puffs
 from extensions.village.slashes import (
     FOE_TRAIL,
+    IMPACT_SECONDS,
     OVER_TRAIL,
     PLAYER_TRAIL,
+    Impact,
     Sparks,
     Trail,
     slash_material,
 )
 from extensions.village.surfaces import HouseLooks
-from extensions.village.terrain import Terrain
+from extensions.village.terrain import OPEN_SKY, Terrain
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -414,6 +431,17 @@ comptime CHEST = Float32(1.3)
 """How high over a fighter's feet a blow's sparks burst, in meters."""
 comptime POPUP_SECONDS = Float32(0.9)
 """How long a number or a word shows over a fighter, in seconds."""
+comptime WORD_REPEAT = Float32(0.4)
+"""How long, in seconds, a blow's word that shows keeps the same word from
+showing again."""
+comptime BACK_LONG_AGO = Float32(1.0e6)
+"""How long ago, in seconds, a foe that has stood at its post since the
+fight began came back to it."""
+comptime VANISH_DUST = Float32(3)
+"""How large the dust of a fallen foe that goes is, as times a foot's."""
+comptime HEM_NEAR = Float32(6)
+"""How near the camera, in meters, a fighter must be to keep their skirt
+out of their legs."""
 comptime POPUP_RISE = Float32(0.9)
 """How fast a number or a word rises, in meters a second."""
 comptime ENGAGE = Float32(10)
@@ -699,6 +727,57 @@ struct Hurt(Copyable, Movable):
     var age: Float32
 
 
+comptime HIT_FLASH = Vector3(255, 235, 190)
+"""The light of a plain blow's flash, as sRGB bytes."""
+comptime CRITICAL_FLASH = Vector3(255, 190, 70)
+"""The light of a critical blow's flash."""
+comptime HURT_FLASH = Vector3(255, 80, 55)
+"""The light of the flash of a blow on the player."""
+comptime CLANG_FLASH = Vector3(170, 210, 255)
+"""The light of the flash of a blow that a guard stops."""
+comptime CLANG_POWER = Float32(0.6)
+"""How large the flash of a blow that a guard stops is."""
+
+
+def impact_color(outcome: StrikeOutcome, hurt: Bool) -> Vector3:
+    """Return the light of a landed blow's flash.
+
+    Args:
+        outcome: What the blow did.
+        hurt: Whether it landed on the player.
+
+    Returns:
+        Red on the player, gold for a critical blow, a finisher or a
+        pierce break, and a warm white for any other.
+    """
+    if hurt:
+        return HURT_FLASH
+    if outcome == CRITICAL or outcome == FINISHED or outcome == PIERCE_BREAK:
+        return CRITICAL_FLASH
+    return HIT_FLASH
+
+
+def impact_power(outcome: StrikeOutcome, hurt: Bool) -> Float32:
+    """Return how large and bright a landed blow's flash is.
+
+    Args:
+        outcome: What the blow did.
+        hurt: Whether it landed on the player.
+
+    Returns:
+        1.8 for a blow that fells or finishes, or breaks a pierce; 1.4 for
+        a critical blow or a stamina break; 0.8 for any other blow on the
+        player; and 1 for any other.
+    """
+    if outcome == FINISHED or outcome == DEFEATED or outcome == PIERCE_BREAK:
+        return 1.8
+    if outcome == CRITICAL or outcome == STAMINA_BREAK:
+        return 1.4
+    if hurt:
+        return 0.8
+    return 1
+
+
 @fieldwise_init
 struct Popup(Copyable, Movable):
     """A number or a word over a fighter: what a blow did."""
@@ -855,6 +934,9 @@ struct Foe(Movable):
     var look: Int
     # The way its sidestep goes, of length one.
     var dodge_way: Vector3
+    # How long ago it came back to its post, in seconds: large for one
+    # that has stood there since the fight began.
+    var back: Float32
 
 
 @fieldwise_init
@@ -929,6 +1011,10 @@ struct Ally(Movable):
     var assisting: Bool
     var down: Float32
     """How long she has lain fallen, in seconds, or -1 while she stands."""
+    var climb: Climb
+    """Where she is on a house's stairs: see `ally_goal`."""
+    var route: Route
+    """Her way round the houses and the pond: see `follow_route`."""
 
 
 @fieldwise_init
@@ -997,11 +1083,22 @@ struct Battle(Movable):
     var dummies: List[Practice]
     var sparks: Sparks
     var popups: List[Popup]
+    # The flashes and rings of light where blows landed.
+    var impacts: List[Impact]
     # The ground wave's waves that run.
     var waves: List[Wave]
     # The companion, if any, and her bolts that fly; and whether the assist
     # button was pressed this frame.
     var allies: List[Ally]
+    # The houses' front doors, which the companion goes in by when the
+    # player is indoors: see `follow_point`. Empty, she follows the
+    # player straight.
+    var doors: List[Doorway]
+    # The way up each house's stairs, in the doors' order.
+    var climbs: List[List[Vector3]]
+    # The grid of open ground that the companion and the raiders find
+    # their ways over, or none: see `extensions.village.route`.
+    var grid: Optional[RouteGrid]
     var bolts: List[Bolt]
     var called: Bool
     # The throwers' knives that fly.
@@ -1195,9 +1292,13 @@ struct Battle(Movable):
                     False,
                     len(self.people) - 1,
                     Vector3(0, 0, 1),
+                    BACK_LONG_AGO,
                 )
             )
         self.allies = List[Ally]()
+        self.doors = List[Doorway]()
+        self.climbs = List[List[Vector3]]()
+        self.grid = None
         for ally in parameters.allies:
             var person = Body(
                 scene,
@@ -1229,6 +1330,8 @@ struct Battle(Movable):
                     -1,
                     False,
                     -1,
+                    no_climb(),
+                    no_route(),
                 )
             )
         var paints = animal_paints(assets)
@@ -1286,6 +1389,7 @@ struct Battle(Movable):
                         True,
                         len(self.pelts) - 1,
                         Vector3(0, 0, 1),
+                        BACK_LONG_AGO,
                     )
                 )
         self.dummies = List[Practice]()
@@ -1310,6 +1414,7 @@ struct Battle(Movable):
         self.frame = 0
         self.sparks = Sparks(scene, assets, glow)
         self.popups = List[Popup]()
+        self.impacts = List[Impact]()
         self.waves = List[Wave]()
         self.bolts = List[Bolt]()
         self.called = False
@@ -1454,6 +1559,8 @@ struct Battle(Movable):
                     0,
                     Vector3(0, 0, 0),
                     Vector3(0, 0, 1),
+                    no_climb(),
+                    no_route(),
                 )
             )
 
@@ -1585,6 +1692,138 @@ struct Battle(Movable):
             if self.standing(index):
                 out.append(self.target_at(index))
         return out^
+
+    def friends(self) -> List[Vector3]:
+        """Return where the player's side stands: the companion and each
+        raider that has not fallen. The village's doors open for them.
+
+        Returns:
+            The feet of the companion, then of each standing raider.
+        """
+        var out = List[Vector3]()
+        for index in range(len(self.allies)):
+            out.append(self.allies[index].character.position)
+        for index in range(len(self.members)):
+            if self.members[index].down < 0:
+                out.append(self.members[index].character.position)
+        return out^
+
+    def set_grid(mut self, var grid: RouteGrid):
+        """Give the companion and the raiders the grid of open ground that
+        they find their ways round the houses and the pond over.
+
+        Args:
+            grid: The grid: see `extensions.village.route.route_grid`.
+        """
+        self.grid = grid^
+
+    def set_doors(
+        mut self,
+        var doors: List[Doorway],
+        var climbs: List[List[Vector3]] = List[List[Vector3]](),
+    ):
+        """Give the companion the houses' front doors to go in by, and the
+        ways up their stairs.
+
+        Args:
+            doors: The houses' front doors.
+            climbs: The way up each house's stairs, in the doors' order.
+        """
+        self.doors = doors^
+        self.climbs = climbs^
+
+    def vanish_puffs(self, seconds: Float32) -> List[Puff]:
+        """Return the dust where each fallen foe has gone in the last
+        second, and where each foe has come back to its post: a body goes
+        and comes in a cloud of dust, not all at once.
+
+        Args:
+            seconds: The time, in seconds, which stirs the dust.
+
+        Returns:
+            The puffs: five for each foe gone, and five for each foe come
+            back, in the last second.
+        """
+        var puffs = List[Puff]()
+        var linger = self.parameters.linger.to(SECOND)
+        for index in range(len(self.foes)):
+            ref foe = self.foes[index]
+            puffs.extend(
+                dust_puffs(
+                    foe.character.position,
+                    seconds,
+                    foe.down - linger,
+                    index,
+                    VANISH_DUST,
+                )
+            )
+            # A foe that comes back to its post comes in a cloud too.
+            puffs.extend(
+                dust_puffs(
+                    foe.character.position,
+                    seconds,
+                    foe.back,
+                    index,
+                    VANISH_DUST,
+                )
+            )
+        return puffs^
+
+    def keep_hems(mut self, mut scene: Scene, mut assets: Assets) raises:
+        """Give each fighter's skirts the pushes that keep them out of the
+        legs: see `extensions.village.hem_push`. They show only near the
+        camera: see `push_hems`.
+
+        Args:
+            scene: The scene the fighters are in.
+            assets: The stores of the skirts' geometries.
+
+        Raises:
+            Error: If a skirt's mesh is not in the scene.
+        """
+        for k in range(len(self.people)):
+            self.people[k].body.keep_hems(scene, assets)
+
+    def push_hems(
+        self, mut scene: Scene, mut assets: Assets, eye: Vector3
+    ) raises -> Int:
+        """Keep the skirts of the fighters within `HEM_NEAR` of the eye, and
+        shown, out of their legs. The others wear their skirts as they are
+        skinned. Few fighters wear skirts, and fewer stand that near.
+
+        Args:
+            scene: The scene, updated.
+            assets: The stores of the skirts' geometries.
+            eye: Where the camera is.
+
+        Returns:
+            How many vertices were pushed.
+
+        Raises:
+            Error: If the scene is stale.
+        """
+        # Each push reads the bones' world matrices, and a weight set marks
+        # the scene changed: every fighter is weighed before any weight is
+        # set.
+        var near = List[Bool](capacity=len(self.people))
+        for k in range(len(self.people)):
+            ref body = self.people[k].body
+            var place = scene.world_matrix(body.carrier).transform_point(
+                Vector3(0, 0, 0)
+            )
+            var close = (place - eye).length() <= HEM_NEAR
+            near.append(close and scene.get(body.carrier).visible)
+        var pushed = 0
+        for k in range(len(self.people)):
+            if near[k]:
+                pushed += self.people[k].body.push_hems(scene, assets)
+        for k in range(len(self.people)):
+            ref body = self.people[k].body
+            if near[k]:
+                body.show_hems(scene)
+            else:
+                body.rest_hems(scene)
+        return pushed
 
     def obstacles(self) -> List[Obstacle]:
         """Return the circle each standing bandit, each dummy and the
@@ -2285,6 +2524,21 @@ struct Battle(Movable):
                 self.token = -1
                 self.token_rest = TOKEN_REST
 
+    def says(self, word: String) -> Bool:
+        """Return whether a word shows over a fighter, and has shown for
+        less than `WORD_REPEAT`.
+
+        Args:
+            word: The word.
+
+        Returns:
+            True if such a word shows.
+        """
+        for popup in self.popups:
+            if popup.text == word and popup.age < WORD_REPEAT:
+                return True
+        return False
+
     def _popup(mut self, at: Vector3, text: String, color: Rgb):
         """Show a number or a word over a fighter's feet."""
         self.popups.append(Popup(at + Vector3(0, HEAD, 0), text, color, 0))
@@ -2297,6 +2551,7 @@ struct Battle(Movable):
         perfect dodge of theirs slows the foes."""
         var outcome = struck.outcome
         var word = outcome_word(outcome)
+        var chest = at + Vector3(0, CHEST, 0)
         if landed_blow(outcome):
             var color = WHITE_TEXT
             if hurt:
@@ -2304,8 +2559,21 @@ struct Battle(Movable):
             elif outcome == CRITICAL:
                 color = GOLD_TEXT
             self._popup(at, String(Int(struck.damage + 0.5)), color)
-            self.sparks.burst(scene, at + Vector3(0, CHEST, 0))
-        if word.byte_length() > 0:
+            self.sparks.burst(scene, chest)
+            self.impacts.append(
+                Impact(
+                    chest,
+                    impact_color(outcome, hurt),
+                    impact_power(outcome, hurt),
+                    0,
+                )
+            )
+        elif outcome == BLOCKED or outcome == PARRIED:
+            # Steel on steel: a small cold flash.
+            self.impacts.append(Impact(chest, CLANG_FLASH, CLANG_POWER, 0))
+        # A word already showing, and new, is not shown again: a burst of
+        # critical blows says CRITICAL once, and its numbers each.
+        if word.byte_length() > 0 and not self.says(word):
             var tone = GOLD_TEXT if landed_blow(outcome) else CALM_TEXT
             self._popup(at + Vector3(0, 0.35, 0), word, tone)
         if outcome == PERFECT_DODGE and hurt:
@@ -2804,9 +3072,40 @@ struct Battle(Movable):
             # A fallen companion lies still.
             if ally.down >= 0:
                 continue
+            # Out of a fight, she goes round a house's walls by its door.
+            ref at = ally.character.position
+            var goal = player.position
+            if self.drawn:
+                ally.climb = no_climb()
+            else:
+                ref feet = player.position
+                var aim_at = ally_goal(
+                    at,
+                    feet,
+                    terrain.ceiling_over(feet.x, feet.z, feet.y) < OPEN_SKY,
+                    terrain.ceiling_over(at.x, at.z, at.y) < OPEN_SKY,
+                    self.doors,
+                    self.climbs,
+                    ally.climb,
+                )
+                ally.climb = aim_at[1]
+                ref pond = terrain.ground.pond
+                goal = around_pond(
+                    at,
+                    aim_at[0],
+                    Vector3(pond.x.to(METER), 0, pond.z.to(METER)),
+                    pond.radius.to(METER),
+                )
+                # Outdoors, her way round the houses: indoors the door
+                # and the stairs give it.
+                var out = terrain.ceiling_over(at.x, at.z, at.y) >= OPEN_SKY
+                if self.grid and out:
+                    goal = follow_route(
+                        self.grid.value(), ally.route, at, goal, FOLLOW, seconds
+                    )
             var sight = AllySight(
                 ally.character.position,
-                player.position,
+                goal,
                 target,
                 share,
                 ally.fighter.free(),
@@ -3062,6 +3361,18 @@ struct Battle(Movable):
                     )
                 )
         self.popups = kept^
+        var lasting = List[Impact]()
+        for impact in self.impacts:
+            if impact.age + seconds < IMPACT_SECONDS:
+                lasting.append(
+                    Impact(
+                        impact.at,
+                        impact.color,
+                        impact.power,
+                        impact.age + seconds,
+                    )
+                )
+        self.impacts = lasting^
         self.sparks.update(scene, delta)
         self._effects_step(seconds)
         for index in range(len(self.dummies)):
@@ -3128,6 +3439,7 @@ struct Battle(Movable):
             var node = self.node_of(index)
             ref foe = self.foes[index]
             foe.shove = foe.shove * fade
+            foe.back += seconds
             if not foe.fighter.defeated():
                 var state = foe.brain.state
                 var near = _flat(foe.character.position, player.position)
@@ -3149,6 +3461,7 @@ struct Battle(Movable):
                 foe.fighter.revive()
                 foe.brain = Brain(foe.brain.seed)
                 foe.down = -1
+                foe.back = 0
                 scene.node(node).visible = True
         if (
             self.lock >= 0
@@ -3353,6 +3666,13 @@ struct Battle(Movable):
         around.extend(self.obstacles())
         var skip_from = first + self.first_warden() + len(self.allies)
         skip_from += len(self.wardens)
+        # A narrow stair takes one at a time: raiders on the stairs pass
+        # through each other, so a line of them does not jam it.
+        var climbing = List[Bool](capacity=len(self.members))
+        for k in range(len(self.members)):
+            climbing.append(self.members[k].climb.step >= 0)
+            if climbing[k]:
+                around[skip_from + k].radius = 0
         var target = self._member_target()
         var joined_now = False
         # The places that each raider sees: the hurt, the fallen, the mark.
@@ -3405,6 +3725,44 @@ struct Battle(Movable):
             var joined = mine.joined
             if not joined:
                 sight.leader = mine.post
+                mine.climb = no_climb()
+            elif target < 0:
+                # Out of a fight, it follows the player into a house by its
+                # door, and up and down its stairs.
+                ref at = mine.character.position
+                var aim_at = ally_goal(
+                    at,
+                    feet,
+                    terrain.ceiling_over(feet.x, feet.z, feet.y) < OPEN_SKY,
+                    terrain.ceiling_over(at.x, at.z, at.y) < OPEN_SKY,
+                    self.doors,
+                    self.climbs,
+                    mine.climb,
+                    FOLLOW_GAP,
+                )
+                mine.climb = aim_at[1]
+                ref pond = terrain.ground.pond
+                sight.leader = around_pond(
+                    at,
+                    aim_at[0],
+                    Vector3(pond.x.to(METER), 0, pond.z.to(METER)),
+                    pond.radius.to(METER),
+                    FOLLOW_GAP,
+                )
+                # Outdoors, its way round the houses: indoors the door
+                # and the stairs give it.
+                var out = terrain.ceiling_over(at.x, at.z, at.y) >= OPEN_SKY
+                if self.grid and out:
+                    sight.leader = follow_route(
+                        self.grid.value(),
+                        mine.route,
+                        at,
+                        sight.leader,
+                        FOLLOW_GAP,
+                        seconds,
+                    )
+            else:
+                mine.climb = no_climb()
             if target >= 0 and joined:
                 ref warden = self.wardens[target - self.first_warden()]
                 sight.target = warden.character.position
@@ -3460,12 +3818,18 @@ struct Battle(Movable):
                     face = yaw_of(
                         intent.face.value() - member.character.position
                     )
+                # On the stairs, a raider passes under or over the player
+                # on another story: the player's circle stands at every
+                # height.
+                var near = around.copy()
+                if climbing[k]:
+                    near[first - 1].radius = 0
                 member.character.step(
                     walk,
                     Angle(0.0, RADIAN),
                     delta,
                     terrain,
-                    around,
+                    near,
                     skip_from + k,
                     face=face,
                 )

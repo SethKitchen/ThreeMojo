@@ -621,6 +621,25 @@ code license does not replace or restrict this asset license.
 
 ---
 
+## Barlow
+
+<https://github.com/jpt/barlow>
+
+`assets/fonts/barlow/BarlowSemiCondensed-SemiBold.ttf` is Barlow Semi
+Condensed SemiBold, Copyright 2017 The Barlow Project Authors. It is
+licensed under the SIL Open Font License 1.1, whose text is in
+`assets/fonts/barlow/OFL.txt`. The file is the one in the Google Fonts
+repository. It is not changed. `assets/fonts/make_hud_font.py` turns its
+glyphs into the signed distance fields of
+`extensions/village/hud_font.mojo`, which the game's display draws with.
+That file is a work derived from the font, under the same license.
+
+The font is separate from ThreeMojo's code. Keep the license with the font
+and with the derived file when you share them. Do not sell the font by
+itself. The name "Barlow" is not reserved.
+
+---
+
 ## Draco
 
 <https://github.com/google/draco>

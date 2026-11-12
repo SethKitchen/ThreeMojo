@@ -580,6 +580,8 @@ struct Arms(Movable):
             Error: If the time is negative, or a clip cannot be played.
         """
         self.show(scene, fighter.style, drawn)
+        # A blow that lands flashes the body.
+        body.flash(scene, fighter.struck_lately())
         var want = self.clip_for(character, fighter, drawn)
         var again = (
             fighter.move == self.seen
@@ -617,6 +619,7 @@ struct Arms(Movable):
             Vector3(0, 1, 0), facing_turn(character.heading)
         )
         body.mixer.update(scene, delta)
+        body.swing_hem(scene, character, delta)
         self._swing_clear(scene)
 
     def _swing_clear(self, mut scene: Scene) raises:

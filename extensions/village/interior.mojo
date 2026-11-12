@@ -25,11 +25,17 @@ render view is: it reads the model and never writes it.
 - **Furniture.** Each piece is a `WallSpan` along its longer side, as
   thick as its shorter side and as high as the piece, on its story's
   floor. So a piece upstairs passes over a character on the floor below.
-- **The stair.** Where `house_stair` finds a stair, each tread is a
-  `Floor`, and so is the upper floor around the stairwell. A railing
-  guards the well's open side, from the ground floor up, so it closes the
-  stair's side too. A railing crosses the well's foot upstairs, and a
-  wall closes the space under the stair's top.
+- **The stairs.** `house_stairs` finds a flight from each story to the
+  next, one over the other in one well. Each tread is a `Floor`, and so
+  is the floor of the story above around the well. A railing guards the
+  well's open side, from the flight's floor up, so it closes the flight's
+  side too. Over the top flight, a railing crosses the well's foot; under
+  it, the next flight starts there. A wall closes the space under the
+  first flight's top. Under a higher flight's top, the flight below
+  arrives, so it stays open. Under the next flight, a tread's ceiling is the
+  underside of the tread over it. `climb` holds the way up, as points to
+  walk to: the landing before each flight, past its top, and back along
+  the well's open side to the next flight.
 - **Doorways.** Each door of the ground story is a `Doorway`: the jamb
   it hangs on, its width and the way it swings.
 
@@ -42,7 +48,7 @@ from extensions.building.ids import ElementId
 from extensions.building.kinds import COLUMN, DOOR, ROOF, SLAB, WALL
 from extensions.building.model import Building
 from extensions.vegetation.ground import Ground, Lot
-from extensions.village.house import STAIR_GOING, Stair, house_stair
+from extensions.village.house import STAIR_GOING, Stair, house_stairs
 from extensions.village.terrain import OPEN_SKY, Floor, WallSpan
 from generators.utils import Vec3d
 from math.vector3 import Vector3
@@ -66,6 +72,14 @@ comptime RAIL_HEIGHT = Float32(1.0)
 """How high a railing stands over the floor it guards, in meters."""
 comptime RAIL_HALF = Float32(0.05)
 """Half the thickness of a railing, in meters."""
+
+
+comptime CLIMB_LANDING = Float64(0.45)
+"""How far before a flight's foot, and past its top, the way up walks, in
+meters."""
+comptime CLIMB_ASIDE = Float64(0.6)
+"""How far from a well's open side the way up walks back along it, in
+meters."""
 
 
 @fieldwise_init
@@ -118,6 +132,9 @@ struct HouseInterior(Copyable, Movable):
     var doorways: List[Doorway]
     # The height of the ground floor, in meters.
     var floor_height: Float32
+    # The way up the stairs, from the hall to the top story, as points to
+    # walk to in turn: see `_stair`. Empty for a house with no stair.
+    var climb: List[Vector3]
 
     def __init__(out self, floor_height: Float32):
         """Hold nothing yet, over a floor at a height.
@@ -131,6 +148,7 @@ struct HouseInterior(Copyable, Movable):
         self.furniture = List[WallSpan]()
         self.doorways = List[Doorway]()
         self.floor_height = floor_height
+        self.climb = List[Vector3]()
 
     def front_door(self) raises -> Doorway:
         """Return the first door that leads outside.
@@ -393,14 +411,22 @@ def _stair(
     placer: _Placer,
     stair: Stair,
     ceiling: Float32,
+    onward: Bool,
 ):
-    """Add a stair's treads, the upper floor around its well, and the
-    railings. `ceiling` is the upper story's."""
-    var floor = placer.floor
-    var top = floor + Float32(stair.height())
-    # `house_stair` gives a stair two risers or more: a tread or more.
+    """Add a flight's treads, the upper floor around its well, and the
+    railings. `ceiling` is the upper story's. Where another flight rises
+    from the upper story, `onward` is True, and no railing crosses the
+    well's foot there: the next flight starts at it."""
+    var floor = placer.floor + Float32(stair.base)
+    var top = placer.floor + Float32(stair.top())
+    # `house_stairs` gives a flight two risers or more: a tread or more.
     for k in range(stair.risers - 1):  # pragma: no branch
         var x0 = stair.x0 + Float64(k) * STAIR_GOING
+        # Under the next flight, a tread's ceiling is the underside of the
+        # tread over it, a riser under its top.
+        var over = ceiling
+        if onward:
+            over = min(over, top + Float32(Float64(k) * stair.rise))
         interior.floors.append(
             _plan_floor(
                 placer,
@@ -409,9 +435,22 @@ def _stair(
                 stair.y0,
                 stair.y1,
                 floor + Float32(Float64(k + 1) * stair.rise),
-                ceiling,
+                over,
             )
         )
+    # The way up: to the landing before the foot, and up past the top.
+    # Under a flight that goes on, the way walks back along the well's
+    # open side, clear of its railing, to the next flight's landing; at
+    # the top it steps off into the room.
+    var middle_y = (stair.y0 + stair.y1) / 2
+    var landing = stair.x0 - CLIMB_LANDING
+    var past = stair.x1 + CLIMB_LANDING
+    var aside = stair.y0 - CLIMB_ASIDE
+    interior.climb.append(_plan_point(placer, landing, middle_y, floor))
+    interior.climb.append(_plan_point(placer, past, middle_y, top))
+    interior.climb.append(_plan_point(placer, past, aside, top))
+    if onward:
+        interior.climb.append(_plan_point(placer, landing, aside, top))
     # The upper floor before the well, beside its foot, and past its top.
     var half_x = Float64(placer.lot.half_width)
     var half_y = Float64(placer.lot.half_depth)
@@ -436,30 +475,42 @@ def _stair(
             top + RAIL_HEIGHT,
         )
     )
-    interior.walls.append(
-        _plan_span(
-            placer,
-            stair.x0,
-            stair.y0,
-            stair.x0,
-            stair.y1,
-            RAIL_HALF,
-            top,
-            top + RAIL_HEIGHT,
+    if not onward:
+        interior.walls.append(
+            _plan_span(
+                placer,
+                stair.x0,
+                stair.y0,
+                stair.x0,
+                stair.y1,
+                RAIL_HALF,
+                top,
+                top + RAIL_HEIGHT,
+            )
         )
-    )
-    interior.walls.append(
-        _plan_span(
-            placer,
-            stair.x1,
-            stair.y0,
-            stair.x1,
-            stair.y1,
-            RAIL_HALF,
-            floor,
-            floor + Float32(stair.height() / 2),
+    # Under the first flight's top, a wall closes the low space. Under a
+    # higher flight's top, the flight below arrives, so it stays open.
+    if stair.storey == 0:
+        interior.walls.append(
+            _plan_span(
+                placer,
+                stair.x1,
+                stair.y0,
+                stair.x1,
+                stair.y1,
+                RAIL_HALF,
+                floor,
+                floor + Float32(stair.height() / 2),
+            )
         )
-    )
+
+
+def _plan_point(
+    placer: _Placer, x: Float64, y: Float64, height: Float32
+) -> Vector3:
+    """Return a point of the plan in the scene, at a height."""
+    var at = placer.point(Vec3d(x, y, 0))
+    return Vector3(at.x, height, at.z)
 
 
 def _box_span(
@@ -590,12 +641,16 @@ def house_interior(
     )
     _doorways(interior, placer, building)
     _steps(interior, ground)
-    var stair = house_stair(building)
-    if stair:
-        ref upper = building.storeys[1]
+    var stairs = house_stairs(building)
+    for index in range(len(stairs)):
+        ref stair = stairs[index]
+        ref upper = building.storeys[stair.storey + 1]
         var over = floor + Float32(
-            upper.elevation.value + upper.height.value - slab
+            upper.elevation.value
+            - building.storeys[0].elevation.value
+            + upper.height.value
+            - slab
         )
-        _stair(interior, placer, stair.value(), over)
+        _stair(interior, placer, stair, over, index + 1 < len(stairs))
     _furniture(interior, placer, building)
     return interior^

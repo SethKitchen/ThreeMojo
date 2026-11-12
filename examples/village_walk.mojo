@@ -263,6 +263,9 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
         width,
         height,
     )
+    # A machine with time to spare draws more of the window's pixels, so a
+    # fight in motion is sharper.
+    game.set_dynamic(True)
     var kept = Path(slot)
     if kept.exists():
         try:

@@ -13,7 +13,12 @@ from core.scene import Scene
 from extensions.vegetation.field import FieldParameters, GrassField
 from extensions.vegetation.blade import SEED_HEAD
 from extensions.vegetation.ground import POND_DROP, Ground, Lot, Pond
-from extensions.village.pond import MIRROR_MOST, PondLook, water_mask
+from extensions.village.pond import (
+    MIRROR_MOST,
+    PondLook,
+    _mirror_key,
+    water_mask,
+)
 from extensions.village.shore import ShoreParameters, stand_shore
 from extensions.village.surfaces import house_looks
 from extensions.village.village import pond_basin
@@ -34,7 +39,8 @@ from extensions.water.ripple import (
 )
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
-from std.math import inf
+from std.math import inf, nan
+
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -392,6 +398,19 @@ def test_the_water_fades_into_fog_and_mirrors_the_stars() raises:
         if lit[k] and night.pixels[k * 4] > 60:
             stars += 1
     assert_true(stars > 0)
+
+
+def test_a_mirror_image_is_kept_by_depth_then_by_source() raises:
+    # Nearer first, below zero as above it; minus zero is zero; of equal
+    # depths, the first source.
+    assert_true(_mirror_key(-0.5, 9) < _mirror_key(-0.25, 0))
+    assert_true(_mirror_key(-0.25, 9) < _mirror_key(0, 0))
+    assert_true(_mirror_key(0, 3) < _mirror_key(0.5, 0))
+    assert_equal(_mirror_key(-0.0, 4), _mirror_key(0.0, 4))
+    assert_true(_mirror_key(0.5, 3) < _mirror_key(0.5, 4))
+    # No depth, or one past the floats, is never kept.
+    assert_equal(_mirror_key(inf[DType.float32](), 1), UInt64.MAX)
+    assert_equal(_mirror_key(nan[DType.float32](), 1), UInt64.MAX)
 
 
 def test_a_pond_look_is_checked() raises:

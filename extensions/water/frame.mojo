@@ -104,6 +104,16 @@ comptime _TARGET_SLOPE = Float32(0.078)
 # Clearwater biases the caustic lookup one mip level to smooth concentrated light.
 comptime CAUSTIC_LOD_BIAS = Float32(1.0)
 
+comptime DEPTH_LANES = 8
+"""How many pixels of a row the water's depth test tests at once, as a
+quick test that falls back to the exact one."""
+comptime DEPTH_DOWN = Float32(0.002)
+"""How steeply a ray must point down for the quick depth test to pass it:
+more than the exact test's 0.0015."""
+comptime DEPTH_MARGIN = Float32(1.0e-4)
+"""How far behind the scene, in clip depth, the quick depth test needs the
+plane over the waves to be. It is far more than the quick test can be off
+from the exact one: a pixel that it passes, the exact test passes too."""
 # tan(32 degrees), the page's half field of view, as the host's libm rounds
 # it. A GPU has no libm, so the shader reads the stored bits.
 comptime _TAN_HALF_FOV = bitcast[DType.float32](UInt32(0x3F1FF770))
@@ -321,40 +331,127 @@ def _depth_rows(
     `flat`, the water is tested where the still plane is rather than where
     the waves are, which moves its edge by at most the waves' height."""
     var look = plan.look
+    ref e = plan.clip.elements
+    comptime F = SIMD[DType.float32, DEPTH_LANES]
+    var column = F(0)
+    comptime for lane in range(DEPTH_LANES):
+        column[lane] = Float32(lane)
+    var tan_f = _TAN_HALF_FOV
     for y in range(first, past):  # pragma: no branch
-        for x in range(width):  # pragma: no branch
-            var ndc_x = texel_ndc(x, width)
-            var ndc_y = texel_ndc_up(y, height)
-            var rd = _ray(look, ndc_x, ndc_y, plan.aspect)
-            if rd.y > -0.0015:
-                continue
-            # No wave rises above `bound`, so no water along this ray is
-            # nearer than the plane at that height. A pixel whose scene is
-            # nearer than that keeps its pixel whatever the waves do.
-            var slot = y * width + x
-            var wd = _unit(rd.x, rd.y, rd.z)
-            var nearest = (bound - look.py) / wd.y
-            if nearest > 0:
-                var z_near = plan.clip.transform_point(
-                    plan.eye + wd * nearest
-                ).z
-                if z_near >= depth[unsafe_offset=slot]:
-                    continue
-            var point: Vector3
-            if flat:
-                point = plan.eye + wd * (-look.py / min(wd.y, -0.0015))
-            else:
-                var hit = _surface_hit(
-                    look, ndc_x, ndc_y, plan.aspect, surface, ripples
+        var ndc_y = texel_ndc_up(y, height)
+        # The ray through a pixel of the row, before it is made of length
+        # one: the row's part, and the part for each unit of `ndc_x`.
+        var bx = look.fx + ndc_y * tan_f * look.ux
+        var by = look.fy + ndc_y * tan_f * look.uy
+        var bz = look.fz + ndc_y * tan_f * look.uz
+        var ax = plan.aspect * tan_f * look.rx
+        var ay = plan.aspect * tan_f * look.ry
+        var az = plan.aspect * tan_f * look.rz
+        var x = 0
+        while x < width:
+            if x + DEPTH_LANES <= width:
+                # A quick test of a run of pixels: where the plane that no
+                # wave rises above is plainly behind the scene, the water
+                # cannot claim the pixel. The ray's length cancels in the
+                # plane's point, so the rays are not made of length one.
+                var nx = (column + Float32(x) + 0.5) / Float32(width) * 2 - 1
+                var rx = bx + nx * ax
+                var ry = by + nx * ay
+                var rz = bz + nx * az
+                var down = ry / sqrt(rx * rx + ry * ry + rz * rz)
+                var t = (bound - look.py) / ry
+                var px = plan.eye.x + rx * t
+                var py = plan.eye.y + ry * t
+                var pz = plan.eye.z + rz * t
+                var near = (e[2] * px + e[6] * py + e[10] * pz + e[14]) / (
+                    e[3] * px + e[7] * py + e[11] * pz + e[15]
                 )
-                point = plan.eye + hit.direction * hit.distance
-            var z = plan.clip.transform_point(point).z
-            if not (z >= -1.0 and z <= 1.0):
-                continue
-            if z >= depth[unsafe_offset=slot]:
-                continue
-            depth[unsafe_offset=slot] = z
-            shown[unsafe_offset=slot] = True
+                var scene = depth.unsafe_load[width=DEPTH_LANES](y * width + x)
+                var behind = (
+                    down.lt(-DEPTH_DOWN)
+                    & t.gt(0)
+                    & near.ge(scene + DEPTH_MARGIN)
+                )
+                if not behind.reduce_and():
+                    for lane in range(DEPTH_LANES):  # pragma: no branch
+                        if not behind[lane]:
+                            _depth_pixel(
+                                plan,
+                                surface,
+                                ripples,
+                                depth,
+                                shown,
+                                width,
+                                height,
+                                x + lane,
+                                y,
+                                bound,
+                                flat,
+                            )
+                x += DEPTH_LANES
+            else:
+                _depth_pixel(
+                    plan,
+                    surface,
+                    ripples,
+                    depth,
+                    shown,
+                    width,
+                    height,
+                    x,
+                    y,
+                    bound,
+                    flat,
+                )
+                x += 1
+
+
+@always_inline
+def _depth_pixel(
+    plan: _ComposePlan,
+    surface: SurfaceField,
+    ripples: RippleField,
+    depth: MutPointer[Float32, MutAnyOrigin],
+    shown: MutPointer[Bool, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    x: Int,
+    y: Int,
+    bound: Float32,
+    flat: Bool,
+):
+    """Test one pixel against the image depth, as `_depth_rows` says."""
+    var look = plan.look
+    var ndc_x = texel_ndc(x, width)
+    var ndc_y = texel_ndc_up(y, height)
+    var rd = _ray(look, ndc_x, ndc_y, plan.aspect)
+    if rd.y > -0.0015:
+        return
+    # No wave rises above `bound`, so no water along this ray is nearer
+    # than the plane at that height. A pixel whose scene is nearer than
+    # that keeps its pixel whatever the waves do.
+    var slot = y * width + x
+    var wd = _unit(rd.x, rd.y, rd.z)
+    var nearest = (bound - look.py) / wd.y
+    if nearest > 0:
+        var z_near = plan.clip.transform_point(plan.eye + wd * nearest).z
+        if z_near >= depth[unsafe_offset=slot]:
+            return
+    var point: Vector3
+    if flat:
+        point = plan.eye + wd * (-look.py / min(wd.y, -0.0015))
+    else:
+        var hit = _surface_hit(
+            look, ndc_x, ndc_y, plan.aspect, surface, ripples
+        )
+        point = plan.eye + hit.direction * hit.distance
+    var z = plan.clip.transform_point(point).z
+    if not (z >= -1.0 and z <= 1.0):
+        return
+    if z >= depth[unsafe_offset=slot]:
+        return
+    depth[unsafe_offset=slot] = z
+    shown[unsafe_offset=slot] = True
 
 
 def _height_bound(surface: SurfaceField, ripples: RippleField) -> Float32:
@@ -442,16 +539,30 @@ def _grid_of(
     """Return the grid samples that the shown pixels are mixed from. Only
     the water rows `rows` hold shown pixels."""
     var marks = List[Bool](length=width * height, fill=False)
+    var out = marks.unsafe_ptr()
+    var seen = shown.unsafe_ptr()
+    # Every pixel of a cell of the grid has the same four corners: a cell
+    # with a shown pixel marks them once.
     # The caller passes at least one water row.
     for y in range(rows[0], rows[1]):  # pragma: no branch
-        for x in range(width):  # pragma: no branch
-            if not shown[y * width + x]:
+        var top = (y // step) * step * width
+        var low = min((y // step) * step + step, height - 1) * width
+        var row = y * width
+        for x0 in range(0, width, step):  # pragma: no branch
+            var end = min(x0 + step, width)
+            var any = False
+            for x in range(x0, end):  # pragma: no branch
+                if seen[unsafe_offset=row + x]:
+                    any = True
+                    break
+            if not any:
                 continue
-            var c = _grid_corners(x, y, width, height, step)
-            marks[c[2] * width + c[0]] = True
-            marks[c[2] * width + c[1]] = True
-            marks[c[3] * width + c[0]] = True
-            marks[c[3] * width + c[1]] = True
+            var x1 = min(x0 + step, width - 1)
+            out[unsafe_offset=top + x0] = True
+            out[unsafe_offset=top + x1] = True
+            out[unsafe_offset=low + x0] = True
+            out[unsafe_offset=low + x1] = True
+    _ = len(shown)
     return marks^
 
 

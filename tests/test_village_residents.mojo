@@ -404,6 +404,17 @@ def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
     assert_true(body.lift > 0.6 and body.lift < 1.0)
     # An empty outfit leaves the body bare.
     assert_equal(len(body.garments), 0)
+    # A blow flashes the skin white, and it goes back after.
+    assert_equal(len(body.flashing), len(body.person.skins))
+    var skin = body.flashing[0]
+    var rest = scene.skinned_meshes[skin].material
+    body.flash(scene, True)
+    body.flash(scene, True)
+    var glow = scene.skinned_meshes[skin].material
+    assert_true(glow != rest)
+    assert_true(assets.materials.get(glow).emissive_intensity > 0)
+    body.flash(scene, False)
+    assert_true(scene.skinned_meshes[skin].material == rest)
     var walker = Character(
         CharacterParameters(), 2, 3, Angle(0.0, RADIAN), ground
     )
@@ -750,9 +761,37 @@ def test_a_person_sits_works_shelters_and_flees() raises:
         scene, Duration(1.0, SECOND), ground, List[Obstacle](), None, True
     )
     assert_true(residents.sheltering)
-    # Once the night is over, she walks her route again.
+    # Once the night is over, she comes back out the way she went in, and
+    # then walks her route again.
     residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
     assert_false(residents.sheltering)
+    assert_true(residents.leaving[0])
+    var went = residents.homeward[0].points.copy()
+    var back = residents.outward[0].points.copy()
+    assert_equal(len(back), len(went))
+    assert_almost_equal(back[0].x, went[len(went) - 1].x)
+    for _ in range(400):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+        if not residents.leaving[0]:
+            break
+    assert_false(residents.leaving[0])
+
+
+def test_a_village_with_nobody_in_it_shelters_and_comes_out() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.villagers = List[Villager]()
+    p.herds = List[Herd]()
+    var residents = Residents(scene, assets, p, ground, List[Lot](), _homes())
+    residents.update(
+        scene, Duration(0.1, SECOND), ground, List[Obstacle](), None, True
+    )
+    assert_true(residents.sheltering)
+    residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_false(residents.sheltering)
+    assert_equal(len(residents.leaving), 0)
 
 
 def test_a_person_with_no_house_and_none_to_go_to_stays_out() raises:
@@ -771,6 +810,19 @@ def test_a_person_with_no_house_and_none_to_go_to_stays_out() raises:
     assert_true(residents.sheltering)
     var home = home_route(_homes()[0])
     assert_equal(len(home.points), 3)
+    # With stairs, the way home goes on up them to bed.
+    var climb: List[Vector3] = [Vector3(1, 0, 1), Vector3(3, 2.8, 1)]
+    var up = home_route(_homes()[0], climb)
+    assert_equal(len(up.points), 5)
+    assert_almost_equal(up.points[4].x, 3, atol=1e-6)
+    # A person whose home has stairs is sent home up them.
+    var q = _small()
+    q.villagers.append(_villager(NO_HOUSE))
+    var climbs: List[List[Vector3]] = [climb.copy()]
+    var climbing = Residents(
+        scene, assets, q, ground, List[Lot](), _homes(), List[Stop](), climbs
+    )
+    assert_equal(len(climbing.homeward[0].points), 5)
 
 
 def test_a_dog_follows_and_a_shy_animal_runs_from_a_foe() raises:

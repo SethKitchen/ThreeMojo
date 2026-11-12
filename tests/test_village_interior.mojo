@@ -10,7 +10,7 @@ doorways, all read from the house's building model."""
 from extensions.building.kinds import COLUMN, DOOR, WALL
 from extensions.building.material import brick
 from extensions.building.model import Element, Opening
-from extensions.vegetation.ground import Ground
+from extensions.vegetation.ground import Ground, Lot
 from extensions.village.house import (
     BREAST_DEPTH,
     BREAST_WIDTH,
@@ -20,6 +20,7 @@ from extensions.village.house import (
     house_lot,
     house_model,
     house_stair,
+    house_stairs,
 )
 from extensions.village.interior import (
     Doorway,
@@ -30,7 +31,7 @@ from extensions.village.interior import (
     STEP_DEPTH,
     house_interior,
 )
-from extensions.village.terrain import OPEN_SKY
+from extensions.village.terrain import OPEN_SKY, Terrain
 from extensions.building.ids import ElementId
 from std.testing import (
     TestSuite,
@@ -301,6 +302,8 @@ def test_a_stair_climbs_to_the_floor_above() raises:
     # The ground floor, a floor for each of the fourteen treads, and the
     # upper floor before the well, beside its foot and past its top.
     assert_equal(len(inside.floors), 1 + 14 + 3)
+    # The way up: to the landing, past the top, and aside into the room.
+    assert_equal(len(inside.climb), 3)
     assert_equal(inside.steps, 0)
     var top = Float32(stair.height())
     var over = top + 2.8 - 0.2
@@ -354,6 +357,80 @@ def test_a_stair_climbs_to_the_floor_above() raises:
     assert_almost_equal(under.bottom, 0)
     assert_almost_equal(under.top, top / 2, atol=1e-5)
     assert_almost_equal(under.x0, Float32(stair.x1), atol=1e-5)
+
+
+def test_a_house_of_three_stories_climbs_to_each() raises:
+    var house = HouseParameters(
+        "tall house", Length(9.0, METER), Length(7.0, METER), 3, brick()
+    )
+    var model = house_model(house)
+    var stairs = house_stairs(model)
+    assert_equal(len(stairs), 2)
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var inside = house_interior(model, lot, 0, _flat())
+    # The ground floor, then for each flight its fourteen treads and the
+    # floor above around the well.
+    assert_equal(len(inside.floors), 1 + 2 * (14 + 3))
+    ref first = stairs[0]
+    # The way up: the first flight's landing, past its top, aside, back
+    # along the well to the second's landing, then past its top and aside.
+    assert_equal(len(inside.climb), 7)
+    assert_almost_equal(inside.climb[0].y, 0, atol=1e-5)
+    assert_almost_equal(inside.climb[1].y, 2.8, atol=1e-5)
+    assert_almost_equal(inside.climb[3].y, 2.8, atol=1e-5)
+    assert_almost_equal(inside.climb[6].y, 5.6, atol=1e-5)
+    # The second landing stands over the first, a story up.
+    assert_almost_equal(inside.climb[4].x, inside.climb[0].x, atol=1e-5)
+    assert_almost_equal(inside.climb[4].z, inside.climb[0].z, atol=1e-5)
+    # Each point stands on a floor at its own height.
+    var terrain = Terrain(
+        _flat(), List[Lot](), inside.walls.copy(), inside.floors.copy()
+    )
+    for p in inside.climb:
+        assert_almost_equal(terrain.height_at(p.x, p.z, p.y), p.y, atol=1e-4)
+    var rise = Float32(first.rise)
+    var second = Float32(first.top())
+    var third = Float32(stairs[1].top())
+    assert_almost_equal(second, 2.8, atol=1e-5)
+    assert_almost_equal(third, 5.6, atol=1e-5)
+    for k in range(14):
+        # The second flight starts from the second story's floor.
+        ref upper = inside.floors[1 + 17 + k]
+        assert_almost_equal(
+            upper.height, second + Float32(k + 1) * rise, atol=1e-5
+        )
+        # The first flight's treads are under the second's: each one's
+        # ceiling is a riser under the top of the tread over it.
+        ref lower = inside.floors[1 + k]
+        assert_almost_equal(
+            lower.ceiling, second + Float32(k) * rise, atol=1e-4
+        )
+        assert_true(lower.ceiling - lower.height > 2)
+    for k in range(15, 18):
+        assert_almost_equal(inside.floors[k].height, second, atol=1e-5)
+        assert_almost_equal(inside.floors[k + 17].height, third, atol=1e-5)
+    # Four railings after the walls: along the first flight's open side
+    # and under its top, then along the second's open side and across its
+    # foot on the top story. No railing crosses the well's foot on the
+    # second story, where the second flight starts.
+    var walls = 0
+    var doors = 0
+    for e in model.elements:
+        if e.kind == WALL or e.kind == COLUMN:
+            walls += 1
+    for o in model.openings:
+        if o.kind == DOOR:
+            doors += 1
+    assert_equal(len(inside.walls), walls + doors * 2 + 4)
+    var n = len(inside.walls)
+    assert_almost_equal(inside.walls[n - 4].bottom, 0)
+    assert_almost_equal(inside.walls[n - 3].x0, Float32(first.x1), atol=1e-5)
+    assert_almost_equal(inside.walls[n - 3].top, second / 2, atol=1e-5)
+    assert_almost_equal(inside.walls[n - 2].bottom, second, atol=1e-5)
+    assert_almost_equal(inside.walls[n - 2].top, third + RAIL_HEIGHT, atol=1e-5)
+    assert_almost_equal(inside.walls[n - 1].bottom, third, atol=1e-5)
+    assert_almost_equal(inside.walls[n - 1].x0, Float32(first.x0), atol=1e-5)
+    assert_almost_equal(inside.walls[n - 1].x1, Float32(first.x0), atol=1e-5)
 
 
 def test_a_chimney_breast_stands_in_the_way_on_every_storey() raises:

@@ -8,15 +8,20 @@
 
 `draw_battle` draws eight things:
 
-1. **The trails** of the swings, the ground wave's waves, the
+1. **The flashes** where blows land, each a star and a ring of light:
+   see `extensions.village.slashes.draw_impact`.
+   **The trails** of the swings, the ground wave's waves, the
    companion's bolts, the throwers' knives and a plunge's ring, as light
    added to the frame: see `extensions.village.slashes`. A wave dims as
    it runs. A knife is a small orange star. A plunge's
    ring spreads over the ground from the player's feet, and fades. A bolt is a blue
    star, or a gold one for a assist attack.
-2. **The player's gauges**, in the bottom right: the stance, the health,
-   the stamina, the limit gauge, and the special gauge as a row of points. The
-   health turns red below a quarter. In a surge, the limit gauge turns
+2. **The player's gauges**, in the bottom right, on a panel of frosted
+   glass: the style and the stance, the health as a number, and the
+   health, the stamina, the mana for magic, the limit gauge, and the
+   special gauge as a row of points. Each is a leaning bar: see
+   `extensions.village.hud.draw_gauge`. The health turns red below a quarter. What a
+   blow takes stays pale on the health bar for a moment, then drains. In a surge, the limit gauge turns
    gold, says `SURGE`, and empties as it ends. Through a ultimate
    special's start-up, `ULTIMATE` stands large in the middle of the
    frame, and a gold star grows at the player's sword hand. The
@@ -25,15 +30,19 @@
 3. **The combo**, such as `12 HITS`, on the right, while two blows or more
    have landed and the combo lasts. It fades as the combo ends.
 4. **Each bandit's health and stamina**, over its head, while it fights or is
-   hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy
+   hurt. What a blow takes stays pale on the health bar, then drains. A staggered bandit shows `BREAK`, or `FINISH` when a heavy
    attack would finish it. A bandit that winds up a heavy attack shows a
    red `!`, a warning of a strong blow. A bandit that winds up a piercing
    attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under
    its bars.
 5. **A dummy's stamina**, over its head, while its stamina is not full.
-6. **The lock's mark**: four gold dots around the locked target's chest.
-7. **The numbers and the words** of the blows, which rise and fade. They
-   stand under `TOP_BAND`, so they do not cross the compass.
+6. **The lock's mark**: a thin gold ring of four arcs, and a dot, around
+   the locked target's chest.
+7. **The numbers and the words** of the blows, which rise and fade,
+   ringed dark so they read over the sky. A number stands half again as
+   large as a word, a critical one twice as large, and each pops larger
+   as it appears. They stand under `TOP_BAND`, so they do not cross the
+   compass.
 8. **The edges of the frame**, tinted: blue while the player's perfect
    dodge slows the foes; gold through an ultimate; and red below a
    quarter of the player's health. A stamina recovery rings the player's feet
@@ -74,9 +83,16 @@ from extensions.village.combat import (
 from extensions.village.companion import ASSIST_FULL
 from extensions.village.foes import POSTED, bandit_fighter
 from extensions.village.effects_hud import draw_effects
-from extensions.village.raid_hud import draw_raid
+from extensions.village.raid_hud import (
+    DIM_TEXT,
+    MANA_COLOR,
+    draw_raid,
+    party_box,
+)
+from extensions.village.styles import MAGIC, style_name
 from extensions.village.slashes import (
     PIERCE_TRAIL,
+    draw_impact,
     FOE_TRAIL,
     OVER_TRAIL,
     draw_ring,
@@ -84,10 +100,19 @@ from extensions.village.slashes import (
     glow_star,
 )
 from extensions.village.hud import (
+    TextStyle,
+    draw_arcs,
+    text_size,
+    draw_gauge,
+    draw_panel,
+    draw_styled,
+    styled_width,
+    clear_span,
     GOLD_TEXT,
     SHADOW,
     WHITE_TEXT,
     Rgb,
+    draw_outlined,
     draw_text,
     fill_box,
     hud_scale,
@@ -95,6 +120,8 @@ from extensions.village.hud import (
     text_width,
 )
 from math.vector3 import Vector3
+from render.tasks import TaskGroup
+from renderers.renderer import available_workers
 from std.math import sqrt
 from render.framebuffer import Framebuffer
 from units.si import METER, SECOND
@@ -104,7 +131,11 @@ comptime HEALTH = Rgb(96, 200, 90)
 comptime WOUNDED = Rgb(225, 70, 50)
 """The color of a fighter's health below a quarter, and of a bandit's."""
 comptime STAMINA_COLOR = Rgb(140, 205, 255)
-"""The color of stamina."""
+"""The color of a fighter's stamina."""
+comptime LOW_STAMINA = Float32(0.25)
+"""The share of the player's stamina below which the gauge turns amber."""
+comptime LOW_STAMINA_COLOR = Rgb(255, 170, 60)
+"""The color of the player's stamina when it runs low."""
 comptime SPECIAL_COLOR = Rgb(255, 190, 70)
 """The color of the special gauge's points."""
 comptime LIMIT_COLOR = Rgb(200, 120, 255)
@@ -140,9 +171,35 @@ begins, in meters: half a man's shoulders."""
 comptime HURT_REACH = Float32(0.4)
 """How far from the frame's middle a blow's mark stands, as a share of
 the frame's width across and of its height down."""
-comptime HURT_ARC = Float32(0.06)
-"""How far apart the squares of a blow's mark stand along its arc, as a
-share of the way from the middle."""
+comptime HURT_SPREAD = Float32(0.2)
+"""How far a blow's mark reaches each side of its middle along its arc, as
+the sine of the angle from the frame's middle."""
+comptime HURT_THICK = 4
+"""Half the width of a blow's mark at its middle, in dots of the display's
+font."""
+comptime CHIP_COLOR = Rgb(255, 236, 196)
+"""The color of the health a blow took, behind the health on a bar."""
+comptime POP_SECONDS = Float32(0.12)
+"""How long a number's box stands larger as it appears, in seconds."""
+comptime POP_EASE = Float32(0.25)
+"""How long a number takes to ease back to its size as it appears, in
+seconds."""
+comptime CRIT_GLOW = Float32(0.35)
+"""How strong the gold halo round a critical blow's number is, from 0 to
+1."""
+comptime POP_GROW = Float32(0.4)
+"""How much larger a number stands as it appears: 0.4 is 40 percent."""
+comptime POPUP_FADE = Float32(0.3)
+"""How long a number or a word takes to fade at its end, in seconds."""
+comptime BAR_GAP = 2
+"""How many dots of the display's font stand between two foes' bars that
+`stack_boxes` sets one over the other."""
+comptime POPUP_STACK = 3
+"""How many of its own heights newer numbers may lift a number before it
+is not drawn."""
+comptime POPUP_GAP = 1
+"""How many dots of a number's font stand between two numbers that
+`stack_boxes` sets one over the other."""
 comptime TOP_BAND = 46
 """How many dots of the heads-up display's font the compass, its caption
 and the target panel take at the top of the frame. The numbers and the
@@ -176,21 +233,22 @@ def draw_bar(
     height: Int,
     share: Float32,
     color: Rgb,
+    chip: Float32 = -1,
 ):
-    """Draw a gauge: a dark box, filled from the left by a share.
+    """Draw a gauge, as `extensions.village.hud.draw_gauge` does.
 
     Args:
         frame: The frame.
-        x: The left of the box, in pixels.
+        x: The left of the bar's foot, in pixels.
         y: Its top, in pixels.
         width: Its width, in pixels.
         height: Its height, in pixels.
         share: How full it is, from 0 to 1.
         color: The fill's color.
+        chip: How full it was a moment ago, from 0 to 1; less than
+            `share` for none.
     """
-    var full = Int(Float32(width) * max(Float32(0), min(Float32(1), share)))
-    fill_box(frame, x - 1, y - 1, x + width + 1, y + height + 1, SHADOW, 0.6)
-    fill_box(frame, x, y, x + full, y + height, color, 1)
+    draw_gauge(frame, x, y, width, height, share, color, chip)
 
 
 def on_screen(
@@ -231,82 +289,151 @@ def _centered(
     color: Rgb,
     alpha: Float32,
 ):
-    """Draw a line of text centered on a pixel's x."""
-    draw_text(
+    """Draw a line of text centered on a pixel's x, outlined so that it
+    reads over the sky."""
+    draw_outlined(
         frame, x - text_width(text, scale) // 2, y, text, scale, color, alpha
     )
 
 
-def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
-    """Draw the player's stance, health, stamina and special gauge."""
+def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
+    """Draw the player's style and stance, health, stamina, mana, limit
+    and special gauges, in the bottom right, on a panel of frosted glass.
+    """
     ref f = battle.fighter
+    var unit = Float32(scale)
     var margin = 6 * scale
-    var width = 72 * scale
-    var x = frame.width - margin - width
-    var y = frame.height - margin - 4 * scale
-    # The special gauge: one box a point, filled by its share.
+    var width = 100 * scale
+    var right = frame.width - margin
+    var x = right - width
+    var base = frame.height - margin
+    var magic = f.style == MAGIC
+    # From the foot up: the special points, the limit, the stamina, the
+    # mana for magic, the health, and the words over it.
+    var pips = base - 2 * scale
+    var limit = pips - 3 * scale
+    var stamina = limit - 4 * scale
+    var mana = stamina - 3 * scale
+    var health = (mana if magic else stamina) - 6 * scale
+    var words = health - 9 * scale
+    draw_panel(
+        frame,
+        x - 6 * scale,
+        words - 5 * scale,
+        right + 4 * scale,
+        base + 4 * scale,
+        scale,
+    )
+    # The special points: one leaning pip a point, filled by its share.
     var points = Int(f.parameters.special_points + 0.5)
-    var pip = 6 * scale
+    var pip = 7 * scale
     for k in range(points):
-        var share = f.special - Float32(k)
-        draw_bar(
+        var at = right - (points - k) * (pip + 2 * scale)
+        draw_gauge(
             frame,
-            x + width - (points - k) * (pip + 2 * scale),
-            y,
+            at,
+            pips,
             pip,
-            3 * scale,
-            share,
+            2 * scale,
+            f.special - Float32(k),
             SPECIAL_COLOR,
         )
-    if points > 0:
-        draw_text(frame, x, y - 2 * scale, "SP", scale, SPECIAL_COLOR, 1)
-    y -= 7 * scale
     var share = f.limit / LIMIT
     var color = LIMIT_COLOR
-    var label = String("SG")
     if f.over > 0:
         share = f.over / OVER_SECONDS
         color = GOLD_TEXT
-        label = "SURGE"
-    draw_bar(frame, x, y, width, 2 * scale, share, color)
-    draw_text(
-        frame,
-        x - text_width(label, scale) - 4 * scale,
-        y - 2 * scale,
-        label,
-        scale,
-        color,
-        1,
-    )
-    y -= 10 * scale
-    draw_bar(
+        draw_styled(
+            frame,
+            Float32(x),
+            Float32(pips - scale // 2),
+            "SURGE",
+            _label(scale, GOLD_TEXT),
+        )
+    draw_gauge(frame, x, limit, width, scale, share, color)
+    # Stamina turns amber when it runs low, before a dodge or a sprint
+    # fails for the want of it.
+    var spent = f.stamina / f.parameters.stamina
+    draw_gauge(
         frame,
         x,
-        y,
+        stamina,
         width,
-        3 * scale,
-        f.stamina / f.parameters.stamina,
-        STAMINA_COLOR,
+        2 * scale,
+        spent,
+        STAMINA_COLOR if spent >= LOW_STAMINA else LOW_STAMINA_COLOR,
     )
-    draw_text(
-        frame, x - 16 * scale, y - 2 * scale, "ST", scale, STAMINA_COLOR, 1
+    if magic:
+        draw_gauge(
+            frame,
+            x,
+            mana,
+            width,
+            scale + scale // 2,
+            f.mana / f.parameters.mana,
+            MANA_COLOR,
+        )
+    var whole = f.health / f.parameters.health
+    var hue = HEALTH if whole >= 0.25 else WOUNDED
+    draw_gauge(
+        frame,
+        x,
+        health,
+        width,
+        4 * scale,
+        whole,
+        hue,
+        f.chip / f.parameters.health,
     )
-    y -= 12 * scale
-    var health = f.health / f.parameters.health
-    var hue = HEALTH if health >= 0.25 else WOUNDED
-    draw_bar(frame, x, y, width, 4 * scale, health, hue)
-    draw_text(frame, x - 16 * scale, y - scale, "HP", scale, hue, 1)
-    var count = String(Int(f.health + 0.5), "/", Int(f.parameters.health))
-    var right = x + width
-    y -= 10 * scale
-    draw_text(
-        frame, right - text_width(count, scale), y, count, scale, WHITE_TEXT, 1
+    # The health as a number, large, and its most, small and dim.
+    var most = String(" / ", Int(f.parameters.health))
+    var small = _label(scale, DIM_TEXT)
+    var tail = styled_width(most, small.size)
+    draw_styled(
+        frame,
+        Float32(right) - tail,
+        Float32(words) + 7 * unit - small.size,
+        most,
+        small,
     )
-    var stance = stance_label(f.stance)
-    y -= 10 * scale
-    draw_text(
-        frame, right - text_width(stance, scale), y, stance, scale, GOLD_TEXT, 1
+    var count = String(Int(f.health + 0.5))
+    # Red while what a blow took still drains from the bar.
+    var hurt = f.chip > f.health + 0.5
+    var big = TextStyle(
+        7 * unit,
+        WOUNDED if hurt else WHITE_TEXT,
+        1,
+        0,
+        0.8 * unit,
+        0.25 * unit,
+        0,
     )
+    draw_styled(
+        frame,
+        Float32(right) - tail - styled_width(count, big.size),
+        Float32(words),
+        count,
+        big,
+    )
+    # The style and the stance, small, on the line's foot.
+    var name = style_name(f.style)
+    var label = _label(scale, WHITE_TEXT)
+    var foot = Float32(words) + 7 * unit - label.size
+    draw_styled(frame, Float32(x), foot, name, label)
+    draw_styled(
+        frame,
+        Float32(x) + styled_width(name + "  ", label.size),
+        foot,
+        stance_label(f.stance),
+        _label(scale, GOLD_TEXT),
+    )
+
+
+def _label(scale: Int, color: Rgb) -> TextStyle:
+    """Return the style of the display's small words: two thirds the size
+    of its text, with a soft shadow."""
+    var size = Float32(scale) * 4.5
+    return TextStyle(size, color, 1, 0, size * 0.12, 0, 0)
 
 
 def _ring(
@@ -341,27 +468,74 @@ def tint_edges(mut frame: Framebuffer, color: Rgb, strength: Float32):
             Nothing is tinted within `EDGE` of the way from the middle to
             a corner.
     """
-    var cx = Float32(frame.width) / 2
-    var cy = Float32(frame.height) / 2
-    var tint: List[Float32] = [
-        Float32(color.r),
-        Float32(color.g),
-        Float32(color.b),
-    ]
-    # A frame's width and height are positive.
-    for y in range(frame.height):  # pragma: no branch
+    var tasks = max(1, min(available_workers() * 2, frame.height))
+    var group = TaskGroup()
+    for t in range(tasks):  # pragma: no branch
+        group.create_task(
+            _tint_task(
+                frame.pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                frame.width,
+                frame.height,
+                color,
+                strength,
+                t * frame.height // tasks,
+                (t + 1) * frame.height // tasks,
+            )
+        )
+    group.wait()
+
+
+__async def _tint_task(
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    color: Rgb,
+    strength: Float32,
+    first: Int,
+    past: Int,
+):
+    """Tint rows `first` to `past`, past the clear middle."""
+    var cx = Float32(width) / 2
+    var cy = Float32(height) / 2
+    var tr = Float32(color.r)
+    var tg = Float32(color.g)
+    var tb = Float32(color.b)
+    for y in range(first, past):  # pragma: no branch
         var dy = (Float32(y) + 0.5 - cy) / cy
-        for x in range(frame.width):  # pragma: no branch
+        var clear = clear_span(y, width, height, EDGE * 1.4142)
+        var x = 0
+        while x < width:
+            if x == clear[0] and clear[1] > clear[0]:
+                x = clear[1]
+                continue
             var dx = (Float32(x) + 0.5 - cx) / cx
             var reach = sqrt((dx * dx + dy * dy) / 2)
-            if reach <= EDGE:
-                continue
-            var share = (reach - EDGE) / (1 - EDGE)
-            var w = min(Float32(1), share * share) * strength
-            var at = (y * frame.width + x) * 4
-            for k in range(3):  # pragma: no branch
-                var mixed = Float32(frame.pixels[at + k]) * (1 - w)
-                frame.pixels[at + k] = UInt8(Int(mixed + tint[k] * w + 0.5))
+            if reach > EDGE:
+                var share = (reach - EDGE) / (1 - EDGE)
+                var w = min(Float32(1), share * share) * strength
+                var at = (y * width + x) * 4
+                pixels[unsafe_offset=at] = UInt8(
+                    Int(
+                        Float32(pixels[unsafe_offset=at]) * (1 - w)
+                        + tr * w
+                        + 0.5
+                    )
+                )
+                pixels[unsafe_offset=at + 1] = UInt8(
+                    Int(
+                        Float32(pixels[unsafe_offset=at + 1]) * (1 - w)
+                        + tg * w
+                        + 0.5
+                    )
+                )
+                pixels[unsafe_offset=at + 2] = UInt8(
+                    Int(
+                        Float32(pixels[unsafe_offset=at + 2]) * (1 - w)
+                        + tb * w
+                        + 0.5
+                    )
+                )
+            x += 1
 
 
 def _edges(
@@ -425,11 +599,27 @@ def _assist(mut frame: Framebuffer, battle: Battle, scale: Int):
             margin,
             y,
             48 * scale,
-            3 * scale,
+            2 * scale,
             mind.assist / ASSIST_FULL,
             color,
         )
-        draw_text(frame, margin, y - 9 * scale, label, scale, color, 1)
+        var style = _label(scale, color)
+        # Ready, the words glow gold, as a critical blow's number does.
+        if mind.ready():
+            var halo = style
+            halo.alpha = CRIT_GLOW
+            halo.weight = style.size * 0.22
+            halo.shadow = 0
+            draw_styled(
+                frame, Float32(margin), Float32(y - 7 * scale), label, halo
+            )
+        draw_styled(
+            frame,
+            Float32(margin),
+            Float32(y - 7 * scale),
+            label,
+            style,
+        )
 
 
 def _glow(
@@ -472,15 +662,16 @@ def _ultimate(
         return
     var share = f.clock / startup
     var title = String("ULTIMATE")
-    var big = scale * 3
-    draw_text(
+    # It lands large and eases to its size, as a blow's number does,
+    # about its middle.
+    var rest = text_size(scale * 3)
+    var big = rest * pop_grow(f.clock)
+    draw_styled(
         frame,
-        (frame.width - text_width(title, big)) // 2,
-        frame.height // 4,
+        (Float32(frame.width) - styled_width(title, big)) / 2,
+        Float32(frame.height // 4) - (big - rest) / 2,
         title,
-        big,
-        GOLD_TEXT,
-        1,
+        TextStyle(big, GOLD_TEXT, 1, big * 0.08, big * 0.1, big * 0.03, 0.14),
     )
     var at = on_screen(
         camera,
@@ -531,6 +722,8 @@ def draw_battle(
         _star(frame, camera, look, bolt.at, BOLT_GLOW, color)
     for knife in battle.knives:
         _star(frame, camera, look, knife.at, KNIFE_GLOW, FOE_TRAIL)
+    for impact in battle.impacts:
+        draw_impact(frame, camera, look, impact)
     _ring(frame, battle, scene, camera, look)
     _edges(frame, battle, scene, camera, look)
     _gauges(frame, battle, scale)
@@ -540,17 +733,32 @@ def draw_battle(
         _ultimate(frame, battle, scene, camera, look, scale)
     if f.combo >= 2:
         var alpha = note_alpha(f.combo_age, COMBO_KEEP)
-        var hits = String(f.combo, " HITS")
-        draw_text(
+        var count = String(f.combo)
+        var word = _label(scale, GOLD_TEXT)
+        word.alpha = alpha
+        var right = Float32(w - 6 * scale) - styled_width(" HITS", word.size)
+        var y = Float32(h * 2 // 5)
+        # Each hit pops the count, which then eases back to its size: it
+        # grows up from its foot, beside `HITS`.
+        var rest = text_size(2 * scale)
+        var big = rest * pop_grow(f.combo_age)
+        draw_styled(
             frame,
-            w - 6 * scale - text_width(hits, scale * 2),
-            h * 2 // 5,
-            hits,
-            scale * 2,
-            GOLD_TEXT,
-            alpha,
+            right - styled_width(count, big),
+            y + rest - big,
+            count,
+            TextStyle(
+                big, GOLD_TEXT, alpha, big * 0.1, big * 0.08, big * 0.04, 0.14
+            ),
         )
+        draw_styled(frame, right, y + big - word.size, " HITS", word)
     var bar = 30 * scale
+    # The bars' boxes, the farthest foe first, so that a nearer foe's bar
+    # keeps its place and a farther one's stands over it.
+    var foes = List[Int]()
+    var depths = List[Float32]()
+    var bar_lefts = List[Int]()
+    var bar_tops = List[Int]()
     for index in range(len(battle.foes)):
         ref foe = battle.foes[index]
         if foe.down >= 0:
@@ -558,20 +766,37 @@ def draw_battle(
         var hurt = foe.fighter.health < foe.fighter.parameters.health
         if foe.brain.state == POSTED and not hurt:
             continue
-        var over = on_screen(
-            camera,
-            look,
-            foe.character.position + Vector3(0, HEAD + 0.2, 0),
-            w,
-            h,
-        )
+        var head = foe.character.position + Vector3(0, HEAD + 0.2, 0)
+        var over = on_screen(camera, look, head, w, h)
         if not over:
             continue
-        var x = Int(over.value().x) - bar // 2
-        var y = Int(over.value().y)
+        var off = head - camera.position
+        var depth = off.x * look.x + off.y * look.y + off.z * look.z
+        # Insert it before the first nearer one.
+        var k = 0
+        while k < len(depths) and depths[k] >= depth:
+            k += 1
+        foes.insert(k, index)
+        depths.insert(k, depth)
+        bar_lefts.insert(k, Int(over.value().x) - bar // 2)
+        bar_tops.insert(k, Int(over.value().y))
+    var bar_widths = List[Int](length=len(foes), fill=bar)
+    var bar_heights = List[Int](length=len(foes), fill=(4 + BAR_GAP) * scale)
+    bar_tops = stack_boxes(bar_lefts, bar_tops, bar_widths, bar_heights)
+    for k in range(len(foes)):
+        ref foe = battle.foes[foes[k]]
+        var x = bar_lefts[k]
+        var y = bar_tops[k]
         ref p = foe.fighter.parameters
         draw_bar(
-            frame, x, y, bar, 2 * scale, foe.fighter.health / p.health, WOUNDED
+            frame,
+            x,
+            y,
+            bar,
+            2 * scale,
+            foe.fighter.health / p.health,
+            WOUNDED,
+            foe.fighter.chip / p.health,
         )
         draw_bar(
             frame,
@@ -598,6 +823,21 @@ def draw_battle(
             _glow(frame, camera, look, foe.character.position, foe.fighter)
         if foe.fighter.raging():
             _centered(frame, middle, y + 6 * scale, "RAGE", scale, DANGER, 1)
+        # A captain or a thrower is named over its bars, small, where a
+        # break or a warning does not stand.
+        var name = target_name(battle, foes[k])
+        var busy = foe.fighter.move == STAGGER or foe.fighter.move == HEAVY
+        if name != "BANDIT" and not foe.beast and not busy:
+            var plate = _label(scale, WHITE_TEXT)
+            plate.size = Float32(scale) * 3.5
+            plate.alpha = 0.9
+            draw_styled(
+                frame,
+                Float32(x),
+                Float32(y) - plate.size - Float32(scale),
+                name,
+                plate,
+            )
     for index in range(len(battle.dummies)):
         ref practice = battle.dummies[index]
         ref fighter = practice.fighter
@@ -626,43 +866,306 @@ def draw_battle(
             h,
         )
         if mark:
-            var x = Int(mark.value().x)
-            var y = Int(mark.value().y)
-            var r = 7 * scale
-            var d = scale + 1
-            for corner in [
-                (-r, 0),
-                (r, 0),
-                (0, -r),
-                (0, r),
-            ]:  # pragma: no branch
-                var cx = x + corner[0]
-                var cy = y + corner[1]
-                fill_box(frame, cx - d, cy - d, cx + d, cy + d, GOLD_TEXT, 1)
+            var x = mark.value().x
+            var y = mark.value().y
+            # A thin gold ring of four arcs round the chest, on a dark
+            # ring, with a dot at its middle.
+            var unit = Float32(scale)
+            var r = 6 * unit
+            var thin = max(Float32(1.5), 0.55 * unit)
+            # Red while the foe winds up a heavy attack: the warning stands
+            # where the eye already is.
+            var ring = GOLD_TEXT
+            if battle.lock < len(battle.foes):
+                if battle.foes[battle.lock].fighter.move == HEAVY:
+                    ring = DANGER
+            draw_arcs(frame, x, y, r, thin + 2, 2 * unit, SHADOW, 0.55)
+            draw_arcs(frame, x, y, r, thin, 2 * unit + 1, ring, 1)
+            draw_arcs(frame, x, y, 0, 1.6 * unit, 0, SHADOW, 0.5)
+            draw_arcs(frame, x, y, 0, 1.1 * unit, 0, ring, 1)
     draw_raid(frame, battle, camera, look, scale)
     draw_effects(frame, battle, camera, look)
+    # The numbers' boxes on the frame, the oldest first.
+    var shown = List[Int]()
+    var lefts = List[Int]()
+    var tops = List[Int]()
+    var widths = List[Int]()
+    var heights = List[Int]()
+    var sizes = List[Int]()
+    for index in range(len(battle.popups)):
+        ref popup = battle.popups[index]
+        var at = on_screen(camera, look, popup.at, w, h)
+        if not at:
+            continue
+        var size = popup_scale(popup.text, popup.color, popup.age, scale)
+        var wide = text_width(popup.text, size)
+        shown.append(index)
+        sizes.append(size)
+        lefts.append(Int(at.value().x) - wide // 2)
+        # A box's top is the outline's, a stroke above the text. Its
+        # height holds the text, the outline and the gap.
+        tops.append(Int(at.value().y))
+        widths.append(wide)
+        heights.append((8 + POPUP_GAP) * size)
+    # A newer number keeps its place. An older one that would cover it
+    # moves up over it. The foes' bars are placed after the newest, so
+    # they keep their places, and a number moves up over a bar.
+    var count = len(tops)
+    var natural = tops.copy()
+    lefts.extend(bar_lefts.copy())
+    tops.extend(bar_tops.copy())
+    widths.extend(bar_widths.copy())
+    heights.extend(bar_heights.copy())
+    # The party's panel keeps its place too: a number over it moves up
+    # clear of it, or is not drawn.
+    var party = party_box(h, battle, scale)
+    lefts.append(party[0])
+    tops.append(party[1])
+    widths.append(party[2])
+    heights.append(party[3])
+    tops = stack_boxes(lefts, tops, widths, heights)
+    tops.resize(count, 0)
+    # A number that the newer ones lift more than `POPUP_STACK` of its own
+    # heights is not drawn: a quick combo writes a short column, not a
+    # wall over the fighter.
+    var kept = List[Bool](capacity=count)
+    for k in range(count):
+        kept.append(natural[k] - tops[k] <= POPUP_STACK * heights[k])
     # Numbers over a head high in the frame stand under the compass and
     # the target panel, so they do not cross them. They move down
     # together, so they keep their order and do not cover each other.
     var band = (TOP_BAND + hud_drop(battle)) * scale
-    var lowest = band
-    for popup in battle.popups:
-        var at = on_screen(camera, look, popup.at, w, h)
-        if at:
-            lowest = min(lowest, Int(at.value().y))
-    for popup in battle.popups:
-        var at = on_screen(camera, look, popup.at, w, h)
-        if not at:
+    var drop = 0
+    for k in range(count):
+        if kept[k]:
+            drop = max(drop, band - tops[k])
+    for k in range(len(shown)):
+        if not kept[k]:
             continue
-        _centered(
-            frame,
-            Int(at.value().x),
-            Int(at.value().y) + band - lowest,
-            popup.text,
-            scale,
-            popup.color,
-            note_alpha(popup.age, POPUP_SECONDS),
+        # A number that the move down set over the party's panel is not
+        # drawn: the panel stands over it.
+        var over_x = _crosses(lefts[k], widths[k], party[0], party[2])
+        if over_x and _crosses(tops[k] + drop, heights[k], party[1], party[3]):
+            continue
+        ref popup = battle.popups[shown[k]]
+        # The number's size without its pop, grown by the pop's ease about
+        # the middle of its box's top, so that it keeps under the band.
+        var base = popup_scale(popup.text, popup.color, POP_EASE, scale)
+        var style = popup_style(
+            popup.text, popup.color, popup_alpha(popup.age), base
         )
+        # A word does not pop: its size is the display's.
+        if base != scale:
+            var grow = pop_grow(popup.age)
+            style.size *= grow
+            style.outline *= grow
+            style.shadow *= grow
+            style.weight *= grow
+        var middle = Float32(lefts[k]) + Float32(widths[k]) / 2
+        var x = middle - styled_width(popup.text, style.size) / 2
+        var y = Float32(tops[k] + drop) + style.outline + 1
+        # A critical blow's gold number glows: a faint gold halo, much
+        # bolder than the number, under it.
+        if is_gold(popup.color) and base != scale:
+            var halo = style
+            halo.alpha *= CRIT_GLOW
+            halo.weight += style.size * 0.22
+            halo.outline = 0
+            halo.shadow = 0
+            draw_styled(frame, x, y, popup.text, halo)
+        draw_styled(frame, x, y, popup.text, style)
+
+
+def fill_triangle(
+    mut frame: Framebuffer,
+    ax: Float32,
+    ay: Float32,
+    bx: Float32,
+    by: Float32,
+    cx: Float32,
+    cy: Float32,
+    color: Rgb,
+    alpha: Float32,
+):
+    """Blend a color over each pixel whose middle lies in a triangle.
+
+    Args:
+        frame: The frame.
+        ax: The first corner's x, in pixels.
+        ay: The first corner's y, in pixels.
+        bx: The second corner's x, either way round.
+        by: The second corner's y.
+        cx: The third corner's x.
+        cy: The third corner's y.
+        color: The color.
+        alpha: How much of it shows, from 0 to 1.
+    """
+    var area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+    if area == 0:
+        return
+    # Each edge's test, turned so that the inside is not negative.
+    var turn = Float32(1) if area > 0 else Float32(-1)
+    var x0 = max(0, Int(min(ax, min(bx, cx))))
+    var x1 = min(frame.width - 1, Int(max(ax, max(bx, cx))))
+    var y0 = max(0, Int(min(ay, min(by, cy))))
+    var y1 = min(frame.height - 1, Int(max(ay, max(by, cy))))
+    for y in range(y0, y1 + 1):
+        var py = Float32(y) + 0.5
+        for x in range(x0, x1 + 1):
+            var px = Float32(x) + 0.5
+            var e0 = ((bx - ax) * (py - ay) - (by - ay) * (px - ax)) * turn
+            var e1 = ((cx - bx) * (py - by) - (cy - by) * (px - bx)) * turn
+            var e2 = ((ax - cx) * (py - cy) - (ay - cy) * (px - cx)) * turn
+            if min(e0, min(e1, e2)) < 0:
+                continue
+            fill_box(frame, x, y, x + 1, y + 1, color, alpha)
+
+
+def stack_boxes(
+    lefts: List[Int], tops: List[Int], widths: List[Int], heights: List[Int]
+) -> List[Int]:
+    """Set boxes over the fighters one over another where they would cover
+    each other: the numbers of the blows, and the foes' bars.
+
+    The boxes are taken from the last to the first. A box that crosses a
+    box already placed moves up, until its bottom touches that box's top.
+    So the last box stays where it is, and the boxes before it stand over
+    it.
+
+    Args:
+        lefts: The left of each box, in pixels. The box that keeps its
+            place last.
+        tops: The top of each box, in pixels.
+        widths: The width of each box, in pixels.
+        heights: The height of each box, in pixels, with the space below
+            it.
+
+    Returns:
+        The top of each box after the move, in the same order.
+    """
+    var placed = tops.copy()
+    var count = len(tops)
+    for back in range(count):
+        var k = count - 1 - back
+        # Each move takes the box higher than before, to the top of one of
+        # the boxes after it less its height, so the moves end.
+        var moved = True
+        while moved:
+            moved = False
+            for j in range(k + 1, count):
+                var across = _crosses(lefts[k], widths[k], lefts[j], widths[j])
+                if across and _crosses(
+                    placed[k], heights[k], placed[j], heights[j]
+                ):
+                    placed[k] = placed[j] - heights[k]
+                    moved = True
+    return placed^
+
+
+def _crosses(a: Int, a_size: Int, b: Int, b_size: Int) -> Bool:
+    """Return whether two spans of pixels share a pixel."""
+    return a < b + b_size and b < a + a_size
+
+
+def is_gold(color: Rgb) -> Bool:
+    """Return whether a color is the gold of a critical blow's number.
+
+    Args:
+        color: The color.
+
+    Returns:
+        Whether it is `GOLD_TEXT`.
+    """
+    # One number of the three bytes: gold or not.
+    var packed = (color.r * 256 + color.g) * 256 + color.b
+    return packed == (GOLD_TEXT.r * 256 + GOLD_TEXT.g) * 256 + GOLD_TEXT.b
+
+
+def popup_scale(text: String, color: Rgb, age: Float32, scale: Int) -> Int:
+    """Return the pixels a dot of a number or a word over a fighter takes.
+
+    A number stands half again as large as the display's words, and a
+    critical blow's gold number twice as large. Each number stands one
+    dot larger for `POP_SECONDS` as it appears, so it pops.
+
+    Args:
+        text: The number or the word.
+        color: Its color: gold for a critical blow.
+        age: How long it has shown, in seconds.
+        scale: The pixels a dot of the display's font takes.
+
+    Returns:
+        The pixels a dot takes, at least one.
+    """
+    var bytes = text.as_bytes()
+    var first = Int(bytes[0]) if len(bytes) > 0 else 0
+    var number = (first >= ord("0") and first <= ord("9")) or first == ord("+")
+    if not number:
+        return scale
+    var size = scale + (scale + 1) // 2
+    if is_gold(color):
+        size = 2 * scale
+    if age < POP_SECONDS:
+        size += max(1, scale // 2)
+    return size
+
+
+def popup_style(
+    text: String, color: Rgb, alpha: Float32, scale: Int
+) -> TextStyle:
+    """Return how a number or a word over a fighter is drawn.
+
+    A number is bold and leans, as a blow's numbers do in a game of
+    today. A word stands upright. Each is ringed dark, so that it reads
+    over the sky.
+
+    Args:
+        text: The number or the word.
+        color: Its color.
+        alpha: How strongly it shows.
+        scale: Its size: a capital stands 7 times this tall, in pixels.
+
+    Returns:
+        The style.
+    """
+    var size = text_size(scale)
+    var bytes = text.as_bytes()
+    var first = Int(bytes[0]) if len(bytes) > 0 else 0
+    var number = (first >= ord("0") and first <= ord("9")) or first == ord("+")
+    var ring = size * 0.12
+    if not number:
+        return TextStyle(size, color, alpha, ring, size * 0.08, 0, 0)
+    return TextStyle(size, color, alpha, ring, size * 0.1, size * 0.05, 0.14)
+
+
+def pop_grow(age: Float32) -> Float32:
+    """Return how much larger a number stands as it appears: `POP_GROW`
+    more at once, easing back to its size over `POP_EASE`.
+
+    Args:
+        age: How long it has shown, in seconds.
+
+    Returns:
+        From `1 + POP_GROW` down to 1.
+    """
+    var left = max(Float32(0), 1 - age / POP_EASE)
+    return 1 + POP_GROW * left * left
+
+
+def popup_alpha(age: Float32) -> Float32:
+    """Return how strongly a number or a word over a fighter shows.
+
+    Args:
+        age: How long it has shown, in seconds.
+
+    Returns:
+        One until `POPUP_FADE` before `POPUP_SECONDS`, then less, to zero
+        at `POPUP_SECONDS` and after.
+    """
+    var left = POPUP_SECONDS - age
+    if left <= 0:
+        return 0
+    return min(Float32(1), left / POPUP_FADE)
 
 
 def target_name(battle: Battle, index: Int) -> String:
@@ -705,18 +1208,33 @@ def draw_target(mut frame: Framebuffer, battle: Battle, top: Int):
     var name = target_name(battle, battle.lock)
     var width = frame.width // 4
     var x = (frame.width - width) // 2
-    _centered(frame, frame.width // 2, top, name, scale, WHITE_TEXT, 1)
+    var label = _label(scale, WHITE_TEXT)
+    label.outline = label.size * 0.1
+    draw_styled(
+        frame,
+        Float32(frame.width) / 2 - styled_width(name, label.size) / 2,
+        Float32(top),
+        name,
+        label,
+    )
     ref p = foe.fighter.parameters
-    var y = top + 9 * scale
+    var y = top + 7 * scale
     draw_bar(
-        frame, x, y, width, 3 * scale, foe.fighter.health / p.health, WOUNDED
+        frame,
+        x,
+        y,
+        width,
+        2 * scale + scale // 2,
+        foe.fighter.health / p.health,
+        WOUNDED,
+        foe.fighter.chip / p.health,
     )
     draw_bar(
         frame,
         x,
         y + 4 * scale,
         width,
-        scale,
+        max(2, scale // 2),
         foe.fighter.stamina / p.stamina,
         STAMINA_COLOR,
     )
@@ -773,22 +1291,51 @@ def draw_hurts(mut frame: Framebuffer, battle: Battle, look: Vector3):
     var my = Float32(frame.height) / 2
     var rx = Float32(frame.width) * HURT_REACH
     var ry = Float32(frame.height) * HURT_REACH
-    var size = 3 * scale
+    var half = Float32(HURT_THICK * scale)
     for hurt in battle.hurts:
         var way = hurt_way(battle.feet, hurt.source, look)
         if way.x == 0 and way.y == 0:
             continue
         var alpha = 0.9 * (1 - hurt.age / HURT_SECONDS)
-        # Seven squares along the arc, across the way.
-        for k in range(-3, 4):  # pragma: no branch
-            var t = Float32(k) * HURT_ARC
-            var x = way.x - t * way.y
-            var y = way.y + t * way.x
-            var px = Int(mx + x * rx)
-            var py = Int(my + y * ry)
-            fill_box(
-                frame, px - size, py - size, px + size, py + size, DANGER, alpha
-            )
+        # The mark is a crescent on the ellipse through the middles of the
+        # frame's edges: widest and strongest at its middle, and thin and
+        # faint at its ends.
+        var cx = Int(mx + way.x * rx)
+        var cy = Int(my + way.y * ry)
+        # The box round the arc: its run across the way, and how far its
+        # ends bow in from its middle.
+        var bow = HURT_SPREAD * HURT_SPREAD / 2
+        var reach_x = Int(
+            HURT_SPREAD * rx * abs(way.y) + bow * rx * abs(way.x) + half + 2
+        )
+        var reach_y = Int(
+            HURT_SPREAD * ry * abs(way.x) + bow * ry * abs(way.y) + half + 2
+        )
+        for py in range(
+            max(0, cy - reach_y), min(frame.height, cy + reach_y + 1)
+        ):  # pragma: no branch
+            var v = (Float32(py) + 0.5 - my) / ry
+            for px in range(
+                max(0, cx - reach_x), min(frame.width, cx + reach_x + 1)
+            ):  # pragma: no branch
+                var u = (Float32(px) + 0.5 - mx) / rx
+                var r = sqrt(u * u + v * v)
+                # How far along the arc from its middle, from 0 to 1.
+                var along = abs(u * way.y - v * way.x) / r / HURT_SPREAD
+                if along >= 1:
+                    continue
+                var taper = 1 - along * along
+                var thick = half * (0.3 + 0.7 * taper)
+                # How far off the ellipse, in pixels.
+                var off = (
+                    abs(r - 1) * sqrt(u * u * rx * rx + v * v * ry * ry) / r
+                )
+                if off >= thick:
+                    continue
+                var edge = min(Float32(1), 2 * (1 - off / thick))
+                fill_box(
+                    frame, px, py, px + 1, py + 1, DANGER, alpha * taper * edge
+                )
 
 
 def boss_fights(battle: Battle) -> Bool:

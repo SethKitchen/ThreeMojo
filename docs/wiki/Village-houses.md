@@ -128,7 +128,9 @@ A step is 32 centimeters deep and at most 18 centimeters high. A door whose sill
 
 ## The stair
 
-A house of two stories or more has a stair from the ground floor up to the first story above. `house_stair` finds it in the model. It runs along the back wall of the hall, the first room of the ground story, and climbs along the plan's +x.
+A house of two stories or more has a stair from each story to the next. `house_stairs` finds the flights in the model, from the ground story up. `house_stair` gives the first. Each flight runs along the back wall of the hall, the first room of the ground story, and climbs along the plan's +x. The flights stand one over the other, in one well.
+
+A climber arrives at a flight's top, at the +x end. To climb on, the climber walks back along the well's open side to the landing at the -x end, where the next flight starts.
 
 | Part | Size |
 |---|---|
@@ -137,11 +139,15 @@ A house of two stories or more has a stair from the ground floor up to the first
 | Tread | 25 centimeters deep, one fewer than the risers. |
 | Landing | 0.9 meters of floor clear before the foot. |
 
-A hall too short for the landing and the treads has no stair. `house_model` takes away the furniture that would stand on the stair, on its landing or over its well.
+A hall too short for the landing and the treads has no stair. The flights stop under the first story that is no more than one riser over the story below it. `house_model` takes away the furniture that would stand on a flight, on its landing or over its well, on every story that a flight reaches.
 
-A railing 1 meter high guards the well's open side upstairs. It reaches down to the ground floor, so it closes the stair's side as well. A railing crosses the well's foot upstairs, and a wall closes the space under the stair's top. `stand_house` draws oak treads and risers, a stringer, a handrail on balusters, a newel post and a balustrade. It cuts the well out of the hall's ceiling and the floor above, with oak trimmers around it.
+A railing 1 meter high guards the well's open side on each upper story. It reaches down to the floor of the flight's foot, so it closes the flight's side as well. On the top story, a railing crosses the well's foot. On a story with a flight above it, the well's foot stays open, because the next flight starts there.
 
-`Doors` opens each door while someone stands within 1.8 meters of its middle, on its floor. The leaf turns at 2.5 radians a second, to a little over a right angle. It closes when nobody is near. A leaf is not solid: the gap in the wall is where a character walks through.
+A wall closes the space under the first flight's top. Under a higher flight's top, the flight below arrives, so that space stays open. A tread under the next flight has the underside of that flight as its ceiling, more than 2 meters over the tread.
+
+`stand_house` draws each flight's oak treads and risers, a stringer, a handrail on balusters, a newel post and a balustrade. A plaster soffit closes the underside of each flight, so the flight below sees a smooth slope. It cuts the well out of each ceiling that a flight rises through, and out of each floor that a flight arrives in. Oak trimmers go around each cut.
+
+`Doors` opens each door while someone stands within 1.8 meters of its middle, on its floor. Someone is the player, a villager, an animal, the companion or a raider of the party. The leaf turns at 2.5 radians a second, to a little over a right angle. It closes when nobody is near. A leaf is not solid: the gap in the wall is where a character walks through.
 
 ## The barn
 
@@ -214,7 +220,7 @@ A glow warms only its own story. A vertex outside the middle of the walls is not
 
 ## Limits
 
-- Only the first story above the ground has a stair. A character does not reach a higher story.
+- The flights are straight and stacked in one well. A house has no turning or spiral stair, and no stair to its attic.
 - A door leaf does not stop a character or a camera.
 - A flame does not light the room as a lamp does. Its light is baked into the vertex colors when the house is built, so a character does not catch it, and it casts no shadow.
 - A house of timber framing or boards has no hearth.

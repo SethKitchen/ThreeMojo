@@ -11,6 +11,7 @@ from extensions.village.terrain import (
     CLIMB,
     OPEN_SKY,
     Floor,
+    FloorIndex,
     Terrain,
     WallSpan,
     view_entry,
@@ -190,6 +191,42 @@ def test_a_camera_stands_before_the_walls() raises:
         terrain.view_reach(Vector3(2, 1.5, 0.05), Vector3(2, 1.5, -2), 0.3),
         0,
     )
+
+
+def test_a_floor_index_finds_the_ceiling_the_floors_give() raises:
+    # Overlapping floors, turned, stacked and far apart: a ground floor, a
+    # step, a story over it, a tread between, and a floor far away.
+    var floors: List[Floor] = [
+        Floor(Lot(0, 0, 4, 3, 0.3), 0, 2.6),
+        Floor(Lot(4.5, 0, 0.3, 1, 0.3), -0.2, OPEN_SKY),
+        Floor(Lot(0, 0, 4, 3, 0.3), 2.8, 5.4),
+        Floor(Lot(1, 1, 0.12, 0.5, 1.1), 1.4, 5.0),
+        Floor(Lot(40, -30, 2, 2, 0), 0.5, 3),
+    ]
+    var terrain = Terrain(_flat(), List[Lot](), List[WallSpan](), floors.copy())
+    var index = FloorIndex(floors)
+    for i in range(-30, 120):
+        for j in range(-90, 30):
+            var x = Float32(i) * 0.37
+            var z = Float32(j) * 0.41
+            for foot in [Float32(0), Float32(1.2), Float32(3)]:
+                assert_equal(
+                    index.ceiling_over(floors, x, z, foot),
+                    terrain.ceiling_over(x, z, foot),
+                )
+    # Past the grid, and with no floors at all, there is open sky.
+    assert_equal(index.ceiling_over(floors, 500, 0, 0), OPEN_SKY)
+    assert_equal(index.ceiling_over(floors, -500, -500, 0), OPEN_SKY)
+    var none = FloorIndex(List[Floor]())
+    assert_equal(none.ceiling_over(List[Floor](), 0, 0, 0), OPEN_SKY)
+    # Floors spread far apart take larger cells, not more of them.
+    var far: List[Floor] = [
+        Floor(Lot(0, 0, 1, 1, 0), 0, 3),
+        Floor(Lot(5000, 5000, 1, 1, 0), 0, 4),
+    ]
+    var wide = FloorIndex(far)
+    assert_true(wide.cell > 2)
+    assert_equal(wide.ceiling_over(far, 5000, 5000, 0), 4)
 
 
 def main() raises:

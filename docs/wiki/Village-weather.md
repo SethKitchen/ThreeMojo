@@ -68,6 +68,8 @@ Each frame, `Village.weather_surfaces` sets the materials of the walls, the wood
 1. **Ground mist.** `ground_mist` veils each pixel by how low and how far its point is. The mist thins to a third over `MIST_HEIGHT`, 2.5 meters, above the pond's water. It comes in over distance, to two thirds at `MIST_NEAR`, 25 meters. It lies in the fog's color. Fog thickens it, and it lies on the ground at dawn, thickest at 6:30.
 2. **Bloom.** `bloom` blurs the light brighter than a threshold, over a frame a quarter of the size, and adds it back. By day only the brightest light glows. At night the threshold is lower and the glow stronger, so the lamps and the windows glow into the dark.
 
+Both share the frame's rows over every core. They decode each byte by a table and encode it by `SrgbBytes`, so they give the same bytes as a power each way. On four cores, the bloom of a bright 640 by 360 frame takes 2.6 milliseconds, and the mist 2.3. A pixel at a time, they took 46 and 28.
+
 ## The clouds
 
 The layer of cloud is a plane 1,500 meters up. Each sky pixel looks along its direction to the plane. The point there gives the cloud's thickness, `cloud_cover`:
@@ -85,4 +87,4 @@ The thickness is found on a grid of `CLOUD_STEP`, 4, pixels and mixed bilinearly
 - The rain darkens the surfaces evenly. It leaves no puddles, and the ground does not shine. It rings the pond: see [Village](Village#the-basin-and-the-ripples).
 - Snow whitens what it covers by an emissive light. It does not build up in drifts, and the leaves keep their green.
 - On a GPU that draws the passes after the triangles, the frame has no ground mist and no bloom.
-- The drops are drawn on the window. `VillageGame.sheltered` keeps them off each pixel whose point stands under a roof, so no rain falls in an open doorway. On a GPU that draws the passes after the triangles, the rain is not kept off a doorway.
+- The drops are drawn on the window. `VillageGame.sheltered` keeps them off each pixel whose point stands under a roof, so no rain falls in an open doorway. A `FloorIndex` sorts the houses' floors into cells of 2 meters, so a pixel tests only the floors over its point. The rows are shared over every core. A rainy 1080p frame at `LOW` takes about 28 milliseconds, as a dry one does. Before, it tested every floor for every pixel, and took 220. On a GPU that draws the passes after the triangles, the rain is not kept off a doorway.

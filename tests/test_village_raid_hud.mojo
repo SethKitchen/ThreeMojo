@@ -34,8 +34,13 @@ from extensions.village.battle_hud import (
     hurt_way,
     target_name,
 )
-from extensions.village.raid_hud import draw_raid, draw_zone, zone_corners
-from extensions.village.styles import AXE, MAGIC, SWORD
+from extensions.village.raid_hud import (
+    draw_raid,
+    draw_zone,
+    party_box,
+    zone_corners,
+)
+from extensions.village.styles import AXE, SWORD
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from std.testing import (
@@ -119,11 +124,13 @@ def test_the_raid_writes_its_bars_party_mark_and_zones() raises:
     var arena = Arena(arena_parameters(0, 0, 6, raid=True, raiders=2))
     var camera = _camera()
     var look = _look()
-    # Out of the fight, nothing of the raid shows but the style.
+    # Out of the fight, nothing of the raid shows: the style is with the
+    # gauges. No raider has joined, so the party has no panel.
+    assert_equal(party_box(180, arena.battle, 1)[3], 0)
     var calm = _frame()
     draw_raid(calm, arena.battle, camera, look, 1)
     var style = _changed(calm)
-    assert_true(style > 0)
+    assert_equal(style, 0)
     ref warden = arena.battle.wardens[0]
     warden.character.position = Vector3(0, 0, -4)
     ref boss = warden.boss
@@ -139,6 +146,11 @@ def test_the_raid_writes_its_bars_party_mark_and_zones() raises:
     var fight = _frame()
     draw_raid(fight, arena.battle, camera, look, 1)
     assert_true(_changed(fight) > style)
+    # The numbers of the blows stand clear of the party's panel: its box
+    # holds a row for each raider who joined.
+    var box = party_box(180, arena.battle, 1)
+    assert_equal(box[3], 2 * 16 + 6)
+    assert_true(box[2] > 0)
     # Each phase, a stagger and the enrage say so; a summon lays no zone.
     var phases: List[BossPhase] = [OPENING, FURY, LAST_STAND]
     for phase in phases:
@@ -308,12 +320,6 @@ def test_the_style_routes_beat_and_book_show() raises:
     var axe = _frame()
     draw_raid(axe, battle, camera, look, 1)
     assert_true(_changed(axe) > 0)
-    # Magic shows its mana.
-    battle.reading = False
-    _ = battle.fighter.set_style(MAGIC)
-    var magic = _frame()
-    draw_raid(magic, battle, camera, look, 1)
-    assert_true(_changed(magic) > 0)
 
 
 def test_each_missile_shows_as_a_star() raises:
