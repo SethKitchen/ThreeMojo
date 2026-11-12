@@ -13,14 +13,14 @@ before the frame is stretched to the window:
    lit windows, fire, glints and lightning. It blurs that light over a
    frame a quarter of the size, and adds it back, so bright light glows
    into what is round it.
-
-Both share the rows over every core, decode the bytes by a table and
-encode them by `SrgbBytes`. So each is about fifteen times as fast as a
-pixel at a time with a power each way, and gives the same bytes.
 2. **Ground mist.** `ground_mist` veils each pixel by how low and how far
    its point is. The mist is thickest on the ground and thins over
    `MIST_HEIGHT` above it. It fades in over distance, so the near ground
    stays clear. It lies in the fog's color.
+
+Both share the rows over every core, decode the bytes by a table and
+encode them by `SrgbBytes`. So each is about fifteen times as fast as a
+pixel at a time with a power each way, and gives the same bytes.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
