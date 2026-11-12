@@ -775,6 +775,22 @@ def test_a_person_sits_works_shelters_and_flees() raises:
         if not residents.leaving[0]:
             break
     assert_false(residents.leaving[0])
+    # A second night that ends before she is home: her way out starts
+    # again. The point that she reached on her last way out does not end
+    # this one at once.
+    ref out = residents.outward[0]
+    assert_equal(out.at, len(out.points) - 1)
+    residents.update(
+        scene, Duration(0.1, SECOND), ground, List[Obstacle](), None, True
+    )
+    residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_true(residents.leaving[0])
+    assert_equal(residents.outward[0].at, 0)
+    for _ in range(400):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+        if not residents.leaving[0]:
+            break
+    assert_false(residents.leaving[0])
 
 
 def test_a_village_with_nobody_in_it_shelters_and_comes_out() raises:

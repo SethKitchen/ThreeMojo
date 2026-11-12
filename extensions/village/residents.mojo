@@ -1709,6 +1709,10 @@ struct Residents(Movable):
             # Each person comes back out the way they went in: down the
             # stairs, through the hall and out of the door.
             for index in range(people):
+                # The way out starts again. The point reached on the last
+                # way out is its last point, which would end this one at
+                # once.
+                self.outward[index].at = 0
                 self.outward[index].next = 0
                 self.outward[index].resting = 0
                 self.leaving[index] = True
