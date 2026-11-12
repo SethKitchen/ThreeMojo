@@ -1018,6 +1018,91 @@ def test_a_still_pose_animation_lasts_one_frame() raises:
     assert_almost_equal(scene.get(model.nodes[0]).position.y, 2, atol=TOLERANCE)
 
 
+def test_keys_that_share_a_time_are_read_as_a_jump() raises:
+    # Two of the glTF models three.js ships hold keys that share a time in
+    # every track. three.js r180 reads keys of 0 at zero, 2 and 10 at one
+    # second and 20 at two seconds as a jump at one second: 1 at a half
+    # second, 2 just below one second, 10 at one second and 15 after
+    # another half. A stepped sampler holds 0 until the jump.
+    var bin = Bin()
+    _ = bin.floats([0, 1, 1, 2], "SCALAR")
+    _ = bin.floats([0, 0, 0, 2, 0, 0, 10, 0, 0, 20, 0, 0], "VEC3")
+    _ = bin.floats(triangle(), "VEC3")
+    # Cubic spline keys with flat tangents: an in-tangent, a value and an
+    # out-tangent for each key.
+    _ = bin.floats(
+        [
+            0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 2, 0, 0, 0, 0, 0,
+            0, 0, 0, 10, 0, 0, 0, 0, 0,
+            0, 0, 0, 20, 0, 0, 0, 0, 0,
+        ],
+        "VEC3",
+    )  # fmt: skip
+    _ = bin.floats([0, 0, 0, 2, 0, 0, 10, 0, 0], "VEC3")
+    var nodes = (
+        ',"meshes":[{"primitives":[{"attributes":{"POSITION":2}}]}]'
+        + ',"nodes":[{"mesh":0},{},{}],"scenes":[{"nodes":[0,1,2]}],"scene":0'
+    )
+    var text = bin.document(
+        nodes
+        + ',"animations":[{"samplers":[{"input":0,"output":1},'
+        + '{"input":0,"output":1,"interpolation":"STEP"},'
+        + '{"input":0,"output":3,"interpolation":"CUBICSPLINE"}],"channels":['
+        + '{"sampler":0,"target":{"node":0,"path":"translation"}},'
+        + '{"sampler":1,"target":{"node":1,"path":"translation"}},'
+        + '{"sampler":2,"target":{"node":2,"path":"translation"}}]}]'
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(text, scene, assets)
+    ref clip = model.animations[0]
+    assert_equal(clip.track_count(), 3)
+    # The first key at one second moved to the nearest time below.
+    assert_equal(len(clip.tracks[0].times), 4)
+    assert_true(clip.tracks[0].times[1] < 1)
+    assert_equal(clip.tracks[0].times[2], 1)
+    # A stepped track never reads that key, and it is dropped.
+    assert_equal(len(clip.tracks[1].times), 3)
+    assert_equal(len(clip.tracks[2].times), 4)
+    var below_one = Float32(0.99999994)
+    var times: List[Float32] = [0.5, below_one, 1, 1.5]
+    var linear: List[Float64] = [1, 2, 10, 15]
+    var stepped: List[Float64] = [0, 0, 10, 10]
+    for index in range(len(times)):
+        var at = Duration(times[index], SECOND)
+        assert_almost_equal(
+            Float64(clip.tracks[0].sample(at)[0]),
+            linear[index],
+            atol=TOLERANCE,
+        )
+        assert_almost_equal(
+            Float64(clip.tracks[1].sample(at)[0]),
+            stepped[index],
+            atol=TOLERANCE,
+        )
+    # The spline's keys keep their tangents with their values.
+    var one = Duration(1, SECOND)
+    assert_almost_equal(
+        Float64(clip.tracks[2].sample(one)[0]), 10, atol=TOLERANCE
+    )
+    assert_almost_equal(
+        Float64(clip.tracks[2].sample(Duration(below_one, SECOND))[0]),
+        2,
+        atol=TOLERANCE,
+    )
+    # Nine numbers are three positions, and a stepped track keeps three of
+    # these four keys. The output is refused for the four keys it is for,
+    # before a key is dropped.
+    var short = bin.document(
+        nodes
+        + ',"animations":[{"samplers":[{"input":0,"output":4,'
+        + '"interpolation":"STEP"}],"channels":['
+        + '{"sampler":0,"target":{"node":0,"path":"translation"}}]}]'
+    )
+    refuses(short, "the same number of values for every key")
+
+
 def _quantized_turn(values: List[Int], interpolation: String) raises -> String:
     """Return a document whose one rotation sampler holds normalized BYTE
     keys at times zero and one, as KHR_mesh_quantization allows."""

@@ -282,7 +282,10 @@ def decompress_lzf(data: List[UInt8], out_length: Int) raises -> List[UInt8]:
             a reference points before the start, or the output is not
             filled.
     """
-    var out = List[UInt8](capacity=out_length)
+    # The declared size is a claim, and a header states one up to 4 GiB.
+    # The longest back reference is three bytes that give 264, so the
+    # data bounds what it expands to. Keep room for no more than that.
+    var out = List[UInt8](capacity=max(0, min(out_length, 88 * len(data))))
     var at = 0
     while at < len(data):
         var control = Int(data[at])

@@ -491,6 +491,46 @@ def test_a_hand_made_gray_block_decodes_its_dc_coefficient() raises:
     assert_equal(pair.get_pixel(15, 0).r, UInt8(192))
 
 
+def wide_table(file: List[UInt8], step: Int, drop: Int = 0) -> List[UInt8]:
+    """Return a `gray_jpeg` file with its quantization table written two
+    bytes a step, every step `step`, and the table's last `drop` bytes
+    left out."""
+    var out = List[UInt8]()
+    out.append(0xFF)
+    out.append(0xD8)
+    var quant = List[Int]()
+    quant.append(0x10)
+    for _ in range(BLOCK_SAMPLES):
+        quant.append(step >> 8)
+        quant.append(step & 0xFF)
+    for _ in range(drop):
+        _ = quant.pop()
+    push_segment(out, 0xDB, quant)
+    # `gray_jpeg`'s own table segment is the 69 bytes after the start
+    # marker.
+    for index in range(71, len(file)):
+        out.append(file[index])
+    return out^
+
+
+def test_a_quantization_table_of_two_bytes_a_step_is_read() raises:
+    # libjpeg writes a step past 255 in two bytes, which a low quality
+    # asks for, and every viewer reads it. Six of the JPEG files three.js
+    # ships have such tables. A size of one read at `0`, then a one bit,
+    # is a DC coefficient of one: an eighth of a level at a step of one.
+    var plain = gray_jpeg(8, 8, [1], [0x00], [0x5F])
+    assert_equal(decode(plain).get_pixel(0, 0).r, UInt8(128))
+    # The same steps in two bytes each give the same image.
+    assert_equal(decode(wide_table(plain, 1)).get_pixel(7, 7).r, UInt8(128))
+    # A step of 304 lifts the block by 38 levels.
+    var lifted = decode(wide_table(plain, 304))
+    assert_equal(lifted.get_pixel(0, 0).r, UInt8(166))
+    assert_equal(lifted.get_pixel(7, 7).g, UInt8(166))
+    # A step of zero, and a table cut short by a byte.
+    refused(wide_table(plain, 0))
+    refused(wide_table(plain, 304, drop=1))
+
+
 def test_a_run_past_the_block_is_refused() raises:
     # The AC table reads a run of sixteen zeros at `0` and a run of
     # fifteen with a one-bit value at `1`: three runs of sixteen reach
@@ -517,15 +557,27 @@ def test_a_scan_that_ends_early_is_refused() raises:
     refused(gray_jpeg(8, 8, [5], [0x00], [0xFF, 0x00, 0xFF, 0x00]))
 
 
-def test_the_end_marker_must_close_the_file() raises:
-    # Data then nothing; data then a byte that is no marker; the wrong
-    # marker; and bytes after the end marker.
+def test_the_image_must_reach_its_end_marker() raises:
+    # Data then nothing; data then a byte that is no marker; and the wrong
+    # marker.
     refused(gray_jpeg(8, 8, [5], [0x00], [0x40], end=False))
     refused(gray_jpeg(8, 8, [5], [0x00], [0x40, 0x12]))
     refused(gray_jpeg(8, 8, [5], [0x00], [0x40, 0xFF, 0xD8], end=False))
+
+
+def test_bytes_after_the_end_marker_are_not_read() raises:
+    # A glTF buffer view pads its image to four bytes, and a camera
+    # appends a second picture. libjpeg and a browser stop at the end
+    # marker. ShaderBall2.glb, which three.js ships, has three such bytes.
     var whole = gray_jpeg(8, 8, [5], [0x00], [0x40])
-    whole.append(0)
-    refused(whole)
+    var plain = decode(whole)
+    for extra in [0, 0, 0, 0xFF, 0xD8, 0x12]:
+        whole.append(UInt8(extra))
+        var padded = decode(whole)
+        assert_equal(padded.width, plain.width)
+        assert_equal(padded.height, plain.height)
+        for index in range(len(plain.pixels)):
+            assert_equal(Int(padded.pixels[index]), Int(plain.pixels[index]))
 
 
 def test_restart_intervals_by_hand_wrap_and_must_be_kept() raises:
@@ -653,8 +705,10 @@ def test_a_scan_header_is_checked_field_by_field() raises:
 def test_a_table_segment_is_checked_field_by_field() raises:
     var whole = fixture("gradient444.jpg")
     var quant = segment(whole, 0xDB)
-    # A sixteen-bit table; an id past three; a table cut short.
+    # A table of two bytes a step in a segment that holds one byte a
+    # step; steps of neither size; an id past three; a table cut short.
     refused(patched(whole, quant + 4, 0x10))
+    refused(patched(whole, quant + 4, 0x20))
     refused(patched(whole, quant + 4, 0x04))
     refused(patched(patched(whole, quant + 2, 0), quant + 3, 4))
     var huffman = segment(whole, 0xC4)

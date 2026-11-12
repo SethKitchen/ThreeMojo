@@ -230,6 +230,15 @@ def test_lzf_refusals() raises:
         _ = decompress_lzf([0, 97, (1 << 5), 1], 4)
     with assert_raises(contains="declares"):
         _ = decompress_lzf([0, 97], 2)
+    # The declared size is a claim. Two bytes of data expand to one byte,
+    # and no room is kept for the exabytes the header names.
+    with assert_raises(contains="expands to 1 bytes"):
+        _ = decompress_lzf([0, 97], 1 << 62)
+    # The longest back reference: three bytes that give 264.
+    var long: List[UInt8] = [0, 97, (7 << 5), 255, 0]
+    assert_equal(len(decompress_lzf(long, 265)), 265)
+    with assert_raises(contains="declares -1"):
+        _ = decompress_lzf(List[UInt8](), -1)
 
 
 def test_header_keywords_comments_and_defaults() raises:

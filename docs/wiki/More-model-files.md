@@ -181,7 +181,13 @@ The loader refuses these, with a message that names the problem:
 
 `ZipMethod` is a type. A bare integer does not compile. `unzip` reads `ZIP_STORED` and `ZIP_DEFLATED` entries, and `zip_archive` writes `ZIP_STORED` entries only.
 
-`unzip` checks each entry's size and CRC-32. fflate does not check them. `unzip` refuses encrypted entries, other compression methods, ZIP64 archives and archives on more than one disk.
+`unzip` checks each entry's size and CRC-32. fflate does not check them. `unzip` refuses encrypted entries, other compression methods and archives on more than one disk.
+
+`unzip` reads a ZIP64 archive. Some writers use the ZIP64 records for every archive, small ones too. Two of the seven 3MF files that three.js ships are such archives.
+
+An end record with a field at its largest value names a ZIP64 end record. The locator of that record is the 20 bytes before the end record. The ZIP64 record must end at its locator, and the central directory must end where the ZIP64 record starts.
+
+An entry with a size or an offset at its largest value holds the real value in its ZIP64 extra field. The values there are in a fixed order: size, compressed size, offset. The entry holds only the values that it asks for. fflate reads all three whichever are there.
 
 The end record's comment length must reach the archive end. Candidate checks follow the central headers and their local-data ranges. The central directory must end at that record, and its size and file count must agree. Shared directory suffixes are cached so repeated candidates do not scan those records again.
 
@@ -189,7 +195,7 @@ The reader selects the last structurally admissible end record. Two complete lay
 
 Names, extra fields and entry comments must fit inside the directory. Local headers and file data must fit before the directory. Invalid UTF-8 in a name becomes replacement characters.
 
-The record layout follows [PKWARE ZIP APPNOTE 6.3.10](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT), sections 4.3.6 and 4.3.12–13. ZIP64 end records and compressed or encrypted directories remain unsupported.
+The record layout follows [PKWARE ZIP APPNOTE 6.3.10](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT), sections 4.3.6, 4.3.12–15 and 4.5.3. Compressed or encrypted directories remain unsupported. The writer does not write ZIP64 records.
 
 The writer checks all lengths before it writes output. Names and local padding can use at most 65,535 bytes each. An archive can have at most 65,534 entries. Entry sizes, directory sizes and offsets must not use the reserved ZIP64 values. The complete archive must stay below 4 GiB.
 
@@ -748,8 +754,9 @@ The other nodes are read but not built, as in three.js. These are the lights, th
 - A texture transform with no `rotation` turns by zero.
 - An `ImageTexture` is decoded at once, when its file is there.
 - A number too big for a double is refused.
-- A pixel image whose byte count does not fit is refused.
+- A pixel image of more than 2^28 pixels is refused. The image takes four bytes for each pixel that it names, whatever pixels the file gives.
 - An elevation grid whose index length does not fit is refused.
+- An elevation grid with more points than heights is refused before it is built. three.js reads each missing height as `NaN`.
 
 ### Example
 
@@ -1052,6 +1059,7 @@ The loader refuses these, with a message that names the problem. three.js throws
 - A binary count that does not fit in an integer.
 - An index length that wraps in an integer is refused.
 - A zlib block that expands past the size in its header.
+- A zlib header that names a block whose size is past the end of the data. three.js reads the missing size as zero, and the block is then not zlib data. The header names up to two billion blocks, so it is refused before the blocks are read.
 - An index past the points. three.js keeps it and draws from undefined positions.
 - A text or XML file that is not UTF-8.
 
@@ -1203,6 +1211,12 @@ These parts of `USDLoader` are not ported:
 - The `LoadingManager` URL modifier. A texture is found in the archive, then on the disk beside the file.
 - AVIF images. An AVIF texture is kept in the archive but is not decoded, so it is one black texel.
 
+The loader corrects one three.js behavior:
+
+- A normal map that has USD's own scale and bias has half its scale as its normal scale. A `UsdUVTexture` gives a texel times `inputs:scale`, plus `inputs:bias`. For a normal map of bytes, the `UsdPreviewSurface` specification asks for a scale of `(2, 2, 2, 1)` and a bias of `(-1, -1, -1, 0)`. That pair is a normal scale of 1. three.js 0.186 takes the scale itself as the normal scale, and draws the bumps twice as strong. `assets/usd/roundtrip.usdz` is written from a normal scale of 1, and three.js reads 2 from it.
+
+The correction applies when the bias of x and of y is minus half the scale. A scale with no bias, or with any other bias, is the normal scale, as in three.js. A file with the usual pair read with a normal scale of 2 before this correction. It now reads with 1.
+
 ### Errors
 
 The loader refuses what three.js throws on:
@@ -1218,9 +1232,11 @@ The loader also refuses these, where the port holds less than three.js:
 
 - A crate with no `TOKENS`, `FIELDS`, `FIELDSETS`, `PATHS` or `SPECS` section, and a spec of no known type.
 - A crate with an LZ4 chunk past the end of its input, or a path tree that does not end.
+- A crate whose paths together take more than 4096 bytes for each path that it counts. A path holds its parent's path, so a chain of children takes bytes that grow with the square of its length.
 - A crate count past what the file can hold.
 - An array attribute that is not an array, points that are not whole vertices, and faces with no corner indices.
 - A face count whose triangle count does not fit in an integer, or whose corner buffer would wrap, is refused.
+- A face of more than 80 corners with a corner or a point that is not in the file. three.js reads the missing value as `NaN`. Its earcut then takes a time that grows with the square of the corners.
 - A material value that is not a number, and a color outside zero to one.
 - A texture that reads `st2`. The port has no third set of texture coordinates.
 - References that nest more than 64 deep.

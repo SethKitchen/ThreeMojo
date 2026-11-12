@@ -125,6 +125,16 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
         raise Error("PVR: the file names more levels than its size has")
     check_decoded_size(width, height, False)
     var image = CompressedImage(width, height, format, LINEAR, faces, levels)
+    # A header names up to four billion faces, and the table below holds
+    # an entry for each level of each face. Every face has every level, so
+    # the bytes after the header bound the count before the table is made.
+    var face_bytes = 0
+    for level in range(levels):  # pragma: no branch
+        face_bytes += level_bytes(
+            image.level_width(level), image.level_height(level), format
+        )
+    if faces > (len(bytes) - start) // face_bytes:
+        raise Error("PVR: the file ends before its last level")
     image.mipmaps = List[List[UInt8]](length=faces * levels, fill=List[UInt8]())
     var at = start
     # three.js walks the levels, and each face within a level.
@@ -133,8 +143,6 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
             image.level_width(level), image.level_height(level), format
         )
         for face in range(faces):  # pragma: no branch
-            if size > len(bytes) - at:
-                raise Error("PVR: the file ends before its last level")
             image.mipmaps[face * levels + level] = List[UInt8](
                 bytes[at : at + size]
             )

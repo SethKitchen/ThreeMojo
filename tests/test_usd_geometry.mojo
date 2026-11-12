@@ -154,6 +154,15 @@ def test_ngons() raises:
         _ = triangulate_with_pattern(
             [0], [Float64(MAX_CORNERS) + 1], _square(), HoleMap()
         )
+    # A face names 100 corners and the list holds three. Each missing
+    # corner is NaN, and earcut refuses more than 80 points with one: its
+    # search would take a time that grows with the square of the corners.
+    with assert_raises(contains="not finite"):
+        _ = triangulate_with_pattern([0, 1, 2], [100], _square(), HoleMap())
+    # So is a long face whose corners name a point that is not there.
+    var far = List[Float64](length=100, fill=9)
+    with assert_raises(contains="not finite"):
+        _ = triangulate_with_pattern(far, [100], _square(), HoleMap())
 
 
 def test_faces_with_holes() raises:

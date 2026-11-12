@@ -20,6 +20,7 @@ geometry, and the writers and coders at their edges.
 
 from std.testing import (
     TestSuite,
+    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_raises,
@@ -61,6 +62,7 @@ from exporters.draco_writer import (
 from loaders.draco import (
     DRACO_TRIANGULAR_MESH,
     decode_draco,
+    parse_draco,
     read_draco,
     read_sequential_index,
 )
@@ -602,6 +604,57 @@ def test_write_draco() raises:
     assert_equal(geometry.attribute_view(POSITION).count(), 4)
     assert_true(geometry.has_attribute(COLOR))
     assert_equal(len(geometry.index), 6)
+
+
+def test_a_large_textured_mesh_decodes_in_time_that_grows_with_it() raises:
+    # Draco's portable texture prediction reads the corner table for each
+    # value. The decoder copied the table for each value, so the time grew
+    # with the square of the mesh. This mesh of 40,000 vertices took
+    # fourteen seconds to decode, and rolex.glb, which three.js ships,
+    # took eight. Both now take a fraction of a second.
+    var side = 200
+    var positions = List[Float32]()
+    var uvs = List[Float32]()
+    for row in range(side):
+        for column in range(side):
+            var u = Float32(column) / Float32(side - 1)
+            var v = Float32(row) / Float32(side - 1)
+            positions.append(u)
+            positions.append(v)
+            positions.append(u * v)
+            uvs.append(u)
+            uvs.append(v * v)
+    var index = List[Int]()
+    for row in range(side - 1):
+        for column in range(side - 1):
+            var corner = row * side + column
+            index.append(corner)
+            index.append(corner + 1)
+            index.append(corner + side)
+            index.append(corner + side)
+            index.append(corner + 1)
+            index.append(corner + side + 1)
+    var geometry = BufferGeometry()
+    geometry.set_attribute(POSITION, BufferAttribute(positions^, 3))
+    geometry.set_attribute(UV, BufferAttribute(uvs^, 2))
+    geometry.set_index(index^)
+    # The slowest speeds pick the portable texture prediction.
+    var bytes = export_draco(
+        geometry,
+        DRACO_EXPORT_MESH,
+        DracoExportOptions(decode_speed=0, encode_speed=0),
+    )
+    var decoded = parse_draco(bytes)
+    assert_equal(decoded.vertex_count(), side * side)
+    # Each vertex keeps its own texture coordinate: its x, and the square
+    # of its y, to the eight bits the coordinate is stored in.
+    ref points = decoded.attribute_view(POSITION)
+    ref coordinates = decoded.attribute_view(UV)
+    for vertex in range(points.count()):
+        var x = points.component(vertex, 0)
+        var y = points.component(vertex, 1)
+        assert_almost_equal(coordinates.component(vertex, 0), x, atol=0.01)
+        assert_almost_equal(coordinates.component(vertex, 1), y * y, atol=0.01)
 
 
 def test_one_value() raises:

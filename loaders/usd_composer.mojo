@@ -55,6 +55,18 @@ white material wears its `displayColor`. A diffuse color is read as sRGB,
 so a color that `USDZExporter` wrote in linear reads back darker. Two maps
 that share a texture share its color space, the last one set.
 
+**Where three.js is corrected.** A `UsdUVTexture` gives a texel times
+its `inputs:scale`, plus its `inputs:bias`. A normal map of bytes holds a
+normal from -1 to 1 as a texel from 0 to 1, so the `UsdPreviewSurface`
+specification asks for a scale of `(2, 2, 2, 1)` and a bias of
+`(-1, -1, -1, 0)`, and OpenUSD's validators report any other pair. A
+normal map whose bias is minus half its scale, for x and for y, is such a
+map, and its normal scale is half its scale: one, for that pair. three.js
+r186 takes the scale itself as the normal scale, and draws those bumps
+twice as strong. `assets/usd/roundtrip.usdz` is written from a normal
+scale of 1, and three.js reads 2 from it. A scale with no bias, or with
+any other bias, is the normal scale, as in three.js.
+
 **What is refused.** Where three.js throws: a transform operation that is
 not numbers, and a texture scale that is not a list. And where this port
 holds less than three.js: an array attribute that is not an array, a
@@ -711,6 +723,36 @@ def _wrap_of(value: String) -> Wrap:
     if value == "clamp":
         return CLAMP
     return REPEAT
+
+
+def decodes_signed_normal(
+    scale: List[Float64], bias: Optional[List[Float64]]
+) -> Bool:
+    """Return whether a normal map's `inputs:scale` and `inputs:bias` turn
+    a texel from 0 to 1 into a normal from -k to k, as the
+    `UsdPreviewSurface` specification asks: the bias of x and of y is
+    minus half the scale.
+
+    Args:
+        scale: The texture's scale.
+        bias: The texture's bias, when it has one.
+
+    Returns:
+        `True` for a scale of `(2, 2, 2, 1)` with a bias of
+        `(-1, -1, -1, 0)`, and for the same pair at any other strength.
+        `False` with no bias, with fewer than two numbers in either, and
+        with any other bias.
+    """
+    if not bias:
+        return False
+    ref moved = bias.value()
+    if len(scale) < 2 or len(moved) < 2:
+        return False
+    for k in range(2):
+        var apart = abs(scale[k] + 2 * moved[k])
+        if not apart <= 1e-6 * max(1.0, abs(scale[k])):
+            return False
+    return True
 
 
 struct _Composer(Movable):
@@ -2078,6 +2120,12 @@ struct _Composer(Movable):
                 var v = s.value().copy()
                 var x = v[0] if len(v) > 0 else nan[DType.float64]()
                 var y = v[1] if len(v) > 1 else nan[DType.float64]()
+                # The scale of USD's own normal map is twice the normal
+                # scale. three.js takes it as it is; see the module
+                # docstring.
+                if decodes_signed_normal(v, built.images[normal_map].bias):
+                    x = x / 2
+                    y = y / 2
                 built.materials[material].normal_scale = vector2_from_float64(
                     x, y
                 )

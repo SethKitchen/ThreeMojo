@@ -789,17 +789,59 @@ def test_a_face_must_name_three_vertices_the_file_has() raises:
     assert_true("names vertex -1" in refusal(triangle(three + "3 0 -1 2\n")))
 
 
-def test_a_polygon_must_be_convex_and_have_area() raises:
+def test_a_polygon_that_is_not_convex_is_cut_and_one_with_no_area_refused() raises:
     var header = String(
         "ply\nformat ascii 1.0\nelement vertex 4\nproperty float x\n"
         "property float y\nproperty float z\nelement face 1\n"
         "property list uchar int vertex_indices\nend_header\n"
     )
-    # An arrowhead: one corner turns the other way.
-    assert_true(
-        "not convex"
-        in refusal(header + "0 0 0\n2 1 0\n4 0 0\n2 3 0\n4 0 1 2 3\n")
+    # An arrowhead: its second corner turns the other way, and a fan from
+    # the first corner has a triangle outside the face. The face is cut by
+    # earcut. Both triangles turn the way the face turns, and their areas
+    # add up to the face's four.
+    var arrow = parse_ply(
+        text_bytes(header + "0 0 0\n2 1 0\n4 0 0\n2 3 0\n4 0 1 2 3\n")
     )
+    assert_equal(arrow.triangle_count(), 2)
+    var total = Float64(0)
+    for triangle in range(2):
+        var a = arrow.corner(triangle, 0)
+        var b = arrow.corner(triangle, 1)
+        var c = arrow.corner(triangle, 2)
+        var twice = Float64(
+            (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+        )
+        assert_true(twice > 0)
+        total += twice
+    assert_almost_equal(total, 8, atol=1e-6)
+    # A cut face's own texture coordinates and color follow its corners:
+    # here a quarter of each corner's x and a third of its y.
+    var faced = parse_ply(
+        text_bytes(
+            header.replace(
+                "end_header\n",
+                (
+                    "property list uchar float texcoord\nproperty uchar red\n"
+                    "property uchar green\nproperty uchar blue\nend_header\n"
+                ),
+            )
+            + "0 0 0\n2 1 0\n4 0 0\n2 3 0\n"
+            + "4 0 1 2 3 8 0 0 0.5 0.333333343 1 0 0.5 1 255 255 255\n"
+        )
+    )
+    assert_equal(faced.triangle_count(), 2)
+    ref positions = faced.attribute_view(String(POSITION))
+    ref uvs = faced.attribute_view(String(UV))
+    ref colors = faced.attribute_view(String(COLOR))
+    assert_equal(positions.count(), 6)
+    for vertex in range(positions.count()):
+        assert_almost_equal(
+            uvs.component(vertex, 0), positions.component(vertex, 0) / 4
+        )
+        assert_almost_equal(
+            uvs.component(vertex, 1), positions.component(vertex, 1) / 3
+        )
+        assert_almost_equal(colors.component(vertex, 0), Float32(1))
     # Corners on one line.
     assert_true(
         "no area" in refusal(header + "0 0 0\n1 0 0\n2 0 0\n3 0 0\n4 0 1 2 3\n")

@@ -145,6 +145,11 @@ zero nor one, a string track built from numbers, and a `SMOOTH`
 rotation. Each of those is a track that cannot be
 read at any time at all, and three.js finds out at the first frame.
 
+Keys that share a time are the one case three.js reads and a track here
+does not hold. three.js reads them as a jump, and files hold them: two of
+the glTF models three.js ships have such keys in every track.
+`rising_key_times` gives a loader the times that rise and read the same.
+
 A time or a value that is not a number is refused too, and so is a time
 asked for that is not a number. That last one is not tidiness. The ends
 are found by comparing the time against the first key and the last, and a
@@ -179,6 +184,7 @@ from math.quaternion import Quaternion
 from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import isfinite, isnan
+from std.memory import bitcast
 from units.si import Duration, SECOND
 
 # How far a rotation key's length may sit from one. Wide enough for a
@@ -742,6 +748,90 @@ def require_key_values(held: Int, expected: Int) raises:
     """
     if held != expected:
         raise Error("A track needs one value for every key")
+
+
+struct RisingKeys(Movable):
+    """Key times that rise, and the key each one came from."""
+
+    # The times, in seconds, each above the one before it.
+    var times: List[Float32]
+    # For each time, the index of its key in the list that was given.
+    var keys: List[Int]
+
+    def __init__(out self):
+        """Start with no keys."""
+        self.times = List[Float32]()
+        self.keys = List[Int]()
+
+
+def _time_below(time: Float32) -> Float32:
+    """Return the nearest time below a time above zero, or minus one.
+
+    Args:
+        time: The time, in seconds.
+
+    Returns:
+        The largest `Float32` below it. Minus one when the time is zero,
+        which has no time below it that a track can hold.
+    """
+    if not (time > 0):
+        return -1
+    return bitcast[DType.float32](bitcast[DType.uint32](time) - 1)
+
+
+def rising_key_times(times: List[Float32], stepped: Bool = False) -> RisingKeys:
+    """Return key times that rise, from times of which some are equal, as
+    three.js reads keys that share a time.
+
+    three.js reads such keys as a jump. The last of them is the value at
+    the time and after it. The first is the value an interpolated track
+    nears before the time. The keys between them are never read, and a
+    stepped track never reads the first.
+
+    A track's times here must rise. The last of such keys keeps the time.
+    The first moves to the nearest time below, and the others are
+    dropped. The track then reads as three.js reads it at every time but
+    those inside that one step.
+
+    The first key is dropped as well when it has no time to move to: at
+    time zero, where a track holds no earlier time, and when the key
+    before it is already at the nearest time below. The track then nears
+    the last key's value, as three.js's `optimize` leaves it.
+
+    Times that fall, or that are not numbers, are returned as they are.
+    A track's constructor refuses them.
+
+    Args:
+        times: The key times, in seconds, in file order.
+        stepped: True for a `STEP` track, which holds each key's value
+            until the next key and so never reads the first of such keys.
+
+    Returns:
+        The times that rise, and for each the index of its key in
+        `times`, so that a caller keeps the values of the same keys.
+    """
+    var out = RisingKeys()
+    var first = 0
+    while first < len(times):
+        var last = first
+        while last + 1 < len(times) and times[last + 1] == times[first]:
+            last += 1
+        if last > first:
+            var below = _time_below(times[first])
+            var fits = (
+                not stepped
+                and below >= 0
+                and (
+                    len(out.times) == 0 or below > out.times[len(out.times) - 1]
+                )
+            )
+            if fits:
+                out.times.append(below)
+                out.keys.append(first)
+        out.times.append(times[last])
+        out.keys.append(last)
+        first = last + 1
+    return out^
 
 
 def light_target(light: LightIndex, kind: TrackKind) raises -> TrackTarget:

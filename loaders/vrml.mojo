@@ -47,7 +47,9 @@ its rows along x and its columns along z.
 
 **Where this port differs.** three.js reads a missing number as `NaN`
 and builds a geometry of it; this refuses a geometry with a `NaN` in
-it, such as one whose index names no point. A field of the wrong kind,
+it, such as one whose index names no point. An elevation grid with more
+points than heights is refused before it is built, and so is a
+`PixelTexture` of more than 2^28 pixels. A field of the wrong kind,
 such as a `coord` that holds no node, is refused where three.js throws
 a `TypeError` or reads nonsense, and so is a `USE` of a name that no
 `DEF` gives, and a node that uses itself. A cross section of odd length
@@ -151,6 +153,9 @@ from core.ordinal import require_valid, require_positive
 comptime VRML_DEFAULT_MATERIAL_NAME = "__DEFAULT"
 # The radius of a background's spheres, as three.js makes them.
 comptime VRML_BACKGROUND_RADIUS = Length(10000.0, METER)
+# The most bytes a `PixelTexture` holds, four a pixel: 2^28 pixels. The
+# image readers stop at the same size.
+comptime MAX_PIXEL_TEXTURE_BYTES = 1 << 30
 
 
 @fieldwise_init
@@ -1864,8 +1869,10 @@ def _pixels(field: VrmlField, name: String) raises -> VrmlTexture:
     )
     record.pending_type = kind
     # Divide before multiplying. A width and a height under `1e15` can
-    # still wrap the byte count.
-    if record.height != 0 and record.width > (Int.MAX // 4) // record.height:
+    # still wrap the byte count. The bytes are made whatever pixels the
+    # file gives, so the limit is on the size it states.
+    var most = MAX_PIXEL_TEXTURE_BYTES // 4
+    if record.height != 0 and record.width > most // record.height:
         raise Error("VRML: an image is larger than this port reads")
     var size = 4 * record.width * record.height
     record.data = List[UInt8](length=size, fill=0)

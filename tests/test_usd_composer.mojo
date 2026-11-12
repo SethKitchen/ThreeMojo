@@ -18,6 +18,7 @@ from loaders.usd_composer import (
     UsdAssets,
     UsdModel,
     compose_usd,
+    decodes_signed_normal,
     moved,
     reference_matches,
     resolve_url,
@@ -46,7 +47,7 @@ from math.quaternion import Quaternion
 from render.srgb import LINEAR
 from render.texture import CLAMP, MIRROR, REPEAT
 from render.texture_store import NO_TEXTURE
-from std.math import isnan
+from std.math import isnan, nan
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -1178,6 +1179,87 @@ def test_texture_refusals() raises:
             + "}\n",
             assets,
         )
+
+
+def _bumps(extra: String) raises -> Material:
+    """Return a material whose normal map's texture has `extra`."""
+    var assets = UsdAssets()
+    _image_asset(assets, "brick.png")
+    var out = _text(
+        _bound("M", "A")
+        + 'def Scope "L"\n{\n'
+        + _material(
+            "A",
+            _surface(
+                "S",
+                (
+                    "            normal3f inputs:normal.connect ="
+                    " </L/A/T.outputs:rgb>\n"
+                ),
+            )
+            + _texture("T", "brick.png", extra),
+        )
+        + "}\n",
+        assets,
+    )
+    return out.material("M")
+
+
+def test_a_normal_map_of_usd_has_half_its_scale() raises:
+    # USD's normal is the texel times the scale, plus the bias. The usual
+    # pair for bytes is a normal scale of one. three.js r186 reads two.
+    var usual = _bumps(
+        "            float4 inputs:scale = (2, 2, 2, 1)\n"
+        + "            float4 inputs:bias = (-1, -1, -1, 0)\n"
+    )
+    _near(usual.normal_scale.x, 1)
+    _near(usual.normal_scale.y, 1)
+    # The same pair at another strength, as `exporters.usdz` writes it.
+    var soft = _bumps(
+        "            float4 inputs:scale = (0.5, 3, 2, 1)\n"
+        + "            float4 inputs:bias = (-0.25, -1.5, -1, 0)\n"
+    )
+    _near(soft.normal_scale.x, 0.25)
+    _near(soft.normal_scale.y, 1.5)
+    # No bias, and a bias that is not half the scale: the scale itself, as
+    # in three.js.
+    var bare = _bumps("            float4 inputs:scale = (2, 2, 2, 1)\n")
+    _near(bare.normal_scale.x, 2)
+    _near(bare.normal_scale.y, 2)
+    var odd = _bumps(
+        "            float4 inputs:scale = (2, 2, 2, 1)\n"
+        + "            float4 inputs:bias = (-1, 0, -1, 0)\n"
+    )
+    _near(odd.normal_scale.x, 2)
+    _near(odd.normal_scale.y, 2)
+    # No scale: the material's own normal scale, whatever the bias is.
+    var plain = _bumps("            float4 inputs:bias = (-1, -1, -1, 0)\n")
+    _near(plain.normal_scale.x, 1)
+    _near(plain.normal_scale.y, 1)
+
+
+def _signed(scale: List[Float64], bias: List[Float64]) -> Bool:
+    """Return `decodes_signed_normal` of a scale and a bias."""
+    return decodes_signed_normal(scale, Optional(bias.copy()))
+
+
+def test_decodes_signed_normal() raises:
+    var scale: List[Float64] = [2, 2, 2, 1]
+    assert_true(_signed(scale, [-1, -1, -1, 0]))
+    assert_false(decodes_signed_normal(scale, None))
+    # Fewer than two numbers in either.
+    assert_false(_signed([2], [-1, -1, -1, 0]))
+    assert_false(_signed(scale, [-1]))
+    # A bias of x or of y that is not minus half the scale.
+    assert_false(_signed(scale, [0, -1]))
+    assert_false(_signed(scale, [-1, 0]))
+    # Only x and y are read, and a float's rounding is not a difference.
+    assert_true(_signed([0.2, 0.6], [-0.1, -0.3000001]))
+    assert_true(_signed([2e6, 2e6], [-1e6, -1e6 - 0.5]))
+    assert_false(_signed([2e6, 2e6], [-1e6, -1e6 - 5]))
+    # No strength is a pair too. A scale that is not a number is not.
+    assert_true(_signed([0, 0], [0, 0]))
+    assert_false(_signed([nan[DType.float64](), 2], [-1, -1]))
 
 
 def _one_texture(

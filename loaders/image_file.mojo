@@ -7,7 +7,8 @@
 
 The model loaders read the textures their files name with
 `decode_image`: glTF, Collada's neighbors, MTL, 3MF, LWO, 3DS, VRML, USD
-and the CARLA assets.
+and the CARLA assets. So an error from here names the image and not a
+format of model.
 """
 
 from render.jpeg import decode as decode_jpeg
@@ -44,7 +45,9 @@ def decode_image(bytes: List[UInt8]) raises -> DecodedImage:
     try:
         return decode_tga(bytes)
     except error:
+        # Every model loader reads its textures here, so the error names
+        # no format of model.
         raise Error(
-            "glTF: an image that is neither PNG nor JPEG, and not a TGA: "
+            "An image is neither PNG nor JPEG nor WebP, and not a TGA: "
             + String(error)
         )

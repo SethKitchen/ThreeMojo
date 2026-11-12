@@ -30,10 +30,11 @@ What is read is what three.js's loader reads:
   `alpha` or `a` is divided by 255 and kept as the color's fourth
   channel, which three.js leaves out.
 - The `face` element: its `vertex_indices` or `vertex_index` list, into
-  the geometry's index. A face of more than three corners is cut into a
-  fan from its first corner, and so it must be convex, as `loaders.obj`
-  requires of an OBJ face. three.js cuts a quad on its other diagonal,
-  and leaves out a face of five or more.
+  the geometry's index. A convex face of more than three corners is cut
+  into a fan from its first corner. A face that is not convex is cut by
+  earcut, as `loaders.obj` cuts an OBJ face, and a face with no area is
+  refused. three.js cuts a quad on its other diagonal, and leaves out a
+  face of five or more.
 - A face's own `texcoord` list and its `red`, `green` and `blue`, or
   their other names: three.js's `faceVertexUvs` and `faceVertexColors`.
   The geometry then loses its index, as three.js's `toNonIndexed` makes
@@ -89,7 +90,7 @@ from loaders.bytes import bytes_match
 from loaders.text_number import file_line
 from loaders.js_text import split_fields
 
-from loaders.fan import fan_problem
+from loaders.fan import cut_polygon
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
@@ -730,7 +731,7 @@ def parse_ply(
             file ends early, a coordinate is not finite, a vertex has only
             some channels of a normal, a texture coordinate or a color, or
             a face has fewer than three corners, names a vertex the file
-            does not have, is not convex, has some channels of a color,
+            does not have, has no area, has some channels of a color,
             or has a `texcoord` without two numbers for each corner. Also
             if a custom attribute names a property the vertex element has
             not got, or a list.
@@ -943,6 +944,8 @@ def parse_ply(
                     + ", and the file has "
                     + String(vertex_count)
                 )
+        # The face's corners in the order of its triangles, three each.
+        var order: List[Int] = [0, 1, 2]
         if count > 3:
             var points = List[Vector3]()
             for corner in range(first, first + count):  # pragma: no branch
@@ -950,31 +953,25 @@ def parse_ply(
                 points.append(
                     Vector3(positions[at], positions[at + 1], positions[at + 2])
                 )
-            var problem = fan_problem(points)
-            if problem:
-                raise Error("PLY face " + String(face) + ": " + problem)
+            var cut = cut_polygon(points)
+            if cut.problem:
+                raise Error("PLY face " + String(face) + ": " + cut.problem)
+            order = cut.triangles.copy()
         if with_face_uv and uv_sizes[face] != 2 * count:
             raise Error(
                 "PLY face "
                 + String(face)
                 + ": its `texcoord` must hold two numbers for each corner"
             )
-        for triangle in range(count - 2):  # pragma: no branch
-            index.append(corners[first])
-            index.append(corners[first + triangle + 1])
-            index.append(corners[first + triangle + 2])
+        # A face has a triangle at least: `cut_polygon` gives none only
+        # with a problem. The loop runs.
+        for corner in order:  # pragma: no branch
+            index.append(corners[first + corner])
             if with_face_uv:
-                _append_run(corner_uvs, face_uvs, uv_first, 2)
-                _append_run(
-                    corner_uvs, face_uvs, uv_first + 2 * triangle + 2, 2
-                )
-                _append_run(
-                    corner_uvs, face_uvs, uv_first + 2 * triangle + 4, 2
-                )
+                _append_run(corner_uvs, face_uvs, uv_first + 2 * corner, 2)
             if len(face_rgb) > 0:
-                # The face's color, at each of the triangle's corners.
-                for _ in range(3):  # pragma: no branch
-                    _append_run(corner_rgb, face_rgb, face * 3, 3)
+                # The face's color, at each corner of each triangle.
+                _append_run(corner_rgb, face_rgb, face * 3, 3)
         first += count
         if with_face_uv:
             uv_first += uv_sizes[face]

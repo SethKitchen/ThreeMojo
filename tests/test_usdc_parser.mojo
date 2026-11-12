@@ -1076,6 +1076,79 @@ def test_a_path_tree_that_does_not_end() raises:
         _ = parse_usdc(b.build())
 
 
+def test_a_wide_path_tree_is_not_a_deep_call() raises:
+    # A prim with many children that each have a child. three.js calls
+    # itself for each such child's sibling, and so did this: a crate that
+    # OpenUSD wrote with 40,000 of them ran off the stack. The walk keeps
+    # its own list of entries to come back to.
+    var b = _Builder()
+    var a = b.token("a")
+    var c = b.token("c")
+    var z = b.token("z")
+    var children = 60000
+    b.path_count = 1 + 2 * children
+    b.path_indices = List[Int]()
+    b.path_elements = List[Int]()
+    b.path_jumps = List[Int]()
+    # The root, with a child and no sibling.
+    b.path_indices.append(0)
+    b.path_elements.append(0)
+    b.path_jumps.append(-1)
+    for k in range(children):
+        # `/a`, with a child, and a sibling two entries on. The last is
+        # `/z`, with a child alone. Then the child, `c`, with neither.
+        b.path_indices.append(1 + 2 * k)
+        b.path_elements.append(a if k < children - 1 else z)
+        b.path_jumps.append(2 if k < children - 1 else -1)
+        b.path_indices.append(2 + 2 * k)
+        b.path_elements.append(c)
+        b.path_jumps.append(-2)
+    b.spec(1, List[Int]())
+    b.spec(2, List[Int]())
+    b.spec(2 * children - 1, List[Int]())
+    b.spec(2 * children, List[Int]())
+    var layer = parse_usdc(b.build())
+    assert_equal(len(layer.paths), 4)
+    assert_equal(layer.paths[0], "/a")
+    assert_equal(layer.paths[1], "/a/c")
+    assert_equal(layer.paths[2], "/z")
+    assert_equal(layer.paths[3], "/z/c")
+
+
+def test_a_chain_of_paths_is_held_to_its_bytes() raises:
+    # Each entry is the child of the one before, so each path is longer
+    # than the last, and the paths together grow with the square of the
+    # chain. A crate of 1.3 KB took 13 GiB this way. The paths may take
+    # 4096 bytes for each path the crate counts.
+    var b = _Builder()
+    var long = b.token("a_name_of_thirty_two_characters_")
+    var links = 3000
+    b.path_count = links
+    b.path_indices = List[Int]()
+    b.path_elements = List[Int]()
+    b.path_jumps = List[Int]()
+    for k in range(links):
+        b.path_indices.append(k)
+        b.path_elements.append(long)
+        b.path_jumps.append(-1)
+    with assert_raises(contains="paths are longer than this reader holds"):
+        _ = parse_usdc(b.build())
+    # A chain of a hundred is well inside it.
+    var short = _Builder()
+    var name = short.token("a_name_of_thirty_two_characters_")
+    short.path_count = 100
+    short.path_indices = List[Int]()
+    short.path_elements = List[Int]()
+    short.path_jumps = List[Int]()
+    for k in range(100):
+        short.path_indices.append(k)
+        short.path_elements.append(name)
+        short.path_jumps.append(-1)
+    short.spec(99, List[Int]())
+    var layer = parse_usdc(short.build())
+    assert_equal(layer.paths[0].byte_length(), 1 + 33 * 99 - 1)
+
+
 def test_uncompressed_paths() raises:
     var b = _Builder(0, 3)
     var a = b.token("a")

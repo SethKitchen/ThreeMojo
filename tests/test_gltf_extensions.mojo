@@ -42,7 +42,15 @@ from std.testing import (
     assert_true,
 )
 from render.srgb import LINEAR, SRGB
-from render.texture import COVERAGE, IGNORED, UV_CHANNEL_0, UV_CHANNEL_1
+from render.texture import (
+    BILINEAR,
+    COVERAGE,
+    IGNORED,
+    NEAREST,
+    UV_CHANNEL_0,
+    UV_CHANNEL_1,
+)
+from render.texture_store import TextureId
 from units.si import Angle, DEGREE, Length, METER, NANOMETER, RADIAN
 
 comptime TOLERANCE = Float64(1e-5)
@@ -1342,6 +1350,124 @@ def test_transmission_volume_and_dispersion_make_a_glass() raises:
         ),
         "transmission must be between",
     )
+
+
+def test_textures_of_one_image_and_sampler_decode_it_once() raises:
+    # A file can name one image in several textures. kira.glb, which
+    # three.js ships, names an image of 4096 by 4096 pixels in 24 of them.
+    # three.js decodes the image once. Here each texture holds its own
+    # pixels, and each after the first is a copy of the first.
+    var bin = Bin()
+    _ = bin.floats([-1, 1, 0, 1, 1, 0, 1, -1, 0, -1, -1, 0], "VEC3")
+    var sheen = ',"extensions":{"KHR_materials_sheen":{"sheenRoughnessTexture":{"index":'
+    var materials = String("[")
+    for texture in range(3):
+        if texture > 0:
+            materials += ","
+        materials += (
+            '{"pbrMetallicRoughness":{"baseColorTexture":{"index":'
+            + String(texture)
+            + '}},"normalTexture":{"index":'
+            + String(texture)
+            + "}"
+            + sheen
+            + String(texture)
+            + "}}}}"
+        )
+    materials += "]"
+    var scene = Scene()
+    var assets = Assets()
+    # Textures zero and one name the image with one sampler. Texture two
+    # names it with another, and is decoded on its own.
+    var model = loaded(
+        bin.document(
+            ',"images":[{"uri":"data:image/png;base64,'
+            + CHECKER
+            + '"}],"samplers":[{"magFilter":9728,"minFilter":9728},'
+            + '{"magFilter":9729,"minFilter":9729}]'
+            + ',"textures":[{"source":0,"sampler":0},{"source":0,"sampler":0},'
+            + '{"source":0,"sampler":1}]'
+            + ',"materials":'
+            + materials
+        ),
+        scene,
+        assets,
+    )
+    # Three textures read three ways: nine textures, each its own.
+    assert_equal(assets.textures.count(), 9)
+    var first = assets.materials.get(model.materials[0])
+    var second = assets.materials.get(model.materials[1])
+    var third = assets.materials.get(model.materials[2])
+    var pairs: List[Tuple[TextureId, TextureId, TextureId]] = [
+        (first.map, second.map, third.map),
+        (first.normal_map, second.normal_map, third.normal_map),
+        (
+            first.sheen_roughness_map,
+            second.sheen_roughness_map,
+            third.sheen_roughness_map,
+        ),
+    ]
+    for pair in pairs:
+        assert_true(pair[0] != pair[1])
+        ref built = assets.textures.get(pair[0])
+        ref copied = assets.textures.get(pair[1])
+        ref other = assets.textures.get(pair[2])
+        assert_equal(copied.width, built.width)
+        assert_equal(copied.height, built.height)
+        assert_equal(copied.color_space, built.color_space)
+        assert_true(copied.alpha == built.alpha)
+        assert_equal(copied.mag_filter, NEAREST)
+        assert_false(copied.flip_y)
+        assert_equal(len(copied.pixels), len(built.pixels))
+        for index in range(len(built.pixels)):
+            assert_equal(Int(copied.pixels[index]), Int(built.pixels[index]))
+        # The other sampler's texture is its own, filtered its own way.
+        assert_equal(other.mag_filter, BILINEAR)
+    assert_equal(model.color_textures[0], first.map)
+    assert_equal(model.color_textures[1], second.map)
+    assert_equal(model.data_textures[1], second.normal_map)
+
+
+def test_many_textures_of_one_image_load_in_the_time_of_one() raises:
+    # Forty-eight textures of one image of a megapixel. Decoded once for
+    # each, they took six seconds. One decode and 47 copies take a third
+    # of a second.
+    var bin = Bin()
+    _ = bin.floats([-1, 1, 0, 1, 1, 0, 1, -1, 0, -1, -1, 0], "VEC3")
+    var count = 48
+    var textures = String()
+    var materials = String()
+    for texture in range(count):
+        if texture > 0:
+            textures += ","
+            materials += ","
+        textures += '{"source":0}'
+        materials += (
+            '{"pbrMetallicRoughness":{"baseColorTexture":{"index":'
+            + String(texture)
+            + "}}}"
+        )
+    var scene = Scene()
+    var assets = Assets()
+    var model = load_gltf(
+        bin.document(
+            ',"images":[{"uri":"pebbles.jpg"}],"textures":['
+            + textures
+            + '],"materials":['
+            + materials
+            + "]"
+        ),
+        List[UInt8](),
+        "assets/",
+        scene,
+        assets,
+    )
+    assert_equal(assets.textures.count(), count)
+    ref first = assets.textures.get(model.color_textures[0])
+    ref last = assets.textures.get(model.color_textures[count - 1])
+    assert_equal(first.width, 1024)
+    assert_equal(len(last.pixels), len(first.pixels))
+    assert_true(model.color_textures[0] != model.color_textures[count - 1])
 
 
 def test_the_volume_maps_are_read_as_data() raises:

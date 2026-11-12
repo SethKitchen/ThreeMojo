@@ -63,12 +63,13 @@ from animation.keyframe_track import (
     node_target,
     orthographic_camera_target,
     perspective_camera_target,
+    rising_key_times,
     skinned_morph_target,
     solve_bezier_parameter,
 )
 from core.object3d import NodeId
 from materials.material import MaterialId
-from std.math import nan
+from std.math import isnan, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -746,6 +747,128 @@ def test_morph_names_sort_into_animations() raises:
         _ = create_clips_from_morph_target_sequences(
             names, List[TrackTarget](), 30
         )
+
+
+# --- keys that share a time -------------------------------------------------
+
+# The largest `Float32` below one.
+comptime BELOW_ONE = Float32(0.99999994)
+
+
+def jump(
+    times: List[Float32], values: List[Float32], stepped: Bool = False
+) raises -> KeyframeTrack:
+    """Return a track of one number from keys of which some share a time,
+    as a loader builds it."""
+    var rising = rising_key_times(times, stepped)
+    var kept = List[Float32]()
+    for key in rising.keys:
+        kept.append(values[key])
+    return KeyframeTrack(
+        material_target(MaterialId(0), MATERIAL_OPACITY),
+        seconds(rising.times),
+        kept^,
+        STEP if stepped else LINEAR,
+    )
+
+
+def reads(
+    track: KeyframeTrack, times: List[Float32], expected: List[Float64]
+) raises:
+    """Assert the track's value at each time."""
+    for index in range(len(times)):
+        assert_almost_equal(
+            Float64(track.sample(at(times[index]))[0]),
+            expected[index],
+            atol=TOLERANCE,
+            msg="at " + String(times[index]),
+        )
+
+
+def test_keys_that_share_a_time_read_as_three_js_reads_them() raises:
+    # Each expected list is three.js r180's `LinearInterpolant` or
+    # `DiscreteInterpolant` at the same times, on the times as given.
+    # Two keys at one: the track nears the first, then jumps to the second.
+    reads(
+        jump([0, 1, 1, 2], [0, 2, 10, 20]),
+        [0, 0.5, BELOW_ONE, 1, 1.5, 2, 3],
+        [0, 1, 2, 10, 15, 20, 20],
+    )
+    # Three keys at one: the middle key is never read.
+    reads(
+        jump([0, 1, 1, 1, 2], [0, 2, 99, 10, 20]),
+        [0, 0.5, BELOW_ONE, 1, 1.5, 2],
+        [0, 1, 2, 10, 15, 20],
+    )
+    # Two keys at zero: three.js reads the first only before the track.
+    reads(jump([0, 0, 1], [5, 10, 20]), [0, 0.5, 1], [10, 15, 20])
+    # Two keys at the start, above zero, and two at the end.
+    reads(
+        jump([1, 1, 2], [5, 10, 20]),
+        [0, 0.5, BELOW_ONE, 1, 1.5],
+        [5, 5, 5, 10, 15],
+    )
+    reads(jump([0, 1, 1], [0, 2, 10]), [0.5, BELOW_ONE, 1, 2], [1, 2, 10, 10])
+    # A stepped track holds each value until the next key. It never reads
+    # the first of two keys at one time.
+    reads(
+        jump([0, 1, 1, 2], [0, 2, 10, 20], stepped=True),
+        [0, 0.5, BELOW_ONE, 1, 1.5, 2],
+        [0, 0, 0, 10, 10, 20],
+    )
+
+
+def test_rising_key_times_keeps_moves_and_drops_keys() raises:
+    # Times that rise already are kept as they are.
+    var plain = rising_key_times([0, 0.5, 2])
+    assert_equal(len(plain.times), 3)
+    for index in range(3):
+        assert_equal(plain.keys[index], index)
+    assert_equal(plain.times[1], 0.5)
+    assert_equal(len(rising_key_times(List[Float32]()).times), 0)
+    # The first of two keys moves to the nearest time below.
+    var pair = rising_key_times([0, 1, 1, 2])
+    assert_equal(len(pair.times), 4)
+    assert_equal(pair.times[1], BELOW_ONE)
+    assert_true(pair.times[1] < pair.times[2])
+    assert_equal(pair.times[2], 1)
+    assert_equal(pair.keys[1], 1)
+    assert_equal(pair.keys[2], 2)
+    # Of three, the first moves and the middle is dropped.
+    var triple = rising_key_times([0, 1, 1, 1, 2])
+    assert_equal(len(triple.times), 4)
+    assert_equal(triple.keys[1], 1)
+    assert_equal(triple.keys[2], 3)
+    assert_equal(triple.keys[3], 4)
+    # A run at the start moves its first key as well.
+    var start = rising_key_times([1, 1])
+    assert_equal(len(start.times), 2)
+    assert_equal(start.times[0], BELOW_ONE)
+    # No time lies below zero, so the first key at zero is dropped.
+    var zero = rising_key_times([0, 0, 1])
+    assert_equal(len(zero.times), 2)
+    assert_equal(zero.keys[0], 1)
+    assert_equal(zero.times[0], 0)
+    # The key before is at the nearest time below already: no room.
+    var tight = rising_key_times([BELOW_ONE, 1, 1])
+    assert_equal(len(tight.times), 2)
+    assert_equal(tight.keys[0], 0)
+    assert_equal(tight.keys[1], 2)
+    # A stepped track drops the first of such keys, wherever it is.
+    var stepped = rising_key_times([0, 1, 1, 2], stepped=True)
+    assert_equal(len(stepped.times), 3)
+    assert_equal(stepped.keys[1], 2)
+    assert_equal(stepped.times[1], 1)
+    # Times that fall or that are not numbers are left for the track's
+    # constructor to refuse.
+    var falling = rising_key_times([2, 1])
+    assert_equal(len(falling.times), 2)
+    assert_equal(falling.times[0], 2)
+    var missing = rising_key_times([nan[DType.float32](), nan[DType.float32]()])
+    assert_equal(len(missing.times), 2)
+    assert_true(isnan(missing.times[1]))
+    with assert_raises(contains="must rise"):
+        _ = jump([2, 1], [0, 1])
 
 
 def main() raises:

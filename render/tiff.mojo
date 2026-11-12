@@ -50,7 +50,13 @@ And an LZW code past the table right after a clear code, which UTIF
 reads from a table it shares between decodes, so that its output depends
 on what was decoded before. An image whose pixel count or sample buffer
 does not fit is refused. A tile with no positive width or height is
-refused.
+refused. A tag whose shorts or longs run past the end of the file is
+refused: UTIF reads each missing value as zero, and a tag names up to
+four billion values. Tags that name more samples than the decoded image
+holds are refused. UTIF decodes for the sample count of tag 277, or one,
+and reads for another count when the tag is not there: the length of
+tag 258, or what the photometric form implies. It then reads past its
+array, and each form reads the missing bytes in its own way.
 
 **Where UTIF is followed.** Any other LZW code past the table is read as
 the next code.
@@ -172,6 +178,34 @@ struct _Ifd(Movable):
         return values.value()[0]
 
 
+def _require_tag_values(
+    present: Int, start: Int, num: Int, size: Int, tag: Int
+) raises:
+    """Refuse a tag whose shorts or longs run past the end of the file.
+
+    Nothing. The call returns when every value is in the file.
+
+    UTIF reads a missing value as zero. A tag names up to four billion
+    values, so a file of eighty bytes would read as gigabytes of zeros.
+
+    Args:
+        present: The file's length, in bytes.
+        start: Where the first value starts.
+        num: How many values the tag names.
+        size: The bytes in one value.
+        tag: The tag, for the error.
+
+    Raises:
+        Error: If a value ends past the file.
+    """
+    if num > max(present - start, 0) // size:
+        raise Error(
+            "TIFF: tag "
+            + String(tag)
+            + " names values past the end of the file"
+        )
+
+
 def _read_ifd[
     origin: Origin[mut=False]
 ](reader: _Reader[origin], offset: Int) raises -> _Ifd:
@@ -187,7 +221,8 @@ def _read_ifd[
 
     Raises:
         Error: For a tag type UTIF does not know, where it logs and
-            three.js's build throws.
+            three.js's build throws; or for a tag whose shorts or longs
+            run past the end of the file.
     """
     var ifd = _Ifd()
     var count = reader.u16(offset)
@@ -208,10 +243,12 @@ def _read_ifd[
                 values.append(reader.byte(start + k))
         elif type == 3:
             var start = inline if num < 3 else pointer
+            _require_tag_values(len(reader.bytes), start, num, 2, tag)
             for k in range(num):
                 values.append(reader.u16(start + 2 * k))
         elif type == 4 or type == 13:
             var start = inline if num < 2 else pointer
+            _require_tag_values(len(reader.bytes), start, num, 4, tag)
             for k in range(num):  # pragma: no branch
                 values.append(reader.u32(start + 4 * k))
         elif type == 6 or type < 1 or type > 13:
@@ -701,7 +738,8 @@ def _to_rgba8(ifd: _Ifd, var data: List[UInt8]) raises -> List[UInt8]:
             not floats, RGB of other sample sizes, RGB floats of other
             sample counts, a palette of other sample sizes, and a
             photometric form UTIF does not know or this port does not
-            read.
+            read. Also if the tags name more samples than the image's
+            bytes hold, or no sample.
     """
     var w = ifd.first(256, 0)
     var h = ifd.first(257, 0)
@@ -723,6 +761,23 @@ def _to_rgba8(ifd: _Ifd, var data: List[UInt8]) raises -> List[UInt8]:
     if intp == 1 and bits == 32 and format != 3:
         raise Error("TIFF: 32-bit gray that is not float")
     var bpl = (smpls * bits * w + 7) // 8
+    # The bytes were decoded for the sample count tag 277 gives, or one.
+    # The count here can be another: the length of tag 258, or what the
+    # photometric form implies. UTIF then reads past its array, and each
+    # form reads the missing bytes in its own way. How many bytes each
+    # form reads: whole rows for gray and palette, whole pixels for RGB,
+    # and for CMYK the fourth sample of the last pixel as well.
+    var needed = h * bpl
+    if intp == 2:
+        needed = area * smpls * (bits // 8)
+    elif intp == 5:
+        needed = max(area * smpls, (area - 1) * smpls + 4)
+    # Any other form is refused below, whatever its samples.
+    var known = intp <= 3 or intp == 5
+    if known and smpls < 1:
+        raise Error("TIFF: the image has no samples")
+    if known and needed > len(data):
+        raise Error("TIFF: the tags name more samples than the image holds")
     if intp == 0:
         for y in range(h):  # pragma: no branch
             var off = y * bpl

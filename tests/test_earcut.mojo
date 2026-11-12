@@ -17,8 +17,9 @@ that touches the outline, a large polygon of three holes, and outlines
 and holes closed by a repeat of their first point.
 """
 
-from geometries.earcut import earcut, triangulate_shape
+from geometries.earcut import earcut, require_finite_points, triangulate_shape
 from loaders.json import JsonDocument, parse_json
+from std.math import inf, nan
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
@@ -105,6 +106,66 @@ def test_odd_lists_are_refused() raises:
         _ = earcut([0, 1, 2])
     with assert_raises(contains="odd length"):
         _ = triangulate_shape([0])
+
+
+def _ring(points: Int) -> List[Float64]:
+    """Return `points` corners walked round a unit square, x then y."""
+    var out = List[Float64]()
+    for k in range(points):
+        var side = k * 4 // points
+        var along = Float64(k * 4 % points) / Float64(points)
+        if side == 0:
+            out.append(along)
+            out.append(0)
+        elif side == 1:
+            out.append(1)
+            out.append(along)
+        elif side == 2:
+            out.append(1 - along)
+            out.append(1)
+        else:
+            out.append(0)
+            out.append(1 - along)
+    return out^
+
+
+def test_a_long_list_with_a_point_that_is_not_finite_is_refused() raises:
+    # earcut searches more than 80 points through a z-order curve. A point
+    # that is NaN or infinite has no place on it, and every ear test then
+    # visits every such point: a face of 64,000 points that are NaN takes
+    # half a minute, and one of a million does not return.
+    var bad: List[Float64] = [
+        nan[DType.float64](),
+        inf[DType.float64](),
+        -inf[DType.float64](),
+    ]
+    for value in bad:
+        for at in [0, 1, 81, 161]:
+            var long = _ring(81)
+            long[at] = value
+            with assert_raises(contains="not finite"):
+                _ = earcut(long)
+            with assert_raises(contains="not finite"):
+                _ = triangulate_shape(long)
+            with assert_raises(contains="not finite"):
+                require_finite_points(long)
+        # In a hole as well as in the outline.
+        var outline = _ring(80)
+        var hole: List[Float64] = [0.25, 0.25, 0.5, value, 0.5, 0.25]
+        with assert_raises(contains="not finite"):
+            _ = triangulate_shape(outline, [hole.copy()])
+        # 80 points are cut without the curve, as three.js cuts them.
+        var short = _ring(80)
+        short[7] = value
+        require_finite_points(short)
+        _ = earcut(short)
+    # A face of 64,000 points that are NaN is refused at once.
+    var huge = List[Float64](length=128000, fill=nan[DType.float64]())
+    with assert_raises(contains="not finite"):
+        _ = earcut(huge)
+    # More than 80 finite points are cut.
+    require_finite_points(_ring(81))
+    assert_equal(len(earcut(_ring(84))), 82 * 3)
 
 
 def _bridge_for_tied_candidates(

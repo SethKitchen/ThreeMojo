@@ -21,10 +21,21 @@ to its declared size and not past it.
 CRC-32, and it reads past a size that does not match. This refuses an
 entry whose expanded size or CRC-32 is not what the directory declares.
 It refuses an encrypted entry, a compression method other than stored
-and deflated, a ZIP64 archive, and an archive split across disks, which
-fflate either refuses or reads wrongly. A name is read as UTF-8, as
-fflate reads a name whose flag says so. Invalid UTF-8 bytes become
-replacement characters.
+and deflated, and an archive split across disks, which fflate either
+refuses or reads wrongly. A name is read as UTF-8, as fflate reads a
+name whose flag says so. Invalid UTF-8 bytes become replacement
+characters.
+
+**ZIP64.** An end record with a field at its largest value names a ZIP64
+end record, which holds the entry count and the directory's size and
+place in 64 bits. Its locator sits just before the end record, and the
+central directory ends where the ZIP64 record starts. An entry with a
+size or an offset at its largest value holds the real one in its ZIP64
+extra field, in the order the format gives: size, compressed size,
+offset. Some writers use these records for every archive, small ones
+too: two of the seven 3MF files three.js ships are such archives.
+fflate reads all three values of the extra field whichever the entry
+asks for; this reads the ones it asks for.
 
 **Writing.** `zip_archive` writes entries stored as they are, with no
 compression, as fflate's `zipSync` writes them at level zero. It can pad
@@ -41,6 +52,7 @@ from core.binary import (
     copy_bytes,
     little_endian_u16,
     little_endian_u32,
+    little_endian_uint,
 )
 from render.checksum import crc32
 from render.inflate import inflate
@@ -71,11 +83,21 @@ comptime _LOCAL_HEADER = 0x04034B50
 comptime _CENTRAL_HEADER = 0x02014B50
 comptime _END_OF_DIRECTORY = 0x06054B50
 comptime _DIGITAL_SIGNATURE = 0x05054B50
-# The fixed lengths of those records.
+comptime _ZIP64_END = 0x06064B50
+comptime _ZIP64_LOCATOR = 0x07064B50
+# The fixed lengths of those records. The ZIP64 end record's is the part
+# before its extensible data.
 comptime _LOCAL_LENGTH = 30
 comptime _CENTRAL_LENGTH = 46
 comptime _END_LENGTH = 22
 comptime _DIGITAL_LENGTH = 6
+comptime _ZIP64_END_LENGTH = 56
+comptime _ZIP64_LOCATOR_LENGTH = 20
+# The header ID of an entry's ZIP64 extra field.
+comptime _ZIP64_EXTRA = 1
+# What a 16-bit and a 32-bit field hold to say "see the ZIP64 record".
+comptime _WIDE16 = 0xFFFF
+comptime _WIDE32 = 0xFFFFFFFF
 
 
 @fieldwise_init
@@ -102,7 +124,8 @@ def _need(end: Int, at: Int, length: Int, what: String) raises:
     Raises:
         Error: If it runs past the end.
     """
-    if at + length > end:
+    # Subtracted, not added: a ZIP64 offset can be near the largest integer.
+    if length > end - at:
         raise Error("ZIP: the archive ends inside " + what)
 
 
@@ -166,22 +189,184 @@ def _directory_shape(
     return shape
 
 
+struct _Wide(Movable):
+    """What a ZIP64 end record says of the central directory."""
+
+    # How many entries the directory holds.
+    var count: Int
+    # Where the directory starts, and how long it is.
+    var start: Int
+    var size: Int
+    # Where the ZIP64 end record starts. The directory ends there.
+    var record: Int
+    # Empty, or why the record is refused.
+    var problem: String
+
+    def __init__(out self, problem: String):
+        """Start with no directory, and a reason or none."""
+        self.count = 0
+        self.start = 0
+        self.size = 0
+        self.record = 0
+        self.problem = problem
+
+
+def _names_zip64(bytes: List[UInt8], end: Int) -> Bool:
+    """Return True when an end record names a ZIP64 end record: one of
+    its fields is at the largest value the field holds.
+
+    Args:
+        bytes: The archive.
+        end: Where the end record starts. The record fits.
+
+    Returns:
+        Whether a disk number, an entry count, the directory's size or
+        its offset is such a value.
+    """
+    # Two disk numbers and two entry counts: the loop always runs.
+    for field in range(4):  # pragma: no branch
+        if little_endian_u16(bytes, end + 4 + 2 * field) == _WIDE16:
+            return True
+    return (
+        little_endian_u32(bytes, end + 12) == _WIDE32
+        or little_endian_u32(bytes, end + 16) == _WIDE32
+    )
+
+
+def _zip64_directory(bytes: List[UInt8], end: Int) -> _Wide:
+    """Read the ZIP64 end record that an end record names.
+
+    The record's locator is the twenty bytes before the end record. The
+    record must end where the locator starts, on the one disk there is,
+    and the directory it names must lie before it.
+
+    Args:
+        bytes: The archive.
+        end: Where the end record starts.
+
+    Returns:
+        The directory's entry count, start and size, and where the ZIP64
+        end record starts; or the reason the record is refused.
+    """
+    var locator = end - _ZIP64_LOCATOR_LENGTH
+    if locator < 0 or little_endian_u32(bytes, locator) != _ZIP64_LOCATOR:
+        return _Wide("ZIP: a ZIP64 archive has no ZIP64 end record locator")
+    # Eight bytes past 2^63 read as negative.
+    var record = little_endian_uint(bytes, locator + 8, 8)
+    if record < 0 or record > locator - _ZIP64_END_LENGTH:
+        return _Wide("ZIP: a ZIP64 end record does not fit before its locator")
+    if little_endian_u32(bytes, record) != _ZIP64_END:
+        return _Wide("ZIP: a ZIP64 end record has the wrong signature")
+    # The record's length counts the bytes after the length itself.
+    if little_endian_uint(bytes, record + 4, 8) != locator - record - 12:
+        return _Wide("ZIP: a ZIP64 end record does not end at its locator")
+    if (
+        little_endian_u32(bytes, locator + 4) != 0
+        or little_endian_u32(bytes, locator + 16) > 1
+        or little_endian_u32(bytes, record + 16) != 0
+        or little_endian_u32(bytes, record + 20) != 0
+    ):
+        return _Wide("ZIP: an archive split across disks is not read")
+    var wide = _Wide("")
+    wide.record = record
+    wide.count = little_endian_uint(bytes, record + 32, 8)
+    wide.size = little_endian_uint(bytes, record + 40, 8)
+    wide.start = little_endian_uint(bytes, record + 48, 8)
+    if little_endian_uint(bytes, record + 24, 8) != wide.count:
+        wide.problem = (
+            "ZIP: different entry counts in an archive split across disks"
+        )
+        return wide^
+    # The directory lies before the record, so each value is at most the
+    # record's offset, and a sum of two of them does not wrap.
+    var held = (
+        index_in_count(wide.count, record + 1)
+        and index_in_count(wide.size, record + 1)
+        and index_in_count(wide.start, record + 1)
+    )
+    if not held:
+        wide.problem = (
+            "ZIP: a ZIP64 end record names more than the archive holds"
+        )
+    return wide^
+
+
+def _wide_values(bytes: List[UInt8], at: Int, length: Int) -> List[Int]:
+    """Return the 64-bit values of an entry's ZIP64 extra field.
+
+    Args:
+        bytes: The archive.
+        at: Where the entry's extra fields start.
+        length: How many bytes they take. They lie inside the directory.
+
+    Returns:
+        The values, in file order: as many whole ones as the field holds
+        inside the entry's extra fields. Empty when the entry has no
+        ZIP64 extra field.
+    """
+    var end = at + length
+    var field = at
+    while field + 4 <= end:
+        var size = little_endian_u16(bytes, field + 2)
+        if little_endian_u16(bytes, field) == _ZIP64_EXTRA:
+            var values = List[Int]()
+            var value = field + 4
+            var stop = min(value + size, end)
+            while value + 8 <= stop:
+                values.append(little_endian_uint(bytes, value, 8))
+                value += 8
+            return values^
+        field += 4 + size
+    return List[Int]()
+
+
+def _wide_value(wide: List[Int], index: Int, what: String) raises -> Int:
+    """Return one value of an entry's ZIP64 extra field.
+
+    Args:
+        wide: What `_wide_values` gives for the entry.
+        index: Which value.
+        what: The entry, for the error.
+
+    Returns:
+        The value.
+
+    Raises:
+        Error: If the field does not hold that value, or the value is
+            past 2^63.
+    """
+    if index >= len(wide):
+        raise Error(
+            "ZIP: a ZIP64 " + what + " does not hold its ZIP64 extra field"
+        )
+    if wide[index] < 0:
+        raise Error("ZIP: a ZIP64 " + what + " is larger than this reads")
+    return wide[index]
+
+
 def _directory_candidate(
     bytes: List[UInt8], end: Int, mut shapes: Dict[Int, Tuple[Int, Int, Int]]
 ) raises -> Bool:
-    """Check a classic EOCD's central-record count and complete extent."""
+    """Check an EOCD's central-record count and complete extent."""
+    if _names_zip64(bytes, end):
+        # A ZIP64 end record that reads, and a directory that ends at it
+        # and can hold the entries it counts.
+        var wide = _zip64_directory(bytes, end)
+        return (
+            wide.problem == ""
+            and wide.start + wide.size == wide.record
+            and wide.count <= wide.size // _CENTRAL_LENGTH
+        )
     var count = little_endian_u16(bytes, end + 10)
     if (
         little_endian_u16(bytes, end + 4) != 0
         or little_endian_u16(bytes, end + 6) != 0
     ):
         return False
-    if count == 0xFFFF or little_endian_u16(bytes, end + 8) != count:
+    if little_endian_u16(bytes, end + 8) != count:
         return False
     var start = little_endian_u32(bytes, end + 16)
     var size = little_endian_u32(bytes, end + 12)
-    if start == 0xFFFFFFFF or size == 0xFFFFFFFF:
-        return False
     if start + size != end:
         return False
     if count > size // _CENTRAL_LENGTH:
@@ -246,32 +431,44 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
         The entries, in central directory order.
 
     Raises:
-        Error: If the archive has no end record, is ZIP64 or split, a
-            record runs past the end or has the wrong signature, an entry
-            is encrypted or uses another method, or an entry's data does
-            not expand to its declared size and CRC-32.
+        Error: If the archive has no end record or is split, a record
+            runs past the end or has the wrong signature, a ZIP64 record
+            or extra field that an end record or an entry names is not
+            there, an entry is encrypted or uses another method, or an
+            entry's data does not expand to its declared size and CRC-32.
     """
     var end = _end_of_directory(bytes)
-    var disk = little_endian_u16(bytes, end + 4)
-    var directory_disk = little_endian_u16(bytes, end + 6)
-    if disk != 0 or directory_disk != 0:
-        raise Error("ZIP: an archive split across disks is not read")
-    var disk_count = little_endian_u16(bytes, end + 8)
-    var count = little_endian_u16(bytes, end + 10)
-    var directory_size = little_endian_u32(bytes, end + 12)
-    var at = little_endian_u32(bytes, end + 16)
-    if disk_count == 0xFFFF or count == 0xFFFF:
-        raise Error("ZIP: a ZIP64 archive is not read")
-    if directory_size == 0xFFFFFFFF or at == 0xFFFFFFFF:
-        raise Error("ZIP: a ZIP64 archive is not read")
-    if disk_count != count:
-        raise Error(
-            "ZIP: different entry counts in an archive split across disks"
-        )
+    var count: Int
+    var directory_size: Int
+    var at: Int
+    # Where the directory must end: at the end record, or at the ZIP64 end
+    # record when there is one.
+    var directory_limit = end
+    if _names_zip64(bytes, end):
+        var wide = _zip64_directory(bytes, end)
+        if wide.problem:
+            raise Error(wide.problem)
+        count = wide.count
+        directory_size = wide.size
+        at = wide.start
+        directory_limit = wide.record
+    else:
+        var disk = little_endian_u16(bytes, end + 4)
+        var directory_disk = little_endian_u16(bytes, end + 6)
+        if disk != 0 or directory_disk != 0:
+            raise Error("ZIP: an archive split across disks is not read")
+        var disk_count = little_endian_u16(bytes, end + 8)
+        count = little_endian_u16(bytes, end + 10)
+        directory_size = little_endian_u32(bytes, end + 12)
+        at = little_endian_u32(bytes, end + 16)
+        if disk_count != count:
+            raise Error(
+                "ZIP: different entry counts in an archive split across disks"
+            )
     var directory_start = at
-    _need(end, at, directory_size, "central directory entry 0")
+    _need(directory_limit, at, directory_size, "central directory entry 0")
     var directory_end = at + directory_size
-    if directory_end != end:
+    if directory_end != directory_limit:
         raise Error("ZIP: the central directory does not end at its end record")
     var entries = List[ZipEntry]()
     for index in range(count):
@@ -301,10 +498,21 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
             )
         )
         what = "entry `" + name + "`"
-        if packed == 0xFFFFFFFF or size == 0xFFFFFFFF:
-            raise Error("ZIP: a ZIP64 " + what + " is not read")
-        if local == 0xFFFFFFFF or entry_disk == 0xFFFF:
-            raise Error("ZIP: a ZIP64 " + what + " is not read")
+        # A field at its largest value holds the real one in the entry's
+        # ZIP64 extra field, in the format's order: size, compressed size,
+        # offset. A disk number there names a disk past the one there is.
+        var wide = _wide_values(
+            bytes, at + _CENTRAL_LENGTH + name_length, extra_length
+        )
+        var taken = 0
+        if size == _WIDE32:
+            size = _wide_value(wide, taken, what)
+            taken += 1
+        if packed == _WIDE32:
+            packed = _wide_value(wide, taken, what)
+            taken += 1
+        if local == _WIDE32:
+            local = _wide_value(wide, taken, what)
         if entry_disk != 0:
             raise Error("ZIP: an archive split across disks is not read")
         if flags & 1 == 1:
