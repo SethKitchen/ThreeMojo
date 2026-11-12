@@ -371,6 +371,46 @@ def _same_map(
                 assert_almost_equal(got.value()[k], doc.number(doc.at(want, k)))
 
 
+def _numbers_are(
+    doc: JsonDocument, node: Int, want: List[Float64]
+) raises -> Bool:
+    """Return whether an entry of the reference is a list of numbers.
+
+    Args:
+        doc: The reference.
+        node: The entry, which can be null.
+        want: The numbers.
+
+    Returns:
+        `True` when the entry has those numbers and no others.
+    """
+    if doc.kind(node) == NULL or doc.length(node) != len(want):
+        return False
+    for k in range(len(want)):
+        if doc.number(doc.at(node, k)) != want[k]:
+            return False
+    return True
+
+
+def _usual_normal_map(doc: JsonDocument, map: Int) raises -> Bool:
+    """Return whether three.js read a normal map with the scale and the
+    bias that USD asks of a normal map of bytes.
+
+    Args:
+        doc: The reference.
+        map: The material's `normalMap` entry.
+
+    Returns:
+        `True` for a scale of `[2, 2, 2, 1]` and a bias of
+        `[-1, -1, -1, 0]`.
+    """
+    if doc.kind(map) == NULL:
+        return False
+    return _numbers_are(
+        doc, doc.get(map, "scale"), [2, 2, 2, 1]
+    ) and _numbers_are(doc, doc.get(map, "bias"), [-1, -1, -1, 0])
+
+
 def _same_material(
     assets: Assets,
     model: UsdModel,
@@ -425,9 +465,15 @@ def _same_material(
             atol=1e-5,
             msg=what + " " + keys[k],
         )
+    # three.js takes the scale of USD's own normal map as the normal
+    # scale, which is twice as strong as the file says. This port does
+    # not; see `loaders.usd_composer`.
+    var by = 1.0
+    if _usual_normal_map(doc, doc.get(node, "normalMap")):
+        by = 0.5
     var scale = doc.get(node, "normalScale")
-    assert_almost_equal(Float64(numbers[7]), doc.number(doc.at(scale, 0)))
-    assert_almost_equal(Float64(numbers[8]), doc.number(doc.at(scale, 1)))
+    assert_almost_equal(Float64(numbers[7]), doc.number(doc.at(scale, 0)) * by)
+    assert_almost_equal(Float64(numbers[8]), doc.number(doc.at(scale, 1)) * by)
     assert_equal(m.transparent, doc.boolean(doc.get(node, "transparent")), what)
     var maps: List[TextureId] = [
         m.map,
@@ -686,6 +732,18 @@ def test_round_trip_through_the_exporter() raises:
     var assets = Assets()
     var model = parse_usd(archive, scene, assets)
     _same_scene(scene, assets, model, _reference(), "roundtrip.usdz")
+    # The normal map reads back as strong as it was written. three.js
+    # reads it twice as strong, and the reference holds that.
+    var written = world[1].materials.get(MaterialId(1)).normal_scale
+    assert_equal(written.x, 1)
+    var bumpy = 0
+    for id in range(assets.materials.count()):
+        ref back = assets.materials.get(MaterialId(id))
+        if back.normal_map != NO_TEXTURE:
+            bumpy += 1
+            assert_equal(back.normal_scale.x, written.x)
+            assert_equal(back.normal_scale.y, written.y)
+    assert_equal(bumpy, 1)
     # The geometry reads back as the exporter wrote it.
     var crate = model.objects[4].copy()
     ref geometry = assets.geometries.get(crate.geometry)

@@ -113,6 +113,34 @@ def _think(
     return [struck, summoned, rocked]
 
 
+def test_a_blow_on_the_boss_stays_pale_then_drains() raises:
+    var boss = Boss(1, 3)
+    var members: List[Vector3] = [Vector3(0, 0, 40)]
+    var sight = _sight(Vector3(0, 0, 0), members)
+    assert_equal(boss.chip, boss.most)
+    # A blow takes health: the bar keeps showing it a moment.
+    boss.health -= 100
+    _ = boss.think(sight, 0.1)
+    assert_equal(boss.chip, boss.most)
+    # Then it drains to the health, and never below it.
+    for _ in range(40):
+        _ = boss.think(sight, 0.1)
+    assert_equal(boss.chip, boss.health)
+    # With its party all fallen, the boss leaves the fight: whole again,
+    # and so is its bar.
+    var fallen: List[Bool] = [False]
+    var gone = BossSight(
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 1),
+        Vector3(0, 0, 0),
+        members.copy(),
+        fallen^,
+    )
+    _ = boss.think(gone, 0.1)
+    assert_equal(boss.health, boss.most)
+    assert_equal(boss.chip, boss.most)
+
+
 def test_each_kind_knows_its_values() raises:
     for value in [-1, BOSS_ATTACKS]:
         assert_false(BossAttack(value).is_valid())

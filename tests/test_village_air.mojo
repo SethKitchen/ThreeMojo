@@ -83,6 +83,22 @@ def test_the_mist_lies_low_and_far() raises:
     assert_equal(
         ground_mist(high, camera, -200, 0.6, Color(200, 200, 200, 255)), 0
     )
+    # A row of 13 is found 8 pixels at once and 5 one at a time: the same
+    # sky, ground and thin mist.
+    var narrow = Framebuffer(13, 16, Color(0, 0, 0, 255))
+    for k in range(13 * 16):
+        narrow.depth[k] = inf[DType.float32]() if k < 13 * 8 else far
+    var depths = narrow.depth.copy()
+    assert_equal(
+        ground_mist(narrow, camera, 0, 0.6, Color(200, 200, 200, 255)), 13 * 8
+    )
+    assert_equal(narrow.get_pixel(12, 3).r, 0)
+    assert_true(narrow.get_pixel(12, 12).r > 100)
+    var thin = Framebuffer(13, 16, Color(0, 0, 0, 255))
+    thin.depth = depths^
+    assert_equal(
+        ground_mist(thin, camera, -200, 0.6, Color(200, 200, 200, 255)), 0
+    )
     with assert_raises(contains="thickness"):
         _ = ground_mist(image, camera, 0, 2, Color(0, 0, 0, 255))
     with assert_raises(contains="thickness"):

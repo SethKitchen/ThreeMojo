@@ -524,6 +524,14 @@ A cross-fade is a mixer call, not an action call. It changes two actions, and on
 
 The glTF loader makes one clip per animation. A `weights` channel drives the morph targets of every mesh at its node and at every node below it, plain or skinned. three.js's `GLTFLoader` does the same traversal. Each mesh takes as many weights as it has targets and the sampler holds.
 
+### Keys that share a time
+
+A file can hold two keys at one time. Two of the glTF models that three.js ships have such keys in every track. three.js reads them as a jump. An interpolated track nears the first key's value before the time. The value at the time and after it is the last key's. A stepped track never reads the first key.
+
+The times of a track must rise, so the glTF loader calls `rising_key_times(times, stepped)`. The function keeps the last key at its time. It moves the first key to the nearest `Float32` time below, and it drops the keys between them. For a stepped track it drops the first key too. It returns the times and the index of each kept key.
+
+The track then reads as three.js reads it, except inside that one step of time. The first key is dropped when it has no time to move to. That is so at time zero, and when the key before it is already at the nearest time below. `tests/test_animation_tracks.mojo` compares the values with three.js r180.
+
 ### Scene JSON
 
 `object_to_json(scene, assets, cameras, animations)` writes a list of clips as the scene's `animations`, as three.js's `Object3D.toJSON` does. `read_object_json` reads the `animations` of every object, as three.js's `ObjectLoader.parseAnimations` does. It returns them in `model.animations`, and the node of the object that holds each clip in `model.animation_roots`. The node is `NO_PARENT` for the scene.

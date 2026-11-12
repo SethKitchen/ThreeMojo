@@ -9,7 +9,8 @@
   with z taken at least 15 ft.
 - `elevation_factor`: Ke of Table 26.9-1 by its note's formula.
 - `velocity_pressure`: qz = 0.00256 Kz Kzt Kd Ke V^2 psf (26.10-1).
-- `leeward_wall_coefficient`: Cp of the leeward wall of Figure 27.3-1,
+- `leeward_wall_coefficient`: Cp of the leeward wall of ASCE 7-10
+  Figure 27.4-1 (ASCE 7-16 Figure 27.3-1),
   by L / B.
 - `wall_net_pressure`: the net horizontal pressure of the main wind
   force resisting system on a rigid low building, windward plus
@@ -30,7 +31,7 @@ from units.si import FOOT64, Length64, Pressure64, Velocity64
 comptime RIGID_GUST = 0.85
 # Kd of a building's main wind force resisting system, Table 26.6-1.
 comptime BUILDING_DIRECTIONALITY = 0.85
-# Cp of a windward wall, Figure 27.3-1.
+# Cp of a windward wall, ASCE 7-10 Figure 27.4-1 (7-16 Figure 27.3-1).
 comptime WINDWARD_WALL = 0.8
 
 
@@ -128,7 +129,7 @@ def velocity_pressure(
 
 
 def leeward_wall_coefficient(depth_over_width: Float64) raises -> Float64:
-    """Return Cp of a leeward wall, Figure 27.3-1.
+    """Return Cp of a leeward wall, ASCE 7-10 Figure 27.4-1.
 
     Args:
         depth_over_width: L / B, the building's depth along the wind over

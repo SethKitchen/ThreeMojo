@@ -133,7 +133,7 @@ The combos added after the first 39 come last in `default_combos`. A saved progr
 | `BLEED` | A wound bleeds 60 percent of the blow's damage over 4 seconds. A number shows each half second. A wound does not fell a target | Red drops that fall, and a drop that pulses on the target |
 | `DRAIN` | Heals the player by 35 percent of the blow's damage | Green motes that run to the player |
 | `SHOCKWAVE` | Strikes each other target within 3.5 meters with half the blow | A gold ring that spreads over the ground |
-| `CHAIN` | Sparks leap to up to 3 other targets within 8 meters, each with 60 percent of the blow | A crooked violet arc to each target |
+| `CHAIN` | Sparks leap to up to 3 other targets within 8 meters, each with 60 percent of the blow | A zigzag violet arc with a white core to each target. It takes a new zigzag 30 times a second, so it flickers as lightning does. |
 | `MARK` | For 6 seconds, each blow on the target does 1.25 times its damage, from any member | A gold ring that closes, and a gold reticle that turns over the target |
 
 The effects are in `extensions/village/battle.mojo`, and their light in `extensions/village/effects_hud.mojo`.

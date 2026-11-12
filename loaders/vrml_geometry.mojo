@@ -586,9 +586,18 @@ def elevation_grid(
         Three numbers a point, and three point indices a triangle.
 
     Raises:
-        Error: If the grid's index length does not fit in an integer.
+        Error: If the grid's index length does not fit in an integer, or
+            the grid has more points than heights.
     """
     _require_grid_count(x_dimension, z_dimension)
+    # three.js reads a missing height as `NaN`, and a geometry with a
+    # `NaN` is refused. Refuse it here, before the points are made: a
+    # dimension is almost `1e15` at most, and the file gives no height.
+    if x_dimension * z_dimension > len(height):
+        raise Error(
+            "VRML: an elevation grid reads a height that is not there: it"
+            " has more points than heights"
+        )
     var vertices = List[Float64]()
     for i in range(z_dimension):
         for j in range(x_dimension):

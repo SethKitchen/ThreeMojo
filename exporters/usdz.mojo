@@ -54,7 +54,8 @@ for any scene whose numbers are short decimals. A matrix is this port's
 `Float32` matrix. A turn that a `Float32` cannot hold exactly, such as
 thirty degrees, is written a few units apart in the last digits.
 
-**Textures.** A texture is written as a PNG from `render.png`. One whose
+**Textures.** A texture is written as a compressed PNG from
+`render.png_compress`. One whose
 longer side is past `max_texture_size`, 1024 by default, is scaled down
 to it, keeping its shape, as three.js's `imageToCanvas` scales it: each
 side times the size over the longer side, cut down to whole pixels. The
@@ -67,6 +68,20 @@ Each file of the archive starts at a multiple of 64 bytes, as USDZ
 asks. three.js pads each file by a count that is right only for the
 first file. A geometry that is not whole triangles is refused. three.js
 throws a `RangeError` for it.
+
+Three texture inputs are written as the `UsdPreviewSurface` specification
+asks, and as three.js 0.186 writes them. OpenUSD's validators report
+each one in a file of three.js 0.180:
+
+- A reader's `inputs:varname` is a `string`. three.js 0.180 writes a
+  `token`.
+- A transform's `inputs:in` is a `float2`. three.js 0.180 writes a
+  `token`.
+- A normal map's texture has `inputs:scale` and `inputs:bias`, which
+  turn a byte from 0 to 1 into a normal from -1 to 1: twice the
+  material's `normal_scale.x` and its negative for x and y, 2 and -1
+  for z. three.js 0.180 writes neither, so a renderer reads each
+  normal as it is in the file, from 0 to 1.
 """
 
 from cameras.orthographic_camera import OrthographicCamera
@@ -100,7 +115,7 @@ from materials.material import (
 from math.matrix4 import Matrix4
 from render.framebuffer import Color, Framebuffer
 from exporters.common import resized_image
-from render.png import encode as encode_png
+from render.png_compress import encode_compressed
 from render.srgb import SRGB
 from render.texture import CLAMP, MIRROR, REPEAT, Texture, Wrap
 from render.texture_store import TextureId
@@ -642,6 +657,7 @@ struct _Exporter(Movable):
     ) raises:
         """Add three.js's `buildTextureNodes`: a primvar reader, a 2D
         transform and a texture, with a scale when `color` is not empty.
+        A `normal` texture has the scale and the bias of a normal map.
         """
         ref texture = assets.textures.get(id)
         require_valid(
@@ -674,12 +690,12 @@ struct _Exporter(Movable):
         var reader = _UsdNode("PrimvarReader_" + map_type, "Shader")
         reader.add_property('uniform token info:id = "UsdPrimvarReader_float2"')
         reader.add_property("float2 inputs:fallback = (0.0, 0.0)")
-        reader.add_property('token inputs:varname = "' + uv + '"')
+        reader.add_property('string inputs:varname = "' + uv + '"')
         reader.add_property("float2 outputs:result")
         var transform = _UsdNode("Transform2d_" + map_type, "Shader")
         transform.add_property('uniform token info:id = "UsdTransform2d"')
         transform.add_property(
-            "token inputs:in.connect = "
+            "float2 inputs:in.connect = "
             + path
             + "PrimvarReader_"
             + map_type
@@ -720,6 +736,19 @@ struct _Exporter(Movable):
         )
         if color.byte_length() > 0:
             node.add_property("float4 inputs:scale = " + color)
+        if map_type == "normal":
+            # A normal is from -1 to 1 and a byte reads as 0 to 1, so the
+            # texture is scaled and moved. Only the x of the normal scale
+            # is used, as in three.js.
+            var strength = _js(material.normal_scale.x)
+            var double = js_number_text(2 * strength)
+            var less = js_number_text(-strength)
+            node.add_property(
+                "float4 inputs:scale = (" + double + ", " + double + ", 2, 1)"
+            )
+            node.add_property(
+                "float4 inputs:bias = (" + less + ", " + less + ", -1, 0)"
+            )
         var space = "sRGB" if texture.color_space == SRGB else "raw"
         node.add_property('token inputs:sourceColorSpace = "' + space + '"')
         node.add_property('token inputs:wrapS = "' + wrap_s + '"')
@@ -1159,7 +1188,7 @@ def usdz_files(
             )
         files.add(
             _texture_file(id, texture),
-            encode_png(Framebuffer(wide, high, pixels^)),
+            encode_compressed(Framebuffer(wide, high, pixels^)),
         )
     return files^
 

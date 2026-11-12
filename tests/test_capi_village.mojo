@@ -159,9 +159,15 @@ comptime UNKNOWN_KIND = 99
 
 
 def _make() raises -> Handle:
-    """Make an app of the tiny village, which the test needs to succeed."""
+    """Make an app of the tiny village, which the test needs to succeed.
+
+    Its frame keeps one size. A window draws more or fewer pixels by the
+    time that its last frame took. A test's frame must not follow the time
+    that the machine takes."""
     var app = new_app(WIDTH, HEIGHT, tiny_game(), pebble_bed(gray_photograph()))
-    return Handle(unsafe_from_address=Int(app))
+    var handle = Handle(unsafe_from_address=Int(app))
+    _state(handle)[].game.set_dynamic(False)
+    return handle
 
 
 def _state(app: Handle) -> Pointer[VillageApp, MutUntrackedOrigin]:
@@ -255,7 +261,7 @@ def test_the_environment_names_the_quality() raises:
 def test_the_game_turns_the_weather_and_the_day_as_the_x11_game_does() raises:
     var parameters = play_parameters(LOW)
     assert_true(parameters.weather_cycle)
-    assert_equal(parameters.quality.frame_size(1920, 1080)[0], 640)
+    assert_equal(parameters.quality.frame_size(1920, 1080)[0], 922)
     assert_almost_equal(parameters.day.hour, Float32(START_HOUR), atol=1e-6)
     assert_almost_equal(parameters.day.hours_a_second, DAY_RATE, atol=1e-9)
     # A day takes twenty minutes.
@@ -529,12 +535,13 @@ def test_a_game_for_a_gpu_draws_at_the_windows_size() raises:
     # frame does, so that they keep their spacing in the picture.
     var low = game_quality(LOW)
     var cpu = play_parameters(LOW)
-    assert_almost_equal(cpu.quality.render_scale, Float32(1.0 / 3.0), atol=1e-6)
+    assert_almost_equal(cpu.quality.render_scale, Float32(0.48), atol=1e-6)
     assert_equal(cpu.quality.sky_step, low.sky_step)
     var gpu = play_parameters(LOW, True)
     assert_equal(gpu.quality.render_scale, Float32(1))
-    assert_equal(gpu.quality.sky_step, low.sky_step * 3)
-    assert_equal(gpu.quality.water_step, low.water_step * 3)
+    # Each step is divided by the share, and rounded.
+    assert_equal(gpu.quality.sky_step, Int(Float32(low.sky_step) / 0.48 + 0.5))
+    assert_equal(gpu.quality.water_step, 13)
     assert_equal(gpu.quality.frame_size(1920, 1080)[0], 1920)
     var medium = play_parameters(MEDIUM, True)
     assert_equal(medium.quality.sky_step, game_quality(MEDIUM).sky_step * 2)
@@ -567,6 +574,19 @@ def test_a_game_that_a_gpu_does_not_draw_prepares_no_frame() raises:
     assert_equal(tm_village_prepare(app), Int32(0))
     assert_false(_state(app)[].gpu)
     tm_destroy(app)
+
+
+def test_a_cpu_window_sizes_its_frame_by_time_and_a_gpu_window_does_not() raises:
+    # The CPU's frame draws more of the window when there is time.
+    var app = new_app(WIDTH, HEIGHT, tiny_game(), pebble_bed(gray_photograph()))
+    var cpu = Handle(unsafe_from_address=Int(app))
+    assert_true(_state(cpu)[].game.dynamic)
+    tm_destroy(cpu)
+    # A GPU draws into an image of a fixed size, so the frame keeps its
+    # size.
+    var gpu = _make_gpu()
+    assert_false(_state(gpu)[].game.dynamic)
+    tm_destroy(gpu)
 
 
 def test_a_prepared_frame_is_described_to_the_host() raises:

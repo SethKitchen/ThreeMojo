@@ -28,7 +28,9 @@ there too. `value_at` reads so.
 and a mesh with neither normals nor corners to compute them from. And
 where this port holds less: points or attributes that are not whole
 vertices, face counts whose triangle count is not whole or does not fit,
-and a face of more than 2^24 corners.
+and a face of more than 2^24 corners. A face of more than 80 corners
+with a corner or a point that is not there is refused: its place is NaN,
+and `geometries.earcut` refuses that many points with one.
 
 ## Numerical range correction
 

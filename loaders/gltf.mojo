@@ -223,6 +223,7 @@ from animation.keyframe_track import (
     SkinnedMeshIndex,
     TrackKind,
     TrackTarget,
+    rising_key_times,
     morph_target,
     node_target,
     skinned_morph_target,
@@ -1261,6 +1262,9 @@ struct _Loader(Movable):
     # and read twice when both a color and a data map ask for it.
     var texture_images: List[Int]
     var texture_samplers: List[GltfSampler]
+    # One number for each glTF texture's image and sampler together: two
+    # textures with the same number read the same image the same way.
+    var texture_keys: List[Int]
     # Each glTF texture read linear with its alpha kept, as a sheen
     # roughness texture is, or `NO_TEXTURE` until one asks for it.
     var alpha_textures: List[TextureId]
@@ -1301,6 +1305,7 @@ struct _Loader(Movable):
         self.tinted_materials = List[MaterialId]()
         self.has_tinted = List[Bool]()
         self.texture_images = List[Int]()
+        self.texture_keys = List[Int]()
         self.texture_samplers = List[GltfSampler]()
         self.alpha_textures = List[TextureId]()
         self.morph_counts = List[Int]()
@@ -1785,6 +1790,10 @@ struct _Loader(Movable):
                 )
             self.texture_images.append(image)
             self.texture_samplers.append(sampling)
+            # A texture with no sampler has the index -1.
+            self.texture_keys.append(
+                image * (self.count("samplers") + 1) + sampler_index + 1
+            )
             self.alpha_textures.append(NO_TEXTURE)
             self.model.color_textures.append(NO_TEXTURE)
             self.model.data_textures.append(NO_TEXTURE)
@@ -1811,9 +1820,15 @@ struct _Loader(Movable):
                 var index = self.texture_reference(slot[0], slot[1])
                 if index < 0 or index >= len(self.texture_images):
                     continue
+                # A texture of the same image and sampler is decoded
+                # once: `texture` copies the one that is built.
                 var fresh = True
                 for k in range(len(textures)):
-                    if textures[k] == index and spaces[k] == slot[2]:
+                    if (
+                        self.texture_keys[textures[k]]
+                        == self.texture_keys[index]
+                        and spaces[k] == slot[2]
+                    ):
                         fresh = False
                 if fresh:
                     textures.append(index)
@@ -1901,31 +1916,39 @@ struct _Loader(Movable):
             and self.model.data_textures[index] != NO_TEXTURE
         ):
             return self.model.data_textures[index]
-        var bytes = self.image_bytes(self.texture_images[index])
-        # A linear texture holds numbers -- metalness and roughness, a
-        # normal, occlusion -- and its alpha is not coverage: the renderer
-        # refuses a data map that reads alpha as coverage, so one built
-        # with the default could not be drawn.
-        ref sampling = self.texture_samplers[index]
-        var alpha = IGNORED if space == LINEAR and not keep_alpha else COVERAGE
-        var built: Texture
-        if is_ktx2(bytes):
-            built = ktx2_texture(bytes, sampling, space, alpha)
+        var id = self.twin(index, space, keep_alpha)
+        if id != NO_TEXTURE:
+            # The same image, read the same way, is built already. A copy
+            # of it is this texture: the image is not decoded again.
+            id = assets.textures.add(Texture(copy=assets.textures.get(id)))
         else:
-            built = texture_from(
-                decode_image(bytes),
-                sampling.wrap_s,
-                sampling.mag_filter,
-                space,
-                sampling.min_filter.is_mipmap(),
-                alpha=alpha,
+            var bytes = self.image_bytes(self.texture_images[index])
+            # A linear texture holds numbers -- metalness and roughness, a
+            # normal, occlusion -- and its alpha is not coverage: the
+            # renderer refuses a data map that reads alpha as coverage, so
+            # one built with the default could not be drawn.
+            ref sampling = self.texture_samplers[index]
+            var alpha = (
+                IGNORED if space == LINEAR and not keep_alpha else COVERAGE
             )
-        built.wrap_t = sampling.wrap_t
-        built.min_filter = sampling.min_filter
-        # glTF's `v` runs down from the top, as the image's rows do: three.js
-        # reads it with `flipY = false`, and so does this.
-        built.flip_y = False
-        var id = assets.textures.add(built^)
+            var built: Texture
+            if is_ktx2(bytes):
+                built = ktx2_texture(bytes, sampling, space, alpha)
+            else:
+                built = texture_from(
+                    decode_image(bytes),
+                    sampling.wrap_s,
+                    sampling.mag_filter,
+                    space,
+                    sampling.min_filter.is_mipmap(),
+                    alpha=alpha,
+                )
+            built.wrap_t = sampling.wrap_t
+            built.min_filter = sampling.min_filter
+            # glTF's `v` runs down from the top, as the image's rows do:
+            # three.js reads it with `flipY = false`, and so does this.
+            built.flip_y = False
+            id = assets.textures.add(built^)
         if keep_alpha:
             self.alpha_textures[index] = id
         elif space == SRGB:
@@ -1933,6 +1956,38 @@ struct _Loader(Movable):
         else:
             self.model.data_textures[index] = id
         return id
+
+    def twin(
+        self, index: Int, space: ColorSpace, keep_alpha: Bool
+    ) -> TextureId:
+        """Return a texture that is built from the same image, with the
+        same sampler, read the same way, or `NO_TEXTURE`.
+
+        A file can name one image in several textures. kira.glb, which
+        three.js ships, names an image of 4096 by 4096 pixels in 24 of
+        them. three.js decodes the image once and each texture shares it.
+        Here each texture holds its own pixels, so each other texture is
+        a copy of the first one built.
+
+        Args:
+            index: The glTF texture.
+            space: The color space it is read in.
+            keep_alpha: Whether its alpha is read as a number.
+
+        Returns:
+            The texture another glTF texture built, or `NO_TEXTURE`.
+        """
+        for other in range(len(self.texture_keys)):  # pragma: no branch
+            if self.texture_keys[other] != self.texture_keys[index]:
+                continue
+            var built = self.model.data_textures[other]
+            if keep_alpha:
+                built = self.alpha_textures[other]
+            elif space == SRGB:
+                built = self.model.color_textures[other]
+            if built != NO_TEXTURE:
+                return built
+        return NO_TEXTURE
 
     def texture_set(self, found: Int) raises -> Int:
         """Return the set of texture coordinates a texture reference reads:
@@ -3604,12 +3659,21 @@ struct _Loader(Movable):
         require_positive(
             len(input[0]), "glTF: a sampler needs at least one key"
         )
-        var times = List[Duration]()
-        for key in range(len(input[0])):  # pragma: no branch
-            times.append(Duration(input[0][key], SECOND))
         var how = _interpolation_of(self.text(sampler, "interpolation"))
+        # Keys that share a time are a jump, as three.js reads them. A
+        # track's times rise, so the key before the jump moves to the
+        # nearest time below, and a key that is never read is dropped.
+        var rising = rising_key_times(input[0], how == STEP)
+        var times = List[Duration]()
+        for key in range(len(rising.times)):  # pragma: no branch
+            times.append(Duration(rising.times[key], SECOND))
         var output_index = self.required_integer(sampler, "output")
         var output = self.accessor_floats(output_index)
+        if len(rising.keys) != len(input[0]):
+            output = (
+                _values_of_keys(output[0], len(input[0]), rising.keys),
+                output[1],
+            )
         if (
             path == "rotation"
             and self.required_integer(
@@ -3767,6 +3831,36 @@ def _normalize_quaternion_keys(mut output: List[Float32], parts: Int):
             for lane in range(4):
                 output[at + lane] = Float32(Float64(output[at + lane]) / length)
         key += 1
+
+
+def _values_of_keys(
+    output: List[Float32], count: Int, keys: List[Int]
+) raises -> List[Float32]:
+    """Return the values of some of a sampler's keys, in the order asked.
+
+    Args:
+        output: Every key's values end to end: the same number for each
+            key, with a cubic spline's two tangents among them.
+        count: How many keys the output is for. One or more.
+        keys: The keys to keep, each below `count`.
+
+    Returns:
+        The values of those keys, end to end.
+
+    Raises:
+        Error: If the output does not hold the same number of values for
+            every key.
+    """
+    var each = len(output) // count
+    if each * count != len(output):
+        raise Error(
+            "glTF: a sampler's output must hold the same number of values"
+            " for every key"
+        )
+    var kept = List[Float32](capacity=each * len(keys))
+    for key in keys:  # pragma: no branch
+        kept.extend(output[key * each : (key + 1) * each])
+    return kept^
 
 
 def _track(

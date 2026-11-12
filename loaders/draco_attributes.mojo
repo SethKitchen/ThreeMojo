@@ -873,7 +873,7 @@ struct PredictionScheme(Copyable, Movable):
         Args:
             buffer: The cursor, after the corrections.
             corners: The corners of the mesh, which bound the crease
-                flags.
+                flags and the orientations.
 
         Raises:
             Error: If the data is not valid.
@@ -892,6 +892,10 @@ struct PredictionScheme(Copyable, Movable):
         elif self.method == DRACO_TEX_COORDS_PORTABLE:
             var count = buffer.i32()
             draco_require(count >= 0, "an orientation count is negative")
+            # A value takes one orientation at most, and a mesh has no more
+            # values than corners. Draco reads as many as the count says,
+            # up to two billion, whatever the mesh holds.
+            draco_require(count <= corners, "there are too many orientations")
             var bits = RAnsBitDecoder()
             bits.start(buffer)
             var last = True
@@ -1067,7 +1071,9 @@ struct PredictionScheme(Copyable, Movable):
     ) raises -> List[Int]:
         """Draco's `MeshPredictionSchemeTexCoordsPortablePredictor`."""
         var corner = data.value_corners[p]
-        var table = data.table.copy()
+        # The table is read where it is. A copy of it for each value takes
+        # a time that grows with the square of the mesh.
+        ref table = data.table
         var next = data.vertex_values[table.vertex(table.next(corner))]
         var prev = data.vertex_values[table.vertex(table.previous(corner))]
         if prev < p and next < p:

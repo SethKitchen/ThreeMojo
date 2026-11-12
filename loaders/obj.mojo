@@ -18,12 +18,12 @@ What is read is what three.js's loader reads and this renderer can draw:
   it: an object with a colored vertex gets a linear `color` attribute,
   and a vertex with no color is white in it.
 - `f` with three or more corners, each `v`, `v/vt`, `v//vn` or `v/vt/vn`.
-  A polygon is cut into a fan of triangles from its first corner, as
-  three.js cuts it, and so it must be convex: a fan covers a convex
-  polygon and only that, and a concave one, or one with no area, is
-  refused rather than drawn wrong, as three.js draws it. An index counts
-  from one, and a negative one counts back from the last entry so far,
-  as the format allows.
+  A convex polygon is cut into a fan of triangles from its first corner,
+  as three.js cuts it. A fan covers a convex polygon and only that, so a
+  polygon that is not convex is cut by earcut instead: three.js cuts it
+  into a fan as well, and draws the cutout. A polygon with no area is
+  refused. An index counts from one, and a negative one counts back from
+  the last entry so far, as the format allows.
 - `o name` and `g name` start a new object. An object with no faces is
   left out, as three.js leaves it out. A name, here and in `usemtl` and
   `mtllib`, is the rest of the line, trimmed: a `#` and the spaces in it
@@ -52,8 +52,8 @@ the next is refused rather than padded, because a zero normal would light
 a corner black without a word.
 
 A number that cannot be read or is not finite once it is a `Float32`, a
-face with fewer than three corners or that is not convex, and an index
-that names nothing are refused, with the line they were found on.
+face with fewer than three corners or with no area, and an index that
+names nothing are refused, with the line they were found on.
 
 `read_obj` reads the file as UTF-8. A byte that is not UTF-8 becomes
 U+FFFD, as three.js's `FileLoader` decodes the text, so a comment or a
@@ -74,7 +74,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
-from loaders.fan import fan_problem
+from loaders.fan import cut_polygon
 from loaders.js_text import comment_start, split_fields, without_bom
 from loaders.text_number import file_line
 from math.vector3 import Vector3
@@ -532,8 +532,8 @@ def _read_face(
     colors: List[Float32],
     line: Int,
 ) raises:
-    """Add a face's triangles to the part being read, as a fan from its
-    first corner.
+    """Add a face's triangles to the part being read, as `cut_polygon`
+    cuts it: a fan from the first corner of a convex face.
 
     Args:
         part: The object being read.
@@ -545,31 +545,33 @@ def _read_face(
         line: Which line, for the error.
 
     Raises:
-        Error: If the face has fewer than three corners, or a corner is
-            refused; see `_read_corner`.
+        Error: If the face has fewer than three corners or no area, or a
+            corner is refused; see `_read_corner`.
     """
     var corners = len(fields) - 1
     if corners < 3:
         raise Error(_where(line) + "a face needs at least three corners")
+    var order: List[Int] = [0, 1, 2]
     if corners > 3:
         var points = List[Vector3]()
         for which in range(corners):  # pragma: no branch
             points.append(_corner_position(fields[which + 1], vertices, line))
-        var problem = fan_problem(points)
-        if problem:
-            raise Error(_where(line) + problem)
-    # Three corners or more: the loop always runs.
-    for triangle in range(corners - 2):  # pragma: no branch
-        for which in [0, triangle + 1, triangle + 2]:  # pragma: no branch
-            _read_corner(
-                part,
-                fields[which + 1],
-                vertices,
-                texcoords,
-                normals,
-                colors,
-                line,
-            )
+        var cut = cut_polygon(points)
+        if cut.problem:
+            raise Error(_where(line) + cut.problem)
+        order = cut.triangles.copy()
+    # A face has a triangle at least: `cut_polygon` gives none only with a
+    # problem. The loop runs.
+    for which in order:  # pragma: no branch
+        _read_corner(
+            part,
+            fields[which + 1],
+            vertices,
+            texcoords,
+            normals,
+            colors,
+            line,
+        )
 
 
 def parse_obj(text: String) raises -> ObjModel:

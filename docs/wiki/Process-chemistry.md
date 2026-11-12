@@ -19,6 +19,7 @@ This page covers steps, requirements, windows and reactions. Each area of the li
 | [Flowsheets and routes](Flowsheets-and-routes) | Steps joined by streams with recycle, and the search for routes |
 | [Materials and coatings](Materials-and-coatings) | Expansion curves, melting points, eutectics and coating mechanics |
 | [Crystals and figures](Crystals-and-figures) | A CIF reader, chart axes and the gallery figures |
+| [Diamond growth](Diamond-growth) | HPHT and plasma CVD growth of diamond crystals, and the cost per carat |
 
 ## Layers
 
@@ -52,7 +53,8 @@ Each layer uses only the layers above it in this table. Extend the library at th
 | `coating` | `ElasticLayer`, the coating stresses, and the peeling, buckling and cracking limits |
 | `crystal` | `read_cif`, `Crystal` and `bonds` |
 | `plot` | `Axes`, `nice_ticks` and `tick_text` |
-| `processes` | Worked processes: `titanium`, `diamond` and `lime` |
+| `production` | `Money64`, `Price`, `GrowthRun`, `run_cost`, `cost_floor` and `growth_for_price` |
+| `processes` | Worked processes: `titanium`, `diamond`, `lime`, `hpht` and `mpcvd` |
 
 ## Model a step
 
@@ -193,15 +195,18 @@ Each piece of data stops at its range. The calcite data ends at 1200 K, and the 
 | Diamond on carbide at 30 Torr | 700 to 1000 degC | Growth rate (stated) | Cobalt (stated) |
 | Hydrogen filament at 30 Torr | 1758 to 3422 degC | 1 % atomic hydrogen (computed) | Tungsten melts (stated) |
 | Lime burning | 894 to 927 degC | CaCO3 gives off CO2 (computed) | The calcite data ends |
+| HPHT diamond at 5.7 GPa | 1392 to 1504 degC | Fe-Ni solvent melts (stated) | Graphite-diamond line (stated) |
+| Diamond on seeds at 200 Torr | 700 to 1200 degC | Growth quality (stated) | Growth quality (stated) |
+| Microwave plasma at 200 Torr | From 2239 degC | 5 % atomic hydrogen (computed) | End of the search |
 
 Print them with `tools/process_report.mojo`:
 
 ```sh
 .venv/bin/mojo run -I . tools/process_report.mojo            # every process
-.venv/bin/mojo run -I . tools/process_report.mojo titanium   # titanium, diamond or lime
+.venv/bin/mojo run -I . tools/process_report.mojo titanium   # titanium, diamond, lime, hpht or mpcvd
 ```
 
-The diamond step shows a metastable product. Graphite to diamond does not proceed at 30 Torr: its change is +5.7 kJ/mol at 850 degC. Methane at 1 % in hydrogen can still deposit diamond, at -14.5 kJ/mol. Atomic hydrogen from the filament etches graphite faster than diamond, so the diamond survives. That last requirement is kinetic, so the step states it as an action.
+The diamond step shows a metastable product. Graphite to diamond does not proceed at 30 Torr: its change is +5.7 kJ/mol at 850 degC. Methane at 1 % in hydrogen can still deposit diamond, at -14.5 kJ/mol. Atomic hydrogen from the filament etches graphite faster than diamond, so the diamond survives. That last requirement is kinetic, so the step states it as an action. For diamond crystals grown in a press or on seeds, and their cost, see [Diamond growth](Diamond-growth).
 
 ## Add a process
 

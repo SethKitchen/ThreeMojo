@@ -5,14 +5,16 @@
 
 """Print the requirements and operating windows of the worked processes.
 
-    mojo run -I . tools/process_report.mojo [titanium|diamond|lime]
+    mojo run -I . tools/process_report.mojo [titanium|diamond|lime|hpht|mpcvd]
 
 With no name, the tool prints every process. Each step gives its hazards,
 its pressure, its operating window, and each requirement at the planned
 temperature. The titanium process adds the magnesium and the heat duty
 per kilogram of titanium. The diamond process adds the residual stress of
 the coating and the thickest coating that does not peel, for an example
-interface fracture energy. The lime process adds its heat duty.
+interface fracture energy. The lime process adds its heat duty. The
+two processes that grow diamond crystals, `hpht` and `mpcvd`, add the
+cost of an example run per kept carat, at an example electricity price.
 
 See the wiki page Process chemistry.
 """
@@ -39,7 +41,18 @@ from extensions.chemistry.processes.diamond import (
     diamond_coating,
     hydrogen_filament,
 )
+from extensions.chemistry.processes.hpht import hpht_growth, hpht_run
 from extensions.chemistry.processes.lime import lime_burning
+from extensions.chemistry.processes.mpcvd import (
+    mpcvd_run,
+    plasma_hydrogen,
+    seed_growth,
+)
+from extensions.chemistry.production import (
+    EnergyPrice64,
+    PER_KILOWATT_HOUR,
+    cost_report,
+)
 from extensions.chemistry.processes.titanium import kroll_route
 from extensions.chemistry.quantities import (
     FractureEnergy64,
@@ -54,6 +67,8 @@ from units.temperature import CELSIUS, Temperature64
 
 # An example interface fracture energy, J/m^2. Measure it on the surface.
 comptime _TOUGHNESS = 30.0
+# An example price of electric energy, per kWh, in any currency.
+comptime _ELECTRICITY = 0.10
 
 
 def _titanium() raises:
@@ -138,6 +153,23 @@ def _lime() raises:
     )
 
 
+def _hpht() raises:
+    """Print the HPHT growth step, then the cost of an example run."""
+    print(report(hpht_growth()))
+    print(
+        cost_report(hpht_run(), EnergyPrice64(_ELECTRICITY, PER_KILOWATT_HOUR))
+    )
+
+
+def _mpcvd() raises:
+    """Print the plasma CVD steps, then the cost of an example run."""
+    print(report(seed_growth()))
+    print(report(plasma_hydrogen()))
+    print(
+        cost_report(mpcvd_run(), EnergyPrice64(_ELECTRICITY, PER_KILOWATT_HOUR))
+    )
+
+
 def main() raises:
     var name = String("all")
     if len(argv()) > 1:
@@ -152,6 +184,15 @@ def main() raises:
     if name == "all" or name == "lime":
         _lime()
         known = True
+    if name == "all" or name == "hpht":
+        _hpht()
+        known = True
+    if name == "all" or name == "mpcvd":
+        _mpcvd()
+        known = True
     if not known:
-        print("Name a process: titanium, diamond or lime.", file=stderr)
+        print(
+            "Name a process: titanium, diamond, lime, hpht or mpcvd.",
+            file=stderr,
+        )
         exit(2)

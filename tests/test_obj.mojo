@@ -438,36 +438,145 @@ def test_a_coordinate_must_be_finite_as_a_float32() raises:
     assert_true(model.objects[0].geometry.corner(0, 0).x > 9e29)
 
 
-def test_a_polygon_must_be_convex_and_have_area() raises:
-    # A U shape: a fan from its first corner covers the cutout.
-    with assert_raises():
-        _ = parse_obj(
-            String(
-                "v 0 0 0\nv 3 0 0\nv 3 3 0\nv 2 3 0\n"
-                "v 2 1 0\nv 1 1 0\nv 1 3 0\nv 0 3 0\n"
-                "f 1 2 3 4 5 6 7 8\n"
+def turns(model: ObjModel, axis: Int) raises -> List[Float64]:
+    """Return twice each triangle's area about an axis, with its sign:
+    positive when the triangle turns counterclockwise seen from the tip
+    of the axis."""
+    ref geometry = model.objects[0].geometry
+    var first = (axis + 1) % 3
+    var second = (axis + 2) % 3
+    var out = List[Float64]()
+    for triangle in range(geometry.triangle_count()):
+        var corners = List[List[Float64]]()
+        for corner in range(3):
+            var point = geometry.corner(triangle, corner)
+            corners.append(
+                [Float64(point.x), Float64(point.y), Float64(point.z)]
             )
+        out.append(
+            (corners[1][first] - corners[0][first])
+            * (corners[2][second] - corners[0][second])
+            - (corners[1][second] - corners[0][second])
+            * (corners[2][first] - corners[0][first])
         )
-    # An arrowhead: one corner turns the other way.
-    with assert_raises():
-        _ = parse_obj(String("v 0 0 0\nv 2 1 0\nv 4 0 0\nv 2 3 0\nf 1 2 3 4\n"))
+    return out^
+
+
+def assert_covers(areas: List[Float64], count: Int, twice: Float64) raises:
+    """Assert that `count` triangles all turn the way of `twice`, and that
+    their areas add up to it: they cover the face once and nothing else."""
+    assert_equal(len(areas), count)
+    var total = Float64(0)
+    for area in areas:
+        assert_true(area * twice > 0, "a triangle turns the other way")
+        total += area
+    assert_almost_equal(total / twice, 1, atol=1e-5)
+
+
+def test_a_face_that_earcut_cannot_cut_is_a_fan() raises:
+    # This face goes through two of its corners twice. It has an area, so
+    # it is not refused, and it has no ear, so earcut gives no triangles.
+    # A cut of nothing would lose the face. three.js cuts every face into
+    # a fan from its first corner, and so is this one cut.
+    var touching = parse_obj(
+        String("v 3 1 0\nv 0 0 0\nv 1 1 0\nv 1 0 0\nf 1 2 3 1 2 4\n")
+    )
+    ref geometry = touching.objects[0].geometry
+    assert_equal(geometry.triangle_count(), 4)
+    ref positions = geometry.attribute_view(String(POSITION))
+    # The corners of the fan: 0 1 2, 0 2 3, 0 3 4, 0 4 5.
+    var corners: List[Int] = [0, 1, 2, 0, 2, 0, 0, 0, 1, 0, 1, 3]
+    var xs: List[Float32] = [3, 0, 1, 1]
+    var ys: List[Float32] = [1, 0, 1, 0]
+    assert_equal(positions.count(), 12)
+    for vertex in range(12):
+        assert_equal(positions.component(vertex, 0), xs[corners[vertex]])
+        assert_equal(positions.component(vertex, 1), ys[corners[vertex]])
+
+
+def test_a_polygon_that_is_not_convex_is_cut_where_it_is() raises:
+    # three.js r180's `OBJLoader` cuts every face into a fan from its
+    # first corner. A fan of this U shape covers the cutout between its
+    # arms: the fan draws an area of 9, and the face has 7. The face is
+    # cut by earcut instead. Each triangle turns the way the face turns,
+    # and their areas add up to the face's.
+    var u_shape = String(
+        "v 0 0 0\nv 3 0 0\nv 3 3 0\nv 2 3 0\n"
+        "v 2 1 0\nv 1 1 0\nv 1 3 0\nv 0 3 0\n"
+    )
+    assert_covers(turns(parse_obj(u_shape + "f 1 2 3 4 5 6 7 8\n"), 2), 6, 14)
+    # The same face wound the other way faces the other way.
+    assert_covers(turns(parse_obj(u_shape + "f 8 7 6 5 4 3 2 1\n"), 2), 6, -14)
+    # An arrowhead: its second corner turns the other way. The fan's first
+    # triangle is outside the face. The cut is on the other diagonal.
+    var arrow = parse_obj(
+        String("v 0 0 0\nv 2 1 0\nv 4 0 0\nv 2 3 0\nf 1 2 3 4\n")
+    )
+    assert_covers(turns(arrow, 2), 2, 8)
+    # The same arrowhead on the other two coordinate planes, each way.
+    var planes: List[String] = [
+        "v 0 0 0\nv 0 2 1\nv 0 4 0\nv 0 2 3\n",
+        "v 0 0 0\nv 1 0 2\nv 0 0 4\nv 3 0 2\n",
+    ]
+    for axis in range(2):
+        assert_covers(
+            turns(parse_obj(planes[axis] + "f 1 2 3 4\n"), axis), 2, 8
+        )
+        assert_covers(
+            turns(parse_obj(planes[axis] + "f 4 3 2 1\n"), axis), 2, -8
+        )
+    # Each corner of a cut face keeps its own texture coordinate and
+    # normal: here a quarter of its x and a third of its y.
+    var textured = parse_obj(
+        String(
+            "v 0 0 0\nv 2 1 0\nv 4 0 0\nv 2 3 0\n"
+            "vt 0 0\nvt 0.5 0.333333343\nvt 1 0\nvt 0.5 1\nvn 0 0 1\n"
+            "f 1/1/1 2/2/1 3/3/1 4/4/1\n"
+        )
+    )
+    ref geometry = textured.objects[0].geometry
+    assert_equal(geometry.triangle_count(), 2)
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref uvs = geometry.attribute_view(String(UV))
+    for vertex in range(positions.count()):
+        assert_almost_equal(
+            uvs.component(vertex, 0),
+            positions.component(vertex, 0) / 4,
+            atol=TOLERANCE,
+        )
+        assert_almost_equal(
+            uvs.component(vertex, 1),
+            positions.component(vertex, 1) / 3,
+            atol=TOLERANCE,
+        )
+
+
+def test_a_polygon_with_no_area_is_refused() raises:
     # Corners on one line: no area at all.
     with assert_raises():
         _ = parse_obj(String("v 0 0 0\nv 1 0 0\nv 2 0 0\nv 3 0 0\nf 1 2 3 4\n"))
     # The refusal names the line.
     var seen = String()
     try:
-        _ = parse_obj(String("v 0 0 0\nv 2 1 0\nv 4 0 0\nv 2 3 0\nf 1 2 3 4\n"))
+        _ = parse_obj(String("v 0 0 0\nv 1 0 0\nv 2 0 0\nv 3 0 0\nf 1 2 3 4\n"))
     except reason:
         seen = String(reason)
     assert_true("OBJ line 5" in seen, seen)
-    assert_true("convex" in seen, seen)
+    assert_true("no area" in seen, seen)
+
+
+def test_a_convex_polygon_is_cut_into_a_fan() raises:
     # A convex pentagon cuts into three triangles, whichever way it is
     # wound, and a triangle is never asked.
     var pentagon = parse_obj(
         String("v 0 0 0\nv 2 0 0\nv 3 1 0\nv 1 2 0\nv -1 1 0\nf 1 2 3 4 5\n")
     )
     assert_equal(pentagon.objects[0].geometry.triangle_count(), 3)
+    # Each triangle starts at the face's first corner, as three.js's does.
+    for triangle in range(3):
+        assert_point(pentagon.objects[0].geometry.corner(triangle, 0), 0, 0, 0)
+    assert_point(pentagon.objects[0].geometry.corner(1, 1), 3, 1, 0)
+    assert_point(pentagon.objects[0].geometry.corner(1, 2), 1, 2, 0)
     var clockwise = parse_obj(
         String("v 0 0 0\nv 2 0 0\nv 3 1 0\nv 1 2 0\nv -1 1 0\nf 5 4 3 2 1\n")
     )
@@ -570,8 +679,14 @@ def test_polygon_convexity_is_independent_of_finite_scale() raises:
         for reversed in [False, True]:
             var convex = parse_obj(scaled_polygon(scale, False, reversed))
             assert_equal(convex.objects[0].geometry.triangle_count(), 2)
-            with assert_raises(contains="not convex"):
-                _ = parse_obj(scaled_polygon(scale, True, reversed))
+            # The concave face has an area of three quarters at a scale
+            # of one. It is cut the same way at every scale.
+            var twice = 1.5 * scale * scale
+            assert_covers(
+                turns(parse_obj(scaled_polygon(scale, True, reversed)), 2),
+                2,
+                -twice if reversed else twice,
+            )
     var translated = parse_obj(
         "v 100000 100000 0\nv 100001 100000 0\n"
         "v 100001 100001 0\nv 100000 100001 0\nf 1 2 3 4\n"
@@ -597,9 +712,13 @@ def test_a_corner_straight_in_the_file_is_not_refused_far_away() raises:
     # the fan, and so must this.
     var straight = parse_obj(t_junction("5000.4", "0.3"))
     assert_equal(straight.objects[0].geometry.triangle_count(), 3)
-    # A notch of a centimeter is more than rounding, and is refused.
-    with assert_raises(contains="not convex"):
-        _ = parse_obj(t_junction("5000.4", "0.31"))
+    # A notch of a centimeter is more than rounding. The face is not
+    # convex, and it is cut so that no triangle turns the other way, as
+    # the first triangle of a fan would.
+    var notched = turns(parse_obj(t_junction("5000.4", "0.31")), 2)
+    assert_equal(len(notched), 3)
+    for area in notched:
+        assert_true(area > 0)
 
 
 def test_a_file_that_is_not_utf8_reads_as_replacement_characters() raises:

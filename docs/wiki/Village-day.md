@@ -45,6 +45,8 @@ The game moves the scene's sun to `sun_toward` each time it has turned `SUN_STEP
 
 `Village.lamps` holds a warm point light by the front door of each dwelling, and one in each lamp post's lantern. There are at most eight, `GAME_LAMPS`. Each burns at `LAMP_INTENSITY`, 6, and reaches `LAMP_REACH`, 9 meters. The node is hidden by day, and the game shows it with the houses' lamps. A lamp lights the walls and the ground that face it, with no shadow.
 
+By night a lantern's light follows the player, so a fight can be seen. It stands `LANTERN_HEIGHT`, 3 meters, over the player's feet, burns at `LANTERN_INTENSITY`, 5, and reaches `LANTERN_REACH`, 10 meters. The game's renderer draws at most `GAME_LAMPS` point lights. When the lamps take all of them, the lamp farthest from the camera gives its light to the lantern. `Village.bulbs` holds the node of each lamp's light.
+
 ## The sky
 
 `DayCycle.night_sky` changes each sky pixel of the frame, after the weather's clouds:

@@ -15,7 +15,7 @@ each wound that bleeds. `extensions.village.battle_hud` calls
 | `BLEED` | Drops of red light that fall from the foe |
 | `DRAIN` | Motes of green light that run from the foe to the player |
 | `SHOCKWAVE` | A ring of gold light that spreads over the ground from the foe |
-| `CHAIN` | A crooked arc of violet light from the foe to each target it leaps to |
+| `CHAIN` | A crooked arc of violet light from the foe to each target it leaps to, with a white core. It takes a new crook `CHAIN_FLICKER` times a second, so it flickers as lightning does. |
 | `MARK` | A ring of gold light that closes on the foe |
 
 A marked target wears a ring of four gold stars over its head, which
@@ -43,6 +43,7 @@ from extensions.village.combos import (
     SUNDER,
 )
 from extensions.village.slashes import arc_points, glow_ribbon, glow_star
+from extensions.vegetation.noise import hash01
 from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
 from std.math import cos, pi, sin
@@ -59,9 +60,19 @@ comptime SHOCK_LIGHT = Vector3(255, 200, 90)
 """The light of a shockwave's ring."""
 comptime CHAIN_LIGHT = Vector3(205, 170, 255)
 """The light of a chain's arc."""
+comptime CHAIN_HALO = Vector3(150, 100, 255)
+"""The light of the dim glow round a chain's arc."""
+comptime CHAIN_CORE = Vector3(245, 240, 255)
+"""The light of the bright core along a chain's arc."""
+comptime CHAIN_FLICKER = Float32(30)
+"""How many times a second a chain's arc takes a new crook."""
+comptime CHAIN_GLOW = Float32(0.12)
+"""Half the height of the dim glow round a chain's arc, in meters."""
+comptime CHAIN_THIN = Float32(0.03)
+"""Half the height of the bright core of a chain's arc, in meters."""
 comptime MARK_LIGHT = Vector3(255, 215, 90)
 """The light of a mark's ring and reticle."""
-comptime ARC_STEPS = 7
+comptime ARC_STEPS = 12
 """How many crooked steps a chain's arc takes."""
 comptime MOTES = 5
 """How many motes a drain's light has, and shards a sunder's."""
@@ -125,13 +136,14 @@ def arc_path(start: Vector3, end: Vector3, seed: Int) -> List[Vector3]:
     Returns:
         `ARC_STEPS + 1` points, from `start` to `end`. Each point between
         them is pushed up or down off the straight line by up to a tenth
-        of its length, and never at the ends.
+        of its length, and never at the ends. The pushes are hashed from
+        the seed, so the arc zigzags as lightning does.
     """
     var out = List[Vector3]()
     var span = (end - start).length()
     for k in range(ARC_STEPS + 1):  # pragma: no branch
         var t = Float32(k) / Float32(ARC_STEPS)
-        var bend = sin(Float32(k * 7 + seed * 13)) * span * 0.1
+        var bend = (2 * hash01(k, seed, 61) - 1) * span * 0.1
         if k == 0 or k == ARC_STEPS:
             bend = 0
         out.append(start + (end - start) * t + Vector3(0, bend, 0))
@@ -190,13 +202,19 @@ def draw_flash(
         var radius = max(Float32(0.2), SHOCK_RADIUS * t)
         _ring(frame, camera, look, ground, radius, SHOCK_LIGHT, glow)
     elif effect == CHAIN:
-        var path = arc_path(at, flash.to, seed)
-        var corners = List[Vector3]()
-        for p in path:  # pragma: no branch
-            corners.append(p - Vector3(0, 0.05, 0))
-            corners.append(p + Vector3(0, 0.05, 0))
-        var light = List[Float32](length=len(path), fill=glow)
-        glow_ribbon(frame, camera, look, corners, light, CHAIN_LIGHT)
+        var crook = seed + Int(flash.age * CHAIN_FLICKER)
+        var path = arc_path(at, flash.to, crook)
+        # A wide, dim glow, and a thin, bright core along it.
+        for layer in range(2):  # pragma: no branch
+            var half = CHAIN_GLOW if layer == 0 else CHAIN_THIN
+            var corners = List[Vector3]()
+            for p in path:  # pragma: no branch
+                corners.append(p - Vector3(0, half, 0))
+                corners.append(p + Vector3(0, half, 0))
+            var shine = glow * (Float32(0.55) if layer == 0 else Float32(1))
+            var light = List[Float32](length=len(path), fill=shine)
+            var color = CHAIN_HALO if layer == 0 else CHAIN_CORE
+            glow_ribbon(frame, camera, look, corners, light, color)
         _star(frame, camera, look, flash.to, 0.3, CHAIN_LIGHT, glow)
     else:
         var ground = at - Vector3(0, CHEST, 0)

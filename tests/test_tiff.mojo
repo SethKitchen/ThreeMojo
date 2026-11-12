@@ -178,5 +178,169 @@ def test_a_deflate_strip_that_is_not_deflate_is_refused() raises:
         _ = read_tiff(file)
 
 
+def _entry(mut bytes: List[UInt8], tag: Int, type: Int, num: Int, value: Int):
+    _push16(bytes, tag)
+    _push16(bytes, type)
+    _push32(bytes, num)
+    _push32(bytes, value)
+
+
+def test_a_tag_whose_values_pass_the_end_is_refused() raises:
+    # A tag names up to four billion values, and UTIF reads each missing
+    # one as zero. A file of twenty-six bytes must not read as gigabytes.
+    for type in [3, 4, 13]:
+        var bomb = List[UInt8]()
+        bomb.append(73)
+        bomb.append(73)
+        _push16(bomb, 42)
+        _push32(bomb, 8)
+        _push16(bomb, 1)
+        _entry(bomb, 273, type, 0xFFFFFFFF, 8)
+        _push32(bomb, 0)
+        with assert_raises(contains="tag 273 names values past the end"):
+            _ = read_tiff(bomb)
+    # Two strips of one gray pixel each. The strip offsets are two longs
+    # that end where the file ends, and they are read.
+    var bytes = List[UInt8]()
+    bytes.append(73)
+    bytes.append(73)
+    _push16(bytes, 42)
+    _push32(bytes, 10)
+    bytes.append(10)
+    bytes.append(200)
+    _push16(bytes, 7)
+    _long(bytes, 256, 1)
+    _long(bytes, 257, 2)
+    _long(bytes, 258, 8)
+    _long(bytes, 262, 1)
+    _entry(bytes, 273, 4, 2, 100)
+    _long(bytes, 278, 1)
+    _entry(bytes, 279, 3, 2, 1 | (1 << 16))
+    _push32(bytes, 0)
+    assert_equal(len(bytes), 100)
+    _push32(bytes, 8)
+    _push32(bytes, 9)
+    var texture = read_tiff(bytes)
+    assert_equal(texture.width, 1)
+    assert_equal(texture.height, 2)
+    assert_equal(Int(texture.pixels[0]), 10)
+    assert_equal(Int(texture.pixels[4]), 200)
+    # One byte shorter, the second offset passes the end.
+    _ = bytes.pop()
+    with assert_raises(contains="tag 273 names values past the end"):
+        _ = read_tiff(bytes)
+    # Two shorts inside an entry that the file cuts short.
+    var cut = List[UInt8]()
+    cut.append(73)
+    cut.append(73)
+    _push16(cut, 42)
+    _push32(cut, 8)
+    _push16(cut, 1)
+    _push16(cut, 279)
+    _push16(cut, 3)
+    _push32(cut, 2)
+    _push16(cut, 1)
+    with assert_raises(contains="tag 279 names values past the end"):
+        _ = read_tiff(cut)
+
+
+def _strip(
+    width: Int, height: Int, entries: List[List[Int]], chunk: List[UInt8]
+) -> List[UInt8]:
+    """Return a TIFF of one strip: the strip, then a directory of the
+    width, the height, `entries` and the strip's place. An entry is a
+    tag, a type, a count and a value."""
+    var bytes = List[UInt8]()
+    bytes.append(73)
+    bytes.append(73)
+    _push16(bytes, 42)
+    _push32(bytes, 8 + len(chunk))
+    bytes.extend(chunk.copy())
+    _push16(bytes, 4 + len(entries))
+    _long(bytes, 256, width)
+    _long(bytes, 257, height)
+    for entry in entries:
+        _entry(bytes, entry[0], entry[1], entry[2], entry[3])
+    _long(bytes, 273, 8)
+    _long(bytes, 279, len(chunk))
+    _push32(bytes, 0)
+    return bytes^
+
+
+def test_tags_that_name_more_samples_than_the_image_holds_are_refused() raises:
+    # UTIF decodes for the sample count of tag 277, or one. It reads for
+    # the length of tag 258 when tag 277 is not there, or for what the
+    # photometric form implies. The two counts can differ, and UTIF then
+    # reads past its array. This read past its list, and stopped the
+    # program.
+    var two: List[UInt8] = [10, 200]
+    var eights = 8 | (8 << 16)
+    var refusal = "more samples than the image holds"
+    # Gray, white is zero and black is zero, and a palette: two sizes in
+    # tag 258 are two samples a pixel, and the strip holds one.
+    for form in [0, 1, 3]:
+        with assert_raises(contains=refusal):
+            _ = read_tiff(
+                _strip(2, 1, [[258, 3, 2, eights], [262, 3, 1, form]], two)
+            )
+    # With tag 277 the image is decoded for two samples as well, and reads.
+    var gray = read_tiff(
+        _strip(
+            2,
+            1,
+            [[258, 3, 2, eights], [262, 3, 1, 1], [277, 3, 1, 2]],
+            [10, 99, 200, 99],
+        )
+    )
+    assert_equal(Int(gray.pixels[0]), 10)
+    assert_equal(Int(gray.pixels[4]), 200)
+    # RGB of three sizes with no tag 277: three samples, in a strip of one.
+    var sizes: List[UInt8] = [8, 0, 8, 0, 8, 0, 8, 0]
+    var rgb = sizes.copy()
+    rgb.extend(two.copy())
+    with assert_raises(contains=refusal):
+        _ = read_tiff(
+            _strip(
+                2,
+                1,
+                [[258, 3, 3, 8], [262, 3, 1, 2]],
+                rgb,
+            )
+        )
+    # CMYK reads four samples for each pixel. A file with three for each
+    # holds no fourth for the last.
+    with assert_raises(contains=refusal):
+        _ = read_tiff(
+            _strip(
+                1,
+                1,
+                [[258, 3, 1, 8], [262, 3, 1, 5], [277, 3, 1, 3]],
+                [1, 2, 3],
+            )
+        )
+    # With four for each, both pixels read. The last pixel is transparent,
+    # as UTIF leaves it: see the module docstring.
+    var cmyk = read_tiff(
+        _strip(
+            2,
+            1,
+            [[258, 3, 1, 8], [262, 3, 1, 5], [277, 3, 1, 4]],
+            [255, 255, 255, 0, 0, 0, 0, 0],
+        )
+    )
+    assert_equal(Int(cmyk.pixels[0]), 0)
+    assert_equal(Int(cmyk.pixels[3]), 255)
+    assert_equal(Int(cmyk.pixels[4]), 255)
+    assert_equal(Int(cmyk.pixels[7]), 0)
+    # No sample at all.
+    with assert_raises(contains="has no samples"):
+        _ = read_tiff(
+            _strip(1, 1, [[258, 3, 1, 8], [262, 3, 1, 1], [277, 3, 1, 0]], two)
+        )
+    # A form that is not read is refused as that, whatever its samples.
+    with assert_raises(contains="photometric form 4"):
+        _ = read_tiff(_strip(2, 1, [[258, 3, 2, eights], [262, 3, 1, 4]], two))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

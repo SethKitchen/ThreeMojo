@@ -7,7 +7,9 @@
 
 Archives are written by `zip_archive` and read back, and then damaged
 byte by byte to reach every refusal. `assets/3mf/fixture.3mf`, written by
-Python's `zipfile`, is the deflated archive read.
+Python's `zipfile`, is the deflated archive read. `wide` builds a ZIP64
+archive by hand, with the records of PKWARE's APPNOTE 6.3.10, sections
+4.3.14, 4.3.15 and 4.5.3.
 """
 
 from core.binary import copy_byte_range, copy_bytes, store_little_endian
@@ -376,9 +378,11 @@ def test_local_records_cannot_cross_into_the_directory() raises:
     bytes = one()
     poke(bytes, 40 + 42, 0xFFFFFFFF, 4)
     refused(bytes, "ZIP64 entry")
+    # A disk number at its largest value names a disk in the ZIP64 extra
+    # field. There is one disk.
     bytes = one()
     poke(bytes, 40 + 34, 0xFFFF, 2)
-    refused(bytes, "ZIP64 entry")
+    refused(bytes, "split across disks")
     bytes = one()
     poke(bytes, 40 + 34, 1, 2)
     refused(bytes, "split across disks")
@@ -543,6 +547,236 @@ def test_competing_complete_directory_layouts_use_the_last_record() raises:
     fake_end(bytes, 113, 0, 113)
     assert_equal(_end_of_directory(bytes), 113)
     assert_equal(len(unzip(bytes)), 0)
+
+
+# --- ZIP64 -------------------------------------------------------------------
+
+comptime WIDE16 = 0xFFFF
+comptime WIDE32 = 0xFFFFFFFF
+# In the archive `wide` returns: the central header, its extra fields, the
+# ZIP64 end record, its locator and the end record.
+comptime CENTRAL = 40
+comptime EXTRA = 91
+comptime RECORD = 119
+comptime LOCATOR = 175
+comptime END = 195
+
+
+def push(mut bytes: List[UInt8], value: Int, size: Int):
+    """Append a little-endian value."""
+    for _ in range(size):
+        bytes.append(0)
+    store_little_endian(bytes, len(bytes) - size, value, size)
+
+
+def wide(
+    values: List[Int],
+    asked: List[Bool],
+    end_fields: List[Int],
+    before: List[UInt8] = List[UInt8](),
+) raises -> List[UInt8]:
+    """Return `one()` as a ZIP64 archive.
+
+    Args:
+        values: The 64-bit values of the entry's ZIP64 extra field.
+        asked: Whether the entry's size, its compressed size and its
+            offset are at their largest value, and so in `values`.
+        end_fields: The end record's two disk numbers, two entry counts,
+            directory size and directory offset.
+        before: An extra field to put before the ZIP64 one.
+
+    Returns:
+        The archive. With three values and nothing before them, the
+        records are where the constants above say.
+    """
+    var plain = one()
+    var bytes = copy_bytes(plain, 0, 91)
+    var places: List[Int] = [CENTRAL + 24, CENTRAL + 20, CENTRAL + 42]
+    for which in range(3):
+        if asked[which]:
+            poke(bytes, places[which], WIDE32, 4)
+    poke(bytes, CENTRAL + 30, len(before) + 4 + 8 * len(values), 2)
+    bytes.extend(before.copy())
+    push(bytes, 1, 2)
+    push(bytes, 8 * len(values), 2)
+    for value in values:
+        push(bytes, value, 8)
+    var record = len(bytes)
+    push(bytes, 0x06064B50, 4)
+    push(bytes, 44, 8)
+    push(bytes, 45, 2)
+    push(bytes, 45, 2)
+    push(bytes, 0, 4)
+    push(bytes, 0, 4)
+    push(bytes, 1, 8)
+    push(bytes, 1, 8)
+    push(bytes, record - CENTRAL, 8)
+    push(bytes, CENTRAL, 8)
+    push(bytes, 0x07064B50, 4)
+    push(bytes, 0, 4)
+    push(bytes, record, 8)
+    push(bytes, 1, 4)
+    push(bytes, 0x06054B50, 4)
+    for field in range(4):
+        push(bytes, end_fields[field], 2)
+    push(bytes, end_fields[4], 4)
+    push(bytes, end_fields[5], 4)
+    push(bytes, 0, 2)
+    return bytes^
+
+
+def all_wide() raises -> List[UInt8]:
+    """Return the ZIP64 archive a writer makes that uses every ZIP64
+    field: the entry's three values, and an end record of largest
+    values."""
+    return wide(
+        [5, 5, 0],
+        [True, True, True],
+        [WIDE16, WIDE16, WIDE16, WIDE16, WIDE32, WIDE32],
+    )
+
+
+def test_a_zip64_archive_reads() raises:
+    var bytes = all_wide()
+    assert_equal(len(bytes), END + 22)
+    var entries = unzip(bytes)
+    assert_equal(len(entries), 1)
+    assert_equal(entries[0].name, "a.txt")
+    assert_equal(entries[0].data, text_bytes("hello"))
+    # A comment after the end record is passed, as in any archive.
+    poke(bytes, END + 20, 3, 2)
+    bytes.extend(text_bytes("hey"))
+    assert_equal(unzip(bytes)[0].data, text_bytes("hello"))
+    # One field of the end record at its largest value names the ZIP64
+    # record. The other fields then hold what the record holds.
+    var real: List[Int] = [0, 0, 1, 1, RECORD - CENTRAL, CENTRAL]
+    for field in range(6):
+        var fields = real.copy()
+        fields[field] = WIDE16 if field < 4 else WIDE32
+        var one_field = wide([5, 5, 0], [True, True, True], fields)
+        assert_equal(unzip(one_field)[0].data, text_bytes("hello"))
+    # A locator may name no disk count.
+    var no_disks = all_wide()
+    poke(no_disks, LOCATOR + 16, 0, 4)
+    assert_equal(unzip(no_disks)[0].data, text_bytes("hello"))
+
+
+def test_a_zip64_entry_holds_only_the_values_it_asks_for() raises:
+    # The extra field holds the size, the compressed size and the offset,
+    # in that order, each only when the entry's own field is at its
+    # largest value. fflate reads three values whichever are there.
+    var end: List[Int] = [WIDE16, WIDE16, WIDE16, WIDE16, WIDE32, WIDE32]
+    var hello = text_bytes("hello")
+    assert_equal(unzip(wide([5], [True, False, False], end))[0].data, hello)
+    assert_equal(unzip(wide([5], [False, True, False], end))[0].data, hello)
+    assert_equal(unzip(wide([0], [False, False, True], end))[0].data, hello)
+    assert_equal(unzip(wide([5, 0], [True, False, True], end))[0].data, hello)
+    # An entry that asks for nothing ignores the field, and one with
+    # another extra field first is read past it.
+    assert_equal(
+        unzip(wide([9, 9, 9], [False, False, False], end))[0].data, hello
+    )
+    var other: List[UInt8] = [0x0A, 0x00, 0x02, 0x00, 0x07, 0x07]
+    assert_equal(
+        unzip(wide([5, 5, 0], [True, True, True], end, other))[0].data, hello
+    )
+    # A field that holds fewer values than the entry asks for.
+    refused(
+        wide([5], [True, True, False], end),
+        "does not hold its ZIP64 extra field",
+    )
+    refused(
+        wide(List[Int](), [False, False, True], end),
+        "does not hold its ZIP64 extra field",
+    )
+    # A field that says it is longer than the entry's extra fields holds
+    # only the whole values inside them.
+    var long = all_wide()
+    poke(long, EXTRA + 2, 400, 2)
+    assert_equal(unzip(long)[0].data, hello)
+    # With the extra fields four bytes shorter, the third value is not
+    # whole, and the entry's offset is not there.
+    var cut = all_wide()
+    poke(cut, EXTRA + 2, 400, 2)
+    poke(cut, CENTRAL + 30, 4 + 20, 2)
+    refused(cut, "does not hold its ZIP64 extra field")
+    # Another field that runs to the end of the extra fields hides it.
+    var hidden = wide([5, 5, 0], [True, True, True], end, other)
+    poke(hidden, EXTRA + 2, 30, 2)
+    refused(hidden, "does not hold its ZIP64 extra field")
+    # A value past 2^63, and an offset that is past the archive.
+    refused(
+        wide([1 << 63, 5, 0], [True, True, True], end),
+        "larger than this reads",
+    )
+    refused(
+        wide([5, 5, (1 << 63) - 1], [True, True, True], end),
+        "ends inside entry `a.txt`",
+    )
+    refused(
+        wide([5, (1 << 63) - 1, 0], [True, True, True], end),
+        "ends inside entry `a.txt`",
+    )
+    refused(wide([6, 5, 0], [True, True, True], end), "expands to 5 bytes")
+
+
+def test_a_zip64_end_record_is_checked_field_by_field() raises:
+    # No locator before the end record, and no room for one.
+    var bytes = all_wide()
+    poke(bytes, LOCATOR, 0, 4)
+    refused(bytes, "no ZIP64 end record locator")
+    var bare = List[UInt8]()
+    push(bare, 0x06054B50, 4)
+    for _ in range(4):
+        push(bare, WIDE16, 2)
+    push(bare, WIDE32, 4)
+    push(bare, WIDE32, 4)
+    push(bare, 0, 2)
+    refused(bare, "no ZIP64 end record locator")
+    # A record past 2^63, and one that does not fit before the locator.
+    bytes = all_wide()
+    poke(bytes, LOCATOR + 8, 1 << 63, 8)
+    refused(bytes, "does not fit before its locator")
+    bytes = all_wide()
+    poke(bytes, LOCATOR + 8, RECORD + 1, 8)
+    refused(bytes, "does not fit before its locator")
+    # A record that is no record, and one that does not end at the locator.
+    bytes = all_wide()
+    poke(bytes, RECORD, 0, 4)
+    refused(bytes, "wrong signature")
+    bytes = all_wide()
+    poke(bytes, RECORD + 4, 45, 8)
+    refused(bytes, "does not end at its locator")
+    # Each of the four disk numbers.
+    var disks: List[Int] = [LOCATOR + 4, RECORD + 16, RECORD + 20]
+    for place in disks:
+        bytes = all_wide()
+        poke(bytes, place, 1, 4)
+        refused(bytes, "split across disks")
+    bytes = all_wide()
+    poke(bytes, LOCATOR + 16, 2, 4)
+    refused(bytes, "split across disks")
+    # Two entry counts that differ.
+    bytes = all_wide()
+    poke(bytes, RECORD + 24, 2, 8)
+    refused(bytes, "different entry counts")
+    # A count, a size and an offset past the record, and past 2^63.
+    for place in [RECORD + 32, RECORD + 40, RECORD + 48]:
+        for value in [RECORD + 1, 1 << 63]:
+            bytes = all_wide()
+            poke(bytes, place, value, 8)
+            if place == RECORD + 32:
+                poke(bytes, RECORD + 24, value, 8)
+            refused(bytes, "names more than the archive holds")
+    # A directory that does not end at the record, and a count of more
+    # entries than the directory holds.
+    bytes = all_wide()
+    poke(bytes, RECORD + 40, RECORD - CENTRAL - 1, 8)
+    refused(bytes, "does not end at its end record")
+    bytes = all_wide()
+    poke(bytes, RECORD + 24, 2, 8)
+    poke(bytes, RECORD + 32, 2, 8)
+    refused(bytes, "ends inside central directory entry 1")
 
 
 def main() raises:

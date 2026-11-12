@@ -32,6 +32,7 @@ from animation.animation_mixer import ONCE, AnimationAction, AnimationMixer
 from core.assets import Assets
 from extensions.attire.kinds import CLOSED, SKIRTED
 from extensions.attire.outfit import Outfit, dress
+from extensions.attire.skirt import skirt_top
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -44,6 +45,7 @@ from extensions.animals.build import (
 )
 from extensions.animals.rig import Pose
 from core.buffer_geometry import BufferGeometry
+from render.framebuffer import Color
 from render.tasks import TaskGroup
 from extensions.animals.gait import is_quadruped, walk_pose, walk_stride
 from extensions.animals.options import CROWD, Quality, animal_options
@@ -68,6 +70,13 @@ from renderers.renderer import available_workers
 from extensions.vegetation.checks import require_between, require_count_between
 from extensions.vegetation.ground import Ground, Lot
 from extensions.vegetation.noise import hash01
+from extensions.village.hem_push import HemPush, add_hem_push
+from extensions.village.sway import (
+    SWAY_REACH,
+    Sway,
+    sway_skirts,
+    sway_weights,
+)
 from extensions.village.faces import FACE_TRIANGLES, FaceLife
 from extensions.village.clothes import Groom, plain_groom
 from extensions.village.interior import Doorway
@@ -213,6 +222,12 @@ def play_rate(stance: Stance, speed: Velocity) -> Float32:
     return 1
 
 
+comptime FLASH_GLOW = Color(255, 244, 228)
+"""The color a body glows as a blow lands on it."""
+comptime FLASH_STRENGTH = Float32(0.12)
+"""How strongly a body glows as a blow lands on it."""
+
+
 def facing_turn(heading: Angle) -> Angle:
     """Return how far to turn a model about +y so it faces a heading.
 
@@ -280,6 +295,20 @@ struct Body(Movable):
     var near: Bool
     # Whether a closed skirt falls past the knees: see `hobbles`.
     var hobbled: Bool
+    # The skinned meshes of the skirts whose hems swing, how far they
+    # swing, and the swing: see `extensions.village.sway`.
+    var skirts: List[Int]
+    # The pushes that keep the skirts out of the legs, if `keep_hems` gave
+    # them: see `extensions.village.hem_push`.
+    var hems: List[HemPush]
+    var sway_reach: Float32
+    var sway: Sway
+    # Each skinned mesh of the skin and the clothes, its own material,
+    # and a copy of it that glows white: a blow flashes the body.
+    var flashing: List[Int]
+    var rest_looks: List[MaterialId]
+    var flash_looks: List[MaterialId]
+    var flashed: Bool
 
     def __init__(
         out self,
@@ -364,6 +393,13 @@ struct Body(Movable):
         for skin in self.person.skins:  # pragma: no branch
             scene.skinned_meshes[skin].cast_shadow = True
         self.garments = List[Int]()
+        # Every skinned mesh the body wears: its skin, and each part of
+        # each garment.
+        var worn = self.person.skins.copy()
+        self.skirts = List[Int]()
+        self.hems = List[HemPush]()
+        self.sway = Sway()
+        self.sway_reach = SWAY_REACH * self.person.rig.stature / Float32(1.8288)
         if len(outfit.garments) > 0:
             var dressed = dress(scene, assets, self.person, outfit)
             self.garments = dressed.meshes.copy()
@@ -372,6 +408,33 @@ struct Body(Movable):
             for parts in dressed.parts:  # pragma: no branch
                 for mesh in parts:
                     scene.skinned_meshes[mesh].cast_shadow = True
+                    worn.append(mesh)
+            # A skirt's hem swings as the person moves.
+            var top = skirt_top(self.person.rig)
+            for g in range(len(outfit.garments)):  # pragma: no branch
+                if outfit.garments[g].form != SKIRTED:
+                    continue
+                self.skirts.extend(
+                    sway_skirts(
+                        scene, assets, dressed.parts[g], top, self.sway_reach
+                    )
+                )
+        # A copy of each material that glows, to flash the body by.
+        self.flashing = List[Int]()
+        self.rest_looks = List[MaterialId]()
+        self.flash_looks = List[MaterialId]()
+        self.flashed = False
+        var made = Dict[Int, MaterialId]()
+        for mesh in worn:  # pragma: no branch
+            var rest = scene.skinned_meshes[mesh].material
+            if rest.value not in made:
+                var glow = assets.materials.get(rest)
+                glow.emissive = FLASH_GLOW
+                glow.emissive_intensity = FLASH_STRENGTH
+                made[rest.value] = assets.materials.add(glow)
+            self.flashing.append(mesh)
+            self.rest_looks.append(rest)
+            self.flash_looks.append(made[rest.value])
         ref rig = self.person.rig
         ref bones = self.person.bones
         self.mixer = AnimationMixer()
@@ -450,6 +513,117 @@ struct Body(Movable):
                 stance, character.speed()
             )
         self.mixer.update(scene, delta)
+        self.swing_hem(scene, character, delta)
+
+    def flash(mut self, mut scene: Scene, on: Bool):
+        """Make the body glow white, as a blow lands on it, or stop.
+
+        The skin and each garment wear their glowing copies while `on`
+        holds.
+
+        Args:
+            scene: The scene the body is in.
+            on: Whether the body glows.
+        """
+        if on == self.flashed:
+            return
+        self.flashed = on
+        for k in range(len(self.flashing)):  # pragma: no branch
+            var look = self.flash_looks[k] if on else self.rest_looks[k]
+            scene.skinned_meshes[self.flashing[k]].material = look
+
+    def swing_hem(
+        mut self, mut scene: Scene, character: Character, delta: Duration
+    ) raises:
+        """Swing the hems of the person's skirts by the body's motion: see
+        `extensions.village.sway`.
+
+        Args:
+            scene: The scene the body is in.
+            character: The character the body shows.
+            delta: The frame's time.
+
+        Raises:
+            Error: If a skirt's mesh is not in the scene.
+        """
+        if len(self.skirts) == 0:
+            return
+        var turn = facing_turn(character.heading).to(RADIAN)
+        var offset = self.sway.step(
+            character.position, turn, delta.to(SECOND), self.sway_reach
+        )
+        var weights = sway_weights(offset, self.sway_reach)
+        weights.append(self.sway.flare)
+        for mesh in self.skirts:  # pragma: no branch
+            for w in range(5):  # pragma: no branch
+                scene.skinned_meshes[mesh].set_morph_influence(w, weights[w])
+
+    def keep_hems(mut self, mut scene: Scene, mut assets: Assets) raises:
+        """Give the person's skirts the pushes that keep them out of the
+        legs: see `extensions.village.hem_push`. A person close to the
+        camera wants them, as the player does.
+
+        Args:
+            scene: The scene the body is in.
+            assets: The stores of the skirts' geometries.
+
+        Raises:
+            Error: If a skirt's mesh is not in the scene.
+        """
+        var top = skirt_top(self.person.rig)
+        # Each skirt took the sway's targets, so it has relative targets
+        # and a vertex below the top: each takes a push.
+        for mesh in self.skirts:
+            var push = add_hem_push(scene, assets, mesh, self.person, top)
+            self.hems.append(push.take())
+
+    def push_hems(self, scene: Scene, mut assets: Assets) raises -> Int:
+        """Push the person's skirts out of the legs as the bones stand
+        now. A person with no pushes is left as they are. The pushes show
+        while their weights are one: see `show_hems` and `rest_hems`.
+
+        Args:
+            scene: The scene, updated.
+            assets: The stores of the skirts' geometries.
+
+        Returns:
+            How many vertices were pushed.
+
+        Raises:
+            Error: If the scene is stale.
+        """
+        var pushed = 0
+        for k in range(len(self.hems)):
+            pushed += self.hems[k].push(scene, assets)
+        return pushed
+
+    def show_hems(self, mut scene: Scene) raises:
+        """Show the pushes of the person's skirts, at full weight. A
+        weight set marks the scene changed: push first, then show.
+
+        Args:
+            scene: The scene the body is in.
+
+        Raises:
+            Error: If a skirt's mesh is not in the scene.
+        """
+        for k in range(len(self.hems)):
+            ref hem = self.hems[k]
+            scene.skinned_meshes[hem.mesh].set_morph_influence(hem.target, 1)
+
+    def rest_hems(self, mut scene: Scene) raises:
+        """Stop showing the pushes of the person's skirts: a person far
+        from the camera wears their skirts as they are skinned.
+
+        Args:
+            scene: The scene the body is in.
+
+        Raises:
+            Error: If a skirt's mesh is not in the scene.
+        """
+        for k in range(len(self.hems)):
+            ref hem = self.hems[k]
+            scene.skinned_meshes[hem.mesh].set_morph_influence(hem.target, 0)
 
     def head(self, scene: Scene) raises -> Vector3:
         """Return about where the person's eyes are, in the world.
@@ -680,12 +854,17 @@ struct Route(Copyable, Movable):
         return IDLE
 
 
-def home_route(door: Doorway) raises -> Route:
-    """Return a route home: up to the front door, over the threshold,
-    and in, where the person stays.
+def home_route(
+    door: Doorway, climb: List[Vector3] = List[Vector3]()
+) raises -> Route:
+    """Return a route home: up to the front door, over the threshold, in,
+    and up the stairs to bed, where the person stays.
 
     Args:
         door: The home's front door.
+        climb: The way up the home's stairs, from the hall to the top
+            story, as `HouseInterior.climb` gives it; empty to stay in the
+            hall.
 
     Returns:
         The route, at its first point. A person on it stays at the last
@@ -699,6 +878,7 @@ def home_route(door: Doorway) raises -> Route:
     var points = List[Vector3]()
     for reach in [-APPROACH, -THRESHOLD, INDOORS]:  # pragma: no branch
         points.append(middle + into * reach)
+    points.extend(climb.copy())
     return Route(points^, Duration(0.2, SECOND))
 
 
@@ -1293,6 +1473,12 @@ struct Residents(Movable):
     var faces: List[Vector3]
     var homeward: List[Route]
     """Each person's way home and in, for when the village shelters."""
+    var outward: List[Route]
+    """Each person's way back out of their home: their way home, the other
+    way round."""
+    var leaving: List[Bool]
+    """Whether each person is still on their way out of their home, since
+    the village stopped sheltering."""
     var sheltering: Bool
     """Whether the people keep to their homes now: at night, or in hard
     rain or snow."""
@@ -1306,6 +1492,7 @@ struct Residents(Movable):
         lots: List[Lot],
         homes: List[Doorway],
         stops: List[Stop] = List[Stop](),
+        climbs: List[List[Vector3]] = List[List[Vector3]](),
     ) raises:
         """Build the residents into a scene, each at its first place.
 
@@ -1320,6 +1507,10 @@ struct Residents(Movable):
             stops: The benches to sit on and the places to work. A person
                 stops at each one within `STOP_REACH` of the middle of
                 where they wander.
+            climbs: The way up each home's stairs, in the order of
+                `homes`, as `HouseInterior.climb` gives it: by night a
+                person goes up to bed. Empty, or shorter than `homes`,
+                for homes where they stay in the hall.
 
         Raises:
             Error: If `parameters.check` refuses a value, a villager's
@@ -1335,6 +1526,8 @@ struct Residents(Movable):
             length=len(parameters.villagers), fill=Vector3(0, 0, 0)
         )
         self.homeward = List[Route]()
+        self.outward = List[Route]()
+        self.leaving = List[Bool](length=len(parameters.villagers), fill=False)
         self.sheltering = False
         for index in range(len(parameters.villagers)):
             ref villager = parameters.villagers[index]
@@ -1376,9 +1569,22 @@ struct Residents(Movable):
                 visit(route, homes[home])
             # A person with no home of their own shelters in the first.
             if home >= 0 or len(homes) > 0:
-                self.homeward.append(home_route(homes[max(0, home)]))
+                var at = max(0, home)
+                var climb = List[Vector3]()
+                if at < len(climbs):
+                    climb = climbs[at].copy()
+                var going = home_route(homes[at], climb)
+                var back = List[Vector3]()
+                # A way home has its points at the door, at the least.
+                for k in range(
+                    len(going.points) - 1, -1, -1
+                ):  # pragma: no branch
+                    back.append(going.points[k])
+                self.outward.append(Route(back^, Duration(0.2, SECOND)))
+                self.homeward.append(going^)
             else:
                 self.homeward.append(route.copy())
+                self.outward.append(route.copy())
             self.people.append(
                 Character(
                     CharacterParameters(),
@@ -1498,6 +1704,18 @@ struct Residents(Movable):
             for index in range(people):
                 self.homeward[index].next = 0
                 self.homeward[index].resting = 0
+                self.leaving[index] = False
+        if self.sheltering and not shelter:
+            # Each person comes back out the way they went in: down the
+            # stairs, through the hall and out of the door.
+            for index in range(people):
+                # The way out starts again. The point reached on the last
+                # way out is its last point, which would end this one at
+                # once.
+                self.outward[index].at = 0
+                self.outward[index].next = 0
+                self.outward[index].resting = 0
+                self.leaving[index] = True
         self.sheltering = shelter
         for index in range(people):
             var steer: Tuple[MoveInput, Angle]
@@ -1525,6 +1743,12 @@ struct Residents(Movable):
                 if home.at == len(home.points) - 1 and home.resting > 0:
                     home.next = home.at
                     home.resting = 1
+            elif self.leaving[index]:
+                steer = self.outward[index].steer(self.people[index], delta)
+                # Out of the door, they walk their route again.
+                ref out = self.outward[index]
+                if out.at == len(out.points) - 1:
+                    self.leaving[index] = False
             else:
                 steer = self.walks[index].steer(self.people[index], delta)
                 doing = self.walks[index].doing()

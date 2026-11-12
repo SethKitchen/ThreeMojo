@@ -199,7 +199,7 @@ from render.cube_texture_store import (
     CubeTextureId,
 )
 from render.framebuffer import FloatColor, Framebuffer
-from render.png import encode as encode_png
+from render.png_compress import encode_compressed
 from render.raster_state import (
     ALWAYS_STENCIL_FUNC,
     KEEP_STENCIL_OP,
@@ -848,7 +848,7 @@ struct _Library(Movable):
         var size = texture.width * texture.height * Texture.CHANNELS
         var pixels = List[UInt8](capacity=size)
         pixels.extend(Span(texture.pixels.values())[0:size])
-        var png = encode_png(
+        var png = encode_compressed(
             Framebuffer(texture.width, texture.height, pixels^)
         )
         var image = JsonWriter()
@@ -944,7 +944,9 @@ struct _Library(Movable):
             var size = face.width * face.height * Texture.CHANNELS
             var pixels = List[UInt8](capacity=size)
             pixels.extend(Span(face.pixels.values())[0:size])
-            var png = encode_png(Framebuffer(face.width, face.height, pixels^))
+            var png = encode_compressed(
+                Framebuffer(face.width, face.height, pixels^)
+            )
             image.string("data:image/png;base64," + encode_base64(png))
         image.end_array()
         image.end_object()

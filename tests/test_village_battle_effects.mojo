@@ -21,11 +21,12 @@ from extensions.village.battle import (
     LAUNCH_SPEED,
     MARK_BONUS,
     MARK_SECONDS,
+    WORD_REPEAT,
     Battle,
     Wound,
 )
 from extensions.village.character import no_input
-from extensions.village.combat import HIT, Blow, Struck
+from extensions.village.combat import CRITICAL, HIT, Blow, Struck
 from extensions.village.combos import (
     BLEED,
     CHAIN,
@@ -120,6 +121,25 @@ def test_a_finisher_launches_sunders_and_drains() raises:
     # Each flash fades.
     arena.battle._effects_step(FLASH_SECONDS)
     assert_equal(len(arena.battle.flashes), 0)
+
+
+def test_a_burst_of_critical_blows_says_critical_once() raises:
+    var arena = Arena(arena_parameters(1, 0, 5))
+    var at = Vector3(0, 0, -3)
+    var crit = Struck(CRITICAL, 40, 10)
+    assert_false(arena.battle.says("CRITICAL"))
+    arena.battle._show(arena.scene, crit, at, False)
+    arena.battle._show(arena.scene, crit, at, False)
+    var texts = popup_texts(arena.battle)
+    assert_equal(_holds(texts, "CRITICAL"), 1)
+    assert_equal(_holds(texts, "40"), 2)
+    assert_true(arena.battle.says("CRITICAL"))
+    # Once the word is old, the next critical blow says it again.
+    for ref popup in arena.battle.popups:
+        popup.age = WORD_REPEAT
+    assert_false(arena.battle.says("CRITICAL"))
+    arena.battle._show(arena.scene, crit, at, False)
+    assert_equal(_holds(popup_texts(arena.battle), "CRITICAL"), 2)
 
 
 def test_a_wound_bleeds_and_never_fells() raises:

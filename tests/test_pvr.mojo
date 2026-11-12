@@ -131,5 +131,45 @@ def test_what_three_js_cannot_read_is_refused() raises:
         _ = read(_header(v3))
 
 
+def test_a_face_count_the_file_cannot_hold_is_refused() raises:
+    # A header names up to four billion faces. The table of their levels
+    # would take a hundred gigabytes, so the file's length bounds the count
+    # before the table is made.
+    var v3: List[Int] = [0x03525650, 0, 3, 0, 0, 0, 8, 8, 1, 1, 1, 1, 0]
+    v3[10] = 0xFFFFFFFF
+    var many = _header(v3)
+    many.extend(List[UInt8](length=32, fill=0))
+    with assert_raises(contains="ends before its last level"):
+        _ = read(many)
+    # The same count in a version 2 file, whose data starts past the end.
+    var v2: List[Int] = [
+        0xFFFFFFFF,
+        8,
+        8,
+        0,
+        25,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0x21525650,
+        0xFFFFFFFF,
+    ]
+    with assert_raises(contains="ends before its last level"):
+        _ = read(_header(v2))
+    # One face too many for the bytes is refused, and the exact count is read.
+    v3[10] = 3
+    var two_faces = _header(v3)
+    two_faces.extend(List[UInt8](length=64, fill=0))
+    with assert_raises(contains="ends before its last level"):
+        _ = read(two_faces)
+    v3[10] = 2
+    two_faces = _header(v3)
+    two_faces.extend(List[UInt8](length=64, fill=0))
+    assert_equal(len(read(two_faces).mipmaps), 2)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -253,8 +253,25 @@ struct _World(Movable):
         self.cameras.orthographic.append(flat^)
 
 
+def _as_usd_asks(text: String) -> String:
+    """Return a file of three.js 0.180 with the three texture inputs that
+    this port writes as the `UsdPreviewSurface` specification asks: the
+    type of a reader's `varname`, the type of a transform's `in`, and the
+    scale and the bias of a normal map."""
+    var fixed = text.replace("token inputs:varname", "string inputs:varname")
+    fixed = fixed.replace("token inputs:in.connect", "float2 inputs:in.connect")
+    var st = "Transform2d_normal.outputs:result>\n"
+    return fixed.replace(
+        st,
+        st
+        + "\t\t\tfloat4 inputs:scale = (2, 2, 2, 1)\n"
+        + "\t\t\tfloat4 inputs:bias = (-1, -1, -1, 0)\n",
+    )
+
+
 def _check(key: String, options: UsdzOptions) raises:
-    """Assert that the files of the scene are three.js's."""
+    """Assert that the files of the scene are three.js's, but for what
+    `_as_usd_asks` changes."""
     var text = String(
         unsafe_from_utf8=open("assets/usdz/three.json", "r").read_bytes()
     )
@@ -268,7 +285,10 @@ def _check(key: String, options: UsdzOptions) raises:
         var name = doc.string(doc.at(names, i))
         assert_equal(files.names[i], name)
         if name.endswith(".usda"):
-            assert_equal(files.text(name), doc.string(doc.get(expected, name)))
+            assert_equal(
+                files.text(name),
+                _as_usd_asks(doc.string(doc.get(expected, name))),
+            )
 
 
 def test_files_match_three_js() raises:
@@ -280,6 +300,63 @@ def test_files_match_three_js() raises:
     options.anchoring_type = "image"
     options.plane_alignment = "vertical"
     _check("quick_look", options)
+
+
+def test_texture_inputs_are_typed_as_usd_asks() raises:
+    # OpenUSD's validators report a `token` in either place.
+    var world = _World()
+    var text = usdz_files(world.scene, world.assets).text("model.usda")
+    assert_false("token inputs:varname" in text)
+    assert_false("token inputs:in.connect" in text)
+    assert_true('string inputs:varname = "st"' in text)
+    assert_true(
+        "float2 inputs:in.connect = "
+        + "</Materials/Material_3/PrimvarReader_diffuse.outputs:result>"
+        in text
+    )
+
+
+def _normal_inputs(strength: Float32) raises -> String:
+    """Return the scale and the bias of the scene's normal map, for a
+    material whose normal scale has `strength` as its x."""
+    var world = _World()
+    for id in range(world.assets.materials.count()):
+        world.assets.materials.materials[id].normal_scale = Vector2(strength, 7)
+    var text = usdz_files(world.scene, world.assets).text("model.usda")
+    var start = text.find("float4 inputs:scale", text.find("Texture_7_normal"))
+    var end = text.find("token inputs:sourceColorSpace", start)
+    return String(text[byte=start:end])
+
+
+def test_a_normal_map_is_scaled_from_bytes_to_normals() raises:
+    # A byte reads as 0 to 1 and a normal is from -1 to 1. Only the map of
+    # the normal has a bias, and only the x of the normal scale is used.
+    var pad = "\n\t\t\t"
+    assert_equal(
+        _normal_inputs(1),
+        "float4 inputs:scale = (2, 2, 2, 1)"
+        + pad
+        + "float4 inputs:bias = (-1, -1, -1, 0)"
+        + pad,
+    )
+    assert_equal(
+        _normal_inputs(0.25),
+        "float4 inputs:scale = (0.5, 0.5, 2, 1)"
+        + pad
+        + "float4 inputs:bias = (-0.25, -0.25, -1, 0)"
+        + pad,
+    )
+    # No strength: the bias is zero, not minus zero.
+    assert_equal(
+        _normal_inputs(0),
+        "float4 inputs:scale = (0, 0, 2, 1)"
+        + pad
+        + "float4 inputs:bias = (0, 0, -1, 0)"
+        + pad,
+    )
+    var world = _World()
+    var text = usdz_files(world.scene, world.assets).text("model.usda")
+    assert_equal(text.count("float4 inputs:bias"), 1)
 
 
 def test_archive() raises:

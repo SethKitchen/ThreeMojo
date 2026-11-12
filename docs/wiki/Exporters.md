@@ -97,7 +97,7 @@ A mesh that wears a list of materials writes one primitive for each group, as th
 | Attribute | Meaning |
 |---|---|
 | `POSITION` | Always. The accessor has `min` and `max`, as the specification requires. |
-| `NORMAL` | When the geometry has `normal`. |
+| `NORMAL` | When the geometry has `normal`. Each normal is made unit length when the length of one of them is more than 0.0005 from 1, as three.js's `createNormalizedNormalAttribute` makes them. A normal of no length is written as `(1, 0, 0)`. The geometry is not changed. |
 | `TEXCOORD_0` | When the geometry has `uv`. |
 | `TEXCOORD_1` | When the geometry has `uv1`. |
 | `COLOR_0` | When the geometry has `color` and the material has `vertex_colors` on. `read_gltf` turns `vertex_colors` on for a primitive with `COLOR_0`. |
@@ -256,7 +256,7 @@ A track on a node that is not written is left out. So is a track of any other ki
 
 ### Textures
 
-Each texture becomes a PNG image and a sampler. The sampler holds the wrap, the filter and whether the texture has a mip chain. Each distinct image is written once, as three.js's `processImage` caches it. Two textures with the same pixels and size share one image, and each keeps its own sampler.
+Each texture becomes a compressed PNG image and a sampler. The sampler holds the wrap, the filter and whether the texture has a mip chain. Each distinct image is written once, as three.js's `processImage` caches it. Two textures with the same pixels and size share one image, and each keeps its own sampler.
 
 The `v` coordinate of glTF runs down from the top of the image. The `v` coordinate of this renderer runs up from the bottom. Thus the writer turns the image upside down, as three.js does for a `flipY` texture. A texture from `read_gltf` has this flip in its `repeat` and `offset`. The writer keeps the image of such a texture as it is.
 
@@ -394,6 +394,8 @@ The archive is a ZIP file that is not compressed. Each file's data starts at a m
 - `geometries/Geometry_<id>.usda`: one `Mesh` for each geometry, with its triangles, normals, points, texture coordinates and colors.
 - `textures/Texture_<id>_<flip_y>.png`: one PNG for each texture, named `true` or `false` by its `flip_y`, as three.js names it by its `flipY`.
 
+The glTF, USDZ and scene JSON writers compress each PNG with `render.png_compress.encode_compressed`, at DEFLATE level 6. The archive itself is not compressed, as USDZ asks. See [Write a compressed PNG](Image-files#write-a-compressed-png).
+
 | Node | USD |
 |---|---|
 | A node with one mesh of a `STANDARD` or `PHYSICAL` material | An `Xform` that references its geometry file and binds its material. A skinned mesh is a mesh at rest. An instanced mesh is a mesh of its one geometry. |
@@ -430,6 +432,14 @@ The text is the text that three.js writes for a scene whose numbers are short de
 - A texture file is named for the texture's id. three.js names it for the id of its source.
 - Each file's data starts at a multiple of 64 bytes. three.js pads each file by a count that is right only for the first file.
 - A geometry that is not whole triangles is refused. three.js throws a `RangeError`.
+- Three texture inputs are written as the `UsdPreviewSurface` specification asks, and as three.js 0.186 writes them. OpenUSD's validators report each one in a file of three.js 0.180:
+  - A reader's `inputs:varname` is a `string`. three.js 0.180 writes a `token`.
+  - A transform's `inputs:in` is a `float2`. three.js 0.180 writes a `token`.
+  - A normal map's texture has `inputs:scale` and `inputs:bias`. They turn a byte from 0 to 1 into a normal from -1 to 1. For x and y they are twice the material's `normal_scale.x` and its negative. For z they are 2 and -1. three.js 0.180 writes neither, so a renderer reads each normal as it is in the file, from 0 to 1.
+
+Set a normal map's color space to `LINEAR`. Its texture is then `raw`, which is what OpenUSD asks of a normal map.
+
+`read_usd` reads the archive back with the same normal scale. three.js 0.186 reads it back with twice the normal scale. See [USD](More-model-files#usd).
 
 ## Draco
 
@@ -582,7 +592,7 @@ The writers raise for:
 
 `tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js r187 writes, in `assets/exr_export/three.json`. `assets/exr_export/three_exr_export.mjs` writes that fixture. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`.
 
-`tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
+`tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. It changes the three texture inputs of the USDZ differences in the three.js text before it compares. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
 
 `tests/test_draco_export.mojo` compares Draco files with the files that three.js writes, in `assets/draco/export/three.json` and `three.bin`. It checks a representative subset of the 323 cases: each encoder method, both traversals, each KD-tree level and each class of quantization. It reads the files of the smaller geometries back with `decode_draco` and finds each triangle of the geometry in them. To check all 323 cases, run `make draco-export-check`. This target is not part of `make check` or `make coverage`. `assets/draco/export/three_export.mjs` writes the three.js files in Node.
 

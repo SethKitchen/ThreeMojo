@@ -226,7 +226,8 @@ extensions/
     coating.mojo          coating stress, peeling, buckling and thermal shock
     crystal.mojo          a CIF reader, unit cells and bonds
     plot.mojo             chart axes for process figures
-    processes/            worked processes: titanium, diamond and lime
+    production.mojo       the cost of a batch of grown crystals
+    processes/            worked processes: titanium, diamond, lime, hpht, mpcvd
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.

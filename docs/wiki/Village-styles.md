@@ -76,7 +76,7 @@ A blast and an aimed shot break a piercing attack, as a heavy attack does. A men
 
 ## Mana
 
-A spell spends mana, not stamina. A fighter has 100 mana, which comes back at 9 points a second. A spell that costs more mana than the fighter has does not start. The mana shows under the style's name while the player fights with magic.
+A spell spends mana, not stamina. A fighter has 100 mana, which comes back at 9 points a second. A spell that costs more mana than the fighter has does not start. The mana shows with the player's gauges, under the stamina, while the player fights with magic.
 
 ## Missiles
 

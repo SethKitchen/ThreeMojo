@@ -49,8 +49,8 @@ def test_the_presets_rise_from_low_to_ultra() raises:
     assert_true(game_quality(LOW).shadows == CACHED_SHADOWS)
     assert_true(game_quality(ULTRA).shadows == FULL_SHADOWS)
     var size = game_quality(LOW).frame_size(1920, 1080)
-    assert_equal(size[0], 640)
-    assert_equal(size[1], 360)
+    assert_equal(size[0], 922)
+    assert_equal(size[1], 518)
     var whole = game_quality(ULTRA).frame_size(3, 2)
     assert_equal(whole[0], 3)
     assert_equal(whole[1], 2)
@@ -98,8 +98,11 @@ def test_each_setting_is_checked() raises:
     q = game_quality(MEDIUM)
     q.fight_reach = 1
     _refused(q, "fight's reach")
+    q = game_quality(MEDIUM)
+    q.sharpness = 1.5
+    _refused(q, "sharpness")
     var big = GameQuality(
-        2, ALL_PLANTS, 1, 1, 1, 1, 1, FULL_SHADOWS, 4096, True, 20
+        2, ALL_PLANTS, 1, 1, 1, 1, 1, FULL_SHADOWS, 4096, True, 20, 0
     )
     with assert_raises(contains="render scale"):
         _ = big.frame_size(10, 10)

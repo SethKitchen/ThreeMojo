@@ -41,7 +41,13 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 | `read_obj(path) -> ObjModel` | Read a file. |
 | `parse_obj(text) -> ObjModel` | Read the text of one. |
 
-OBJ and PLY check polygon convexity on the exact products of the stored `Float32` corners. Thus the scale of a finite model does not change whether a face is accepted. A corner that turns the wrong way by no more than `Float32` rounding of the file's numbers can explain is accepted. So a corner that is straight in the file, such as a T-junction far from the origin, does not refuse the face.
+OBJ and PLY cut a convex face into a fan of triangles from its first corner, as three.js cuts every OBJ face. A fan covers a convex polygon and only that. A face that is not convex is cut by earcut, so that the triangles cover the face and nothing else. three.js cuts such a face into a fan too, and the fan covers the cutout. `ninjaHead_Low.obj`, which three.js ships, has two such quads among 4,074.
+
+A face that touches itself can have an area and no ear for earcut to cut. Earcut gives no triangles for such a face. The loaders cut it into a fan, as three.js does, so that the face is not lost.
+
+The loaders check convexity on the exact products of the stored `Float32` corners. Thus the scale of a finite model does not change how a face is cut. A corner that turns the wrong way by no more than `Float32` rounding of the file's numbers can explain counts as straight. So a corner that is straight in the file, such as a T-junction far from the origin, keeps the fan.
+
+For the cut, the loader drops the coordinate that the face's normal points along most. That changes no number, so the cut does not depend on the scale either. Each triangle turns the way the face turns, and each corner keeps its own normal, texture coordinate and color.
 
 ## ObjModel and ObjObject
 
@@ -66,7 +72,7 @@ OBJ and PLY check polygon convexity on the exact products of the stored `Float32
 | `v x y z r g b` | A position and its sRGB color, as in three.js. An object with a colored vertex gets a linear `color` attribute. A vertex without a color is white in it. |
 | `vt u v` | A texture coordinate. |
 | `vn x y z` | A normal. |
-| `f a b c ...` | A face of three or more corners, cut into a fan of triangles. A polygon must be convex. Each corner is `v`, `v/vt`, `v//vn` or `v/vt/vn`. |
+| `f a b c ...` | A face of three or more corners, cut into a fan of triangles. A polygon that is not convex is cut by earcut. Each corner is `v`, `v/vt`, `v//vn` or `v/vt/vn`. |
 | `o name`, `g name` | A new object. One with no faces is dropped. |
 | `usemtl name` | A new run of faces under that material, in the same object. A run with no faces is dropped. The first `usemtl` also takes the faces before it, as in three.js. |
 | `mtllib name` | A material library. The rest of the line is one file name. |
@@ -82,7 +88,7 @@ The parser raises, naming the line, for:
 
 - A `v`, `vt` or `vn` line with too few coordinates. A coordinate that is not a number, or is not finite as a `Float32`.
 - A face with fewer than three corners, or a corner with more than three parts.
-- A face of four or more corners that is not convex, or has no area. A fan covers a convex polygon and only that.
+- A face of four or more corners that has no area.
 - An index that is not a whole number, is zero, or names an entry the file does not have.
 - A face that names a normal or a texture coordinate where an earlier face of the object did not, or the other way round.
 - An `mtllib` line with no file name.
@@ -303,7 +309,7 @@ The loader reads the three formats: `ascii`, `binary_little_endian` and `binary_
 | `face`: `texcoord` | `uv` at each corner of the face. It holds two numbers for each corner. three.js reads it only for a triangle. |
 | `face`: `red`, `green`, `blue`, or their other names | `color` at each corner of the face, divided by 255 and decoded from sRGB. three.js gives a quad only three corners' colors, so its later colors move one triangle along. Here each triangle of a face takes the face's color. |
 
-A face of more than three corners becomes a fan of triangles from its first corner. Thus the face must be convex, as an OBJ face must be. three.js cuts a quad on the other diagonal, and it does not read a face of five or more corners.
+A convex face of more than three corners becomes a fan of triangles from its first corner. A face that is not convex is cut by earcut, as an OBJ face is. three.js cuts a quad on the other diagonal, and it does not read a face of five or more corners.
 
 A face's own texture coordinates or colors need a vertex for each corner. So the geometry then has no index, as three.js's `toNonIndexed` makes it. They replace the vertices' `uv` and `color`, as in three.js.
 
@@ -342,7 +348,7 @@ The loader raises, and names the element and the row, for:
 - An ASCII row with too few or too many values. A value that is not a number of its type, or is out of its range.
 - A file that ends before its last row. A list with a negative length.
 - A value of a vertex that is not finite as a `Float32`.
-- A face with fewer than three corners, or one that names a vertex the file does not have. A face that is not convex, or has no area. A face's `texcoord` without two numbers for each corner, when another face has some.
+- A face with fewer than three corners, or one that names a vertex the file does not have. A face that has no area. A face's `texcoord` without two numbers for each corner, when another face has some.
 
 ### Example
 
@@ -396,6 +402,8 @@ The model says what went where, by the file's own indices.
 | `mesh_extras` | One `UserData` per glTF mesh: its `extras`, three.js's `mesh.userData`. |
 | `material_extras` | One `UserData` per glTF material: its `extras`, three.js's `material.userData`. |
 | `scene_extras` | The `extras` of the loaded scene, three.js's `scene.userData`. |
+
+A file can name one image in several textures. The loader decodes the image once for textures that name it with the same sampler and read it the same way. Each of those textures holds its own pixels, and each one after the first is a copy of the first. `kira.glb`, which three.js ships, names one image of 4096 by 4096 pixels in 24 textures. It loads in 6 seconds, down from 46.
 
 ### Extras
 
@@ -506,6 +514,7 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 - A skin joint that the scene does not reach is refused. three.js puts a new bone in its place.
 - A morph target without `COLOR_0` changes no color. three.js adds the base colors to it as offsets.
 - A rotation key must be of unit length. A track refuses one that is not.
+- Keys that share a time are read as a jump, as in three.js. The key before the jump moves to the nearest time below, because the times of a track must rise. See [Keys that share a time](Animation#keys-that-share-a-time).
 - A map other than the occlusion texture must read the first set of texture coordinates. three.js reads any set. Here, only the ao map and the light map are sampled at a second set.
 - A map that reads the third set of texture coordinates or a later set is refused. A geometry here has only `uv` and `uv1`.
 
@@ -898,6 +907,7 @@ print(model.mesh_count, len(model.materials))
 | `unit` | The length of one unit of the file, a `Length`: `UnitScaleFactor` from `GlobalSettings`, in centimeters. Like three.js, the loader keeps it and does not apply it. |
 | `first_mesh`, `mesh_count`, `first_light`, `light_count` | Where the meshes and lights of the file start in the scene, and how many there are. |
 | `first_skinned_mesh`, `skinned_mesh_count` | Where the skinned meshes of the file start in `scene.skinned_meshes`, and how many there are. |
+| `first_line`, `line_count` | Where the curves of the file start in `scene.lines`, and how many there are. |
 | `animations` | One `AnimationClip` for each animation stack that makes a track. See [Skins, blend shapes and animation](#skins-blend-shapes-and-animation). |
 
 A name is sanitized as three.js's `PropertyBinding.sanitizeNodeName` does it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are removed.
@@ -923,6 +933,8 @@ A binary file writes an object name as `Name\x00\x01Class`. three.js stops the s
 |---|---|
 | `Model` | An `Object3D` under its parent model. |
 | `Geometry` of type `Mesh` | A `BufferGeometry` with `position`, and `normal`, `uv` and `color` when the layer elements give them. It has a group for each run of polygons of one material index, as three.js's `genGeometry` adds them. A layer mapped `AllSame` adds no group. |
+| `Geometry` of type `NurbsCurve` | A `BufferGeometry` with the `position` of each point of the path. See [Curves](#curves). |
+| `Model` of type `NurbsCurve` | A `Line` of its geometry, in a `BASIC` material. |
 | `Material` | A `LAMBERT` material for the `lambert` shading model, and a `PHONG` material for any other, as in three.js. |
 | `Texture` and `Video` | A `Texture`. |
 | `NodeAttribute` of a `Camera` model | A `PerspectiveCamera`. |
@@ -993,6 +1005,19 @@ A light reads `LightType`: 0 is a point light, 1 a directional light and 2 a spo
 
 A directional or spot light stands one unit up its own y axis before the model transform applies, as in three.js. It shines toward the world origin.
 
+### Curves
+
+A `NurbsCurve` model is a line: the path of the `NurbsCurve` geometry that is connected to it, as three.js's `createCurve` and `parseNurbsGeometry` build it. The lines are in `scene.lines`, from `first_line`, and `line_count` says how many there are.
+
+| Entry of the geometry | Meaning |
+|---|---|
+| `Order` | The degree of the curve and one. It is read as JavaScript's `parseInt` reads it, so `3.7` is 3. |
+| `Points` | The control points, four numbers each: x, y, z and the weight. |
+| `KnotVector` | The knots. There must be as many as the control points, the degree and one more. |
+| `Form` | `Closed` adds the first control point at the end. `Periodic` adds as many of the first control points as the degree, and the curve runs between the knots that the degree leaves at each end. Any other form is an open curve. |
+
+The path has twelve steps for each control point, at equal steps of the curve's parameter. An FBX file gives a curve no material, so each line is a `BASIC` material in `CURVE_COLOR`, three.js's blue. When two geometries are connected to the model, the last one is drawn. A `Mesh` geometry that is connected to a curve model is drawn as a path through its vertices, as in three.js.
+
 ### Skins, blend shapes and animation
 
 A `Skin` deformer on a geometry makes each mesh of the geometry a `SkinnedMesh`. `loaders/fbx.mojo` reads the skins and blend shapes, and `loaders/fbx_animation.mojo` reads the animation stacks. three.js: `parseDeformers`, `bindSkeleton` and `AnimationParser`.
@@ -1020,6 +1045,8 @@ The stacks come in the order that three.js meets them. A JavaScript object puts 
 
 - A polygon of four or more corners is cut by ear clipping. three.js uses earcut, which picks other diagonals. A flat polygon gives the same surface.
 - The ASCII reader reads tokens, not lines and tabs. A file that three.js reads, this reader reads the same way.
+- A control point of a curve is held as `Float32`s. three.js holds it as doubles, so a point of the path can differ in its last digit.
+- A curve whose order is not a number has no points, and it is given no line. three.js adds a line of nothing.
 - three.js sets the penumbra of a spot light to the outer angle in radians, at least 1. This loader uses 1, because a penumbra above 1 is refused.
 - `ByVertex` and `Index` are read as `ByVertice` and `IndexToDirect`. three.js does not read them.
 - A texture with no image is `NO_TEXTURE`. three.js makes an empty texture.
@@ -1034,7 +1061,7 @@ The stacks come in the order that three.js meets them. A JavaScript object puts 
 
 ### Not read
 
-Animation layers after the first of a stack are not read, as in three.js. NURBS curves, `LookAtProperty`, orthographic cameras, a second set of texture coordinates, and the ambient occlusion, displacement, reflection and specular maps are skipped.
+Animation layers after the first of a stack are not read, as in three.js. `LookAtProperty`, orthographic cameras, a second set of texture coordinates, and the ambient occlusion, displacement, reflection and specular maps are skipped.
 
 ### Errors
 
@@ -1058,6 +1085,7 @@ The loader raises for:
 - A mapping or a reference that is not known. A layer index outside its values.
 - A position index outside `Vertices`. A last polygon with no negative index. A polygon of four or more corners with no area, or one that crosses itself so that no ear is left.
 - A mesh model with no mesh geometry. Models connected in a loop, or nested deeper than `MAX_MODEL_DEPTH`. A transform that flattens an axis.
+- A curve model with no geometry, for which three.js throws a `TypeError`. A curve with an order below one or above `MAX_CURVE_ORDER`, with no `KnotVector` or no `Points`, or with points that are not fours of numbers. A periodic curve with fewer points than its degree. Knots that do not fit the points and the degree. three.js draws `NaN`s for these curves.
 - A camera, a light or a material that its builder refuses.
 - A rotation order, an inherit type, a light type or a camera projection that is not a whole number, or that does not fit.
 - A skin that deforms no geometry. A cluster with no `TransformLink`, a `TransformLink` that is not 16 numbers, or a cluster with not one weight for each index. A cluster with no bone.

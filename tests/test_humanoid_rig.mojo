@@ -101,6 +101,7 @@ from extensions.humanoid.skeleton.torso.body import (
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
+from std.math import cos, pi, sin
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 from renderers.renderer import available_workers
 from std.memory import bitcast
@@ -439,6 +440,96 @@ def test_the_arms_weights_come_off_the_trunk_below_the_armpit() raises:
     # keeps it, for it has no other.
     assert_almost_equal(weights.component(2, 0), 0.75, atol=1e-6)
     assert_almost_equal(weights.component(3, 0), 1, atol=1e-6)
+
+
+def test_a_fan_on_an_arm_keeps_the_arms_weights() raises:
+    var rig = _rig()
+    var trunk = _middle(rig, SPINE)
+    var forearm = _middle(rig, RIGHT_FOREARM)
+    # The middle of a slit closed along the arm can lie nearest the trunk
+    # through the air; every vertex round it is the forearm's.
+    var points: List[Vector3] = [
+        trunk,
+        forearm,
+        forearm + Vector3(0, 0.02, 0),
+        forearm + Vector3(0, 0, 0.02),
+    ]
+    var mesh = _mesh(points, [0, 1, 2, 0, 2, 3])
+    var a = Float32(RIGHT_FOREARM.value)
+    var c = Float32(SPINE.value)
+    var bones = List[Float32]()
+    var weights = List[Float32]()
+    for _ in range(4):
+        bones.extend([a, c, 0, 0])
+        weights.extend([Float32(0.75), 0.25, 0, 0])
+    mesh.set_attribute(String(SKIN_INDEX), BufferAttribute(bones^, 4))
+    mesh.set_attribute(String(SKIN_WEIGHT), BufferAttribute(weights^, 4))
+    keep_arms_off(mesh, rig, trunk.y + 1)
+    # The fan's middle keeps the arm's weight: it rises with the arm.
+    ref kept = mesh.attribute_view(String(SKIN_WEIGHT))
+    assert_almost_equal(kept.component(0, 0), 0.75, atol=1e-6)
+    assert_almost_equal(kept.component(0, 1), 0.25, atol=1e-6)
+
+
+def _ring() raises -> BufferGeometry:
+    """Return a flat ring of twelve triangles round a hexagonal hole: the
+    hole's loop is the six inner vertices, from 6 to 11."""
+    var points = List[Vector3]()
+    for k in range(6):
+        var a = Float32(k) * Float32(pi) / 3
+        points.append(Vector3(2 * cos(a), 2 * sin(a), 0))
+    for k in range(6):
+        var a = Float32(k) * Float32(pi) / 3
+        points.append(Vector3(cos(a), sin(a), 0))
+    var triangles = List[Int]()
+    for k in range(6):
+        var j = (k + 1) % 6
+        triangles.extend([k, j, 6 + k, 6 + k, j, 6 + j])
+    return _mesh(points, triangles)
+
+
+def test_a_hole_on_two_sides_is_closed_on_each_alone() raises:
+    # Only the inner hole is closed, not the ring's outer edge.
+    var touched = List[Bool](length=12, fill=False)
+    for v in range(6, 12):
+        touched[v] = True
+    # Half the hole's edge is on one part, half on the other.
+    var sides = List[Int](length=12, fill=0)
+    for v in [7, 8, 9]:
+        sides[v] = 1
+    var parted = _ring()
+    close_holes(parted, touched, sides)
+    # Two fans of three triangles, each round a new vertex of its own.
+    assert_equal(parted.vertex_count(), 14)
+    assert_equal(len(parted.index), 36 + 18)
+    # No new triangle joins the two parts.
+    for t in range(36, len(parted.index), 3):
+        var a = parted.index[t]
+        var b = parted.index[t + 1]
+        assert_equal(sides[a], sides[b])
+    # On one side alone, one fan closes the whole loop.
+    var whole = _ring()
+    close_holes(whole, touched, List[Int](length=12, fill=1))
+    assert_equal(whole.vertex_count(), 13)
+    assert_equal(len(whole.index), 36 + 18)
+    # A run of fewer than three vertices is left open.
+    var thin = List[Int](length=12, fill=0)
+    thin[7] = 1
+    thin[8] = 1
+    var short = _ring()
+    close_holes(short, touched, thin)
+    assert_equal(short.vertex_count(), 13)
+    assert_equal(len(short.index), 36 + 12)
+    # Runs of one, three, one and one: only the run of three closes.
+    var broken = List[Int](length=12, fill=0)
+    broken[6] = 1
+    broken[10] = 1
+    var scattered = _ring()
+    close_holes(scattered, touched, broken)
+    assert_equal(scattered.vertex_count(), 13)
+    assert_equal(len(scattered.index), 36 + 9)
+    with assert_raises(contains="one side per vertex"):
+        close_holes(short, touched, [0, 1])
 
 
 def test_holes_that_meet_at_a_vertex_are_closed_once() raises:

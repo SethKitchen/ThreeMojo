@@ -53,7 +53,19 @@ geometry can carry any number of them, as three.js's can on WebGL2.
 `loaders.fbx_animation` reads the animation
 stacks into clips.
 
-**Not ported.** NURBS curves, a
+**Curves.** A `NurbsCurve` model is a line, as three.js's `createCurve`
+makes it: the path of its `NurbsCurve` geometry, in three.js's blue,
+since an FBX file gives a curve no material. `build_curve` is three.js's
+`parseNurbsGeometry`: a `NURBSCurve` of the geometry's order, knots and
+points, drawn in twelve steps for each control point. A control point is
+held as `Float32`s here and as doubles in three.js, so a point of the
+path can differ in its last digit. A curve with an order below one, or
+with knots that do not fit its points, is refused; three.js draws
+`NaN`s. A curve model with no geometry is refused, where three.js throws
+a `TypeError`. A curve of no points is given no line, where three.js
+adds a line of nothing.
+
+**Not ported.** A
 `LookAtProperty`, an orthographic camera, layered textures past their
 first layer, a second set of texture coordinates, and the ambient
 occlusion, displacement, reflection and specular maps.
@@ -106,6 +118,8 @@ from loaders.bytes import space_tab_line, decode_base64
 from loaders.file_path import path_directory
 from loaders.fbx_tree import (
     FBX_BYTES,
+    FBX_INTEGER,
+    FBX_NUMBER,
     FBX_STRING,
     NO_FBX_NODE,
     FbxDocument,
@@ -120,6 +134,7 @@ from loaders.fbx_animation import (
     _connections,
     read_fbx_animations,
 )
+from loaders.js_number import js_number_text, js_parse_int
 from loaders.model_nodes import (
     authored_color,
     compose,
@@ -127,11 +142,22 @@ from loaders.model_nodes import (
     remember_material,
     texture_from_bytes,
 )
-from materials.material import LAMBERT, NO_TEXTURE, PHONG, Material, MaterialId
+from materials.material import (
+    BASIC,
+    LAMBERT,
+    NO_TEXTURE,
+    PHONG,
+    Material,
+    MaterialId,
+)
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
+from math.nurbs import NURBSCurve
+from math.space_curve import points_of
 from math.vector2 import Vector2, append_vector2, vector2_from_float64
 from math.vector3 import Vector3, append_vector3, vector3_from_float64
+from math.vector4 import Vector4
+from objects.line import Line
 from objects.mesh import Mesh
 from objects.skeleton import Bone, Skeleton
 from objects.skinned_mesh import (
@@ -144,7 +170,7 @@ from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB, ColorSpace, srgb_to_linear
 from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha
 from render.texture_store import TextureId
-from std.math import atan, pi
+from std.math import atan, isnan, nan, pi
 from std.pathlib import Path
 from units.measure import angle_degrees, length_meters
 from units.si import CENTIMETER, DEGREE, Angle, Length
@@ -160,6 +186,14 @@ comptime DEFAULT_FAR_PLANE = Float64(1000)
 comptime FILM_GAUGE = Float64(35)
 # The color three.js gives a mesh with no material connected.
 comptime UNMATERIALED = Color(204, 204, 204)
+# The color three.js draws a curve in. An FBX file gives a curve no
+# material.
+comptime CURVE_COLOR = Color(0x33, 0x00, 0xFF)
+# How many steps three.js draws a curve in, for each of its control points.
+comptime CURVE_STEPS = 12
+# The largest order a curve is read with. An order is the degree and one,
+# and a degree past the control points is refused whatever it is.
+comptime MAX_CURVE_ORDER = 1 << 20
 comptime _WHITE = Color(255, 255, 255)
 
 
@@ -795,6 +829,9 @@ struct FbxModel(Copyable, Movable):
     # The same for the skinned meshes, in `scene.skinned_meshes`.
     var first_skinned_mesh: Int
     var skinned_mesh_count: Int
+    # The same for the curves, in `scene.lines`.
+    var first_line: Int
+    var line_count: Int
     # One clip per animation stack that makes a track.
     var animations: List[AnimationClip]
 
@@ -824,6 +861,8 @@ struct FbxModel(Copyable, Movable):
         self.light_count = 0
         self.first_skinned_mesh = 0
         self.skinned_mesh_count = 0
+        self.first_line = 0
+        self.line_count = 0
         self.animations = List[AnimationClip]()
 
     def model(self, name: String) raises -> NodeId:
@@ -909,6 +948,7 @@ def load_fbx(
     loader.model.first_mesh = len(scene.meshes)
     loader.model.first_light = len(scene.lights)
     loader.model.first_skinned_mesh = len(scene.skinned_meshes)
+    loader.model.first_line = len(scene.lines)
     loader.read_materials(assets)
     loader.read_deformers()
     loader.read_models(scene, assets)
@@ -920,6 +960,7 @@ def load_fbx(
     )
     loader.model.mesh_count = len(scene.meshes) - loader.model.first_mesh
     loader.model.light_count = len(scene.lights) - loader.model.first_light
+    loader.model.line_count = len(scene.lines) - loader.model.first_line
     return loader.model.copy()
 
 
@@ -1668,6 +1709,8 @@ struct _Loader(Movable):
             self.place_light(attribute, light_type, at, scene)
         elif kind == "Mesh":
             self.place_meshes(id, at, scene, assets)
+        elif kind == "NurbsCurve":
+            self.place_curve(id, at, scene, assets)
         for child in self.model_children[place].copy():
             self.place(child, at, matrix, world, depth + 1, scene, assets)
 
@@ -1820,6 +1863,136 @@ struct _Loader(Movable):
         if assets.geometries.get(made).vertex_count() == 0:
             return
         self.add_piece(id, geometry, made, materials, node, scene, assets)
+
+    def curve_order(self, node: Int) raises -> Float64:
+        """Return three.js's `parseInt( geoNode.Order )` for a curve: the
+        whole number its `Order` begins with, or NaN when it has no
+        `Order` or one that is not a number."""
+        var found = self.document.child(node, "Order")
+        if found == NO_FBX_NODE or self.document.property_count(found) == 0:
+            return nan[DType.float64]()
+        var order = self.document.property(found, 0)
+        if order.kind == FBX_INTEGER:
+            return Float64(order.integer)
+        if order.kind == FBX_NUMBER:
+            return js_parse_int(js_number_text(order.number))
+        if order.kind == FBX_STRING:
+            return js_parse_int(order.text)
+        return nan[DType.float64]()
+
+    def build_curve(mut self, id: Int, mut assets: Assets) raises:
+        """Build the path of a `NurbsCurve` geometry, the first time a
+        model draws it, as three.js's `parseNurbsGeometry` builds it:
+        `CURVE_STEPS` steps for each control point, at equal steps of the
+        curve's parameter. A `Closed` curve ends on its first control
+        point. A `Periodic` curve repeats as many of its first control
+        points as its degree, and runs between the knots that the degree
+        leaves at each end. A curve whose order is not a number has no
+        points, as in three.js.
+
+        Raises:
+            Error: If the order is less than one or more than
+                `MAX_CURVE_ORDER`, the curve has no `KnotVector` or no
+                `Points`, its points are not fours of numbers, a periodic
+                curve has fewer points than its degree, or `NURBSCurve`
+                refuses the knots and the points.
+        """
+        if id in self.built:
+            return
+        var node = self.objects[id]
+        var geometry = BufferGeometry()
+        var order = self.curve_order(node)
+        if not isnan(order):
+            if order < 1 or order > MAX_CURVE_ORDER:
+                raise Error("FBX: a curve's order must be one or more")
+            var degree = Int(order) - 1
+            var knots = self.document.numbers(
+                self._required_child(node, "KnotVector")
+            )
+            var values = self.document.numbers(
+                self._required_child(node, "Points")
+            )
+            if len(values) == 0 or len(values) % 4 != 0:
+                raise Error("FBX: a curve's points must be fours of numbers")
+            var control = List[Vector4](capacity=len(values) // 4 + degree)
+            # There are four numbers at least: the loop runs.
+            for at in range(0, len(values), 4):  # pragma: no branch
+                control.append(
+                    Vector4(
+                        of=vector3_from_float64(
+                            values[at], values[at + 1], values[at + 2]
+                        ),
+                        w=Float32(values[at + 3]),
+                    )
+                )
+            var start: Optional[Int] = None
+            var end: Optional[Int] = None
+            var form = String()
+            var found = self.document.child(node, "Form")
+            if found != NO_FBX_NODE and self.document.property_count(found) > 0:
+                var named = self.document.property(found, 0)
+                if named.kind == FBX_STRING:
+                    form = named.text
+            if form == "Closed":
+                control.append(control[0])
+            elif form == "Periodic":
+                if degree > len(control):
+                    raise Error(
+                        "FBX: a periodic curve has fewer points than its degree"
+                    )
+                start = degree
+                end = len(knots) - 1 - degree
+                for at in range(degree):
+                    control.append(control[at])
+            var curve = NURBSCurve(degree, knots, control, start, end)
+            var path = points_of(curve, len(control) * CURVE_STEPS)
+            var positions = List[Float32](capacity=len(path) * 3)
+            # A curve has one control point at least: the loop runs.
+            for point in path:  # pragma: no branch
+                append_vector3(positions, point)
+            geometry.set_attribute(
+                String(POSITION), BufferAttribute(positions^, 3)
+            )
+        var made = assets.geometries.add(geometry^)
+        self.model.geometries.append(made)
+        self.built[id] = made
+
+    def place_curve(
+        mut self, id: Int, node: NodeId, mut scene: Scene, mut assets: Assets
+    ) raises:
+        """Add the line of a `NurbsCurve` model, as three.js's
+        `createCurve` adds it: the last geometry connected to the model,
+        drawn as one path in `CURVE_COLOR`. three.js draws a `Mesh`
+        geometry connected to such a model as a path through its
+        vertices, and so does this.
+
+        Raises:
+            Error: If the model has no geometry, for which three.js throws
+                a `TypeError`, or the geometry is refused.
+        """
+        var geometry = -1
+        var curve = False
+        for link in self.links(self.children, id):
+            if self.kind(link.id) == "Geometry":
+                var subtype = self.subtype(self.objects[link.id])
+                if subtype == "NurbsCurve" or subtype == "Mesh":
+                    geometry = link.id
+                    curve = subtype == "NurbsCurve"
+        require_non_negative(geometry, "FBX: a curve model has no geometry")
+        if curve:
+            self.build_curve(geometry, assets)
+        else:
+            self.build_geometry(geometry, assets)
+        var made = self.built[geometry]
+        # A curve of no points draws nothing, and is given no line.
+        # three.js adds a line of nothing.
+        ref drawn = assets.geometries.get(made)
+        if not drawn.has_attribute(POSITION) or drawn.vertex_count() == 0:
+            return
+        var material = self.default_material(
+            "curve", Material(CURVE_COLOR, kind=BASIC), assets
+        )
+        scene.add_line(Line(made, material, node))
 
     def read_global_settings(mut self, mut scene: Scene) raises:
         """Read `GlobalSettings`: an ambient light for an `AmbientColor`

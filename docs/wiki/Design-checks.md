@@ -13,8 +13,8 @@ The checks take and return unit-typed quantities. Inside, they work in the units
 | `quantities` | `POUND64`, `PSI`, `KIP_INCH`, `KIP_FOOT`, `POUND_FOOT`, `SQUARE_INCH`, `CUBIC_INCH`, `INCH_TO_THE_FOURTH`, `MILE_PER_HOUR` and `POUND_PER_INCH`. `extensions.geotech.quantities` gives `PSF`, `PLF`, `KIP`, `KSI` and `PCF` |
 | `kinds` | `WindExposure` (`EXPOSURE_B`, `EXPOSURE_C`, `EXPOSURE_D`) and `AnchorKind` (`CAST_IN`, `POST_INSTALLED`) |
 | `steel` | `WideFlange`, `w_shapes` and `w_shape` (W8 to W12), `flexural_strength` (F2, F3), `shear_strength` (G2.1), `web_local_yielding` (J10.2), `web_crippling` (J10.3), `Pipe` and `standard_pipes`, `compression_strength` (E3), `concrete_bearing` (J8), `WideFlange.strong_radius`, `combined_ratio` (H1.1), `fillet_weld_strength` (J2.4), `bolt_shear_strength` (J3.6), `base_plate_thickness` (Design Guide 1) and the ASD safety factors |
-| `wood` | `Lumber`, `southern_pine_no2`, `dressed_depth`, `joist_line_load`, `simple_span_check`, `bearing_stress_ratio`, `dowel_bearing_strength` and `bolt_lateral_value` (the yield limit equations) |
-| `concrete` | `propped_wall_effects`, `cantilever_wall_effects`, `stress_block_factor`, `tension_strain`, `one_way_shear_strength`, `two_way_shear_stress`, `plain_flexural_strength`, `minimum_wall_steel`, `wall_in_plane_shear_strength`, `plain_bearing_strength`, `plain_two_way_shear_strength`, `square_footing_side` and `strip_footing_width` |
+| `wood` | `Lumber`, `southern_pine_no2`, `dressed_depth`, `joist_line_load`, `simple_span_check`, `bearing_stress_ratio`, `dowel_bearing_strength`, `bolt_lateral_value` and `nail_lateral_value` (the yield limit equations), `column_buckling_stress`, `column_stability_factor` (Cp) and `beam_column_ratio` (equation 3.9-3) |
+| `concrete` | `propped_wall_effects`, `cantilever_wall_effects`, `fixed_base_moment`, `wall_section_effects`, `stress_block_factor`, `tension_strain`, `one_way_shear_strength`, `two_way_shear_stress`, `plain_flexural_strength`, `minimum_wall_steel`, `wall_in_plane_shear_strength`, `plain_bearing_strength`, `plain_two_way_shear_strength`, `square_footing_side` and `strip_footing_width` |
 | `anchors` | One anchor by ACI 318-19 chapter 17: `steel_tension_strength`, `steel_shear_strength`, `breakout_tension_strength`, `pullout_strength`, `bond_tension_strength`, `pryout_shear_strength`, `concrete_tension_phi` and the steel and pryout factors |
 | `wind` | `exposure_coefficient` (Kz), `elevation_factor` (Ke), `velocity_pressure` (qz), `leeward_wall_coefficient` and `wall_net_pressure` |
 | `beams` | `continuous_beam` and `patterned_beam` |
@@ -44,6 +44,17 @@ def main() raises:
 A basement wall spans from the slab at its base to the floor at its top. `propped_wall_effects` takes the span, the height of the soil above the bottom support, the equivalent fluid pressure and a uniform lateral surcharge. It integrates the pressure for the reactions and scans the moment along the span. Soil above the top support loads the wall only up to the span.
 
 Give the result to `flexural_resistance` and `shear_resistance` of `extensions.geotech.concrete`, or to `one_way_shear_strength` here, with the load factor of your code.
+
+A pinned base gives the largest span moment and top reaction. A restrained base puts a moment at the base, with the soil face in tension. `fixed_base_moment` gives that moment for a fixed base, which is its upper bound. Give a base moment to `wall_section_effects` to get the moment and the shear at any height. Use it to find the inflection height, or the shear at d above the support.
+
+## Check a wood beam-column
+
+A joist or a stud that carries an axial force and a bending moment needs equation 3.9-3 of the NDS.
+
+1. Get FcE for each axis with `column_buckling_stress`. Give E'min and le/d.
+2. Get Cp with `column_stability_factor`. Give Fc*, the smaller FcE and `SAWN_COLUMN_C`.
+3. Multiply Fc* by Cp to get F'c.
+4. Give fc, F'c, fb, F'b and the FcE of the bending axis to `beam_column_ratio`. The member is adequate at 1 or less.
 
 ## Check an anchor
 

@@ -1,6 +1,6 @@
 # Image files
 
-`render/png.mojo`, `render/jpeg.mojo`, `render/tga.mojo`, `render/rgbe.mojo`, `render/exr.mojo`, `render/inflate.mojo`, `render/apng.mojo`, `render/ppm.mojo`, `render/tiff.mojo` and `render/webp.mojo`. The project writes PNG, APNG and PPM, and reads PNG, JPEG, WebP, TGA, TIFF, Radiance HDR and OpenEXR. No compression or image library is involved.
+`render/png.mojo`, `render/png_compress.mojo`, `render/jpeg.mojo`, `render/tga.mojo`, `render/rgbe.mojo`, `render/exr.mojo`, `render/inflate.mojo`, `render/apng.mojo`, `render/ppm.mojo`, `render/tiff.mojo` and `render/webp.mojo`. The project writes PNG, APNG and PPM, and reads PNG, JPEG, WebP, TGA, TIFF, Radiance HDR and OpenEXR. No compression or image library is involved.
 
 ![A triangle turns in an animated PNG](out/spin.png)
 
@@ -27,7 +27,35 @@ from render.png import encode
 Path("out/frame.png").write_bytes(encode(framebuffer))
 ```
 
-The encoder uses DEFLATE's stored blocks, so the file is larger than a compressed one and legal everywhere.
+The encoder uses DEFLATE's stored blocks, so the file is as large as its pixels and legal everywhere.
+
+## Write a compressed PNG
+
+```mojo
+from render.png_compress import encode_compressed
+Path("out/frame.png").write_bytes(encode_compressed(framebuffer))
+```
+
+`render/png_compress.mojo` writes the same pixels as a file that is far smaller. Each row gets one of PNG's five filters: the filter whose bytes, read as signed, have the smallest sum. `render/deflate.mojo` compresses the filtered rows. `render.png.decode` and any other PNG reader read the file back to the same pixels.
+
+`encode_compressed(framebuffer, level)` takes DEFLATE's level:
+
+| Level | What `encode_compressed` writes |
+|---|---|
+| 0 | The filtered rows in stored blocks. |
+| 1 to 9 | The filtered rows, compressed at that level. 1 is the fastest and 9 is the smallest. |
+
+The default is `TEXTURE_LEVEL`, which is 6. A level outside 0 to 9 raises.
+
+These sizes are for an image of 1024 by 1024 pixels, which is 4.2 MB from `render.png.encode`:
+
+| Image | Level 1 | Level 6 | Level 9 |
+|---|---|---|---|
+| A photograph of bricks | 2.31 MB | 2.29 MB | 2.29 MB |
+| A grid of flat colors and text | 0.89 MB | 0.79 MB | 0.76 MB |
+| Time, on one core | 0.2 s | 0.45 s | 0.4 to 1.1 s |
+
+The exporters write each texture with `encode_compressed`. See [Exporters](Exporters).
 
 ## Write an APNG
 
@@ -93,7 +121,8 @@ var skin = assets.textures.add(texture_from(photo, REPEAT, BILINEAR, mipmapped=T
 | Supported | Refused by name |
 |---|---|
 | Baseline sequential Huffman coding, `SOF0` and `SOF1` at 8 bits | Arithmetic coding |
-| Progressive Huffman coding, `SOF2`: spectral selection and successive approximation | Twelve bits a sample, and sixteen-bit quantization tables |
+| Progressive Huffman coding, `SOF2`: spectral selection and successive approximation | Twelve bits a sample |
+| Quantization tables with steps of 8 bits or of 16 bits | |
 | Gray, and YCbCr in three components numbered one, two and three as JFIF numbers them | Four components, which is CMYK, and three numbered any other way |
 | 4:4:4, 4:2:2 and 4:2:0 | Other sampling factors |
 | Restart intervals, in sequential and progressive scans | |
@@ -135,7 +164,7 @@ The pixels are the same as before, bit for bit.
 
 ### Integrity checks
 
-The decoder checks that every marker segment fits and that the frame header comes once and before the scans. It checks that every table a scan names was defined and holds no zero, and that each scan names components the frame has. It checks that the restart markers arrive in order and that the end marker closes the file. A truncated scan, a code no table defines and a run past a block's end are refused rather than padded.
+The decoder checks that every marker segment fits and that the frame header comes once and before the scans. It checks that every table a scan names was defined and holds no zero, and that each scan names components the frame has. It checks that the restart markers arrive in order and that the image has its end marker. Bytes after the end marker are not read, as libjpeg and a browser leave them. A glTF buffer view pads an image to four bytes, and a camera can append a second picture. A truncated scan, a code no table defines and a run past a block's end are refused rather than padded.
 
 ## Read a TGA
 
@@ -163,7 +192,7 @@ The descriptor byte gives the origin. The reader reads all four corners: bottom 
 - The reader applies the color map's first entry index. three.js ignores it.
 - The reader refuses an index past the color map, a packet past the image and a file that ends early. three.js reads these as whatever its array holds.
 
-`decode_image` in `loaders/image_file.mojo` reads a TGA when the bytes are neither PNG nor JPEG. A TGA has no signature, so the header check alone tells a TGA from other bytes. glTF names only PNG and JPEG, so this fallback is an addition of this port.
+`decode_image` in `loaders/image_file.mojo` reads a TGA when the bytes are not a PNG, a JPEG or a WebP. A TGA has no signature, so the header check alone tells a TGA from other bytes. glTF names only PNG and JPEG, so this fallback is an addition of this port.
 
 ## Read a TIFF
 
@@ -210,6 +239,8 @@ The decoder refuses these, with a message that names the problem:
 - An image of no width or no height, and a file that starts with neither `II` nor `MM`. Also a tile with no offset or no byte count. three.js gives an empty image for the first two. For such a tile, UTIF reads what it can, differently for each compression.
 - An image whose pixel count or sample buffer does not fit.
 - A tile whose width or height is not positive.
+- A tag whose shorts or longs run past the end of the file. UTIF reads each missing value as zero. A tag names up to four billion values, so a short file can read as gigabytes of zeros.
+- Tags that name more samples than the decoded image holds, or no sample. UTIF decodes for the sample count of tag 277, or one. Without that tag it reads for another count: the length of tag 258, or what the photometric form implies. It then reads past its array, and each form reads the missing bytes in its own way.
 
 The tests read 96 files that `assets/tiff/make_tiff.py` wrote, with Pillow and by hand. Each one must have the bytes that three.js 0.180 gives, or be one of the seven that the decoder refuses on purpose.
 

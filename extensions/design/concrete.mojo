@@ -9,7 +9,9 @@ A basement wall spans vertically between the slab at its base and the
 floor at its top. `propped_wall_effects` gives the reactions, the largest
 moment and its height for an equivalent-fluid soil pressure and a uniform
 lateral surcharge. `cantilever_wall_effects` gives the same for a wall
-that is free at its top.
+that is free at its top. `fixed_base_moment` gives the base moment of a
+wall fixed at its base, and `wall_section_effects` gives the moment and
+the shear at one height for any base moment between a pin and that.
 
 The strength of a unit width uses `ConcreteStrip` and
 `flexural_resistance` of `extensions.geotech.concrete`, which give the
@@ -221,6 +223,139 @@ def cantilever_wall_effects(
         Length64(0),
         LineLoad64(force),
         LineLoad64(force),
+    )
+
+
+def _load_terms(
+    span: Float64, soil_height: Float64, fluid: Float64, surcharge: Float64
+) -> Tuple[Float64, Float64, Float64]:
+    """Return the loaded height c, the base pressure a and the slope g.
+
+    The pressure on the loaded part is a - g t for t from 0 to c.
+    """
+    return (min(soil_height, span), fluid * soil_height + surcharge, fluid)
+
+
+def _load_integrals(
+    y: Float64, c: Float64, a: Float64, g: Float64
+) -> Tuple[Float64, Float64]:
+    """Return the load below height y and its moment about height y."""
+    var t = min(y, c)
+    var force = a * t - g * t * t / 2
+    # The first moment of the load below t about the base.
+    var first = a * t * t / 2 - g * t * t * t / 3
+    return (force, force * y - first)
+
+
+def fixed_base_moment(
+    span: Length64,
+    soil_height: Length64,
+    fluid_pressure: UnitWeight64,
+    surcharge: Pressure64,
+) raises -> MomentPerLength64:
+    """Return the base moment of a wall fixed at its base, pinned at its top.
+
+    This is the upper bound of the moment that a base restraint can take.
+    The moment puts the soil face of the wall in tension. The pressure is
+    that of `propped_wall_effects`.
+
+    Args:
+        span: The height between the base and the top support.
+        soil_height: The height of the soil surface above the base.
+        fluid_pressure: The equivalent fluid pressure.
+        surcharge: The uniform lateral pressure of a surcharge.
+
+    Returns:
+        The integral of w(t) t (L - t) (2L - t) / (2 L^2) over the
+        loaded height: w L^2 / 15 for a triangle over the span.
+
+    Raises:
+        Error: If the span is not positive or a load is negative.
+    """
+    _check_wall_inputs(span, soil_height, fluid_pressure, surcharge)
+    var l = span.value
+    var terms = _load_terms(
+        l, soil_height.value, fluid_pressure.value, surcharge.value
+    )
+    var c = terms[0]
+    var a = terms[1]
+    var g = terms[2]
+    # The integral of (a - g t)(2 L^2 t - 3 L t^2 + t^3) from 0 to c.
+    var c2 = c * c
+    var c3 = c2 * c
+    var c4 = c3 * c
+    var total = a * (l * l * c2 - l * c3 + c4 / 4) - g * (
+        2 * l * l * c3 / 3 - 3 * l * c4 / 4 + c4 * c / 5
+    )
+    return MomentPerLength64(total / (2 * l * l))
+
+
+@fieldwise_init
+struct WallSection(ImplicitlyCopyable):
+    """The moment and the shear at one height of a wall."""
+
+    # Positive when the face at the supports is in tension.
+    var moment: MomentPerLength64
+    # The force per width that the wall carries toward its bottom
+    # support, positive toward the supports.
+    var shear: LineLoad64
+    var bottom_reaction: LineLoad64
+    var top_reaction: LineLoad64
+
+
+def wall_section_effects(
+    span: Length64,
+    soil_height: Length64,
+    fluid_pressure: UnitWeight64,
+    surcharge: Pressure64,
+    base_moment: MomentPerLength64,
+    height: Length64,
+) raises -> WallSection:
+    """Return the moment and the shear at one height of a propped wall.
+
+    The wall is pinned at its top. Its base carries a given moment, from
+    zero for a pin to `fixed_base_moment` for a fixed base. A base moment
+    makes the bottom reaction larger and the top reaction smaller by
+    M / L. Use it to find the inflection height, or the shear at the
+    critical section d above the support.
+
+    Args:
+        span: The height between the base and the top support.
+        soil_height: The height of the soil surface above the base.
+        fluid_pressure: The equivalent fluid pressure.
+        surcharge: The uniform lateral pressure of a surcharge.
+        base_moment: The base moment. It is positive when it puts the
+            soil face in tension.
+        height: The height of the section above the base, from 0 to the
+            span.
+
+    Returns:
+        The moment and the shear at the height, and the two reactions.
+
+    Raises:
+        Error: If the span is not positive, a load is negative, the base
+            moment is not finite, or the height is outside the span.
+    """
+    _check_wall_inputs(span, soil_height, fluid_pressure, surcharge)
+    var mb = base_moment.value
+    if not (abs(mb) < Float64.MAX):
+        raise Error("A base moment must be finite")
+    var l = span.value
+    var y = height.value
+    if not (y >= 0 and y <= l):
+        raise Error("A section height must be within the span")
+    var terms = _load_terms(
+        l, soil_height.value, fluid_pressure.value, surcharge.value
+    )
+    var full = _load_integrals(l, terms[0], terms[1], terms[2])
+    var r_bottom = (full[1] + mb) / l
+    var r_top = full[0] - r_bottom
+    var here = _load_integrals(y, terms[0], terms[1], terms[2])
+    return WallSection(
+        MomentPerLength64(-mb + r_bottom * y - here[1]),
+        LineLoad64(r_bottom - here[0]),
+        LineLoad64(r_bottom),
+        LineLoad64(r_top),
     )
 
 

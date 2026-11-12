@@ -185,7 +185,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 5. Each resident steps along its route, and its body or its mesh is posed.
 6. Each door swings open while someone stands near it, and shut after.
 7. The use button uses the spot in reach: see [Village gathering](Village-gathering). With no spot in reach, it talks to the villager in reach: see [Village errands](Village-errands).
-8. The camera's focus follows the player. The eye comes in before a wall and before a tree's trunk, and stays below a ceiling and above the ground. The inside of each house hides while the eye is more than `INSIDE_REACH`, 18 meters, past the house's edge. The fireflies and the butterflies fly on: see [Village critters](Village-critters).
+8. The camera's focus follows the player. The eye comes in before a wall and before a tree's trunk, and stays below a ceiling and above the ground. When the eye comes within `CLOSE_EYE`, 1.2 meters, of the player's head, the player's body hides, so the room before the player shows. The inside of each house hides while the eye is more than `INSIDE_REACH`, 18 meters, past the house's edge. The fireflies and the butterflies fly on: see [Village critters](Village-critters).
 9. The village grows the grass for the camera, and moves the water's clock on.
 10. The weather moves on, and scales the lights and the fog. See [Village weather](Village-weather). The day moves on, and dims and tints them for the hour. See [Village day and night](Village-day).
 
@@ -318,7 +318,11 @@ A person stops at each stop within `STOP_REACH`, 14 meters, of the middle of whe
 
 ### Home at night
 
-At night, while the daylight is below `SHELTER_LIGHT`, 0.2, the people go home. They also go home in hard rain or snow, above `SHELTER_FALL`, 0.6, of the heaviest. Each walks to their front door, over the threshold and in, and stays there. A person with no home of their own shelters in the first house. Once the night or the storm is over, they walk their routes again.
+At night, while the daylight is below `SHELTER_LIGHT`, 0.2, the people go home. They also go home in hard rain or snow, above `SHELTER_FALL`, 0.6, of the heaviest. Each walks to their front door, over the threshold and in, and stays there.
+
+In a house with stairs, a person goes on up to bed, to a room on the top story. They climb each flight, and walk back along the well to the next. `HouseInterior.climb` gives the way, and `home_route` follows it.
+
+Once the night or the storm is over, each comes back out the same way, down the stairs and out of the door. `Residents.outward` holds that way. A person with no home of their own shelters in the first house. Out of the door, they walk their routes again.
 
 ### Danger
 
@@ -379,6 +383,28 @@ The clothes follow the skin, and the skin follows the bones, so they move togeth
 - A platebody keeps off the arms. So its side does not tear open under a raised arm. See [Outfits and armor](Outfits-and-armor#plate).
 - A long robe or gown hides the legs inside it. So a running leg does not push out through its front. See [Garments](Garments).
 
+### The swinging hem
+
+A skirt's hem swings as the person moves. It trails a run, kicks forward as the runner stops, and settles. The module is `extensions/village/sway.mojo`.
+
+1. `Body` gives each piece of a skirted garment four morph targets: the hem moved forward, back, right and left, in the body's frame. A vertex moves by the square of how far it lies down the skirt. So the waist stays, and the hem moves `SWAY_REACH`, 9 cm on a person of six feet.
+2. Each frame, `Sway.step` moves the hem's offset on a damped spring. As the body speeds up, the spring's rest lies behind it by `SWAY_LAG`, 1.2 cm for each meter a second squared. As the body moves, the air holds the hem back by `SWAY_DRAG`, 1 cm for each meter a second. The spring swings about once a second, and its swing dies at `SWAY_DAMPING`, 4.5 a second.
+3. `sway_weights` turns the offset into the four targets' weights. `Body.swing_hem` sets them on each skirt.
+4. A fifth target flares the hem: out from the body's axis, and a little up. `Sway.flare` follows the body's spin, by `FLARE_SPIN`, 0.12 for each radian a second, and its fall, by `FLARE_FALL`, 0.15 for each meter a second. So a whirlwind spreads the skirt, and so does a jump as it comes down.
+
+The renderer moves the vertices by the targets before the bones, so the swing turns with the hips. The offset stays within `SWAY_REACH`.
+
+### The skirt over a raised knee
+
+A skirt is skinned half to each thigh at the middle of its front. As one knee rises high, the cloth there follows it half way, and the knee shows through. The player's skirt is kept out of the legs each frame. The module is `extensions/village/hem_push.mojo`.
+
+1. `Body.keep_hems` gives each piece of the player's skirt one more morph target, at full weight. `add_hem_push` adds it.
+2. Each frame, after the bones move, `Body.push_hems` skins each vertex of the skirt as the renderer does. The other targets move its rest place, and its four bones carry it.
+3. A vertex within `HEM_GAP`, 4 cm, of a capsule round a thigh or a shin moves out along the capsule's normal to that distance. The capsules are `body_colliders`'s. The thigh's and the shin's capsules meet at the knee, so the moves are made `HEM_PASSES`, three, times.
+4. The move is turned back through the vertex's blend of its bones and the bind matrix, and written into the target. So the renderer carries the vertex to its new place.
+
+The push costs about 0.7 ms a frame for one person. The player has it, and so does each fighter within `HEM_NEAR`, 6 meters, of the camera: `Battle.push_hems` pushes them. A fighter further off, or hidden, wears the skirt as it is skinned: `Body.rest_hems` sets the target's weight to zero. Each push reads the bones before any weight is set.
+
 ## The lighter village
 
 `planted` changes the default village to the quality's plant detail. This table compares the default village with `FEWEST_PLANTS`, the `low` detail:
@@ -394,7 +420,7 @@ The clothes follow the skin, and the skin follows the bones, so they move togeth
 ## Limits
 
 - The game renderer lights each vertex, not each pixel. See [Game renderer](Game-renderer#why-it-agrees-with-renderer).
-- A garment bends with the skin. It does not swing as cloth does.
+- A garment bends with the skin. Only a skirt's hem swings, and it swings as one piece: it does not fold or flutter. A sleeve and a hood do not swing.
 - The characters do not swim. Deep water stops them.
 - A resident walks straight to its next point. Round a house, it walks aside and tries again, but it does not plan a way. It can give up on a point it cannot reach.
 - The camera comes in before a wall and a trunk, but not before a crown of leaves or a roof.

@@ -172,6 +172,7 @@
 - [Flowsheets and routes](Flowsheets-and-routes)
 - [Materials and coatings](Materials-and-coatings)
 - [Crystals and figures](Crystals-and-figures)
+- [Diamond growth](Diamond-growth)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)

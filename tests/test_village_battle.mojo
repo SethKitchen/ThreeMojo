@@ -23,6 +23,12 @@ from tests._village_arena import (
 from extensions.village.battle import (
     BLOCK_PUSH,
     CALM_SECONDS,
+    CLANG_POWER,
+    CRITICAL_FLASH,
+    HIT_FLASH,
+    HURT_FLASH,
+    impact_color,
+    impact_power,
     JUGGLE,
     SLOW_SECONDS,
     BattleParameters,
@@ -38,6 +44,8 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     BLOCKED,
+    CRITICAL,
+    FINISHED,
     PIERCE,
     STAGGER,
     DODGE,
@@ -267,7 +275,13 @@ def test_the_player_cuts_a_dummy() raises:
     arena.tick(cut)
     assert_true(arena.battle.fighter.move == LIGHT_ONE)
     assert_true(arena.battle.drawn)
-    arena.run(0.3)
+    # The blow flashes where it lands.
+    var flashed = False
+    for _ in range(6):
+        arena.tick(no_input())
+        if len(arena.battle.impacts) > 0:
+            flashed = True
+    assert_true(flashed)
     assert_equal(arena.battle.fighter.combo, 1)
     assert_true(holds_text(popup_texts(arena.battle), "30"))
     assert_equal(arena.battle.trained[SWORD.value], PRACTICE_EXPERIENCE)
@@ -281,12 +295,23 @@ def test_the_player_cuts_a_dummy() raises:
         arena.battle.dummies[0].fighter.parameters.health,
         atol=1e-3,
     )
-    # The numbers rise and go.
+    # The numbers rise and go, and so do the flashes.
     arena.run(1.2)
     assert_equal(len(arena.battle.popups), 0)
+    assert_equal(len(arena.battle.impacts), 0)
     # With nothing to fight, the sword is sheathed.
     arena.run(CALM_SECONDS + 0.5)
     assert_false(arena.battle.drawn)
+
+
+def test_a_flash_is_as_strong_as_its_blow() raises:
+    assert_equal(impact_power(HIT, False), 1)
+    assert_equal(impact_power(HIT, True), 0.8)
+    assert_equal(impact_power(CRITICAL, False), 1.4)
+    assert_equal(impact_power(FINISHED, False), 1.8)
+    assert_true(impact_color(HIT, True).x == HURT_FLASH.x)
+    assert_true(impact_color(CRITICAL, False).z == CRITICAL_FLASH.z)
+    assert_true(impact_color(HIT, False).z == HIT_FLASH.z)
 
 
 def test_the_lock_turns_the_camera_and_faces_the_player() raises:
@@ -371,11 +396,16 @@ def test_a_bandit_comes_and_strikes_and_a_guard_blocks() raises:
     guard.lock = True
     var health = arena.battle.fighter.health
     var blocked = False
+    var clanged = False
     for _ in range(200):
         arena.tick(guard)
         if holds_text(popup_texts(arena.battle), "BLOCKED"):
             blocked = True
+        for impact in arena.battle.impacts:
+            if impact.power == CLANG_POWER:
+                clanged = True
     assert_true(blocked)
+    assert_true(clanged)
     assert_almost_equal(arena.battle.fighter.health, health, atol=1e-3)
     # A blocked blow takes no health, so the display marks none; the
     # marks of the blows before have faded.

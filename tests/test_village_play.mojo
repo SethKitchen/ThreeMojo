@@ -7,6 +7,8 @@
 walks and jumps in front of the third-person camera."""
 
 from core.assets import Assets
+from core.object3d import Object3D
+from renderers.game_renderer import GAME_LAMPS
 from core.scene import Scene
 from extensions.attire.outfit import Outfit
 from extensions.animals.registry import RABBIT
@@ -54,6 +56,15 @@ from extensions.village.talk import (
 from extensions.village.residents import SIT, WORK
 from extensions.village.props import BARREL, BENCH, CROPS, Prop, WELL, WOODPILE
 from extensions.village.play import (
+    WARDEN_MARK,
+    DYNAMIC_BUDGET_MS,
+    DYNAMIC_FLOOR,
+    DYNAMIC_LEAST,
+    DYNAMIC_QUICK,
+    DYNAMIC_REACH,
+)
+from extensions.village.play import (
+    CLOSE_EYE,
     FOCUS_HEIGHT,
     FOE_SIGHT,
     SILVER_MARK,
@@ -68,6 +79,7 @@ from extensions.village.play import (
     game_residents,
     tree_obstacles,
     prop_stops,
+    shows_player,
     trunks_reach,
     village_mood,
     HITSTOP,
@@ -267,6 +279,8 @@ def test_a_player_walks_jumps_and_is_followed() raises:
     for _ in range(10):
         _ = game.tick(scene, assets, MoveInput(1, 0, 0, 0, False, False), step)
     assert_true(game.player.position.z < start.z - 1)
+    # By day, no lantern follows the player.
+    assert_false(scene.node(game.lantern).visible)
     # The camera stands behind the player, and looks at a point above the
     # feet.
     assert_true(game.camera.position.z > game.player.position.z)
@@ -286,13 +300,81 @@ def test_a_player_walks_jumps_and_is_followed() raises:
         _ = game.tick(scene, assets, no_input(), step)
     assert_true(game.player.stance == STANDING)
     assert_almost_equal(game.clock, 3.2, atol=1e-4)
-    # The frame is drawn at a third of the window and stretched to it.
+    # A strong blow tightens the view, and it eases back as the shake dies.
+    assert_almost_equal(game.camera.fov.to(DEGREE), game.wide.to(DEGREE))
+    game.battle.shake = 0.2
+    _ = game.tick(scene, assets, no_input(), Duration(0.01, SECOND))
+    assert_true(game.camera.fov.to(DEGREE) < game.wide.to(DEGREE) * 0.95)
+    for _ in range(20):
+        _ = game.tick(scene, assets, no_input(), step)
+    assert_almost_equal(
+        game.camera.fov.to(DEGREE), game.wide.to(DEGREE), atol=0.05
+    )
+    # The frame is drawn at 48 percent of the window and stretched to it.
     game.render(scene, assets)
-    assert_equal(game.fast.width, 16)
-    assert_equal(game.fast.height, 9)
+    assert_equal(game.fast.width, 23)
+    assert_equal(game.fast.height, 13)
     assert_equal(game.window.width, 48)
     assert_equal(game.window.height, 27)
     assert_true(game.upscale_ms > 0)
+
+
+def test_quick_frames_draw_more_of_the_window() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        _game_parameters(),
+        pebble_bed(_bed()),
+        None,
+        100,
+        50,
+    )
+    var base = game.quality.render_scale
+    var width = game.fast.width
+    var height = game.fast.height
+    var reach = game.face_reach
+    # Off, nothing changes however quick the frames.
+    for _ in range(DYNAMIC_QUICK * 2):
+        game.adapt_scale(1)
+    assert_equal(game.fast.width, width)
+    game.set_dynamic(True)
+    # A frame neither quick nor slow starts the count again.
+    for _ in range(DYNAMIC_QUICK - 1):
+        game.adapt_scale(1)
+    game.adapt_scale(DYNAMIC_BUDGET_MS * 0.9)
+    game.adapt_scale(1)
+    assert_equal(game.fast.width, width)
+    # Quick frames grow it a step at a time, to the reach at the most.
+    for _ in range(DYNAMIC_QUICK * 20):
+        game.adapt_scale(1)
+    assert_almost_equal(
+        game.scale, min(Float32(1), base + DYNAMIC_REACH), atol=1e-5
+    )
+    assert_true(game.fast.width > width)
+    # A face is drawn in detail by its height in the frame's pixels, so a
+    # taller frame shows faces in detail from further.
+    assert_true(game.face_reach > reach)
+    # Slow frames shrink it again, past the quality's share, to the floor
+    # at the least.
+    for _ in range(20):
+        game.adapt_scale(DYNAMIC_BUDGET_MS * 2)
+    var floor = max(DYNAMIC_LEAST, base - DYNAMIC_FLOOR)
+    assert_almost_equal(game.scale, floor, atol=1e-5)
+    assert_true(game.fast.width < width)
+    assert_true(game.face_reach < reach)
+    # A GPU draws into `gpu_image`, which has the quality's size. A frame
+    # prepared for it has that size again, whatever the CPU's last had.
+    _ = game.tick(scene, assets, no_input(), Duration(0.1, SECOND))
+    game.prepare_gpu(scene, assets)
+    assert_equal(game.fast.width, width)
+    assert_equal(game.fast.height, height)
+    assert_equal(game.fast.width, game.gpu_image.width)
+    assert_equal(game.fast.height, game.gpu_image.height)
+    assert_equal(game.scale, base)
+    assert_almost_equal(game.face_reach, reach, atol=1e-5)
 
 
 def test_a_player_walks_into_a_house_through_its_door() raises:
@@ -437,6 +519,30 @@ def test_at_night_the_lamps_are_lit_and_the_pond_darkens() raises:
     assert_equal(game.window.width, 32)
     assert_true(scene.node(game.village.houses[0].lit).visible)
     assert_false(scene.node(game.village.houses[0].daylit).visible)
+    # A lantern's light follows the player by night, over their head.
+    assert_true(scene.node(game.lantern).visible)
+    assert_true(scene.node(game.lantern).position.y > game.player.position.y)
+    # With fewer lamps than the renderer draws, every lamp keeps its light;
+    # with as many, the one farthest from the camera gives up its own.
+    for bulb in game.village.bulbs:
+        assert_true(scene.node(bulb).visible)
+    var near = game.village.bulbs[0]
+    var far = scene.add(Object3D())
+    var eye = game.camera.position
+    scene.node(far).set_position(eye.x + 500, eye.y, eye.z)
+    while len(game.village.bulbs) < GAME_LAMPS - 1:
+        game.village.bulbs.append(near)
+    game.village.bulbs.append(far)
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_false(scene.node(far).visible)
+    assert_true(scene.node(near).visible)
+    # As the hours pass, the sun turns and its shadows are drawn again:
+    # the frame reads the moved sun's world matrix, and draws.
+    game.day.hours_a_second = 2
+    for _ in range(3):
+        _ = game.tick(scene, assets, no_input(), step)
+        game.render(scene, assets)
+    assert_true(game.day.hour < 1 or game.day.hour > 23)
 
 
 def test_a_full_size_frame_is_not_stretched() raises:
@@ -638,6 +744,39 @@ def test_the_compass_points_to_the_nearest_foe_that_stands() raises:
     game.battle.foes[0].down = -1
     game.battle.foes[0].character.position.z -= FOE_SIGHT * 2
     assert_equal(len(game.compass_marks()), 0)
+
+
+def test_the_compass_points_to_each_warden_that_stands() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.gathering.spots = []
+    parameters.battle.raids = PlayParameters(
+        game_quality(LOW)
+    ).battle.raids.copy()
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        64,
+        36,
+    )
+    assert_true(len(game.battle.wardens) > 0)
+    var violet = 0
+    for mark in game.compass_marks():
+        if mark.color.b == WARDEN_MARK.b and mark.color.r == WARDEN_MARK.r:
+            violet += 1
+    assert_equal(violet, len(game.battle.wardens))
+    # A beaten warden is not pointed to.
+    for k in range(len(game.battle.wardens)):
+        game.battle.wardens[k].boss.health = 0
+    for mark in game.compass_marks():
+        assert_false(
+            mark.color.r == WARDEN_MARK.r and mark.color.b == WARDEN_MARK.b
+        )
 
 
 def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
@@ -906,6 +1045,17 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     # Near falling, and as a blow lands, the frame's edges redden.
     game.battle.fighter.health = 10
     assert_true(game.vignette() > 0.5)
+    # It beats: stronger at one moment than at another.
+    var seen = List[Float32]()
+    for k in range(8):
+        game.clock = Float32(k) * 0.1
+        seen.append(game.vignette())
+    var most = seen[0]
+    var least = seen[0]
+    for v in seen:
+        most = max(most, v)
+        least = min(least, v)
+    assert_true(most - least > 0.05)
     game.battle.fighter.health = game.battle.fighter.parameters.health
     assert_equal(game.vignette(), 0)
     game.battle.hurts.append(Hurt(Vector3(1, 0, 0), 0.1))
@@ -943,6 +1093,13 @@ def test_the_rain_a_wader_and_a_bite_ripple_the_pond() raises:
     game.battle.fell = True
     _ = game.tick(scene, assets, no_input(), step)
     assert_equal(game.gathering.satchel.count(CHEST), 0)
+
+
+def test_an_eye_close_to_the_head_hides_the_player() raises:
+    var focus = Vector3(0, 1.5, 0)
+    assert_true(shows_player(Vector3(0, 2, 4), focus))
+    assert_false(shows_player(Vector3(0, 1.6, 0.4), focus))
+    assert_true(shows_player(Vector3(0, 1.5, CLOSE_EYE), focus))
 
 
 def test_the_camera_comes_in_before_a_trunk() raises:
