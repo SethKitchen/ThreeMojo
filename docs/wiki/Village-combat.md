@@ -200,7 +200,7 @@ Out of a fight, a raider of the party follows the player into a house, and up an
 
 Outdoors, she finds her way round the houses and the pond. `route_grid`, in `extensions/village/route.mojo`, lays a grid of 1-meter cells over the village. A cell is closed where a wall or a solid lot stands near its middle, or where the water is too deep to wade. When a house stands between her and the spot she walks to, `find_route` finds the shortest way over the open cells. `follow_route` then gives the furthest point of that way that she sees straight.
 
-She finds her way again each second, or when her goal moves 2 meters. Indoors, the door and the stairs give her way.
+She finds her way again each second, or when her goal moves 2 meters. When no way leads to the spot, she walks straight to her goal, and looks for a way again after the same second. Indoors, the door and the stairs give her way.
 
 Raiders on the stairs pass through each other and under the player, so a line of them does not jam a narrow flight.
 

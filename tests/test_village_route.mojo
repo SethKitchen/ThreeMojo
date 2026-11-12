@@ -207,6 +207,30 @@ def test_a_follower_keeps_its_way_and_finds_it_again() raises:
     assert_true(
         follow_route(shut, none, Vector3(0.5, 0, 0.5), stuck, 0, 0.1) == stuck
     )
+    # It keeps a search that found no way, and does not search each frame:
+    # the search read the whole grid.
+    assert_equal(len(none.way), 0)
+    assert_equal(none.age, 0)
+    assert_true(
+        follow_route(shut, none, Vector3(0.5, 0, 0.5), stuck, 0, 0.1) == stuck
+    )
+    assert_almost_equal(none.age, 0.1, atol=1e-6)
+    # After `ROUTE_REFRESH` it searches again.
+    _ = follow_route(
+        shut, none, Vector3(0.5, 0, 0.5), stuck, 0, ROUTE_REFRESH + 0.1
+    )
+    assert_equal(none.age, 0)
+    # A follower that sees its goal, and then does not, finds its way at
+    # once.
+    var lost = no_route()
+    var here = Vector3(-3, 0, 0)
+    _ = follow_route(grid, lost, here, goal, 1, 0.1)
+    assert_true(len(lost.way) > 0)
+    assert_true(follow_route(grid, lost, here, open, 1, 0.1) == open)
+    assert_equal(len(lost.way), 0)
+    _ = follow_route(grid, lost, here, goal, 1, 0.1)
+    assert_true(len(lost.way) > 0)
+    assert_equal(lost.age, 0)
 
 
 def main() raises:

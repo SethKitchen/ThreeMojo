@@ -421,6 +421,8 @@ seconds."""
 comptime ROUTE_DRIFT = Float32(2)
 """How far its goal may move from the way's end before a follower finds
 its way again, in meters."""
+comptime _STALE = ROUTE_REFRESH + 1
+"""The age of a way that a follower must find at once, in seconds."""
 
 
 @fieldwise_init
@@ -439,9 +441,9 @@ def no_route() -> Route:
     """Return a follower that keeps no way.
 
     Returns:
-        An empty way.
+        An empty way, old enough that the follower finds its way at once.
     """
-    return Route(List[Vector3](), Vector3(0, 0, 0), 0)
+    return Route(List[Vector3](), Vector3(0, 0, 0), _STALE)
 
 
 def follow_route(
@@ -456,7 +458,10 @@ def follow_route(
     to its goal.
 
     The follower finds its way again after `ROUTE_REFRESH`, or once its
-    goal has moved `ROUTE_DRIFT` from the way's end.
+    goal has moved `ROUTE_DRIFT` from the way's end. It keeps a search
+    that found no way as long as one that found a way. A search that
+    finds no way reads the whole grid, so the follower must not repeat
+    it each frame.
 
     Args:
         grid: The grid.
@@ -484,12 +489,14 @@ def follow_route(
         )
     if sees(grid, at, spot):
         route.way.clear()
+        # Once the spot is out of sight, the follower finds its way at once.
+        route.age = _STALE
         return goal
     route.age += seconds
     var dx = route.goal.x - spot.x
     var dz = route.goal.z - spot.z
     var drift = sqrt(dx * dx + dz * dz)
-    if len(route.way) == 0 or route.age > ROUTE_REFRESH or drift > ROUTE_DRIFT:
+    if route.age > ROUTE_REFRESH or drift > ROUTE_DRIFT:
         route.way = find_route(grid, at, spot)
         route.goal = spot
         route.age = 0
