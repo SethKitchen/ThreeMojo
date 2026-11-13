@@ -5119,6 +5119,32 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_wayland_interface_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "invalid call to '__eq__': value passed to 'other' cannot be converted from 'IntLiteral[0]' to 'WaylandInterface'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_wayland_socket_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'display' cannot be converted from 'IntLiteral[3]' to 'String'",
+      "candidate not viable: value passed to 'socket' cannot be converted from 'IntLiteral[3]' to 'WaylandSocket'"
+    ]
+  },
   "tests/compile_fail/a_waypoint_id_is_not_a_bare_int.mojo": {
     "errors": [
       {

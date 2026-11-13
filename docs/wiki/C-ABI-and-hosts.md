@@ -363,7 +363,7 @@ The page gets a copy of each frame from the threaded module. `ImageData` does no
 ### What is not done
 
 - The `scene` app needs the whole renderer. Its threads and its strings are not in the WebAssembly build yet.
-- The window host is macOS only. On Linux, `X11Window` in `window/x11.mojo` opens a window from Mojo itself. A Linux host can also load these libraries.
+- The window host is macOS only. On Linux, `X11Window` in `window/x11.mojo` and `WaylandWindow` in `window/wayland.mojo` open a window from Mojo itself. A Linux host can also load these libraries.
 - The ocean FFT, the ripples, the caustics and the glare's FFT run on the CPU in both GPU paths. The original Clearwater runs them on the GPU. They cost about 7.5 milliseconds a frame in a browser. A frame on a 120 Hz display lasts 8.3 milliseconds, so they stay.
 - The page does not return to the CPU when a frame fails. It shows a message, and the message names `?gpu=0`. It does return before the first frame, if the browser has no adapter or the shader does not compile.
 - The window copies each frame from the library's buffer to the display. The copy takes 0.47 of 16 milliseconds. A kernel that wrote into the host's buffer read back wrong on Metal, so the copy stays.

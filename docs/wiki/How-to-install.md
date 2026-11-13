@@ -93,6 +93,7 @@ make check-cpu
 | MAX | `26.7.0` | `render/gpu.mojo` and its tests only |
 | Metal toolchain | Xcode component | GPU kernels on macOS |
 | Xvfb | Any | `tests/test_x11.mojo` |
+| weston | Any | One test of `tests/test_wayland.mojo`, which does nothing without it |
 
 The toolchain version is part of the build cache key. An upgrade invalidates every cached result.
 

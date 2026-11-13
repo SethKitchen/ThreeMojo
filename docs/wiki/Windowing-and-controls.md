@@ -2,6 +2,8 @@
 
 `window/terminal.mojo` and `controls/`. A `TerminalWindow` shows frames in the terminal and reads the keys and the mouse. The controls turn that input into a camera that moves. All of them use the standard library only.
 
+[X11Window](#x11window) and [WaylandWindow](#waylandwindow) open a native window with the same members. A Wayland window also reads a touch screen.
+
 ![A transform gizmo rides a cube while the camera orbits](out/controls.png)
 
 `examples/gizmo.mojo` draws the gizmo. `examples/viewer.mojo` opens the window.
@@ -123,6 +125,73 @@ The window manager's close button does not close the window. It sets `close_requ
 
 `tests/test_x11.mojo` starts an `Xvfb` server for each test. You must install it first. On Linux, use `apt-get install xvfb`. On macOS, use `brew install xorg-server`.
 
+## WaylandWindow
+
+`window/wayland.mojo` opens a native window on a Wayland compositor. It speaks the Wayland protocol on the compositor's socket, with the socket calls of the C library. It loads no library, and nothing else in the project needs Wayland.
+
+| Member | Meaning |
+|---|---|
+| `WaylandWindow(width, height, title="ThreeMojo", display="")` | Open the window. An empty `display` uses the `WAYLAND_DISPLAY` variable, and then `wayland-0`. |
+| `WaylandWindow(width, height, title, socket, timeout)` | Open the window on a connected `WaylandSocket`. The compositor has `timeout` to answer, 5 seconds by default. |
+| `present(frame)` | Draw a `Framebuffer` of the window's size. |
+| `poll(timeout) -> List[InputEvent]` | Wait up to a `Duration` for input, and return the events. |
+| `resize(width, height)` | Take frames of a new size. |
+| `close()` | Close the window. A second call does nothing. |
+| `close_requested` | True after the compositor asks the window to close. |
+
+The window gives the same `InputEvent` values as `X11Window`, and the same loop drives both. A change of size is a `RESIZE` event. The program must call `resize` to follow it. The close button sets `close_requested`, and the program must end its loop on it.
+
+A finger on a touch screen is a `POINTER_DOWN`, a `POINTER_MOVE` or a `POINTER_UP` with a `pointer_type` of `TOUCH_POINTER`. A finger lifts where it last was. When the compositor takes the fingers away, each one is a `POINTER_CANCEL`. See [Touch](#touch).
+
+`connect_display(display)` returns the `WaylandSocket` of a display. A name that starts with `/` is the socket's path. Any other name is a socket in the folder that `XDG_RUNTIME_DIR` names. A `WaylandSocket` is a type, not a bare integer.
+
+### What the window asks the compositor for
+
+The window needs three globals: `wl_compositor`, `wl_shm` and `xdg_wm_base`. It refuses a compositor that lacks one of them.
+
+The window uses two more globals when the compositor has them:
+
+- `wl_seat` gives the pointer, the keyboard and the touch screen. The window speaks version 4 of it. Without a seat, the window gets no input.
+- `zxdg_decoration_manager_v1` lets the window ask for a title bar that the compositor draws. A compositor without it, such as GNOME's, shows the window with no title bar.
+
+### Frames
+
+A frame is a `wl_shm` buffer of 32 bits a pixel in the `XRGB8888` format, which every compositor takes. The alpha channel is not shown. The buffer is a file with no name, which the compositor maps. The window makes the file in the folder that `XDG_RUNTIME_DIR` names, or in `/tmp`.
+
+The window keeps a buffer until the compositor releases it. So two or three buffers take turns. `resize` destroys them, and the next `present` makes new ones.
+
+### Keys
+
+A key arrives as the code of its place on the keyboard. The window names the key as a US keyboard labels that place. It does not read the keymap that the compositor sends. Ctrl with a letter is its control code, as a terminal sends it.
+
+A compositor sends a key one time. The window repeats a held key in `poll`, at the rate and after the delay that the compositor gives. Until the compositor gives them, the rate is 25 a second and the delay is 600 milliseconds. A `poll` returns when the held key repeats, although its timeout is longer.
+
+### What is refused
+
+- A size that is not positive.
+- A size that does not fit in a native integer.
+- A size whose four bytes a pixel do not fit in a signed 32-bit integer.
+- A display that no compositor listens on, or whose socket path is longer than 103 bytes.
+- A compositor that lacks `wl_compositor`, `wl_shm` or `xdg_wm_base`.
+- A compositor that does not answer in time, closes the connection, reports an error or sends a malformed message.
+- A frame of another size.
+- A `present`, a `poll` or a `resize` after `close`.
+
+### Limits
+
+- Wayland runs on Linux, and the window is checked there. The module also has the BSD layout of the socket structures, which macOS uses. Only the socket-pair tests check that layout, when they run on a Mac.
+- The window ignores the `SIGPIPE` signal for the whole program. A compositor that left is then an error from `present` or `poll`, and not the end of the program.
+- One pixel of a frame is one logical pixel. On a scaled output, the compositor enlarges the frame.
+- The window sets no pointer image. The pointer keeps the image it had when it entered the window.
+- The window does not read `WAYLAND_SOCKET`. Give `connect_display` a name, or give the window a `WaylandSocket`.
+- `X11Window` does not send touch events. Touch on X11 needs the XInput extension, which this port does not load.
+
+### Tests
+
+`tests/test_wayland.mojo` needs no compositor. Each test gives the window one end of a socket pair, and plays the compositor on the other end. The test writes the events of a compositor, and reads the requests that the window sent.
+
+One test opens a window on a headless `weston`, takes a screenshot with `weston-screenshooter`, and reads the frame back. It runs only when both programs are installed. On Linux, use `apt-get install weston`.
+
 ## Input events
 
 `controls/input.mojo`. An `InputEvent` is one of the seven kinds the browser has, or a resize.
@@ -150,7 +219,7 @@ A finger on a touch screen is a pointer, as in the browser. Its events are `POIN
 
 `PointerType` and `PointerId` are types, not bare integers. A `PointerType` is `MOUSE_POINTER` or `TOUCH_POINTER`. A `PointerId` is zero or more. Every other event has `MOUSE_POINTER` and `FIRST_POINTER`.
 
-A terminal sends no touch events. Each control refuses an event with an invalid pointer type or pointer id.
+[WaylandWindow](#waylandwindow) sends touch events. A terminal and an `X11Window` send none. Each control refuses an event with an invalid pointer type or pointer id.
 
 | Controls | One finger | Two fingers | Three fingers |
 |---|---|---|---|
