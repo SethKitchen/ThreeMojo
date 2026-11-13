@@ -71,7 +71,7 @@ from render.cube_texture_store import SCENE_ENVIRONMENT
 from core.scene import Scene
 from lights.ltc import LtcTables, load_ltc_tables
 from core.layers import Layers
-from lights.lighting import Lighting
+from lights.lighting import Lighting, TOON_SHADE
 from lights.shadow import (
     BASIC_SHADOW_MAP,
     PCF_SHADOW_MAP,
@@ -4760,8 +4760,25 @@ def test_a_toon_sphere_shows_flat_bands_where_a_lambert_one_is_smooth() raises:
     var faded = rendered(
         renderer, scene, assets, ball_of(assets, smooth), camera_at(0, 0, 4)
     )
-    # The background, the fallback's low tone and its full tone: three.
-    assert_equal(band_count(stepped), 3)
+    # The background and the fallback's full tone hold the image. The
+    # edge to the low tone is antialiased, as in three.js: the pixels on
+    # it hold levels from the low tone to the full one, and none below.
+    var low = FloatColor(TOON_SHADE, 0, 0, 1).encode().r
+    var full = 0
+    var on_edge = 0
+    var below = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var here = stepped.get_pixel(x, y).r
+            if here == 255:
+                full += 1
+            elif here >= low:
+                on_edge += 1
+            elif here > 0:
+                below += 1
+    assert_equal(below, 0)
+    assert_true(on_edge > 0, "the edge was not antialiased")
+    assert_true(full > 3 * on_edge, "the face of the sphere is not flat")
     assert_true(band_count(faded) > 10, "a lambert sphere did not fade at all")
 
 
