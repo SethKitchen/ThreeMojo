@@ -2043,6 +2043,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_hinge_limit_is_not_a_bare_number.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 40,
+        "message": "invalid call to 'set_hinge_limits': value passed to 'lower' cannot be converted from 'FloatLiteral[-0.5]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_hit_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2083,12 +2095,36 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_joint_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 23,
+        "message": "invalid call to 'check_joint': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'JointId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_joint_is_not_a_bare_int.mojo": {
     "errors": [
       {
         "column": 22,
         "line": 12,
         "message": "invalid call to 'joint_parent': value passed to 'joint' cannot be converted from 'IntLiteral[1]' to 'Joint'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_joint_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 17,
+        "message": "invalid call to '_name': value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'JointKind'"
       }
     ],
     "notes": [

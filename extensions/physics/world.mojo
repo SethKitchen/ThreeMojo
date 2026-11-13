@@ -64,6 +64,19 @@ from extensions.physics.body import (
     STATIC,
     rotation_matrix,
 )
+from extensions.physics.joint import (
+    HINGE,
+    Joint,
+    JointId,
+    _JointRows,
+    _carry_joint,
+    _prepare_joints,
+    _push_joint,
+    _solve_joint,
+    ball_joint,
+    hinge_joint,
+    require_hinge_limits,
+)
 from extensions.physics.collide import (
     ContactPoint,
     WorldShape,
@@ -95,7 +108,7 @@ from math.triangle import Line3, Triangle
 from math.norm import squared_length2
 from math.vector3 import Vector3
 from std.math import cos, fma, inf, isfinite, sin, sqrt
-from units.si import Duration, Length
+from units.si import Angle, Duration, Length
 from core.ordinal import require_valid
 
 
@@ -201,6 +214,8 @@ struct PhysicsWorld(Movable):
     """Bodies, static meshes, and the solver that steps them."""
 
     var bodies: List[RigidBody]
+    # Ball and hinge joints between pairs of bodies, in the order added.
+    var joints: List[Joint]
     # Discrete by default. CCD refuses unsupported colliding worlds.
     var collision_detection: CollisionDetection
     # Per sphere and step. Exhaustion rolls back the complete step.
@@ -217,6 +232,8 @@ struct PhysicsWorld(Movable):
     var slop: Float32
     # How much of the overlap one step removes.
     var push_factor: Float32
+    # How much of a joint's position error one step removes.
+    var joint_push_factor: Float32
     # Below this speed together, in m/s, a hit does not bounce.
     var bounce_threshold: Float32
     # The collision events of the last step.
@@ -235,10 +252,14 @@ struct PhysicsWorld(Movable):
     var _ccd_brute_force: Bool
     # Non-mesh bodies, sorted by the low x of their bounds.
     var _order: List[Int]
+    # For each body, the bodies a joint keeps it from touching, as the
+    # last contact search found them. Empty when no joint does.
+    var _joined: List[List[Int]]
 
     def __init__(out self):
         """Create an empty world with standard gravity."""
         self.bodies = List[RigidBody]()
+        self.joints = List[Joint]()
         self.collision_detection = DISCRETE
         self.ccd_max_impacts = 16
         self.ccd_max_substeps = 256
@@ -248,6 +269,7 @@ struct PhysicsWorld(Movable):
         self.margin = 0.02
         self.slop = 0.005
         self.push_factor = 0.2
+        self.joint_push_factor = 1.0
         self.bounce_threshold = 1.0
         self.events = List[CollisionEvent]()
         self.contact_count = 0
@@ -258,6 +280,7 @@ struct PhysicsWorld(Movable):
         self._ccd_index = _CCDIndex()
         self._ccd_brute_force = False
         self._order = List[Int]()
+        self._joined = List[List[Int]]()
 
     def add_body(mut self, var body: RigidBody) raises -> BodyId:
         """Add a body. A mesh body's triangles go into the static octree.
@@ -313,6 +336,110 @@ struct PhysicsWorld(Movable):
         if not id.is_valid() or id.value >= len(self.bodies):
             raise Error("Body id names no body")
 
+    def add_ball_joint(
+        mut self, a: BodyId, b: BodyId, anchor: Vector3
+    ) raises -> JointId:
+        """Join two bodies at a point. They can turn any way about it.
+
+        Args:
+            a: The first body.
+            b: The second body.
+            anchor: The shared point, in the world frame, in meters.
+
+        Returns:
+            The joint's id.
+
+        Raises:
+            Error: If an id names no body, the two bodies are the same,
+                or the anchor is not finite.
+        """
+        self.joints.append(ball_joint(self.bodies, a, b, anchor))
+        return JointId(len(self.joints) - 1)
+
+    def add_hinge_joint(
+        mut self, a: BodyId, b: BodyId, anchor: Vector3, axis: Vector3
+    ) raises -> JointId:
+        """Join two bodies on an axis. They can turn only about it.
+
+        The hinge angle is zero in the present pose.
+
+        Args:
+            a: The first body.
+            b: The second body. The hinge angle is its turn from `a`.
+            anchor: A point on the axis, in the world frame, in meters.
+            axis: The direction of the axis, in the world frame.
+
+        Returns:
+            The joint's id.
+
+        Raises:
+            Error: If an id names no body, the two bodies are the same,
+                the anchor or the axis is not finite, or the axis has no
+                length.
+        """
+        self.joints.append(hinge_joint(self.bodies, a, b, anchor, axis))
+        return JointId(len(self.joints) - 1)
+
+    def joint_count(self) -> Int:
+        """Return how many joints the world has.
+
+        Returns:
+            The count, including joints that are not enabled.
+        """
+        return len(self.joints)
+
+    def check_joint(self, id: JointId) raises:
+        """Refuse an id that names no joint.
+
+        Args:
+            id: The id.
+
+        Raises:
+            Error: If the id is not valid or is out of range.
+        """
+        if not id.is_valid() or id.value >= len(self.joints):
+            raise Error("Joint id names no joint")
+
+    def set_hinge_limits(
+        mut self, id: JointId, lower: Angle, upper: Angle
+    ) raises:
+        """Stop a hinge at a least and a greatest angle.
+
+        Args:
+            id: The hinge.
+            lower: The least angle. Minus pi at the least.
+            upper: The greatest angle. Pi at the most.
+
+        Raises:
+            Error: If the id names no joint, the joint is not a hinge, a
+                limit is not finite, the lower limit is above the upper
+                limit, or a limit is outside minus pi to pi.
+        """
+        self.check_joint(id)
+        if self.joints[id.value].kind != HINGE:
+            raise Error("Only a hinge has limits")
+        require_hinge_limits(lower, upper)
+        self.joints[id.value].limited = True
+        self.joints[id.value].lower = lower
+        self.joints[id.value].upper = upper
+
+    def hinge_angle(self, id: JointId) raises -> Angle:
+        """Return how far a joint's second body has turned about its axis.
+
+        Args:
+            id: The joint.
+
+        Returns:
+            The angle from the pose the joint was made in, between minus
+            pi and pi.
+
+        Raises:
+            Error: If the id names no joint, or the joint is not valid.
+        """
+        self.check_joint(id)
+        self.joints[id.value].validate(len(self.bodies))
+        return self.joints[id.value].angle(self.bodies)
+
     def _shape(self, i: Int) -> WorldShape:
         ref body = self.bodies[i]
         var at = body.shape_world_position()
@@ -352,7 +479,9 @@ struct PhysicsWorld(Movable):
         Raises:
             Error: If the step is not more than zero and finite, a
                 velocity or position iteration count is above 16777216,
-                or a body's mode or mass state is inconsistent.
+                a body's mode or mass state is inconsistent, the joint
+                push factor is negative or not finite, or a joint is not
+                valid or has no positive effective mass.
         """
         var h = dt.value
         require_positive_finite(
@@ -373,8 +502,14 @@ struct PhysicsWorld(Movable):
             self.collision_detection.is_valid(),
             "Collision detection mode is not valid",
         )
+        # Joints are checked and prepared before any body changes.
+        require_non_negative_finite(
+            Float64(self.joint_push_factor),
+            "A joint push factor must be finite and nonnegative",
+        )
+        var rows = _prepare_joints(self.bodies, self.joints)
         if self.collision_detection == DISCRETE:
-            self._step(h)
+            self._step(h, rows)
             return
         # CCD is transactional, including pending forces and prior reports.
         var states = List[_StepState]()
@@ -396,8 +531,10 @@ struct PhysicsWorld(Movable):
         var count = self.contact_count
         var dirty = self._dirty
         try:
+            if len(rows) > 0:
+                raise Error("CCD does not support joints")
             self._validate_ccd()
-            self._step(h)
+            self._step(h, rows)
         except error:
             for i in range(len(states)):
                 self.bodies[i].position = states[i].position
@@ -414,7 +551,7 @@ struct PhysicsWorld(Movable):
             self._dirty = dirty
             raise error
 
-    def _step(mut self, h: Float32) raises:
+    def _step(mut self, h: Float32, mut rows: List[_JointRows]) raises:
         self._integrate_velocities(h)
         if self.collision_detection == SPHERE_MESH_CCD:
             # Refuse an unsupported world before any contact work. The
@@ -426,14 +563,27 @@ struct PhysicsWorld(Movable):
         if self.collision_detection == SPHERE_MESH_CCD:
             manifolds = self._ccd_contacts(manifolds, h)
         self._prepare(manifolds, h)
+        # Joints go first in each pass, so the contacts have the last word.
         for _ in range(self.velocity_iterations):
+            for r in range(len(rows)):
+                _solve_joint(self.bodies, rows[r], h)
             for m in range(len(manifolds)):
                 self._solve_velocity(manifolds[m], h)
         for m in range(len(manifolds)):
             self._restitution(manifolds[m])
+        # The centripetal part of each joint: a velocity pass of its own.
+        for _ in range(self.velocity_iterations):
+            for r in range(len(rows)):
+                _carry_joint(self.bodies, rows[r], h)
         for _ in range(self.position_iterations):
+            for r in range(len(rows)):
+                _push_joint(self.bodies, rows[r], h, self.joint_push_factor)
             for m in range(len(manifolds)):
                 self._solve_push(manifolds[m], h)
+        for j in range(len(self.joints)):
+            self.joints[j].impulse = Vector3(0, 0, 0)
+        for r in range(len(rows)):
+            self.joints[rows[r].joint].impulse = rows[r].impulse
         var impacts = List[_CCDImpact]()
         if self.collision_detection == SPHERE_MESH_CCD:
             impacts = self._ccd_positions(h)
@@ -1817,6 +1967,7 @@ struct PhysicsWorld(Movable):
                 j -= 1
         for i in inactive:
             self._order.append(i)
+        self._joined = self._partners()
         var out = List[_Manifold]()
         for i in range(count):
             var a = self._order[i]
@@ -1826,9 +1977,29 @@ struct PhysicsWorld(Movable):
                     break
                 if not self._may_touch(a, b, boxes):
                     continue
+                if self._is_joined(a, b):
+                    continue
                 var points = collide(shapes[a], shapes[b], self.margin)
                 self._add(out, a, b, points)
             self._mesh_pairs(out, a, shapes[a], boxes[a])
+        return out^
+
+    def _is_joined(self, a: Int, b: Int) -> Bool:
+        # Whether a joint keeps two bodies from touching in this step.
+        return len(self._joined) > 0 and b in self._joined[a]
+
+    def _partners(self) -> List[List[Int]]:
+        # For each body, the bodies a joint keeps it from touching. Empty
+        # when no joint does, so a world with no joints pays nothing.
+        var out = List[List[Int]]()
+        for joint in self.joints:
+            if not joint.enabled or joint.collide_connected:
+                continue
+            if len(out) == 0:
+                for _ in range(len(self.bodies)):  # pragma: no branch
+                    out.append(List[Int]())
+            out[joint.a.value].append(joint.b.value)
+            out[joint.b.value].append(joint.a.value)
         return out^
 
     def _may_touch(self, a: Int, b: Int, boxes: List[Box3]) -> Bool:
@@ -1861,6 +2032,8 @@ struct PhysicsWorld(Movable):
         for t in found:
             var owner = self._triangle_body[t]
             if not self.bodies[owner].collides:
+                continue
+            if self._is_joined(a, owner):
                 continue
             if self.collision_detection == SPHERE_MESH_CCD:
                 var triangle = self._triangles[t]

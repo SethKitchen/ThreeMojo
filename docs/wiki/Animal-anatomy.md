@@ -304,7 +304,19 @@ The model uses one ratio at every size as a DESIGN simplification. The source ex
 
 ## Physics bodies
 
-`segment_bodies` turns each bone with flesh into a dynamic `RigidBody` for `extensions/physics`. Each body has the sampled mass, center of mass and inertia tensor. `to_physics` turns the sculpt's `+y`-up frame into the physics world's `+z`-up frame. The physics world has no joints yet, so the bodies are the segments of a multibody model.
+`segment_bodies` turns each bone with flesh into a dynamic `RigidBody` for `extensions/physics`. Each body has the sampled mass, center of mass and inertia tensor. `to_physics` turns the sculpt's `+y`-up frame into the physics world's `+z`-up frame.
+
+`segment_chain` adds those bodies to a `PhysicsWorld` and joins them. Each body gets a [ball joint](Physics#joints) at the head of its bone. The joint connects it to the nearest bone above it that has flesh. A bone with no such bone above it gets no joint. The function returns the body ids and the joint ids.
+
+```mojo
+from extensions.animals.anatomy.physics import segment_chain
+from extensions.physics.world import PhysicsWorld
+
+var world = PhysicsWorld()
+var chain = segment_chain(animal, mass, world)
+```
+
+Joined segments do not collide with each other. Other segments can overlap in the bind pose, and the world then pushes them apart. Set `collides` to `False` on a body to prevent this.
 
 ## Species
 
@@ -344,7 +356,8 @@ All selected masses and reference lengths below are `DESIGN` parameters. The fin
 - The individual muscle architecture, selected representative body parameters, attachments and coat depths are `DESIGN` values. Source evidence is recorded separately.
 - The cheetah uses greyhound pennation proxies except for soleus. Dog and cheetah soleus retain the rat plan's 3.9° as a DESIGN proxy because their reference rows give no angle. The horse and rat use the plan's forelimb references.
 - Birds have flight muscles but no leg muscles.
-- The physics world has no joints, so the segment bodies do not yet form a chain
+- The segment chain has ball joints only. It has no joint limits and no muscle forces, so the body is limp.
+- Small segments make the chain slow to converge. A rat's joints hold within 1 cm at 240 steps a second.
 - A normalized total mass does not validate segment fractions, centers, tensors, tissue densities or muscle capacity
 - The engineering display grants no validated engineering capability
 

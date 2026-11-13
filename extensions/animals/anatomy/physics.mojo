@@ -13,16 +13,22 @@ is a rotation, so it keeps handedness, lengths and inertia.
 Each bone with flesh becomes one dynamic body. Its frame starts at the
 bone's head joint with its `+z` along the bone. A capsule along the bone
 is its collision shape. Its mass, center of mass and inertia tensor are
-the sampled ones, not the capsule's. The physics world has no joints yet,
-so the bodies are the segments of a multibody model for a solver that
-has them.
+the sampled ones, not the capsule's.
+
+`segment_chain` puts the bodies in a `PhysicsWorld` and joins each one to
+the nearest bone above it that has flesh, with a ball joint at the bone's
+head. The joints have no limits and no muscles, so the chain is a limp
+body and not a posed one.
 """
 
 from extensions.anatomy.inertia import SegmentInertia
 from extensions.animals.anatomy.mass import BodyMass, require_sampled_rig
 from extensions.animals.build import Animal
-from extensions.physics.body import DYNAMIC, RigidBody, rotation_matrix
+from extensions.animals.rig import NO_BONE
+from extensions.physics.body import BodyId, DYNAMIC, RigidBody, rotation_matrix
+from extensions.physics.joint import JointId
 from extensions.physics.shape import Shape
+from extensions.physics.world import PhysicsWorld
 from extensions.sdf.vector import length
 from math.finite import require_non_negative_finite
 from math.matrix3 import Matrix3
@@ -136,4 +142,61 @@ def segment_bodies(animal: Animal, mass: BodyMass) raises -> List[RigidBody]:
         body.set_center_of_mass(turn.conjugate().rotate(center))
         body.set_inertia(_into_body(_tensor(s), turn))
         out.append(body^)
+    return out^
+
+
+@fieldwise_init
+struct SegmentChain(Movable):
+    """An animal's segment bodies in a world, and the joints between them."""
+
+    # One body for each bone that holds flesh, in bone order.
+    var bodies: List[BodyId]
+    # One ball joint for each of those bones that has such a bone above
+    # it, in bone order.
+    var joints: List[JointId]
+
+
+def segment_chain(
+    animal: Animal, mass: BodyMass, mut world: PhysicsWorld
+) raises -> SegmentChain:
+    """Add an animal's segments to a world and join each to the one above.
+
+    Each bone that holds flesh becomes one body, as `segment_bodies`
+    makes it. A ball joint at the bone's head joins the body to the
+    nearest bone above it that holds flesh. A bone with no such bone
+    above it gets no joint. Joined bodies do not collide with each other.
+
+    Args:
+        animal: The individual, at its real size, in its bind pose.
+        mass: Its mass, sampled from the same sculpt.
+        world: The world the bodies and joints go into.
+
+    Returns:
+        The ids of the new bodies and joints.
+
+    Raises:
+        Error: If the mass is for another rig, or a body refuses its
+            mass properties.
+    """
+    var made = segment_bodies(animal, mass)
+    # The world body of each bone, or -1 for a bone with no flesh.
+    var slot = List[Int]()
+    var out = SegmentChain(List[BodyId](), List[JointId]())
+    for i in range(len(animal.rig.bones)):  # pragma: no branch
+        if mass.bones[i].mass == 0.0:
+            slot.append(-1)
+            continue
+        var id = world.add_body(made[len(out.bodies)].copy())
+        slot.append(id.value)
+        out.bodies.append(id)
+        var above = animal.rig.bones[i].parent
+        while above != NO_BONE and slot[above.value] < 0:
+            above = animal.rig.bones[above.value].parent
+        if above == NO_BONE:
+            continue
+        # The body's frame starts at the bone's head.
+        var head = world.bodies[id.value].position
+        out.joints.append(
+            world.add_ball_joint(BodyId(slot[above.value]), id, head)
+        )
     return out^

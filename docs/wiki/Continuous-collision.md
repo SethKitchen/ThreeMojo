@@ -33,6 +33,8 @@ In a kinematic sphere's frame, an impact cannot add energy. So each impact with 
 
 A dynamic sphere that a kinematic sphere drives into a static mesh has no impulse that can open both contacts. The step then raises an error and rolls back.
 
+The mode refuses a world with a [joint](Physics#joints) that acts: an enabled joint with a dynamic body.
+
 The mode refuses boxes and hulls that can turn, kinematic capsules, kinematic shapes off their body or mass center, spinning kinematic spheres and static primitives. It also refuses a turning body, box or hull that can reach another moving body. Rotating convex CCD remains unsupported, so a turning box chassis is not a continuous collider.
 
 A body with `collides = False` stays outside collision handling. Its forces and motion still follow the original integration rules. It must still have valid finite state. Turning collisions back on restores the same support checks on the next step.

@@ -212,7 +212,7 @@ A contact can have a gap of up to 2 cm. The solver lets the bodies close the gap
 - `WheelPhysicsControl`'s run-time fields `wheel_index`, `location`, `old_location` and `velocity` are not part of the setup. `WheelState` reports the location and the velocity.
 - The front wheels turn by one angle. The inner wheel does not turn more than the outer wheel.
 - The chassis has no linear damping, because the air drag is modeled on its own.
-- There are no joints, so vehicle doors do not swing.
+- A vehicle door is not a body of its own on a hinge joint, so vehicle doors do not swing. The shared world has [joints](Physics#joints).
 
 ## Tests
 
