@@ -236,12 +236,26 @@ def socket_path(display: String, runtime: String) raises -> String:
         if runtime == "":
             raise Error("XDG_RUNTIME_DIR is not set, so Wayland has no socket")
         path = runtime + "/" + name
-    if path.byte_length() > SOCKET_PATH_MAX:
-        raise Error("The Wayland socket's path is too long: ", path)
+    require_socket_path(path)
     return path
 
 
-def socket_address(path: String, bsd: Bool) -> List[UInt8]:
+def require_socket_path(path: String) raises:
+    """Refuse a socket path that a socket address cannot hold.
+
+    Nothing. The call returns when the path fits.
+
+    Args:
+        path: The socket's path.
+
+    Raises:
+        Error: If the path is longer than 103 bytes.
+    """
+    if path.byte_length() > SOCKET_PATH_MAX:
+        raise Error("The Wayland socket's path is too long: ", path)
+
+
+def socket_address(path: String, bsd: Bool) raises -> List[UInt8]:
     """Return the `sockaddr_un` of a path.
 
     Linux's is the family in 16 bits, then the path and its end. The BSD
@@ -254,7 +268,11 @@ def socket_address(path: String, bsd: Bool) -> List[UInt8]:
 
     Returns:
         The address, 106 bytes.
+
+    Raises:
+        Error: If the path is longer than 103 bytes.
     """
+    require_socket_path(path)
     var address = List[UInt8](length=2 + SOCKET_PATH_MAX + 1, fill=0)
     address[0] = AF_UNIX
     if bsd:
@@ -459,12 +477,13 @@ def connect_display(display: String = "") raises -> WaylandSocket:
     """
     var name = display if display != "" else getenv("WAYLAND_DISPLAY", "")
     var path = socket_path(name, getenv("XDG_RUNTIME_DIR", ""))
+    # The address comes first: a path it refuses then leaves no socket open.
+    var address = socket_address(path, is_bsd())
     var libc = OwnedDLHandle()
     var fd = libc.call["socket", c_int](
         c_int(AF_UNIX), c_int(SOCK_STREAM), c_int(0)
     )
     require_io(fd >= 0, "cannot make a socket")
-    var address = socket_address(path, is_bsd())
     var result = libc.call["connect", c_int](
         fd, Int(address.unsafe_ptr()), UInt32(len(address))
     )

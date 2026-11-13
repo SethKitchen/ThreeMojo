@@ -47,6 +47,7 @@ from std.math import inf
 from std.os import getenv, setenv
 from std.pathlib import Path
 from std.subprocess import run
+from std.tempfile import mkdtemp
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -433,6 +434,18 @@ def test_a_socket_address_is_its_family_and_its_path() raises:
     var empty = socket_address("", False)
     assert_equal(len(empty), 106)
     assert_equal(empty[2], 0)
+    # A path of 103 bytes fills the address up to its last byte, which
+    # ends the path. A longer one is refused in either layout.
+    var long = String("/")
+    for _ in range(102):
+        long += "x"
+    for bsd in [False, True]:
+        var full = socket_address(long, bsd)
+        assert_equal(len(full), 106)
+        assert_equal(full[104], 120)
+        assert_equal(full[105], 0)
+        with assert_raises(contains="too long"):
+            _ = socket_address(long + "x", bsd)
 
 
 def test_a_descriptor_travels_in_control_data_of_either_layout() raises:
@@ -692,9 +705,22 @@ def test_a_frame_must_fit_a_wayland_buffer() raises:
 # --- connecting ----------------------------------------------------------------
 
 
+def _in_session(name: String) -> String:
+    """Return a path in the session's folder, where a display has its
+    socket.
+
+    Args:
+        name: The file's name.
+
+    Returns:
+        The path.
+    """
+    return getenv("XDG_RUNTIME_DIR", "") + "/" + name
+
+
 def test_a_display_nobody_listens_on_is_refused() raises:
     with assert_raises(contains="Could not connect"):
-        _ = connect_display(temporary_path("threemojo-no-compositor"))
+        _ = connect_display(_in_session("threemojo-no-compositor"))
     # With no display named, the environment names it.
     _ = setenv("WAYLAND_DISPLAY", "threemojo-nobody-listens")
     with assert_raises(contains="threemojo-nobody-listens"):
@@ -709,7 +735,7 @@ def test_a_display_nobody_listens_on_is_refused() raises:
 
 def test_a_listening_socket_is_connected_to() raises:
     var lib = OwnedDLHandle()
-    var path = temporary_path("threemojo-wayland-listen")
+    var path = _in_session("threemojo-wayland-listen")
     var listener = lib.call["socket", c_int](c_int(1), c_int(1), c_int(0))
     var address = socket_address(path, is_bsd())
     assert_equal(
@@ -1467,7 +1493,7 @@ def test_a_window_shows_a_frame_on_a_real_compositor() raises:
     if not (_installed("weston") and _installed("weston-screenshooter")):
         print("    weston is not installed: the real compositor is skipped")
         return
-    var folder = temporary_path("threemojo-weston")
+    var folder = _in_session("threemojo-weston")
     var saved = getenv("XDG_RUNTIME_DIR", "")
     var pid = run(
         "mkdir -m 700 -p '"
@@ -1517,8 +1543,13 @@ def test_a_window_shows_a_frame_on_a_real_compositor() raises:
 def main() raises:
     with TestScratch():
         # The session's folder, where a display has its socket and a
-        # frame has its file.
-        var runtime = temporary_path("threemojo-wayland-runtime")
-        _ = run("mkdir -m 700 -p '" + runtime + "'")
+        # frame has its file. A socket's path holds at most 103 bytes, and
+        # a test root in macOS's TMPDIR is too long for one. So the folder
+        # is a short one in /tmp, as a real session's is in /run/user. A
+        # socket path is a protocol path, not a test fixture.
+        var runtime = mkdtemp(prefix="threemojo-wl-", dir=String("/tmp"))
         _ = setenv("XDG_RUNTIME_DIR", runtime)
-        TestSuite.discover_tests[__functions_in_module()]().run()
+        try:
+            TestSuite.discover_tests[__functions_in_module()]().run()
+        finally:
+            _ = run("rm -rf '" + runtime + "'")
