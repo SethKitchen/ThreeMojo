@@ -606,6 +606,8 @@ Content that is not a three.js port lives under `extensions/`. These features ha
 A checked box records implemented scope. It does not establish engineering or clinical validity.
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
+- [ ] [Meadow on the GPU rasterizer](https://github.com/SethKitchen/ThreeMojo/wiki/Vegetation#draw-a-frame-on-a-gpu): MeadowDevice draws the prepared frame; compiled for sm_80, but its device parity suite has not run [#985](https://github.com/SethKitchen/ThreeMojo/issues/985)
+
 <details>
 <summary>Implemented: 146</summary>
 
