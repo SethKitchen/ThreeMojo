@@ -1,6 +1,6 @@
 # Continuous collision
 
-Use `SPHERE_MESH_CCD` to prevent a supported moving body from passing through a static triangle during a step. The supported bodies are dynamic spheres and capsules, turning or not, dynamic boxes and hulls that cannot turn, and kinematic spheres. The mode also prevents moving spheres and rotation-locked capsules from passing through each other. The mode is opt-in. The default `DISCRETE` mode keeps the previous solver behavior. The mode name is older than the wider support, and it is kept for compatibility.
+Use `SPHERE_MESH_CCD` to prevent a supported moving body from passing through a static triangle during a step. The supported bodies are dynamic spheres, capsules, boxes and hulls, turning or not, and kinematic spheres. The mode also prevents moving spheres and rotation-locked capsules from passing through each other. The mode is opt-in. The default `DISCRETE` mode keeps the previous solver behavior. The mode name is older than the wider support, and it is kept for compatibility.
 
 ```mojo
 from extensions.physics.ccd import SPHERE_MESH_CCD
@@ -13,11 +13,13 @@ The CARLA compatibility module `extensions.carla.physics.world` exports the same
 
 ## Supported worlds
 
-An enabled collider must be a dynamic sphere or capsule, a dynamic box or hull that cannot turn, a kinematic sphere or a static mesh. A static mesh must not move. A dynamic shape can sit off its body's origin and its mass center, by at most 10000 meters. A sphere's inverse inertia must be symmetric and positive definite, and the sphere can spin.
+An enabled collider must be a dynamic sphere, capsule, box or hull, a kinematic sphere or a static mesh. A static mesh must not move. A dynamic shape can sit off its body's origin and its mass center, by at most 10000 meters. A sphere's inverse inertia must be symmetric and positive definite, and the sphere can spin.
 
 The tensor can be anisotropic. Each pair of mirrored off-diagonal elements must be exactly equal. A tensor computed as `R M Rᵀ` in Float32 can round each pair differently. Set each pair to its mean before you give the tensor to the body.
 
 A capsule whose inverse inertia is zero in every element cannot turn. Its angular velocity and angular push must then be zero, and it only translates, as a character or walker body does. Any other capsule turns, and its inverse inertia must be symmetric and positive definite. A capsule's half height must be finite and at most 10000 meters. Materials keep the existing friction mixing, restitution mixing and bounce threshold.
+
+A box or hull whose inverse inertia is zero in every element cannot turn. Its angular velocity and angular push must then be zero, and it only translates. Any other box or hull turns, and its inverse inertia must be symmetric and positive definite.
 
 Each moving body has a reachable region: a ball around its start position, including the contact margin. A capsule's region uses a bounding sphere around its actual world-space segment. The radius includes an outward-rounded length of the Float32-rotated half axis. The exact sweeps use the same shape bound to select mesh candidates. This includes stretch from accepted near-unit rotations and rotation roundoff.
 
@@ -35,7 +37,7 @@ A dynamic sphere that a kinematic sphere drives into a static mesh has no impuls
 
 The mode refuses a world with a [joint](Physics#joints) that acts: an enabled joint with a dynamic body.
 
-The mode refuses boxes and hulls that can turn, kinematic capsules, kinematic shapes off their body or mass center, spinning kinematic spheres and static primitives. It also refuses a turning body, box or hull that can reach another moving body. Rotating convex CCD remains unsupported, so a turning box chassis is not a continuous collider.
+The mode refuses kinematic capsules, kinematic shapes off their body or mass center, spinning kinematic spheres and static primitives. It also refuses a turning body, box or hull that can reach another moving body. So a turning box chassis is a continuous collider only while it is alone.
 
 A body with `collides = False` stays outside collision handling. Its forces and motion still follow the original integration rules. It must still have valid finite state. Turning collisions back on restores the same support checks on the next step.
 
@@ -89,7 +91,9 @@ Fast contacts between two moving spheres within the contact margin use their rel
 
 ## Turning bodies
 
-A turning body is a dynamic capsule that can turn, or a dynamic shape that sits off its body's origin or its mass center. Its shape does not move in a straight line, so it does not take the exact sweep. It advances in sub-steps instead, and a bound certifies each one.
+A turning body is a dynamic capsule, box or hull that can turn. A dynamic sphere or capsule that sits off its body's origin or its mass center is also a turning body. Its shape does not move in a straight line, so it does not take the exact sweep. It advances in sub-steps instead, and a bound certifies each one.
+
+This section describes spheres and capsules. A box or hull uses the same sub-steps with a different bound; see [Turning boxes and hulls](#turning-boxes-and-hulls).
 
 Each sub-step lasts as long as every nearby triangle stays clear of the body's true path:
 
@@ -112,13 +116,41 @@ Each turning sweep queries triangles for its current velocity, spin and remainin
 
 ## Boxes and hulls
 
-A box or hull whose inverse inertia is zero in every element, with no spin and no spin push, only translates. It is swept exactly against static triangles by the separating-axis test over time. Its shape can sit off its body's origin.
+A box or hull whose inverse inertia is zero in every element, with no spin and no spin push, only translates. It is swept exactly against static triangles by the separating-axis test over time. Its shape can sit off its body's origin. A box or hull that can turn takes the sub-stepped sweep in [Turning boxes and hulls](#turning-boxes-and-hulls).
 
 The solid and a triangle overlap exactly when their projections overlap on every candidate axis. These are the solid's face normals, the triangle's normal, and the cross product of each solid edge with each triangle edge. Along each axis the solid's interval moves linearly. So the two overlap along that axis during one interval of time.
 
 The first contact is the latest entry over all axes, when it comes before the earliest exit. Its normal is the axis that entered last. An axis along which the solid does not move separates it for the whole step, even when the two only touch. So a face or edge that slides along a triangle with zero clearance takes no impulse. A solid that already touches or overlaps a triangle uses the axis of least overlap instead. So a box that rests on a floor and slides does not close on it, and takes no impulse.
 
 The mesh stays one-sided: a triangle that the solid starts wholly behind does not catch it. An impact is a linear impulse with restitution and Coulomb friction. A box or hull must be alone in its group. Its reach bound uses its farthest corner, which also sets its radius-relative precision limits.
+
+## Turning boxes and hulls
+
+A box or hull that can turn advances in sub-steps, as a turning capsule does. Its shape and its mass center can sit off its body's origin.
+
+Each sub-step lasts as long as every nearby triangle stays clear of the solid's true path:
+
+- For each triangle, one axis parts the solid from the triangle the most. The candidates are the axes of the separating-axis test. These are the triangle's normal, the solid's face normals, and the cross product of each solid edge with each triangle edge. The triangle's own normal is tried toward its front only, so the mesh stays one-sided.
+- The solid's corners move in straight lines at their present velocities. The true rigid path stays within |ω|² r t² / 2 of those lines. Here r is the largest distance of a corner from the spin axis through the mass center.
+- A convex solid is clear of a plane while its corners are. So the sub-step ends when the bound of one corner reaches the plane across the chosen axis.
+- A corner farther from that plane than the tolerance goes to the plane and no farther. The tolerance is 1/1024 of the largest distance of a corner from the mass center.
+
+Three kinds of features can touch a triangle within the tolerance. A corner of the solid touches the triangle. A corner of the triangle touches the solid. An edge of the solid crosses an edge of the triangle. Each pair gives one contact point with a normal from the triangle to the solid. Two triangles that share an edge or a corner give one contact there.
+
+A touching point strikes when two conditions are true. It closes on the triangle at a resolved speed. It would also pass the surface in the remaining time, by more than 1/16 of the tolerance. A point that only closes its gap takes no impulse. The contact solver already let it close that much, so a box at rest stays at rest on the surface.
+
+One striking point takes a rigid impulse at that point. The impulse uses restitution, Coulomb friction and the world inverse inertia at the step's start orientation, as a turning capsule's does.
+
+Several striking points take their normal impulses together. The solver finds the impulses that leave no striking point closing, as it does for a cascade of spheres. This solution is plastic and has no friction. When the fastest approach is at or above the bounce threshold, the whole set is multiplied by one plus the restitution. For a scale s, the energy changes by xᵀAx s (s / 2 − 1). That is not positive for s from 0 through 2, so the scaled set cannot add kinetic energy.
+
+No impulse of the sweep adds energy. So no point of the solid moves faster than the bound that the reach uses. An approach slower than 10⁻⁸ of that bound is not resolved, and it takes no impulse.
+
+The limits of this sweep are these:
+
+- A flat landing on several points has no friction in the sweep. The contact solver applies friction on the next steps, while the solid rests on the surface.
+- More than ten striking points at one instant are refused, and the step rolls back. A fine mesh under a large face can give that many.
+- A turning box or hull must be alone in its group, as each turning body must.
+- Each sub-step projects every corner on each candidate axis. For a solid with F faces, E edges and V corners, one triangle costs (F + 1 + 3 E) V projections.
 
 ## Tessellated-floor limitation
 
@@ -178,7 +210,7 @@ Triangle ties retain triangle insertion order. Equal feature times retain face o
 
 `ccd_max_impacts` defaults to 16 per body per step. Valid limits are 1 through 1024. The loop does not discard remaining time, freeze a body or continue through a surface after exhaustion. It raises an error.
 
-A failed CCD step restores body positions, rotations, velocities, forces, torques, split state, previous contact count, previous events, primitive order and mesh dirty state. A failed step does not consume pending forces. This applies to every supported shape. Tests check the complete restored state after an impact-limit, sub-step-limit or support failure for spheres, capsules, boxes, hulls and turning capsules. For boxes, hulls and turning capsules, a retried step also matches a world that never failed, bit for bit. A mesh index allocated during an unsuccessful rebuild can remain in memory.
+A failed CCD step restores body positions, rotations, velocities, forces, torques, split state, previous contact count, previous events, primitive order and mesh dirty state. A failed step does not consume pending forces. This applies to every supported shape. Tests check the complete restored state after an impact-limit, sub-step-limit or support failure for spheres, capsules, boxes, hulls and turning capsules. For boxes, hulls, turning capsules and turning boxes, a retried step also matches a world that never failed, bit for bit. A mesh index allocated during an unsuccessful rebuild can remain in memory.
 
 Restoring the dirty flag preserves ray-query behavior. The next successful step rebuilds that contact index. A validated CCD index can remain valid after rollback because the immutable triangle snapshot did not change. Tests cover equal-distance mesh ownership before and after failure.
 
@@ -217,4 +249,6 @@ The [interacting-sphere report](https://github.com/SethKitchen/ThreeMojo/blob/37
 
 Tests include the original tunneling example, a radius/speed/step/restitution family, edge and vertex formulas, grazing controls and multiple rebounds. Other controls cover friction, spin energy, late-impact orientation, deterministic ordering, mode changes, ghosts, numeric refusals and rollback. Boxes and hulls have hand-derived grazing and energy controls with restitution 0 and 1 and with friction. Every supported shape has mode-change and ghost controls. Twenty-three reference hits use a separate 70-digit Decimal nearest-triangle-distance search and time bisection. Ordinary discrete physics suites remain part of qualification.
 
-[Issue 635](https://github.com/SethKitchen/ThreeMojo/issues/635) still tracks the remaining refusals. These are boxes and hulls that turn, such as a vehicle chassis, and moving meshes. They also include kinematic shapes other than spheres and static primitives. Boxes, hulls and turning bodies that can reach another moving body are also refused. It also tracks representative vehicle and interacting-body benchmarks. The immutable-mesh acceleration in [issue 636](https://github.com/SethKitchen/ThreeMojo/issues/636) does not provide the mutable primitive ownership API in [issue 633](https://github.com/SethKitchen/ThreeMojo/issues/633).
+Turning boxes and hulls have controls for each kind of touching feature. Whole-step controls cover flat, corner and tumbling landings and a box that comes to rest.
+
+The mode still refuses moving meshes, kinematic shapes other than spheres, and static primitives. It also refuses a box, a hull or a turning body that can reach another moving body. [Issue 635](https://github.com/SethKitchen/ThreeMojo/issues/635) records these refusals and the request for vehicle and interacting-body benchmarks. The immutable-mesh acceleration in [issue 636](https://github.com/SethKitchen/ThreeMojo/issues/636) does not provide the mutable primitive ownership API in [issue 633](https://github.com/SethKitchen/ThreeMojo/issues/633).

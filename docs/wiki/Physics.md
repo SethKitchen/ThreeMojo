@@ -205,4 +205,4 @@ The production sweep and existing world ray path stay unchanged. [Owned query sn
 
 ## Continuous collision
 
-The opt-in [continuous collision mode](Continuous-collision) handles fast dynamic spheres, capsules, and boxes and hulls that cannot turn, against one-sided static triangles. It also sweeps moving spheres and rotation-locked capsules against each other. It supports multiple impacts and transactional failure. Turning boxes and hulls, moving meshes and other unsupported cases are refused. The default discrete mode keeps its previous behavior. Read the support, precision and performance limits before use.
+The opt-in [continuous collision mode](Continuous-collision) handles fast dynamic spheres, capsules, boxes and hulls, turning or not, against one-sided static triangles. It also sweeps moving spheres and rotation-locked capsules against each other. It supports multiple impacts and transactional failure. Turning boxes and hulls, moving meshes and other unsupported cases are refused. The default discrete mode keeps its previous behavior. Read the support, precision and performance limits before use.

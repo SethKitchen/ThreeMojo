@@ -47,6 +47,10 @@ from extensions.physics.ccd import (
     _segment_triangle_gap,
     _sweep_segments,
     _turning_step,
+    _SolidContact,
+    _solid_axis,
+    _solid_contacts,
+    _solid_step,
     _sweep_capsule_triangle,
     _sweep_convex_triangle,
     _SweepHit,
@@ -680,14 +684,23 @@ struct PhysicsWorld(Movable):
                 )
             var inverse = body.inverse_inertia()
             if _solid(body):
-                # A box or hull only translates, swept exactly; see
-                # _ccd_convex. It must not turn.
-                if (
-                    not _locked(inverse)
-                    or body.angular_velocity != Vector3(0, 0, 0)
-                    or body.push_angular != Vector3(0, 0, 0)
-                ):
-                    raise Error("CCD requires a box or hull that cannot turn")
+                # A box or hull with every inverse inertia element zero
+                # only translates, swept exactly; see _ccd_convex. It must
+                # have no spin or spin push. Any other box or hull turns,
+                # with a positive definite tensor; see _ccd_tumbling.
+                if _locked(inverse):
+                    if body.angular_velocity != Vector3(
+                        0, 0, 0
+                    ) or body.push_angular != Vector3(0, 0, 0):
+                        raise Error(
+                            "CCD requires a box or hull that cannot turn to"
+                            " have no spin"
+                        )
+                elif not _positive_definite(inverse):
+                    raise Error(
+                        "CCD requires symmetric positive definite box and"
+                        " hull inertia"
+                    )
             elif body.shape.kind == CAPSULE:
                 # A capsule with every inverse inertia element zero cannot
                 # turn, so it must have no spin or spin push. Any other
@@ -786,25 +799,8 @@ struct PhysicsWorld(Movable):
             if not body.collides or body.kind() == STATIC:
                 continue
             kinematic[i] = body.kind() == KINEMATIC
-            var v = widen_vector(body.linear_velocity)
-            var w = widen_vector(body.angular_velocity)
-            # A rotation-locked capsule has no spin energy to transfer.
-            var spin = Float64(0)
             var inverse = body.inverse_inertia()
-            if _isotropic(inverse):
-                var inertia = Float64(inverse.elements[0])
-                if inertia > 0:
-                    spin = (
-                        wide_dot(w, w) * Float64(body.inverse_mass()) / inertia
-                    )
-            else:
-                # w^T I w = u^T M^-1 u with u = R^T w in the body frame.
-                var turn = rotation_matrix(body.rotation)
-                var u = _turn_in(turn, w)
-                spin = wide_dot(u, _solve(inverse, u)) * Float64(
-                    body.inverse_mass()
-                )
-            speed[i] = sqrt(wide_dot(v, v) + spin)
+            speed[i] = self._ccd_energy_speed(i)
             var p = widen_vector(body.push_velocity)
             push[i] = sqrt(wide_dot(p, p))
             bound[i] = _ccd_bound(body)
@@ -920,6 +916,28 @@ struct PhysicsWorld(Movable):
                     )
         return group^
 
+    def _ccd_energy_speed(self, i: Int) -> Float64:
+        # The speed that body i's whole kinetic energy gives its mass:
+        # the root of v^2 + w^T I w / m.
+        ref body = self.bodies[i]
+        var v = widen_vector(body.linear_velocity)
+        var w = widen_vector(body.angular_velocity)
+        # A rotation-locked body has no spin energy to transfer.
+        var spin = Float64(0)
+        var inverse = body.inverse_inertia()
+        if _isotropic(inverse):
+            var inertia = Float64(inverse.elements[0])
+            if inertia > 0:
+                spin = wide_dot(w, w) * Float64(body.inverse_mass()) / inertia
+        else:
+            # w^T I w = u^T M^-1 u with u = R^T w in the body frame.
+            var turn = rotation_matrix(body.rotation)
+            var u = _turn_in(turn, w)
+            spin = wide_dot(u, _solve(inverse, u)) * Float64(
+                body.inverse_mass()
+            )
+        return sqrt(wide_dot(v, v) + spin)
+
     def _ccd_contacts(
         self, manifolds: List[_Manifold], h: Float32
     ) -> List[_Manifold]:
@@ -971,7 +989,10 @@ struct PhysicsWorld(Movable):
                 if self._ccd_turns(i):
                     # Its pose and spin always come from the sweep, which
                     # turns at a constant spin along the certified path.
-                    result = self._ccd_turning(i, h, impacts)
+                    if _solid(self.bodies[i]):
+                        result = self._ccd_tumbling(i, h, impacts)
+                    else:
+                        result = self._ccd_turning(i, h, impacts)
                     turned[i] = True
                 elif _solid(self.bodies[i]):
                     result = self._ccd_convex(i, h, impacts)
@@ -1170,8 +1191,12 @@ struct PhysicsWorld(Movable):
         # center, takes the sub-stepped sweep. A centered sphere and a
         # centered capsule that cannot turn keep their exact sweeps.
         ref body = self.bodies[i]
-        if body.kind() != DYNAMIC or _solid(body):
+        if body.kind() != DYNAMIC:
             return False
+        if _solid(body):
+            # A box or hull that cannot turn keeps its exact sweep, on or
+            # off its body's origin.
+            return not _locked(body.inverse_inertia())
         if body.shape_position != Vector3(
             0, 0, 0
         ) or body.center_of_mass != Vector3(0, 0, 0):
@@ -1197,8 +1222,28 @@ struct PhysicsWorld(Movable):
             widen_vector(rotation.rotate(middle + half)),
         )
 
+    def _ccd_arms(self, i: Int) -> List[Vector3]:
+        # A box's or hull's corners from its mass center, in its body's
+        # frame.
+        ref body = self.bodies[i]
+        var out = List[Vector3]()
+        for corner in body.shape.polyhedron.vertices:  # pragma: no branch
+            out.append(
+                body.shape_position
+                - body.center_of_mass
+                + body.shape_rotation.rotate(corner)
+            )
+        return out^
+
     def _ccd_lever(self, i: Int) -> Float64:
-        # The farthest segment end from the mass center, rounded outward.
+        # The farthest segment end, or corner of a box or hull, from the
+        # mass center, rounded outward.
+        if _solid(self.bodies[i]):
+            var most = Float64(0)
+            for arm in self._ccd_arms(i):  # pragma: no branch
+                var wide = widen_vector(self.bodies[i].rotation.rotate(arm))
+                most = max(most, sqrt(wide_dot(wide, wide)))
+            return most * 1.000000000000001
         var ends = self._ccd_ends(i, self.bodies[i].rotation)
         return (
             max(
@@ -1340,6 +1385,268 @@ struct PhysicsWorld(Movable):
             self.bodies[i].center_of_mass
         )
         return (final, rotation)
+
+    def _ccd_tumbling(
+        mut self, i: Int, h: Float32, mut impacts: List[_CCDImpact]
+    ) raises -> Tuple[Vector3, Quaternion]:
+        # A box or hull that turns: conservative advancement, as in
+        # _ccd_turning, on the axis that parts the solid from each triangle
+        # the most; see _solid_axis and _solid_step. Every corner, edge
+        # and face that touches a triangle at one instant is one contact.
+        # One contact takes a rigid impulse with restitution and friction.
+        # Several take their normal impulses together; see _ccd_resting.
+        var rotation = self.bodies[i].rotation
+        var center = widen_vector(
+            self.bodies[i].world_center_of_mass()
+        ) + widen_vector(self.bodies[i].push_velocity) * Float64(h)
+        var velocity = widen_vector(self.bodies[i].linear_velocity)
+        var angular = widen_vector(self.bodies[i].angular_velocity)
+        var turning = widen_vector(self.bodies[i].push_angular)
+        var arms = self._ccd_arms(i)
+        var lever = self._ccd_lever(i)
+        var tolerance = lever / 1024
+        # No impulse of this sweep adds energy, so no point of the solid
+        # moves faster than this. An approach below 1e-8 of it is not
+        # resolved: the simultaneous solve leaves that much.
+        var inverse = self.bodies[i].inverse_inertia()
+        var resolved = (
+            self._ccd_energy_speed(i)
+            * (
+                1
+                + lever
+                * sqrt(
+                    (
+                        Float64(inverse.elements[0])
+                        + Float64(inverse.elements[4])
+                        + Float64(inverse.elements[8])
+                    )
+                    / Float64(self.bodies[i].inverse_mass())
+                )
+            )
+            * 1e-8
+        )
+        var indexed = (
+            not self._ccd_brute_force and len(self._ccd_index.nodes) > 0
+        )
+        var candidates = List[Int]()
+        var near = len(self._triangles)
+        var refresh = indexed
+        var remaining = Float64(h)
+        var steps = 0
+        var count = 0
+        while remaining > 0:
+            if steps == self.ccd_max_substeps:
+                raise Error("CCD sub-step limit exhausted; step rolled back")
+            steps += 1
+            var spin = angular + turning
+            if refresh:
+                var speed = (
+                    sqrt(wide_dot(velocity, velocity))
+                    + sqrt(wide_dot(spin, spin)) * lever
+                )
+                _ = self._ccd_index.query(
+                    center,
+                    SIMD[DType.float64, 4](0),
+                    lever + remaining * speed + Float64(self.margin),
+                    candidates,
+                )
+                # Contacts keep triangle insertion order.
+                sort(candidates)
+                near = len(candidates)
+                refresh = False
+            # The corners, their velocities, the face normals and the edge
+            # directions at this pose.
+            var points = List[SIMD[DType.float64, 4]]()
+            var speeds = List[SIMD[DType.float64, 4]]()
+            var curvature = Float64(0)
+            var square = wide_dot(spin, spin)
+            for arm in arms:  # pragma: no branch
+                var out = widen_vector(rotation.rotate(arm))
+                points.append(center + out)
+                speeds.append(velocity + wide_cross(spin, out))
+                if square > 0:
+                    var off = out - spin * (wide_dot(out, spin) / square)
+                    curvature = max(curvature, sqrt(wide_dot(off, off)))
+            curvature *= square * 1.000000000000001
+            var faces = List[SIMD[DType.float64, 4]]()
+            for normal in self.bodies[
+                i
+            ].shape.polyhedron.normals:  # pragma: no branch
+                faces.append(
+                    widen_vector(
+                        rotation.rotate(
+                            self.bodies[i].shape_rotation.rotate(normal)
+                        )
+                    )
+                )
+            var edges = List[SIMD[DType.float64, 4]]()
+            ref solid = self.bodies[i].shape.polyhedron
+            for e in range(len(solid.edge_a)):  # pragma: no branch
+                edges.append(points[solid.edge_b[e]] - points[solid.edge_a[e]])
+            var step = remaining
+            var contacts = List[_SolidContact]()
+            for c in range(near):
+                var index = candidates[c] if indexed else c
+                if not self.bodies[self._triangle_body[index]].collides:
+                    continue
+                var parted = _solid_axis(
+                    points, faces, edges, self._triangles[index]
+                )
+                if parted[0] == -1e300:
+                    # The mesh stays one-sided.
+                    continue
+                if parted[0] <= tolerance:
+                    _solid_contacts(
+                        points,
+                        faces,
+                        solid.edge_a,
+                        solid.edge_b,
+                        self._triangles[index],
+                        index,
+                        tolerance,
+                        max(-parted[0], Float64(0)),
+                        contacts,
+                    )
+                step = min(
+                    step,
+                    _solid_step(
+                        points,
+                        speeds,
+                        tolerance,
+                        curvature,
+                        parted[0],
+                        parted[1],
+                        parted[2],
+                    ),
+                )
+            # A touching point strikes when it closes at a resolved speed
+            # and would pass the surface in the time that remains. A point
+            # that only closes its gap is left to the contact solver, which
+            # let it close that much.
+            var striking = List[_SolidContact]()
+            for contact in contacts:
+                var closing = wide_dot(
+                    velocity + wide_cross(angular, contact.point - center),
+                    contact.normal,
+                )
+                if (
+                    closing < -resolved
+                    and contact.gap + closing * remaining < -tolerance / 16
+                ):
+                    striking.append(contact)
+            if len(striking) > 0:
+                count = self._ccd_resting(
+                    i,
+                    striking,
+                    center,
+                    velocity,
+                    angular,
+                    Float64(h) - remaining,
+                    count,
+                    impacts,
+                )
+                refresh = indexed
+                continue
+            center += velocity * step
+            rotation = _ccd_turn(rotation, spin, step)
+            remaining -= step
+        self.bodies[i].linear_velocity = _ccd_narrow(velocity)
+        self.bodies[i].angular_velocity = _ccd_narrow(angular)
+        var final = _ccd_narrow(center) - rotation.rotate(
+            self.bodies[i].center_of_mass
+        )
+        return (final, rotation)
+
+    def _ccd_resting(
+        self,
+        i: Int,
+        contacts: List[_SolidContact],
+        center: SIMD[DType.float64, 4],
+        mut velocity: SIMD[DType.float64, 4],
+        mut angular: SIMD[DType.float64, 4],
+        time: Float64,
+        start: Int,
+        mut impacts: List[_CCDImpact],
+    ) raises -> Int:
+        # The impact of a box or hull at every point that touches now.
+        # One point takes a rigid impulse with restitution and friction.
+        # Several take the normal impulses x >= 0 that leave no point
+        # closing, solved together; see _ccd_lcp. That solve is plastic.
+        # With restitution e the whole set is scaled by 1 + e: the energy
+        # changes by x^T A x s (s / 2 - 1) for the scale s, which is never
+        # more than zero for s from 0 to 2. Returns the impact count.
+        var count = start
+        if len(contacts) == 1:
+            _impact_exhausted(count, self.ccd_max_impacts)
+            var impulse = self._ccd_rigid(
+                i,
+                self._triangle_body[contacts[0].triangle],
+                contacts[0].point - center,
+                contacts[0].normal,
+                velocity,
+                angular,
+            )
+            impacts.append(
+                _CCDImpact(
+                    time,
+                    i,
+                    contacts[0].triangle,
+                    -1,
+                    _ccd_narrow(contacts[0].normal * impulse),
+                )
+            )
+            return count + 1
+        var m = len(contacts)
+        var mass = Float64(self.bodies[i].inverse_mass())
+        var matrix = List[Float64](length=m * m, fill=0)
+        var closing = List[Float64](length=m, fill=0)
+        var fastest = Float64(0)
+        var bounce = Float64(0)
+        for c in range(m):  # pragma: no branch
+            var arm = contacts[c].point - center
+            closing[c] = wide_dot(
+                velocity + wide_cross(angular, arm), contacts[c].normal
+            )
+            if closing[c] < fastest:
+                fastest = closing[c]
+                bounce = Float64(
+                    self.bodies[i]
+                    .material.combine(
+                        self.bodies[
+                            self._triangle_body[contacts[c].triangle]
+                        ].material
+                    )
+                    .restitution
+                )
+            for d in range(m):  # pragma: no branch
+                # The change in point c's closing speed for a unit
+                # impulse at point d.
+                var other = contacts[d].point - center
+                var turn = self._ccd_spin(
+                    i, wide_cross(other, contacts[d].normal)
+                )
+                matrix[c * m + d] = wide_dot(
+                    contacts[d].normal * mass + wide_cross(turn, arm),
+                    contacts[c].normal,
+                )
+        var impulse = _ccd_lcp(matrix, closing)
+        var scale = Float64(1)
+        if fastest <= -Float64(self.bounce_threshold):
+            scale += bounce
+        for c in range(m):  # pragma: no branch
+            if impulse[c] <= 0:
+                continue
+            _impact_exhausted(count, self.ccd_max_impacts)
+            count += 1
+            var push = contacts[c].normal * (impulse[c] * scale)
+            velocity += push * mass
+            angular += self._ccd_spin(
+                i, wide_cross(contacts[c].point - center, push)
+            )
+            impacts.append(
+                _CCDImpact(time, i, contacts[c].triangle, -1, _ccd_narrow(push))
+            )
+        return count
 
     def _ccd_rigid(
         self,
