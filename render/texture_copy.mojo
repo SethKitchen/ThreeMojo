@@ -25,6 +25,11 @@ its bottom, as `render.rect` counts a scissor. A source region is a
 of the destination. A write into the first level of a texture with a
 chain rebuilds the chain, as three.js calls `generateMipmap` after a copy
 into level zero of a texture that generates mipmaps.
+
+**A volume into a 2D texture.** three.js copies the layers of the source
+block one after the other, and a 2D texture has one layer for them all
+to land on. `copy_volume_to_texture` therefore writes the last layer of
+the block, which is what three.js leaves.
 """
 
 from core.ordinal import require_index_in_count
@@ -358,6 +363,74 @@ def copy_volume_to_volume(
                 destination.data[write + at] = source.data[read + at]
             else:
                 destination.pixels[write + at] = source.pixels[read + at]
+
+
+def copy_volume_to_texture(
+    source: VolumeImage,
+    mut destination: Texture,
+    region: Optional[TexelBox] = None,
+    position: TexelPoint = TexelPoint(0, 0, 0),
+    destination_level: Int = 0,
+) raises:
+    """Copy a block of a volume into a 2D texture: three.js's
+    `copyTextureToTexture` with a `Data3DTexture` or `DataArrayTexture`
+    source and a 2D destination. Pass the source's `image`.
+
+    three.js copies each layer of the block in turn, and each one lands
+    on the same texels of the 2D texture. So the last layer of the block
+    is what stays, and only that layer is written here. Pass a block one
+    layer deep to choose the layer.
+
+    Args:
+        source: The volume to read.
+        destination: The texture to write.
+        region: The texels to copy. The whole source by default, which
+            leaves its last layer.
+        position: Where the block's corner lands. `z` must be zero.
+        destination_level: The destination's mip level.
+
+    Raises:
+        Error: If the volume fails `VolumeImage.validate`, the texture is
+            blank, is refused by `Texture.validate` or has no such level,
+            the texel types differ, the position has a layer, or the
+            block is empty or reaches outside either image.
+    """
+    source.validate()
+    _check_level(destination, destination_level)
+    require_copy_texel(source.texel_type, destination.texel_type)
+    require_flat_layer(position.z)
+    var box = region.or_else(
+        TexelBox(0, 0, 0, source.width, source.height, source.depth)
+    )
+    if not box.is_valid() or box.z < 0 or box.z + box.depth > source.depth:
+        raise Error("A texture copy must lie inside both images")
+    _check_place(
+        box.x, box.y, box.width, box.height, source.width, source.height
+    )
+    _check_place(
+        position.x,
+        position.y,
+        box.width,
+        box.height,
+        destination.level_width(destination_level),
+        destination.level_height(destination_level),
+    )
+    var floats = source.texel_type == FLOAT_TYPE
+    # Every layer lands on the same texels, so the last one stays.
+    var layer = box.z + box.depth - 1
+    for row in range(box.height):  # pragma: no branch
+        var read = (
+            (layer * source.height + box.y + row) * source.width + box.x
+        ) * VOLUME_CHANNELS
+        var write = _texel_start(
+            destination, destination_level, position.x, position.y + row
+        )
+        for at in range(box.width * VOLUME_CHANNELS):  # pragma: no branch
+            if floats:
+                destination.data[write + at] = source.data[read + at]
+            else:
+                destination.pixels[write + at] = source.pixels[read + at]
+    _regenerate(destination, destination_level)
 
 
 def framebuffer_texture(

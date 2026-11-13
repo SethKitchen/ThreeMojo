@@ -301,6 +301,7 @@ This port differs from three.js in four ways:
 | `copy_texture_to_texture(source, destination, region=None, position=TexelPoint(0, 0, 0), source_level=0, destination_level=0)` | `copyTextureToTexture` between two 2D textures. |
 | `copy_texture_to_volume(source, destination.image, region=None, position, source_level=0)` | `copyTextureToTexture` from a 2D texture into a layer of a `Data3DTexture` or a `DataArrayTexture`. |
 | `copy_volume_to_volume(source.image, destination.image, region=None, position)` | `copyTextureToTexture` between two volumes, with a `Box3` source region. |
+| `copy_volume_to_texture(source.image, destination, region=None, position=TexelPoint(0, 0, 0), destination_level=0)` | `copyTextureToTexture` from a `Data3DTexture` or a `DataArrayTexture` into a 2D texture. |
 | `framebuffer_texture(width, height, texel_type=UNSIGNED_BYTE_TYPE, color_space=SRGB)` | `new FramebufferTexture(width, height)`: nearest, no chain, clamped. |
 | `copy_framebuffer_to_texture(source, texture, position=TexelPoint(0, 0, 0), level=0)` | `copyFramebufferToTexture`. The source is a displayed `Framebuffer` or a `RenderTarget`. |
 
@@ -310,14 +311,13 @@ A 2D source region is a `Rect`. A volume source region is a `TexelBox`: a corner
 
 A copy into level zero of a texture with a chain rebuilds the chain with `Texture.regenerate_mipmaps`. three.js calls `generateMipmap` in the same case.
 
+`copy_volume_to_texture` writes the last layer of its region. three.js copies each layer in turn, and each layer lands on the same texels of the 2D texture. So only the last layer stays. Pass a `TexelBox` one layer deep to copy the layer that you want. The default region is the whole volume, which leaves its last layer. The position's `z` must be zero, as for every copy into a 2D texture.
+
 `copy_framebuffer_to_texture` copies a rectangle the size of the texture's level. From a `Framebuffer` it copies the sRGB bytes into a byte texture. The default `SRGB` color space of `framebuffer_texture` reads them back as the light they show. From a `RenderTarget` it copies `attachment(0)`: a byte target fills a byte texture, and a half float or float target fills a float texture. A byte target's channel is held from zero to one and rounded to a byte. NaN and positive infinity are 255, and negative infinity is zero.
 
 `GpuRenderer.copy_framebuffer_to_texture(texture, position, level)` does the same copy from the device's image. See [GPU backend](GPU-backend#gpurenderer).
 
-This port differs from three.js in two ways:
-
-- A compressed texture is not a copy source. The port has no compressed textures on the device.
-- A copy from a volume into a 2D texture is not ported.
+This port differs from three.js in one way. A compressed texture is not a copy source, because the port has no compressed textures on the device.
 
 ## Tone mapping
 
