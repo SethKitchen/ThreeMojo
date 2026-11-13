@@ -3228,6 +3228,34 @@
       "candidate not viable: value passed to 'button' cannot be converted from 'IntLiteral[0]' to 'PointerButton'"
     ]
   },
+  "tests/compile_fail/a_pointer_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'pointer_id' cannot be converted from 'IntLiteral[1]' to 'PointerId'"
+    ]
+  },
+  "tests/compile_fail/a_pointer_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'pointer_type' cannot be converted from 'IntLiteral[1]' to 'PointerType'"
+    ]
+  },
   "tests/compile_fail/a_pose_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4483,6 +4511,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_touch_action_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'TouchAction'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_track_target_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -5530,6 +5568,18 @@
     ],
     "notes": [
       "'AngularAcceleration' is aka 'Quantity[Int(0), Int(0), Int(-2), Int(1)]'"
+    ]
+  },
+  "tests/compile_fail/an_arcball_input_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 31,
+        "message": "invalid call to '__eq__': value passed to 'other' cannot be converted from 'IntLiteral[1]' to 'ArcballInput'"
+      }
+    ],
+    "notes": [
+      "function declared here"
     ]
   },
   "tests/compile_fail/an_arcball_modifier_is_not_a_bare_int.mojo": {

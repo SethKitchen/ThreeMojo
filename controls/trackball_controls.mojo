@@ -29,10 +29,16 @@ turn keeps the square root of that, as three.js keeps it.
 A key is held from its last repeat until `key_timeout` goes by, or until a
 `KEY_UP`. See `controls.held_keys`.
 
-Differences from three.js: touch input is not ported. `update` takes the
-time the frame took only to age the keys held; three.js's takes none.
-An orthographic camera's pan measures both directions by the view's width,
-as three.js's does.
+A finger is a pointer of type `TOUCH_POINTER`. One finger rotates. Two
+fingers zoom by their distance apart and pan by the point midway between
+them. More fingers go on as the first two.
+
+Differences from three.js: `update` takes the time the frame took only to
+age the keys held; three.js's takes none. A mouse button and a finger do
+not count together: three.js raises a `TypeError` when both are down and
+the finger moves. Two fingers on one pixel do not zoom, where three.js
+divides by zero. An orthographic camera's pan measures both directions by
+the view's width, as three.js's does.
 
 ## Numerical range correction
 
@@ -55,6 +61,7 @@ from controls.input import (
     require_input,
     KEY_UP,
     Key,
+    POINTER_CANCEL,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -137,6 +144,19 @@ struct TrackballControls(Copyable, Movable):
     # `pointermove` only then, so a move with no button held does nothing,
     # even with a key held.
     var _pressed: Bool
+    # The fingers down, in the order they came: three.js's `_pointers`.
+    # Where each one went down, and where each one is now: the events
+    # three.js keeps in `_pointers`, and its `_pointerPositions`.
+    var _touches: List[Int]
+    var _touch_down_xs: List[Float64]
+    var _touch_down_ys: List[Float64]
+    var _touch_xs: List[Float64]
+    var _touch_ys: List[Float64]
+    # True while two fingers zoom and pan: three.js's `TOUCH_ZOOM_PAN`
+    # state. How far apart the two fingers were, and are.
+    var _touch_zoom_pan: Bool
+    var _touch_zoom_start: Float64
+    var _touch_zoom_end: Float64
     # The view's size, from the last event.
     var _width: Int
     var _height: Int
@@ -223,6 +243,14 @@ struct TrackballControls(Copyable, Movable):
         self._key_state = NO_ACTION
         self._listening = True
         self._pressed = False
+        self._touches = List[Int]()
+        self._touch_down_xs = List[Float64]()
+        self._touch_down_ys = List[Float64]()
+        self._touch_xs = List[Float64]()
+        self._touch_ys = List[Float64]()
+        self._touch_zoom_pan = False
+        self._touch_zoom_start = 0
+        self._touch_zoom_end = 0
         self._width = 1
         self._height = 1
         self._move_prev_x = 0
@@ -273,17 +301,25 @@ struct TrackballControls(Copyable, Movable):
     ) raises:
         """Record what one input event asks for.
 
+        One finger down rotates. A second finger starts a zoom and a pan.
+        A finger that the window cancels is let go also while `enabled`
+        is False, as three.js's `onPointerCancel` lets it go.
+
         Args:
             event: The event, with its position in pixels.
             viewport_width: The view's width, in pixels.
             viewport_height: The view's height, in pixels.
 
         Raises:
-            Error: If the event's kind, button or key is invalid, a key or
-                an action is invalid, or a size is not positive.
+            Error: If the event's kind, button, key or pointer is invalid,
+                a key or an action is invalid, or a size is not positive.
         """
         require_input(event)
         require_viewport_size(viewport_width, viewport_height)
+        if event.kind == POINTER_CANCEL:
+            if event.is_touch():
+                self._forget(event.pointer_id.value)
+            return
         if not self.enabled:
             return
         self._width = viewport_width
@@ -295,18 +331,162 @@ struct TrackballControls(Copyable, Movable):
             _ = self._held.release(event.key)
             self._key_up()
         elif event.kind == POINTER_DOWN:
-            self._state = self.action_of(event.button)
-            self._pressed = True
-            self._press(event)
+            if event.is_touch():
+                self._touch_start(event)
+            else:
+                self._state = self.action_of(event.button)
+                # three.js keeps one state for the mouse and the fingers.
+                self._touch_zoom_pan = False
+                self._pressed = True
+                self._press(event)
         elif event.kind == POINTER_MOVE:
-            if self._pressed:
+            if event.is_touch():
+                self._touch_move(event)
+            elif self._pressed:
                 self._move(event)
         elif event.kind == POINTER_UP:
-            self._state = NO_ACTION
-            self._pressed = False
+            if event.is_touch():
+                self._touch_end(event)
+            else:
+                self._state = NO_ACTION
+                self._pressed = False
         elif event.kind == WHEEL:
             if not self.no_zoom:
                 self._zoom_start_y -= Float32(event.wheel) * WHEEL_ZOOM
+
+    # --- touch ---------------------------------------------------------------
+
+    def _forget(mut self, id: Int):
+        """Stop following a finger. three.js: `_removePointer`.
+
+        Args:
+            id: The finger's pointer id.
+        """
+        for index in range(len(self._touches)):
+            if self._touches[index] == id:
+                _ = self._touches.pop(index)
+                _ = self._touch_down_xs.pop(index)
+                _ = self._touch_down_ys.pop(index)
+                _ = self._touch_xs.pop(index)
+                _ = self._touch_ys.pop(index)
+                return
+
+    def _track(mut self, id: Int, x: Float64, y: Float64):
+        """Record where a followed finger is. three.js: `_trackPointer`.
+
+        Args:
+            id: The finger's pointer id.
+            x: Its x, in pixels.
+            y: Its y, in pixels.
+        """
+        # A move is read only while a finger is followed, so the list is
+        # never empty here.
+        for index in range(len(self._touches)):  # pragma: no branch
+            if self._touches[index] == id:
+                self._touch_xs[index] = x
+                self._touch_ys[index] = y
+
+    def _rotate_from(mut self, x: Float64, y: Float64):
+        """Start a rotation where a finger is.
+
+        Args:
+            x: The finger's x, in pixels.
+            y: The finger's y, in pixels.
+        """
+        var at = self._circle_at(x, y)
+        self._move_curr_x = at.x
+        self._move_curr_y = at.y
+        self._move_prev_x = at.x
+        self._move_prev_y = at.y
+
+    def _touch_start(mut self, event: InputEvent):
+        """Follow a new finger. One finger starts a rotation, and more
+        start a zoom and a pan. three.js: `onTouchStart`.
+
+        The zoom and the pan start from where the first two fingers went
+        down, as three.js reads them.
+
+        Args:
+            event: The finger's press.
+        """
+        var x = Float64(event.x)
+        var y = Float64(event.y)
+        self._touches.append(event.pointer_id.value)
+        self._touch_down_xs.append(x)
+        self._touch_down_ys.append(y)
+        self._touch_xs.append(x)
+        self._touch_ys.append(y)
+        if len(self._touches) == 1:
+            self._touch_zoom_pan = False
+            self._rotate_from(self._touch_down_xs[0], self._touch_down_ys[0])
+            return
+        self._touch_zoom_pan = True
+        var dx = self._touch_down_xs[0] - self._touch_down_xs[1]
+        var dy = self._touch_down_ys[0] - self._touch_down_ys[1]
+        self._touch_zoom_start = sqrt(dx * dx + dy * dy)
+        self._touch_zoom_end = self._touch_zoom_start
+        var at = self._screen_at(
+            (self._touch_down_xs[0] + self._touch_down_xs[1]) / 2,
+            (self._touch_down_ys[0] + self._touch_down_ys[1]) / 2,
+        )
+        self._pan_start_x = at.x
+        self._pan_start_y = at.y
+        self._pan_end_x = at.x
+        self._pan_end_y = at.y
+
+    def _touch_move(mut self, event: InputEvent):
+        """Follow a finger: one rotates, and two zoom and pan. three.js:
+        `onTouchMove`.
+
+        Args:
+            event: The finger's move.
+        """
+        var count = len(self._touches)
+        if count == 0:
+            return
+        var id = event.pointer_id.value
+        var x = Float64(event.x)
+        var y = Float64(event.y)
+        self._track(id, x, y)
+        if count == 1:
+            var at = self._circle_at(x, y)
+            self._move_prev_x = self._move_curr_x
+            self._move_prev_y = self._move_curr_y
+            self._move_curr_x = at.x
+            self._move_curr_y = at.y
+            return
+        # three.js's `_getSecondPointerPosition`: the second finger when
+        # the event is about the first, else the first.
+        var other = 1 if self._touches[0] == id else 0
+        var dx = x - self._touch_xs[other]
+        var dy = y - self._touch_ys[other]
+        self._touch_zoom_end = sqrt(dx * dx + dy * dy)
+        var at = self._screen_at(
+            (x + self._touch_xs[other]) / 2, (y + self._touch_ys[other]) / 2
+        )
+        self._pan_end_x = at.x
+        self._pan_end_y = at.y
+
+    def _touch_end(mut self, event: InputEvent):
+        """Let a finger go. three.js: `onTouchEnd`, then `_removePointer`.
+
+        The last finger to lift ends the zoom and the pan. One of two
+        fingers that lifts leaves the other where a rotation starts, and
+        three.js keeps the zoom and pan state until that one lifts too.
+
+        Args:
+            event: The finger's release.
+        """
+        var id = event.pointer_id.value
+        var count = len(self._touches)
+        if count == 1:
+            self._touch_zoom_pan = False
+            self._rotate_from(Float64(event.x), Float64(event.y))
+        elif count == 2:
+            self._touch_zoom_pan = True
+            var other = 1 if self._touches[0] == id else 0
+            self._rotate_from(self._touch_xs[other], self._touch_ys[other])
+        self._forget(id)
 
     def _key_down(mut self, key: Key) raises:
         """Make the buttons rotate, zoom or pan while a key is held.
@@ -361,13 +541,27 @@ struct TrackballControls(Copyable, Movable):
             Right and up from the middle, as parts of half the width, in x
             and y.
         """
+        return self._circle_at(Float64(event.x), Float64(event.y))
+
+    def _circle_at(self, x: Float64, y: Float64) -> Vector3:
+        """Return where a place in the view is on the circle as wide as
+        the view. three.js: `_getMouseOnCircle`.
+
+        Args:
+            x: Across, in pixels.
+            y: Down, in pixels.
+
+        Returns:
+            Right and up from the middle, as parts of half the width, in x
+            and y.
+        """
         # A `Float32` side past 2^24 loses the half pixel at the middle,
         # so the last pixel reads as the edge.
         var width = Float64(self._width)
         var height = Float64(self._height)
         return Vector3(
-            Float32((Float64(event.x) - width * 0.5) / (width * 0.5)),
-            Float32((height - 2 * Float64(event.y)) / width),
+            Float32((x - width * 0.5) / (width * 0.5)),
+            Float32((height - 2 * y) / width),
             0,
         )
 
@@ -381,9 +575,22 @@ struct TrackballControls(Copyable, Movable):
         Returns:
             Right and down from the top left, in x and y.
         """
+        return self._screen_at(Float64(event.x), Float64(event.y))
+
+    def _screen_at(self, x: Float64, y: Float64) -> Vector3:
+        """Return a place in the view as parts of the view. three.js:
+        `_getMouseOnScreen`.
+
+        Args:
+            x: Across, in pixels.
+            y: Down, in pixels.
+
+        Returns:
+            Right and down from the top left, in x and y.
+        """
         return Vector3(
-            Float32(Float64(event.x) / Float64(self._width)),
-            Float32(Float64(event.y) / Float64(self._height)),
+            Float32(x / Float64(self._width)),
+            Float32(y / Float64(self._height)),
             0,
         )
 
@@ -611,9 +818,21 @@ struct TrackballControls(Copyable, Movable):
         """Return the factor on the distance the pending zoom asks for, and
         let what is left of it die away. three.js: `_zoomCamera`.
 
+        While two fingers zoom, the factor is how far apart they were
+        over how far apart they are, and a wheel or a zoom drag waits.
+        Two fingers on one pixel, before or now, are no zoom: three.js
+        divides by zero there.
+
         Returns:
             The factor. One, or not positive, is no zoom.
         """
+        if self._touch_zoom_pan:
+            var start = self._touch_zoom_start
+            var end = self._touch_zoom_end
+            self._touch_zoom_start = end
+            if start > 0 and end > 0:
+                return Float32(start / end)
+            return 1
         var factor = (
             1 + (self._zoom_end_y - self._zoom_start_y) * self.zoom_speed
         )
@@ -681,6 +900,7 @@ struct TrackballControls(Copyable, Movable):
     def _restore(mut self):
         """Stop every action and put the target back."""
         self._state = NO_ACTION
+        self._touch_zoom_pan = False
         self._key_state = NO_ACTION
         self._listening = True
         self.target = self._target0

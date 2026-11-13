@@ -32,8 +32,13 @@ The press and the moves read the pointer at the center of its pixel. The
 scene is brought up to date at each event, as a render between two events
 brings it up to date in three.js.
 
-Differences from three.js: touch input and the cursor style are not
-ported.
+A finger is a pointer of type `TOUCH_POINTER`. Its press does what
+`touch_action` says, a translation by default: three.js's `touches.ONE`.
+A finger that moves with nothing picked up hovers over nothing, as in
+three.js. A pointer that the window cancels lets its object go: a browser
+sends `pointerleave` after `pointercancel`, and three.js lets go on that.
+
+Differences from three.js: the cursor style is not ported.
 """
 from core.ordinal import ordinal_valid
 
@@ -44,6 +49,7 @@ from controls.input import (
     require_named,
     require_view_size,
     pixel_center_ndc,
+    POINTER_CANCEL,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -145,6 +151,8 @@ struct DragControls(Copyable, Movable):
     var primary_action: DragAction
     var middle_action: DragAction
     var secondary_action: DragAction
+    # What a finger does. three.js: `touches.ONE`.
+    var touch_action: DragAction
 
     # The action of the button that picked the object up.
     var _action: DragAction
@@ -181,6 +189,7 @@ struct DragControls(Copyable, Movable):
         self.primary_action = DRAG_TRANSLATE
         self.middle_action = DRAG_TRANSLATE
         self.secondary_action = DRAG_ROTATE
+        self.touch_action = DRAG_TRANSLATE
         self._action = NO_DRAG
         self._selected = None
         self._hovered = None
@@ -243,7 +252,8 @@ struct DragControls(Copyable, Movable):
         height: Int,
     ) raises -> List[DragEvent]:
         """Take one event: a press picks an object up, a move drags it or
-        hovers, and a release lets it go.
+        hovers, and a release or a cancel lets it go. A finger's press
+        does what `touch_action` says, and a finger does not hover.
 
         Args:
             event: The event, with its position in pixels.
@@ -258,14 +268,25 @@ struct DragControls(Copyable, Movable):
             What happened, in three.js's order.
 
         Raises:
-            Error: If the event's kind, button or key is invalid, a button's
-                action is invalid, the view has no size, one of `objects`
-                is not in the scene, or the camera or the scene cannot be
-                read.
+            Error: If the event's kind, button, key or pointer is invalid,
+                a button's action or the touch action is invalid, the view
+                has no size, one of `objects` is not in the scene, or the
+                camera or the scene cannot be read.
         """
         require_named(event.kind.is_valid(), "input kind", event.kind.value)
         require_named(event.key.is_valid(), "key", event.key.value)
+        require_named(
+            event.pointer_type.is_valid(),
+            "pointer type",
+            event.pointer_type.value,
+        )
+        require_named(
+            event.pointer_id.is_valid(), "pointer id", event.pointer_id.value
+        )
         var action = self.action_of(event.button)
+        if event.is_touch():
+            action = self.touch_action
+            require_named(action.is_valid(), "drag action", action.value)
         var events = List[DragEvent]()
         if not self.enabled:
             return events^
@@ -283,9 +304,11 @@ struct DragControls(Copyable, Movable):
             self._press(camera, scene, assets, events)
             self._previous = pointer
         elif event.kind == POINTER_MOVE:
-            self._move(pointer, camera, scene, assets, events)
+            self._move(
+                pointer, camera, scene, assets, events, not event.is_touch()
+            )
             self._previous = pointer
-        elif event.kind == POINTER_UP:
+        elif event.kind == POINTER_UP or event.kind == POINTER_CANCEL:
             self._release(events)
         return events^
 
@@ -348,6 +371,7 @@ struct DragControls(Copyable, Movable):
         mut scene: Scene,
         assets: Assets,
         mut events: List[DragEvent],
+        hovers: Bool,
     ) raises:
         """Drag the object picked up, or find the object under the pointer.
         three.js: `onPointerMove`.
@@ -359,6 +383,8 @@ struct DragControls(Copyable, Movable):
             scene: The scene, updated.
             assets: Its geometry and materials.
             events: Where the events are appended.
+            hovers: Whether the pointer can hover: a mouse can, and a
+                finger cannot.
 
         Raises:
             Error: If the camera or the scene cannot be read.
@@ -378,6 +404,8 @@ struct DragControls(Copyable, Movable):
                 moved.rotate_on_world_axis(self._up, Angle(diff.x, RADIAN))
                 moved.rotate_on_world_axis(self._right, Angle(-diff.y, RADIAN))
                 events.append(DragEvent(DRAG_MOVE, node))
+            return
+        if not hovers:
             return
         var struck = self._first_hit(scene, assets)
         if Bool(struck):

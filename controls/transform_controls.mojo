@@ -42,8 +42,13 @@ Here each shape is drawn by its edges.
 The plane and the handles are worked out from the scene at each event,
 as a render between two events works them out in three.js.
 
+A finger is a pointer of type `TOUCH_POINTER`. Its press picks the handle
+under it and starts the drag at once, as the primary button does. A
+finger that moves does not pick a handle: three.js hovers for a mouse and
+a pen only.
+
 Differences from three.js: the helper lines shown during a drag, the
-limits `minX` to `maxZ`, `setColors`, and touch input are not ported. A
+limits `minX` to `maxZ` and `setColors` are not ported. A
 scale whose start point has no length along an axis keeps that axis's
 scale, where three.js divides by zero. The `E` picker is a flat ring, the
 shape of three.js's torus with two segments around its tube, and the
@@ -500,7 +505,8 @@ struct TransformControls(Copyable, Movable):
         height: Int,
     ) raises -> List[TransformEvent]:
         """Take one event: a move picks a handle or drags it, a press
-        starts a drag, and a release ends it.
+        starts a drag, and a release ends it. A finger is the primary
+        button, and its move picks no handle.
 
         Args:
             event: The event, with its position in pixels.
@@ -514,19 +520,22 @@ struct TransformControls(Copyable, Movable):
             What happened, in three.js's order.
 
         Raises:
-            Error: If the event's kind, button or key is invalid, a setting
-                is refused by `check`, the view has no size, the node is
-                not in the scene, or the camera or the scene cannot be
-                read.
+            Error: If the event's kind, button, key or pointer is invalid,
+                a setting is refused by `check`, the view has no size, the
+                node is not in the scene, or the camera or the scene
+                cannot be read.
         """
         require_input(event)
         self.check()
         var events = List[TransformEvent]()
         if not self.enabled:
             return events^
+        # A finger has the browser's button zero.
+        var touch = event.is_touch()
+        var primary = touch or event.button == PRIMARY
         if event.kind == POINTER_UP:
             # three.js lets go even with no node attached.
-            if event.button == PRIMARY:
+            if primary:
                 self._release(events)
             return events^
         if not Bool(self.node):
@@ -544,10 +553,12 @@ struct TransformControls(Copyable, Movable):
         )
         if event.kind == POINTER_DOWN:
             self._hover(frame, events)
-            if event.button == PRIMARY:
+            if primary:
                 self._press(frame, scene, events)
         elif event.kind == POINTER_MOVE:
-            self._hover(frame, events)
+            # three.js's `onPointerHover` reads a mouse and a pen only.
+            if not touch:
+                self._hover(frame, events)
             self._drag(frame, scene, events)
         return events^
 

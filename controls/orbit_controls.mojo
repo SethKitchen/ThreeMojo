@@ -30,8 +30,15 @@ With `screen_space_panning` off, a pan up the view moves the target
 forward in the plane at right angles to the camera's up, as three.js's
 does. `MapControls` in `controls.map_controls` pans that way.
 
-Differences from three.js: touch input and a target radius limit are not
-ported.
+A finger is a pointer of type `TOUCH_POINTER`. One finger does what
+`touch_one` says, and two fingers do what `touch_two` says: three.js's
+`touches.ONE` and `touches.TWO`. Two fingers act at the point midway
+between them, and their distance apart is the dolly.
+
+Differences from three.js: a mouse button and a finger do not count
+together, and a two-finger move with one finger left does nothing.
+three.js raises a `TypeError` in both cases. A dolly between two fingers
+on one pixel is no dolly, where three.js divides by zero.
 """
 from core.ordinal import ordinal_valid
 
@@ -49,6 +56,7 @@ from controls.input import (
     require_input,
     pixel_center_ndc,
     Key,
+    POINTER_CANCEL,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -60,7 +68,7 @@ from math.utils import clamp, scaled_side
 from math.quaternion import Quaternion
 from math.spherical import Spherical
 from math.vector3 import Vector3
-from std.math import inf, isfinite, pi, tan
+from std.math import inf, isfinite, pi, sqrt, tan
 from units.measure import angle_radians
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
 
@@ -100,6 +108,33 @@ comptime NO_ACTION = OrbitAction(0)
 comptime ROTATE = OrbitAction(1)
 comptime DOLLY = OrbitAction(2)
 comptime PAN = OrbitAction(3)
+
+
+@fieldwise_init
+struct TouchAction(Equatable, ImplicitlyCopyable, Writable):
+    """What one finger or two fingers do to the camera, as a type rather
+    than a bare int. three.js: `TOUCH.ROTATE`, `TOUCH.PAN`,
+    `TOUCH.DOLLY_PAN` and `TOUCH.DOLLY_ROTATE`."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the four actions, or none.
+
+        Returns:
+            Whether the value names a touch action.
+        """
+        return ordinal_valid(self.value, 4)
+
+
+comptime NO_TOUCH_ACTION = TouchAction(0)
+# One finger rotates, or two fingers do with `TOUCH_DOLLY_ROTATE`.
+comptime TOUCH_ROTATE = TouchAction(1)
+comptime TOUCH_PAN = TouchAction(2)
+# Two fingers dolly by their distance apart and pan by their midpoint.
+comptime TOUCH_DOLLY_PAN = TouchAction(3)
+# Two fingers dolly by their distance apart and rotate by their midpoint.
+comptime TOUCH_DOLLY_ROTATE = TouchAction(4)
 
 
 def require_dolly_factor(scale: Float32) raises:
@@ -169,6 +204,11 @@ struct OrbitControls(Copyable, Movable):
     var primary_action: OrbitAction
     var middle_action: OrbitAction
     var secondary_action: OrbitAction
+    # What one finger and two fingers do. three.js: `touches.ONE` and
+    # `touches.TWO`. One finger can rotate or pan. Two fingers can dolly
+    # and pan, or dolly and rotate. Any other action does nothing.
+    var touch_one: TouchAction
+    var touch_two: TouchAction
     # How far an orthographic camera can zoom out and in, three.js's
     # `minZoom` and `maxZoom`. Zero and infinity by default.
     var min_zoom: Float32
@@ -185,6 +225,21 @@ struct OrbitControls(Copyable, Movable):
     var _action: OrbitAction
     var _last_x: Int
     var _last_y: Int
+    # The action of the fingers down, three.js's touch states.
+    var _touch_state: TouchAction
+    # The fingers down, in the order they came, and where each one is:
+    # three.js's `_pointers` and `_pointerPositions`.
+    var _pointers: List[Int]
+    var _pointer_xs: List[Float64]
+    var _pointer_ys: List[Float64]
+    # Where a touch rotation and a touch pan last were, and how far apart
+    # the two fingers of a dolly last were: three.js's `_rotateStart`,
+    # `_panStart` and `_dollyStart`.
+    var _touch_rotate_x: Float64
+    var _touch_rotate_y: Float64
+    var _touch_pan_x: Float64
+    var _touch_pan_y: Float64
+    var _touch_dolly: Float64
     # What is pending: radians about y, radians down, a factor on the
     # radius and a move of the target.
     var _delta_theta: Float32
@@ -249,9 +304,20 @@ struct OrbitControls(Copyable, Movable):
         self.primary_action = ROTATE
         self.middle_action = DOLLY
         self.secondary_action = PAN
+        self.touch_one = TOUCH_ROTATE
+        self.touch_two = TOUCH_DOLLY_PAN
         self._action = NO_ACTION
         self._last_x = 0
         self._last_y = 0
+        self._touch_state = NO_TOUCH_ACTION
+        self._pointers = List[Int]()
+        self._pointer_xs = List[Float64]()
+        self._pointer_ys = List[Float64]()
+        self._touch_rotate_x = 0
+        self._touch_rotate_y = 0
+        self._touch_pan_x = 0
+        self._touch_pan_y = 0
+        self._touch_dolly = 0
         self._delta_theta = 0
         self._delta_phi = 0
         self._scale = 1
@@ -410,6 +476,10 @@ struct OrbitControls(Copyable, Movable):
         resize changes nothing here. A release ends a drag also while
         `enabled` is False, as three.js's `onPointerUp` does.
 
+        A finger down starts `touch_one`, and a second finger starts
+        `touch_two`. A finger that lifts, or that the window cancels,
+        leaves the action of the fingers still down.
+
         Args:
             event: The event, with its position in pixels.
             camera: The camera, which a pan moves across. The view is as
@@ -417,9 +487,9 @@ struct OrbitControls(Copyable, Movable):
             viewport_height: The view's height, in pixels.
 
         Raises:
-            Error: If the event's kind, button or key is invalid, an
-                action is invalid, the height is not positive, or the
-                view's width does not fit in an integer.
+            Error: If the event's kind, button, key or pointer is
+                invalid, an action is invalid, the height is not
+                positive, or the view's width does not fit in an integer.
         """
         self._handle(
             event, _perspective_view(camera, self.target, viewport_height)
@@ -442,8 +512,8 @@ struct OrbitControls(Copyable, Movable):
             viewport_height: The view's height, in pixels.
 
         Raises:
-            Error: If the event's kind, button or key is invalid, an
-                action is invalid, or a size is not positive.
+            Error: If the event's kind, button, key or pointer is
+                invalid, an action is invalid, or a size is not positive.
         """
         self._handle(
             event,
@@ -458,25 +528,342 @@ struct OrbitControls(Copyable, Movable):
             view: The camera, as the controls see it.
 
         Raises:
-            Error: If the event's kind, button or key is invalid, or an
-                action is invalid.
+            Error: If the event's kind, button, key or pointer is
+                invalid, or an action is invalid.
         """
         require_input(event)
-        if event.kind == POINTER_UP:
-            # three.js's `onPointerUp` does not read `enabled`. So a drag
-            # that the controls were turned off during ends at its release.
-            self._action = NO_ACTION
+        if event.kind == POINTER_UP or event.kind == POINTER_CANCEL:
+            # three.js's `onPointerUp` does not read `enabled`, and it
+            # hears `pointercancel` too. So a drag that the controls were
+            # turned off during ends at its release.
+            if event.is_touch():
+                self._touch_up(event)
+            else:
+                self._action = NO_ACTION
             return
         if not self.enabled:
             return
         if event.kind == POINTER_DOWN:
-            self._press(event, view)
+            if event.is_touch():
+                self._touch_down(event)
+            else:
+                self._press(event, view)
         elif event.kind == POINTER_MOVE:
-            self._move(event, view)
+            if event.is_touch():
+                self._touch_move(event, view)
+            else:
+                self._move(event, view)
         elif event.kind == WHEEL:
             self._wheel(event, view)
         elif event.kind == KEY_DOWN:
             self._key(event, view)
+
+    # --- touch ---------------------------------------------------------------
+
+    def _finger(self, id: Int) -> Int:
+        """Return where a finger is in the list of fingers down.
+
+        Args:
+            id: The finger's pointer id.
+
+        Returns:
+            Its index, or -1 for a finger the controls do not follow.
+        """
+        for index in range(len(self._pointers)):
+            if self._pointers[index] == id:
+                return index
+        return -1
+
+    def _other(self, id: Int) -> Int:
+        """Return the index of the second finger of a pair. three.js:
+        `_getSecondPointerPosition`.
+
+        Args:
+            id: The pointer id of the finger the event is about.
+
+        Returns:
+            The index of the second finger down when the event is about
+            the first one, else the index of the first.
+        """
+        return 1 if self._pointers[0] == id else 0
+
+    def _touch_point(self, id: Int, x: Float64, y: Float64) -> List[Float64]:
+        """Return where a touch action is: at the one finger down, or
+        midway between a finger and the other one.
+
+        three.js reads the place the same way in `_handleTouchStartRotate`,
+        `_handleTouchStartPan` and their moves.
+
+        Args:
+            id: The pointer id of the finger the event is about.
+            x: That finger's x, in pixels.
+            y: That finger's y, in pixels.
+
+        Returns:
+            The x and the y, in pixels.
+        """
+        if len(self._pointers) == 1:
+            return [x, y]
+        var other = self._other(id)
+        return [
+            0.5 * (x + self._pointer_xs[other]),
+            0.5 * (y + self._pointer_ys[other]),
+        ]
+
+    def _touch_down(mut self, event: InputEvent) raises:
+        """Follow a new finger and start the action of the fingers down.
+        three.js: `onPointerDown` for a touch.
+
+        Args:
+            event: The finger's press.
+
+        Raises:
+            Error: If a touch action is invalid.
+        """
+        var id = event.pointer_id.value
+        if self._finger(id) >= 0:
+            return
+        self._pointers.append(id)
+        self._pointer_xs.append(Float64(event.x))
+        self._pointer_ys.append(Float64(event.y))
+        self._touch_start(id, Float64(event.x), Float64(event.y))
+
+    def _touch_start(mut self, id: Int, x: Float64, y: Float64) raises:
+        """Start the action of the fingers that are down now. three.js:
+        `onTouchStart`.
+
+        An action that is turned off leaves the state as it was, as in
+        three.js.
+
+        Args:
+            id: The pointer id of the finger the event is about.
+            x: That finger's x, in pixels.
+            y: That finger's y, in pixels.
+
+        Raises:
+            Error: If a touch action is invalid.
+        """
+        require_named(
+            self.touch_one.is_valid(), "touch action", self.touch_one.value
+        )
+        require_named(
+            self.touch_two.is_valid(), "touch action", self.touch_two.value
+        )
+        var count = len(self._pointers)
+        if count == 1 and self.touch_one == TOUCH_ROTATE:
+            if not self.enable_rotate:
+                return
+            self._touch_start_rotate(id, x, y)
+            self._touch_state = TOUCH_ROTATE
+        elif count == 1 and self.touch_one == TOUCH_PAN:
+            if not self.enable_pan:
+                return
+            self._touch_start_pan(id, x, y)
+            self._touch_state = TOUCH_PAN
+        elif count == 2 and self.touch_two == TOUCH_DOLLY_PAN:
+            if not self.enable_zoom and not self.enable_pan:
+                return
+            if self.enable_zoom:
+                self._touch_start_dolly(id, x, y)
+            if self.enable_pan:
+                self._touch_start_pan(id, x, y)
+            self._touch_state = TOUCH_DOLLY_PAN
+        elif count == 2 and self.touch_two == TOUCH_DOLLY_ROTATE:
+            if not self.enable_zoom and not self.enable_rotate:
+                return
+            if self.enable_zoom:
+                self._touch_start_dolly(id, x, y)
+            if self.enable_rotate:
+                self._touch_start_rotate(id, x, y)
+            self._touch_state = TOUCH_DOLLY_ROTATE
+        else:
+            self._touch_state = NO_TOUCH_ACTION
+
+    def _touch_start_rotate(mut self, id: Int, x: Float64, y: Float64):
+        """Remember where a touch rotation starts. three.js:
+        `_handleTouchStartRotate`.
+
+        Args:
+            id: The pointer id of the finger the event is about.
+            x: That finger's x, in pixels.
+            y: That finger's y, in pixels.
+        """
+        var at = self._touch_point(id, x, y)
+        self._touch_rotate_x = at[0]
+        self._touch_rotate_y = at[1]
+
+    def _touch_start_pan(mut self, id: Int, x: Float64, y: Float64):
+        """Remember where a touch pan starts. three.js:
+        `_handleTouchStartPan`.
+
+        Args:
+            id: The pointer id of the finger the event is about.
+            x: That finger's x, in pixels.
+            y: That finger's y, in pixels.
+        """
+        var at = self._touch_point(id, x, y)
+        self._touch_pan_x = at[0]
+        self._touch_pan_y = at[1]
+
+    def _fingers_apart(self, id: Int, x: Float64, y: Float64) -> Float64:
+        """Return how far a finger is from the other one of a pair.
+
+        Args:
+            id: The pointer id of the finger the event is about.
+            x: That finger's x, in pixels.
+            y: That finger's y, in pixels.
+
+        Returns:
+            The distance, in pixels.
+        """
+        var other = self._other(id)
+        var dx = x - self._pointer_xs[other]
+        var dy = y - self._pointer_ys[other]
+        return sqrt(dx * dx + dy * dy)
+
+    def _touch_start_dolly(mut self, id: Int, x: Float64, y: Float64):
+        """Remember how far apart the two fingers of a dolly start.
+        three.js: `_handleTouchStartDolly`.
+
+        Args:
+            id: The pointer id of the finger the event is about.
+            x: That finger's x, in pixels.
+            y: That finger's y, in pixels.
+        """
+        self._touch_dolly = self._fingers_apart(id, x, y)
+
+    def _touch_move(mut self, event: InputEvent, view: _View):
+        """Rotate, pan or dolly by how far a finger moved. three.js:
+        `onTouchMove`.
+
+        A two-finger action with one finger left does nothing. three.js
+        raises a `TypeError` there.
+
+        Args:
+            event: The finger's move.
+            view: The camera, as the controls see it.
+        """
+        var id = event.pointer_id.value
+        var x = Float64(event.x)
+        var y = Float64(event.y)
+        var index = self._finger(id)
+        if index >= 0:
+            self._pointer_xs[index] = x
+            self._pointer_ys[index] = y
+        var state = self._touch_state
+        if state == TOUCH_ROTATE:
+            if self.enable_rotate:
+                self._touch_move_rotate(id, x, y, view)
+        elif state == TOUCH_PAN:
+            if self.enable_pan:
+                self._touch_move_pan(id, x, y, view)
+        elif state == TOUCH_DOLLY_PAN:
+            if len(self._pointers) < 2:
+                return
+            if self.enable_zoom:
+                self._touch_move_dolly(id, x, y, view)
+            if self.enable_pan:
+                self._touch_move_pan(id, x, y, view)
+        elif state == TOUCH_DOLLY_ROTATE:
+            if len(self._pointers) < 2:
+                return
+            if self.enable_zoom:
+                self._touch_move_dolly(id, x, y, view)
+            if self.enable_rotate:
+                self._touch_move_rotate(id, x, y, view)
+
+    def _touch_move_rotate(
+        mut self, id: Int, x: Float64, y: Float64, view: _View
+    ):
+        """Rotate by how far the touch point moved. three.js:
+        `_handleTouchMoveRotate`.
+
+        Args:
+            id: The pointer id of the finger the event is about.
+            x: That finger's x, in pixels.
+            y: That finger's y, in pixels.
+            view: The camera, as the controls see it.
+        """
+        var at = self._touch_point(id, x, y)
+        var dx = Float32(at[0] - self._touch_rotate_x)
+        var dy = Float32(at[1] - self._touch_rotate_y)
+        var height = Float32(view.height)
+        self.rotate_left(Angle(TAU * dx * self.rotate_speed / height, RADIAN))
+        self.rotate_up(Angle(TAU * dy * self.rotate_speed / height, RADIAN))
+        self._touch_rotate_x = at[0]
+        self._touch_rotate_y = at[1]
+
+    def _touch_move_pan(mut self, id: Int, x: Float64, y: Float64, view: _View):
+        """Pan by how far the touch point moved. three.js:
+        `_handleTouchMovePan`.
+
+        Args:
+            id: The pointer id of the finger the event is about.
+            x: That finger's x, in pixels.
+            y: That finger's y, in pixels.
+            view: The camera, as the controls see it.
+        """
+        var at = self._touch_point(id, x, y)
+        var dx = Float32(at[0] - self._touch_pan_x)
+        var dy = Float32(at[1] - self._touch_pan_y)
+        self._pan_by(dx * self.pan_speed, dy * self.pan_speed, view)
+        self._touch_pan_x = at[0]
+        self._touch_pan_y = at[1]
+
+    def _touch_move_dolly(
+        mut self, id: Int, x: Float64, y: Float64, view: _View
+    ):
+        """Dolly by how the distance between two fingers changed, toward
+        the point midway between them with `zoom_to_cursor`. three.js:
+        `_handleTouchMoveDolly`.
+
+        Fingers that move apart bring the camera nearer. Two fingers on
+        one pixel, before or after the move, are no dolly: three.js
+        divides by zero there.
+
+        Args:
+            id: The pointer id of the finger the event is about.
+            x: That finger's x, in pixels.
+            y: That finger's y, in pixels.
+            view: The camera, as the controls see it.
+        """
+        var distance = self._fingers_apart(id, x, y)
+        var before = self._touch_dolly
+        self._touch_dolly = distance
+        if distance > 0 and before > 0:
+            self._scale /= Float32(distance / before) ** self.zoom_speed
+        var other = self._other(id)
+        # The pixels are whole numbers, so the conversions are exact.
+        var across = pixel_center_ndc(Int(x), view.width) + pixel_center_ndc(
+            Int(self._pointer_xs[other]), view.width
+        )
+        var down = pixel_center_ndc(Int(y), view.height) + pixel_center_ndc(
+            Int(self._pointer_ys[other]), view.height
+        )
+        self._aim_at(0.5 * across, -0.5 * down, view)
+
+    def _touch_up(mut self, event: InputEvent) raises:
+        """Stop following a finger, and start the action of the one finger
+        left, if one is. three.js: `onPointerUp`.
+
+        Args:
+            event: The finger's release, or its cancel.
+
+        Raises:
+            Error: If a touch action is invalid.
+        """
+        var index = self._finger(event.pointer_id.value)
+        if index >= 0:
+            _ = self._pointers.pop(index)
+            _ = self._pointer_xs.pop(index)
+            _ = self._pointer_ys.pop(index)
+        var count = len(self._pointers)
+        if count == 0:
+            self._touch_state = NO_TOUCH_ACTION
+        elif count == 1:
+            self._touch_start(
+                self._pointers[0], self._pointer_xs[0], self._pointer_ys[0]
+            )
 
     def _aim_at_cursor(mut self, event: InputEvent, view: _View):
         """Remember where the pointer is for a zoom toward it, three.js's
@@ -490,11 +877,27 @@ struct OrbitControls(Copyable, Movable):
             event: A wheel notch or the press that starts a dolly.
             view: The camera, as the controls see it.
         """
+        self._aim_at(
+            pixel_center_ndc(event.x, view.width),
+            -pixel_center_ndc(event.y, view.height),
+            view,
+        )
+
+    def _aim_at(mut self, x: Float32, y: Float32, view: _View):
+        """Remember a place in the view for a zoom toward it.
+
+        Nothing is remembered unless `zoom_to_cursor` is set.
+
+        Args:
+            x: The place across the view, from minus one to one.
+            y: The place up the view, from minus one to one.
+            view: The camera, as the controls see it.
+        """
         if not self.zoom_to_cursor:
             return
         self._cursor = True
-        self._cursor_x = pixel_center_ndc(event.x, view.width)
-        self._cursor_y = -pixel_center_ndc(event.y, view.height)
+        self._cursor_x = x
+        self._cursor_y = y
         var through = view.inverse.transform_point(
             Vector3(self._cursor_x, self._cursor_y, 0.5)
         )
@@ -591,7 +994,8 @@ struct OrbitControls(Copyable, Movable):
         return ZOOM_BASE ** (self.zoom_speed * abs(pixels) / WHEEL_PIXELS)
 
     def _wheel(mut self, event: InputEvent, view: _View):
-        """Dolly by a wheel notch, unless a button's action is going.
+        """Dolly by a wheel notch, unless a button's action or a touch
+        action is going.
 
         A notch away from the user moves nearer, as in three.js.
 
@@ -599,7 +1003,11 @@ struct OrbitControls(Copyable, Movable):
             event: A wheel notch.
             view: The camera, as the controls see it.
         """
-        if not self.enable_zoom or self._action != NO_ACTION:
+        if (
+            not self.enable_zoom
+            or self._action != NO_ACTION
+            or self._touch_state != NO_TOUCH_ACTION
+        ):
             return
         self._aim_at_cursor(event, view)
         var factor = self._zoom_scale(Float32(event.wheel) * WHEEL_PIXELS)
@@ -688,6 +1096,7 @@ struct OrbitControls(Copyable, Movable):
         var saved = self._saved.value().copy()
         self.target = saved[0]
         self._action = NO_ACTION
+        self._touch_state = NO_TOUCH_ACTION
         return saved[1]
 
     def save_state(mut self, camera: PerspectiveCamera):
@@ -953,7 +1362,11 @@ struct OrbitControls(Copyable, Movable):
         var theta = spherical.theta.to(RADIAN)
         var phi = spherical.phi.to(RADIAN)
 
-        if self.auto_rotate and self._action == NO_ACTION:
+        if (
+            self.auto_rotate
+            and self._action == NO_ACTION
+            and self._touch_state == NO_TOUCH_ACTION
+        ):
             var turns = self.auto_rotate_speed * delta.to(SECOND)
             self.rotate_left(Angle(TAU * turns / SECONDS_PER_MINUTE, RADIAN))
 
