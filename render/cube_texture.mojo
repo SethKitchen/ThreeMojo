@@ -34,7 +34,8 @@ See `face_uv` for the arithmetic, which both rasterizers share.
 **A face is read at its full size, not down a mip chain.** A reflection's
 direction changes across a surface at a rate that has nothing to do with
 the surface's own texture coordinates, and the footprint `mip_level`
-measures is theirs. The same reasoning keeps a matcap out of its chain. A
+measures is theirs. A matcap measures the footprint of its own lookup
+instead; see `render.rasterizer.matcap_steps`. A
 face can still hold a chain, since it is a `Texture`, and one reader asks
 for it: a physical surface reads the chain by its *roughness* rather than
 by any footprint, through `sample_level`, because a rough surface reflects

@@ -1352,8 +1352,8 @@ def test_a_cosine_maps_onto_the_whole_ramp() raises:
 
 def test_the_fallback_ramp_has_two_tones_and_one_edge() raises:
     # three.js's `mix(vec3(0.7), vec3(1.0), smoothstep(0.7 - fw, 0.7 + fw,
-    # coord))`, with the edge hard because a software rasterizer has no
-    # neighboring fragment to take `fwidth` against.
+    # coord))` where the coordinate has no width: the hard step.
+    # `tests/test_derivatives.mojo` covers the antialiased edge.
     assert_equal(toon_step(0.0), TOON_SHADE)
     assert_equal(toon_step(TOON_EDGE - 0.001), TOON_SHADE)
     assert_equal(toon_step(TOON_EDGE), Float32(1))

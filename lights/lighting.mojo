@@ -98,6 +98,7 @@ from math.vector2 import Vector2
 from math.cross import cross_vectors
 from math.vector3 import Vector3, mix_delta3
 from render.color_math import rgb_channels
+from render.derivatives import SurfaceSteps, fwidth
 from render.framebuffer import Color, FloatColor
 from std.math import cos, exp2, log2, max, min, pi, sqrt
 from units.si import METER
@@ -312,13 +313,12 @@ def toon_coord(dot_nl: Float32) -> Float32:
 
 
 def toon_step(coord: Float32) -> Float32:
-    """Return three.js's fallback ramp at `coord`: two tones, one edge.
+    """Return three.js's fallback ramp at `coord` with a hard edge: two
+    tones, one edge.
 
-    three.js antialiases the edge with `fwidth`, a screen-space derivative
-    of the coordinate. A software rasterizer shades one fragment at a time
-    and has no neighboring fragment to take a derivative against, so the
-    edge is hard here. That is the one difference, and it shows only on the
-    single row of fragments the edge crosses.
+    This is the ramp where the coordinate has no width on the screen.
+    `toon_edge` is the ramp with three.js's antialiased edge, and it
+    returns this step for a width of zero.
 
     Args:
         coord: Where on the ramp to read, from `toon_coord`.
@@ -329,6 +329,106 @@ def toon_step(coord: Float32) -> Float32:
     if coord < TOON_EDGE:
         return TOON_SHADE
     return 1.0
+
+
+def toon_edge(coord: Float32, half_width: Float32) -> Float32:
+    """Return three.js's fallback ramp at `coord`, its edge antialiased.
+
+    three.js's `getGradientIrradiance` with no gradient map:
+    `mix(0.7, 1.0, smoothstep(0.7 - fw, 0.7 + fw, coord))`, where `fw` is
+    `fwidth(coord) * 0.5`. The edge is as wide as the coordinate changes
+    across one pixel, so it covers about one pixel on the image.
+
+    Shared by both rasterizers, as `toon_step` is.
+
+    Args:
+        coord: Where on the ramp to read, from `toon_coord`.
+        half_width: Half of `fwidth` of the coordinate, from
+            `toon_width_along` or `toon_width_toward`. A width that is
+            not above zero gives the hard edge of `toon_step`.
+
+    Returns:
+        How lit the surface looks, from `TOON_SHADE` to one.
+    """
+    if not (half_width > 0):
+        return toon_step(coord)
+    return mix_delta(
+        TOON_SHADE,
+        Float32(1),
+        smoothstep(TOON_EDGE - half_width, TOON_EDGE + half_width, coord),
+    )
+
+
+def toon_width_along(steps: SurfaceSteps, direction: Vector3) -> Float32:
+    """Return half of `fwidth` of a toon coordinate, for a light that has
+    one direction everywhere: three.js's `fwidth(coord) * 0.5`.
+
+    The coordinate is computed at the fragment's pixel, at the pixel to
+    its right and at the pixel above it, each from the plane's own normal
+    there.
+
+    Args:
+        steps: The surface at the three pixels.
+        direction: The unit direction toward the light.
+
+    Returns:
+        The half width, or zero when `steps` holds nothing.
+    """
+    if not steps.measured:
+        return 0
+    return (
+        fwidth(
+            toon_coord(steps.normal.dot(direction)),
+            toon_coord(steps.normal_right.dot(direction)),
+            toon_coord(steps.normal_up.dot(direction)),
+        )
+        * 0.5
+    )
+
+
+def _toon_coord_toward(
+    normal: Vector3, position: Vector3, light: Vector3, fallback: Float32
+) -> Float32:
+    """Return the toon coordinate of a surface point lit from a position,
+    or `fallback` for a point on the light, which has no direction."""
+    var ray = light_vector(light, position)
+    if ray[1] == 0:
+        return fallback
+    return toon_coord(normal.dot(ray[0]) / ray[2])
+
+
+def toon_width_toward(
+    steps: SurfaceSteps, light: Vector3, coord: Float32
+) -> Float32:
+    """Return half of `fwidth` of a toon coordinate, for a light that has
+    a position: three.js's `fwidth(coord) * 0.5`.
+
+    The direction toward the light changes from pixel to pixel, so each of
+    the three coordinates is computed from the plane's own position and
+    normal at its pixel. A pixel that is on the light has no direction and
+    takes the coordinate of the pixel before it.
+
+    Args:
+        steps: The surface at the three pixels.
+        light: Where the light is, in world space.
+        coord: The fragment's own coordinate for this light.
+
+    Returns:
+        The half width, or zero when `steps` holds nothing.
+    """
+    if not steps.measured:
+        return 0
+    var here = _toon_coord_toward(steps.normal, steps.position, light, coord)
+    return (
+        fwidth(
+            here,
+            _toon_coord_toward(
+                steps.normal_right, steps.position_right, light, here
+            ),
+            _toon_coord_toward(steps.normal_up, steps.position_up, light, here),
+        )
+        * 0.5
+    )
 
 
 def toon_index(coord: Float32, count: Int) -> Int:
@@ -357,7 +457,9 @@ def toon_index(coord: Float32, count: Int) -> Int:
     return slot
 
 
-def toon_tone(dot_nl: Float32, ramp: List[Float32]) -> Float32:
+def toon_tone(
+    dot_nl: Float32, ramp: List[Float32], half_width: Float32 = 0
+) -> Float32:
     """Return how lit a toon surface looks at this cosine.
 
     The host's spelling of what the kernel does with the same three
@@ -369,13 +471,17 @@ def toon_tone(dot_nl: Float32, ramp: List[Float32]) -> Float32:
             toward the light.
         ramp: The tones of the material's gradient map, left to right, or
             empty for the fallback.
+        half_width: Half of `fwidth` of the coordinate, which the
+            fallback's edge is antialiased over; see `toon_edge`. Zero,
+            the default, keeps the edge hard. A gradient map does not
+            read it.
 
     Returns:
         How lit the surface looks, from zero to one.
     """
     var coord = toon_coord(dot_nl)
     if len(ramp) == 0:
-        return toon_step(coord)
+        return toon_edge(coord, half_width)
     return ramp[toon_index(coord, len(ramp))]
 
 
@@ -2165,6 +2271,7 @@ struct Lighting(Movable):
         ramp: List[Float32],
         receives: Bool = True,
         shape: R = Unshaped(),
+        steps: SurfaceSteps = SurfaceSteps(),
     ) -> FloatColor:
         """Return how much light of each color reaches a `TOON` surface here.
 
@@ -2197,13 +2304,22 @@ struct Lighting(Movable):
                 see `shadow_at`.
             shape: What the surface makes of each light's shadow, three.js's
                 `receivedShadowNode`; the shadow as it falls by default.
+            steps: The surface at the fragment's pixel and at the two
+                pixels beside it, which the fallback ramp's edge is
+                antialiased over: three.js's `fwidth(coord)`. The default
+                holds nothing and keeps the edge hard. A gradient map
+                does not read it.
 
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
         """
         var total = self.ambient_at(normal, position)
         for index in range(len(self.directions)):
-            var tone = toon_tone(normal.dot(self.directions[index]), ramp)
+            var tone = toon_tone(
+                normal.dot(self.directions[index]),
+                ramp,
+                toon_width_along(steps, self.directions[index]),
+            )
             var through = self.direction_through(
                 index, position, normal, receives, shape
             )
@@ -2216,7 +2332,14 @@ struct Lighting(Movable):
             # A surface exactly on the bulb has no direction to be lit from.
             if distance == 0:
                 continue
-            var tone = toon_tone(normal.dot(toward) / direction_length, ramp)
+            var cosine = normal.dot(toward) / direction_length
+            var tone = toon_tone(
+                cosine,
+                ramp,
+                toon_width_toward(
+                    steps, self.positions[index], toon_coord(cosine)
+                ),
+            )
             var bare = tone * falloff(
                 distance, self.decays[index], self.cutoffs[index]
             )
@@ -2235,7 +2358,14 @@ struct Lighting(Movable):
                 continue
             if rim <= 0:
                 continue
-            var tone = toon_tone(normal.dot(toward) / direction_length, ramp)
+            var cosine = normal.dot(toward) / direction_length
+            var tone = toon_tone(
+                cosine,
+                ramp,
+                toon_width_toward(
+                    steps, self.spot_positions[index], toon_coord(cosine)
+                ),
+            )
             var bare = (
                 tone
                 * rim

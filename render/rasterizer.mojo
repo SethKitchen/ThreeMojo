@@ -101,7 +101,19 @@ from render.volume_texture_store import (
     DataArrayTextureStore,
 )
 from render.target import RenderTarget
-from render.fragment_flags import alpha_covers, dither, hashed_threshold
+from render.derivatives import (
+    NO_EDGE_RAMP,
+    SurfaceSteps,
+    alpha_test_ramp,
+    fwidth,
+)
+from render.fragment_flags import (
+    alpha_covers,
+    dither,
+    edge_ramp_at,
+    hashed_threshold,
+    surface_steps,
+)
 from render.raster_state import (
     REVERSED_DEPTH,
     RasterState,
@@ -2603,6 +2615,89 @@ def interpolate_alpha(
     return first + share_b * (second - first) + share_c * (third - first)
 
 
+def _mapped_alpha(
+    a: RasterVertex,
+    b: RasterVertex,
+    c: RasterVertex,
+    coverage: _Coverage,
+    x: Int,
+    y: Int,
+    textures: TextureStore,
+    placed: List[UvPlacement],
+    sampled: Bool,
+) raises -> Float32:
+    """Return the alpha a triangle's corners and maps give at one pixel,
+    covered or not: three.js's `diffuseColor.a` there, from the triangle's
+    own plane.
+
+    The corners' alpha, interpolated as `interpolate_alpha` interpolates
+    it, times the map's alpha and the alpha map's green. Each map is
+    sampled where its own placement puts that pixel, with that pixel's own
+    footprint. `sampled` is whether the mode opens the maps.
+    """
+    var weights = _weights(coverage, x, y)
+    var shares = perspective_shares(
+        weights.wa, weights.wb, weights.wc, a.inv_w, b.inv_w, c.inv_w
+    )
+    var alpha = interpolate_alpha(
+        a.color.a, b.color.a, c.color.a, shares[1], shares[2]
+    )
+    if not sampled:
+        return alpha
+    var uv = _coordinates_at(a, b, c, weights)
+    var uv1 = _coordinates_at(a, b, c, weights, True)
+    if a.texture != NO_TEXTURE:
+        alpha *= _sample_placed(
+            textures.get(a.texture),
+            placed[MAP_SLOT],
+            uv,
+            uv1,
+            a,
+            b,
+            c,
+            coverage,
+            x,
+            y,
+        ).a
+    if a.alpha_map != NO_TEXTURE:
+        alpha *= _sample_placed(
+            textures.get(a.alpha_map),
+            placed[ALPHA_MAP_SLOT],
+            uv,
+            uv1,
+            a,
+            b,
+            c,
+            coverage,
+            x,
+            y,
+        ).g
+    return alpha
+
+
+def _alpha_width(
+    a: RasterVertex,
+    b: RasterVertex,
+    c: RasterVertex,
+    coverage: _Coverage,
+    x: Int,
+    y: Int,
+    textures: TextureStore,
+    placed: List[UvPlacement],
+    sampled: Bool,
+) raises -> Float32:
+    """Return GLSL's `fwidth` of a fragment's alpha, for three.js's alpha
+    test under alpha to coverage: `_mapped_alpha` at the fragment's pixel,
+    at the pixel to its right and at the pixel above it. Mirrored on the
+    device by `render.gpu._alpha_width`.
+    """
+    return fwidth(
+        _mapped_alpha(a, b, c, coverage, x, y, textures, placed, sampled),
+        _mapped_alpha(a, b, c, coverage, x + 1, y, textures, placed, sampled),
+        _mapped_alpha(a, b, c, coverage, x, y - 1, textures, placed, sampled),
+    )
+
+
 def check_data_state(a: RasterVertex, b: RasterVertex, c: RasterVertex) raises:
     """Refuse a triangle's fog switch, depth packing or distance range
     where its corners disagree or its kind cannot use it.
@@ -3333,6 +3428,48 @@ def matcap_uv(toward_eye: Vector3, up: Vector3, normal: Vector3) -> Vector2:
     return Vector2(
         across.dot(normal) * MATCAP_SCALE + 0.5,
         upright.dot(normal) * MATCAP_SCALE + 0.5,
+    )
+
+
+def matcap_steps(
+    steps: SurfaceSteps, eye: Vector3, up: Vector3
+) -> Tuple[Vector2, Vector2]:
+    """Return how far a `MATCAP` lookup moves across one pixel: GLSL's
+    `dFdx` and `dFdy` of three.js's matcap `uv`.
+
+    The lookup comes from the normal and not from the surface's own
+    texture coordinates, so its footprint in the image is not the one
+    `mip_level` measures. Here `matcap_uv` is computed at the fragment's
+    pixel, at the pixel to its right and at the pixel above it, each from
+    the plane's own normal and position there, and the two differences are
+    what `render.texture.anisotropic_footprint` reads.
+
+    Shared by both rasterizers, as `matcap_uv` is.
+
+    Args:
+        steps: The surface at the three pixels.
+        eye: Where the camera is, in world space.
+        up: The camera's own up axis, in world space, already unit length.
+
+    Returns:
+        The change one pixel to the right, then the change one pixel up.
+    """
+    var here = matcap_uv(
+        toward_eye_at(eye, PERSPECTIVE_VIEW, steps.position), up, steps.normal
+    )
+    var right = matcap_uv(
+        toward_eye_at(eye, PERSPECTIVE_VIEW, steps.position_right),
+        up,
+        steps.normal_right,
+    )
+    var above = matcap_uv(
+        toward_eye_at(eye, PERSPECTIVE_VIEW, steps.position_up),
+        up,
+        steps.normal_up,
+    )
+    return (
+        Vector2(right.x - here.x, right.y - here.y),
+        Vector2(above.x - here.x, above.y - here.y),
     )
 
 
@@ -4583,20 +4720,46 @@ def rasterize_shaded(
                     )
                     if a.matcap != NO_TEXTURE:
                         ref ball = textures.get(a.matcap)
-                        # The full-size level, never a mip: the coordinate
-                        # comes from the normal rather than from the
-                        # surface, so a pixel's footprint in this image is
-                        # not the footprint the chain was built for.
-                        var looked = ball.sample(place.x, place.y)
+                        # The level the lookup's own footprint chooses:
+                        # the coordinate comes from the normal rather than
+                        # from the surface, so the footprint is measured
+                        # on the lookup at this pixel and the two beside
+                        # it; see `matcap_steps`. An image with one level
+                        # and one tap has no chain to choose from.
+                        var looked: FloatColor
+                        if ball.levels == 1 and ball.anisotropy == 1:
+                            looked = ball.sample(place.x, place.y)
+                        else:
+                            var moved = matcap_steps(
+                                surface_steps(nodes), lighting.eye, lighting.up
+                            )
+                            looked = ball._sample_footprint(
+                                place.x,
+                                place.y,
+                                anisotropic_footprint(
+                                    moved[0],
+                                    moved[1],
+                                    ball.width,
+                                    ball.height,
+                                    ball.anisotropy,
+                                ),
+                            )
                         arriving = FloatColor(looked.r, looked.g, looked.b, 1.0)
                     else:
                         var gray = matcap_fallback(place.y)
                         arriving = FloatColor(gray, gray, gray, 1.0)
                 elif a.kind == TOON:
                     # Every cosine read off the ramp rather than faded, and
-                    # never clamped at zero: see `Lighting.toon_at`.
+                    # never clamped at zero: see `Lighting.toon_at`. The
+                    # fallback's edge is as wide as the coordinate changes
+                    # across this pixel, three.js's `fwidth(coord)`, so the
+                    # surface is read at the two pixels beside it. A ramp
+                    # of the material's own has no edge to soften.
+                    var beside = SurfaceSteps()
+                    if len(ramp) == 0:
+                        beside = surface_steps(nodes)
                     arriving = lighting.toon_at(
-                        facing, spot, ramp, a.receives_shadow, shape
+                        facing, spot, ramp, a.receives_shadow, shape, beside
                     )
                 elif a.kind == GOURAUD:
                     # Lit at the corners, and the direct light darkened
@@ -5208,11 +5371,37 @@ def rasterize_shaded(
                 # discards it in `setupDiffuseColor`.
                 if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
                     continue
+            # The antialiased edge of a wide line under alpha to
+            # coverage, three.js's `LineMaterial`: the alpha falls to zero
+            # across the edge its coordinates describe. The uv view has
+            # written its fragment above and reads no alpha.
+            if a.state.edge_ramp != NO_EDGE_RAMP:
+                shaded.a *= edge_ramp_at(nodes, a.state.edge_ramp)
             # Thrown away for being too transparent, three.js's
             # `alphatest_fragment`: no color, and no depth either, so what
             # is behind this hole is drawn instead. Asked once the maps have
             # had their say over alpha and before anything is written.
-            if tested and shaded.a < a.alpha_test:
+            # Under alpha to coverage the test is a ramp as wide as the
+            # alpha changes across the pixel, and the coverage reads what
+            # the ramp leaves. An opacity node's alpha has no width here.
+            if tested and covered:
+                var width = Float32(0)
+                if not (noded and has_output(nodes, OPACITY_NODE)):
+                    width = _alpha_width(
+                        a,
+                        b,
+                        c,
+                        coverage,
+                        x,
+                        y,
+                        textures,
+                        placed,
+                        mode == SHADE_TEXTURE,
+                    )
+                shaded.a = alpha_test_ramp(shaded.a, a.alpha_test, width)
+                if shaded.a == 0:
+                    continue
+            elif tested and shaded.a < a.alpha_test:
                 continue
             # Thrown away below a hashed threshold, three.js's
             # `alphahash_fragment`, from the world position here and at
@@ -6776,6 +6965,56 @@ def _sample_point_map(
     return image.sample_level(place.x, place.y, level)
 
 
+def _point_alpha(
+    point: RasterVertex,
+    x: Int,
+    y: Int,
+    textures: TextureStore,
+    level: Float32,
+    mask_level: Float32,
+    sampled: Bool,
+) raises -> Float32:
+    """Return the alpha a point's color and maps give at one pixel, inside
+    its square or not: three.js's `diffuseColor.a` there.
+
+    The point's own alpha, times the map's alpha and the alpha map's
+    green at that pixel's place in the square. `sampled` is whether the
+    mode opens the maps.
+    """
+    var alpha = point.color.a
+    if not sampled:
+        return alpha
+    var place = point_coord(Vector2(point.x, point.y), point.point_size, x, y)
+    if point.texture != NO_TEXTURE:
+        alpha *= _sample_point_map(textures.get(point.texture), place, level).a
+    if point.alpha_map != NO_TEXTURE:
+        alpha *= _sample_point_map(
+            textures.get(point.alpha_map), place, mask_level
+        ).g
+    return alpha
+
+
+def _point_alpha_width(
+    point: RasterVertex,
+    x: Int,
+    y: Int,
+    textures: TextureStore,
+    level: Float32,
+    mask_level: Float32,
+    sampled: Bool,
+) raises -> Float32:
+    """Return GLSL's `fwidth` of a point's alpha at one pixel, for
+    three.js's alpha test under alpha to coverage: `_point_alpha` there,
+    at the pixel to its right and at the pixel above it. Mirrored on the
+    device by `render.gpu._point_alpha_width`.
+    """
+    return fwidth(
+        _point_alpha(point, x, y, textures, level, mask_level, sampled),
+        _point_alpha(point, x + 1, y, textures, level, mask_level, sampled),
+        _point_alpha(point, x, y - 1, textures, level, mask_level, sampled),
+    )
+
+
 def rasterize_point(
     point: RasterVertex,
     mut target: RenderTarget,
@@ -6977,8 +7216,24 @@ def rasterize_point(
                 if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
                     continue
             # Thrown away for being too transparent, claiming no depth, as
-            # a triangle's fragment is.
-            if tested and shaded.a < point.alpha_test:
+            # a triangle's fragment is. Under alpha to coverage the test
+            # is a ramp, as a triangle's is; see `rasterize_shaded`.
+            if tested and covered:
+                var width = Float32(0)
+                if not (noded and has_output(nodes, OPACITY_NODE)):
+                    width = _point_alpha_width(
+                        point,
+                        x,
+                        y,
+                        textures,
+                        level,
+                        mask_level,
+                        mode == SHADE_TEXTURE,
+                    )
+                shaded.a = alpha_test_ramp(shaded.a, point.alpha_test, width)
+                if shaded.a == 0:
+                    continue
+            elif tested and shaded.a < point.alpha_test:
                 continue
             if covered and not alpha_covers(shaded.a, x, y):
                 continue

@@ -45,10 +45,16 @@ from objects.line_segments2 import (
     line_segments_geometry,
 )
 from render.cube_texture_store import SCENE_ENVIRONMENT
+from render.derivatives import (
+    CAPSULE_EDGE_RAMP,
+    DISC_EDGE_RAMP,
+    NO_EDGE_RAMP,
+)
+from render.fragment_flags import coverage_threshold
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.texture import checkerboard
 from renderers.renderer import Renderer
-from std.math import inf, nan
+from std.math import inf, nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -970,6 +976,202 @@ def test_a_wide_line_picker_refuses_indexed_points() raises:
     var ray = Raycaster(Vector3(0.5, 0, 4), Vector3(0, 0, -1))
     with assert_raises(contains="cannot be indexed"):
         _ = ray.intersect_wide_line(scene, assets, 0, a_camera(), SIZE, SIZE)
+
+
+# Alpha to coverage: three.js's `LineMaterial` antialiases its edge.
+
+
+def covering(width: LineWidth, dashed: Bool = False) raises -> Material:
+    """Return a red wide-line material under alpha to coverage."""
+    var material = line_material(RED, width)
+    if dashed:
+        material = line_material(
+            RED,
+            width,
+            dash_size=Length(0.25, METER),
+            gap_size=Length(0.25, METER),
+        )
+    material.alpha_to_coverage = True
+    return material^
+
+
+def step_between(edge0: Float64, edge1: Float64, x: Float64) -> Float64:
+    """Return GLSL's `smoothstep`, written out again for the tests."""
+    if x <= edge0:
+        return 0
+    if x >= edge1:
+        return 1
+    var t = (x - edge0) / (edge1 - edge0)
+    return t * t * (3 - 2 * t)
+
+
+def cap_place(
+    x: Int, y: Int, half: Float64
+) -> Tuple[Float64, Float64, Float64]:
+    """Return where a pixel is about the nearer end of the stick
+    `across_x`, in half widths: across, ahead of the end, and which way
+    ahead grows with x. Ahead is below zero between the two ends."""
+    var across = (Float64(y) + 0.5 - 8) / half
+    var px = Float64(x) + 0.5
+    if px > 8:
+        return (across, (px - 12) / half, Float64(1))
+    return (across, (4 - px) / half, Float64(-1))
+
+
+def disc_alpha(x: Int, y: Int, half: Float64) -> Float64:
+    """Return three.js's cap alpha at a pixel past an end of `across_x`,
+    for a line in pixels: `1 - smoothstep(1 - dlen, 1 + dlen, len2)`,
+    with `len2` at the pixel, one to its right and one above it."""
+    var at = cap_place(x, y, half)
+    var step = 1 / half
+    var here = at[0] * at[0] + at[1] * at[1]
+    var ahead = at[1] + at[2] * step
+    var right = at[0] * at[0] + ahead * ahead
+    var above = (at[0] - step) * (at[0] - step) + at[1] * at[1]
+    var width = abs(right - here) + abs(above - here)
+    return 1 - step_between(1 - width, 1 + width, here)
+
+
+def capsule_alpha(x: Int, y: Int, half: Float64) -> Float64:
+    """Return three.js's alpha at a pixel of `across_x` for a line in the
+    world: `1 - smoothstep(0.5 - dnorm, 0.5 + dnorm, norm)`, with `norm`
+    half the distance from the segment, in half widths."""
+    var at = cap_place(x, y, half)
+    var step = 1 / half
+    var along = max(at[1], Float64(0))
+    var beside = max(at[1] + at[2] * step, Float64(0))
+    var here = sqrt(at[0] * at[0] + along * along) / 2
+    var right = sqrt(at[0] * at[0] + beside * beside) / 2
+    var above = sqrt((at[0] - step) * (at[0] - step) + along * along) / 2
+    var width = abs(right - here) + abs(above - here)
+    return 1 - step_between(0.5 - width, 0.5 + width, here)
+
+
+def test_a_covered_line_in_pixels_ramps_its_caps() raises:
+    # Eight pixels wide: the body covers rows 4 to 11 between columns 4
+    # and 11, and each cap is the square four pixels past its end. A
+    # sample is lit where the cap's alpha is above the ordered threshold.
+    var image = draw(across_x(), covering(LineWidth(pixels=8)))
+    var checked = 0
+    var partly = 0
+    for y in range(SIZE):
+        for x in range(SIZE):
+            var at = cap_place(x, y, 4)
+            if abs(at[0]) > 1 or at[1] > 1:
+                assert_false(lit(image, x, y))
+                continue
+            if at[1] < 0:
+                # The body has no ramp.
+                assert_true(lit(image, x, y))
+                continue
+            var alpha = disc_alpha(x, y, 4)
+            var threshold = Float64(coverage_threshold(x, y))
+            if abs(alpha - threshold) < 1e-3:
+                continue
+            assert_equal(lit(image, x, y), alpha > threshold)
+            checked += 1
+            if alpha > 0.01 and alpha < 0.99:
+                partly += 1
+    # The two squares hold 64 samples. One sits on its threshold, within
+    # rounding, and is left out.
+    assert_true(checked >= 62 and checked <= 64)
+    assert_true(partly > 8, "no cap sample was on the ramp")
+    # The square's corner is far outside the disc: its alpha is about
+    # 0.14, below its threshold of 10.5 / 16.
+    assert_false(lit(image, 15, 4))
+    # (14, 4) is outside the disc, where a fan draws nothing. Its alpha on
+    # the ramp is about 0.37, above its threshold of 2.5 / 16.
+    assert_true(lit(image, 14, 4))
+    # (14, 5) is inside the disc, where a fan draws. Its alpha on the ramp
+    # is about 0.71, below its threshold of 14.5 / 16.
+    assert_false(lit(image, 14, 5))
+    var fan = draw(across_x(), line_material(RED, LineWidth(pixels=8)))
+    assert_false(lit(fan, 14, 4))
+    assert_true(lit(fan, 14, 5))
+
+
+def test_a_covered_line_in_the_world_ramps_its_whole_outline() raises:
+    # Half a meter wide is four pixels: the body covers rows 6 to 9, and
+    # every sample of the body and the caps reads the capsule's ramp.
+    var image = draw(across_x(), covering(LineWidth(world=Length(0.5, METER))))
+    var checked = 0
+    var partly = 0
+    for y in range(SIZE):
+        for x in range(SIZE):
+            var at = cap_place(x, y, 2)
+            if abs(at[0]) > 1 or at[1] > 1:
+                assert_false(lit(image, x, y))
+                continue
+            var alpha = capsule_alpha(x, y, 2)
+            var threshold = Float64(coverage_threshold(x, y))
+            if abs(alpha - threshold) < 1e-3:
+                continue
+            assert_equal(lit(image, x, y), alpha > threshold)
+            checked += 1
+            if alpha > 0.01 and alpha < 0.99:
+                partly += 1
+    # The body and the two squares hold 48 samples.
+    assert_true(checked >= 46 and checked <= 48)
+    assert_true(partly > 8, "no sample was on the ramp")
+
+
+def cap_states(material: Material) raises -> List[Int]:
+    """Return how many corners of a wide line's frame carry no edge ramp,
+    the disc's and the capsule's, in that order, and then how many carry
+    a coordinate across the line."""
+    var assets = Assets()
+    var geometry = assets.geometries.add(line_segments_geometry(across_x()))
+    var paint = assets.materials.add(material)
+    var scene = a_scene()
+    scene.add_wide_line(LineSegments2(geometry, paint, NodeId(0)))
+    var frame = Renderer(SIZE, SIZE).prepare_frame(scene, assets, a_camera())
+    var corners = frame.whole_corners()
+    var counts: List[Int] = [0, 0, 0, 0]
+    for index in range(len(corners)):
+        counts[corners[index].state.edge_ramp.value] += 1
+        if corners[index].u != 0:
+            counts[3] += 1
+    return counts^
+
+
+def test_a_covered_line_builds_square_caps_with_an_edge_ramp() raises:
+    # In pixels: a body of two triangles and two squares of two triangles
+    # each, all under the disc's ramp, which a draw's one state names.
+    # The body's coordinates are zero, where that ramp is one. The twelve
+    # corners of the squares carry their place about the end.
+    var pixels = cap_states(covering(LineWidth(pixels=8)))
+    assert_equal(pixels[0], 0)
+    assert_equal(pixels[1], 18)
+    assert_equal(pixels[2], 0)
+    assert_equal(pixels[3], 12)
+    # In the world: all eighteen corners carry the capsule's ramp and how
+    # far across they are.
+    var world = cap_states(covering(LineWidth(world=Length(0.5, METER))))
+    assert_equal(world[0], 0)
+    assert_equal(world[1], 0)
+    assert_equal(world[2], 18)
+    assert_equal(world[3], 18)
+    # A dashed line has no caps and no ramp, as in three.js.
+    var dashed = cap_states(covering(LineWidth(pixels=8), dashed=True))
+    assert_true(dashed[0] > 0)
+    assert_equal(dashed[1] + dashed[2] + dashed[3], 0)
+    var dashed_world = cap_states(
+        covering(LineWidth(world=Length(0.5, METER)), dashed=True)
+    )
+    assert_true(dashed_world[0] > 0)
+    assert_equal(dashed_world[1] + dashed_world[2] + dashed_world[3], 0)
+    # Without alpha to coverage the caps stay fans with no ramp, in
+    # pixels and in the world.
+    var plain = cap_states(line_material(RED, LineWidth(pixels=8)))
+    assert_true(plain[0] > 18)
+    assert_equal(plain[1] + plain[2] + plain[3], 0)
+    var plain_world = cap_states(
+        line_material(RED, LineWidth(world=Length(0.5, METER)))
+    )
+    assert_true(plain_world[0] > 18)
+    assert_equal(plain_world[1] + plain_world[2] + plain_world[3], 0)
+    assert_true(NO_EDGE_RAMP.value == 0)
+    assert_true(DISC_EDGE_RAMP.value == 1 and CAPSULE_EDGE_RAMP.value == 2)
 
 
 def main() raises:

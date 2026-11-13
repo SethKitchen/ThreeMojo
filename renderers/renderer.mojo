@@ -323,6 +323,11 @@ from render.target import (
     require_rect,
     sample_grid,
 )
+from render.derivatives import (
+    CAPSULE_EDGE_RAMP,
+    DISC_EDGE_RAMP,
+    NO_EDGE_RAMP,
+)
 from render.raster_state import (
     LOGARITHMIC_DEPTH,
     NO_OFFSET,
@@ -3971,6 +3976,73 @@ def _emit_cap(
         last = next
 
 
+def _ramp_corner(
+    ribbon: _Ribbon, end: ClipVertex, side: Float32, ahead: Float32
+) -> ClipVertex:
+    """Return a ribbon corner that carries where it is about `end`, in
+    half widths, as its texture coordinates: three.js's `vUv` on a
+    `LineMaterial`, which the edge ramp reads.
+
+    Args:
+        ribbon: The segment's directions.
+        end: The end the corner is about.
+        side: How far across, in half widths.
+        ahead: How far along, in half widths.
+
+    Returns:
+        The corner, with `side` and `ahead` in `u` and `v`.
+    """
+    var corner = ribbon.corner(end, side, ahead)
+    corner.u = side
+    corner.v = ahead
+    return corner
+
+
+def _emit_square_cap(
+    ribbon: _Ribbon,
+    paint: _Paint,
+    mut corners: _Slim,
+    end: ClipVertex,
+    outward: Float32,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane],
+    any_of: List[Plane],
+) raises:
+    """Build the square past one end of a wide segment and append it, for
+    a line under alpha to coverage.
+
+    three.js's `LineMaterial` puts a square past each end and gives each
+    fragment of it an alpha: one inside the half disc, zero outside, and a
+    ramp as wide as `fwidth` across the rim. Here the square is two
+    triangles whose corners carry their place about the end, and `paint`
+    names the edge ramp that reads it; see
+    `render.derivatives.edge_ramp_alpha`.
+
+    Args:
+        ribbon: The segment's directions.
+        paint: What every corner of the draw carries, its edge ramp
+            included.
+        corners: The frame's raster vertices, appended to.
+        end: The end the cap is about.
+        outward: One at the segment's end, minus one at its start: which
+            way along the segment the cap lies.
+        near: Distance to the near plane.
+        far: Distance to the far plane.
+        sides: The planes that each cut.
+        any_of: The clipping planes of which a kept point needs one.
+
+    Raises:
+        Error: If the clipper does.
+    """
+    var a = _ramp_corner(ribbon, end, -1, 0)
+    var b = _ramp_corner(ribbon, end, 1, 0)
+    var c = _ramp_corner(ribbon, end, 1, outward)
+    var d = _ramp_corner(ribbon, end, -1, outward)
+    _emit_clipped(paint, corners, a, b, c, near, far, sides, any_of)
+    _emit_clipped(paint, corners, a, c, d, near, far, sides, any_of)
+
+
 def _strand_corner(
     ribbon: _Ribbon,
     paint: _Paint,
@@ -4181,6 +4253,12 @@ def _emit_wide_line(
     triangles then go where every triangle goes: through the clipper and
     `_Paint.emit`, two-sided. See `objects.line_segments2`.
 
+    Under alpha to coverage a solid line antialiases its edge, as
+    three.js's `LineMaterial` does. Each cap is then the square past its
+    end and not a fan, and the draw's state names an edge ramp that reads
+    each fragment's place from its texture coordinates. See
+    `_emit_square_cap` and `render.derivatives.edge_ramp_alpha`.
+
     Args:
         corners: The frame's raster vertices, appended to.
         assets: Where the geometry and the material live.
@@ -4282,6 +4360,16 @@ def _emit_wide_line(
         state.alpha_hash = True
         state.strand_hash = True
         state.alpha_to_coverage = False
+    # The antialiased edge of three.js's `LineMaterial` under alpha to
+    # coverage. A line in pixels has it on its round caps. A line in the
+    # world has it on its whole outline. A dashed line has none, because
+    # three.js throws its caps away and skips the capsule. A draw has one
+    # state, so the body of a line in pixels carries the ramp too, with
+    # coordinates of zero, where the ramp is one.
+    if state.alpha_to_coverage and not dashed:
+        state.edge_ramp = (
+            CAPSULE_EDGE_RAMP if width.world_units else DISC_EDGE_RAMP
+        )
     var blending = material.blending
     if casters_only:
         blending = OPAQUE
@@ -4315,6 +4403,9 @@ def _emit_wide_line(
     var each = 6
     if strand:
         each = 18 + 18 * cap_steps(half + Float32(render_scale) * 0.5)
+    elif state.edge_ramp != NO_EDGE_RAMP:
+        # Two squares of two triangles each.
+        each += 12
     elif not dashed:
         each += 6 * cap_steps(half)
     # Each point in the world once, so every run reads the same values.
@@ -4571,6 +4662,14 @@ def _wide_segments(
             var b = ribbon.corner(a_at, 1, 0)
             var c = ribbon.corner(b_at, 1, 0)
             var d = ribbon.corner(b_at, -1, 0)
+            # Under the capsule's ramp each corner carries how far across
+            # it is. Under the disc's the body keeps coordinates of zero,
+            # where that ramp is one.
+            if run.paint.state.edge_ramp == CAPSULE_EDGE_RAMP:
+                a.u = -1
+                b.u = 1
+                c.u = 1
+                d.u = -1
             _emit_clipped(
                 run.paint,
                 corners,
@@ -4594,6 +4693,30 @@ def _wide_segments(
                 run.any_of,
             )
         if run.dashed:
+            continue
+        if run.paint.state.edge_ramp != NO_EDGE_RAMP:
+            _emit_square_cap(
+                ribbon,
+                run.paint,
+                corners,
+                start,
+                -1,
+                run.near,
+                run.far,
+                run.sides,
+                run.any_of,
+            )
+            _emit_square_cap(
+                ribbon,
+                run.paint,
+                corners,
+                end,
+                1,
+                run.near,
+                run.far,
+                run.sides,
+                run.any_of,
+            )
             continue
         _emit_cap(
             ribbon,

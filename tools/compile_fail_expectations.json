@@ -5844,6 +5844,20 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/an_edge_ramp_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'edge_ramp' cannot be converted from 'IntLiteral[1]' to 'EdgeRamp'"
+    ]
+  },
   "tests/compile_fail/an_element_id_is_not_a_bare_int.mojo": {
     "errors": [
       {

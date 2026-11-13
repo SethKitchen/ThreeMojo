@@ -215,7 +215,11 @@ How dark that side is belongs to the ramp. three.js's fallback puts its left end
 
 With no `gradient_map`, three.js's fallback applies: two tones, with the edge where the coordinate reads 0.7, and the low tone at 0.7 as well.
 
-three.js softens that edge with `fwidth`, a screen-space derivative. The edge is hard here because that antialiasing is not implemented yet. The architecture does not forbid it: this rasterizer already evaluates a triangle's varyings at neighboring pixels, which is how `mip_level` picks a level. The difference shows on the single row of fragments the edge crosses.
+The edge is antialiased, as in three.js. three.js reads the fallback as `mix(0.7, 1.0, smoothstep(0.7 - fw, 0.7 + fw, coord))`. `fw` is half of `fwidth(coord)`, which is how much the coordinate changes across one pixel. So the edge is about one pixel wide at every distance. `toon_edge` in `lights/lighting.mojo` is that arithmetic, and both rasterizers call it.
+
+Each light has its own coordinate and its own width. The coordinate is computed again at the pixel to the right and at the pixel above, from the triangle's own normal and position there. See [Screen-space derivatives](Rasterization#screen-space-derivatives).
+
+The width comes from the normal before any map. A normal map, a bump map and a normal node move the edge, but they do not change its width. A `gradient_map` has no edge to soften, and it reads no width.
 
 ### The gradient map is a lookup table
 
@@ -279,7 +283,9 @@ With no `matcap`, three.js falls back to `mix(0.2, 0.8, uv.y)`. That is a gray g
 
 An emissive term. The image already holds every bit of light the surface shows, so a `MATCAP` material refuses one, exactly as a `BASIC` material does. `MaterialKind.is_unlit` is the question both answer.
 
-The image is sampled at its full-size level and never down a mip chain. A mip chain is only progressively filtered copies of an image, so normal-derived coordinates could use one. What is missing is the screen-space footprint of *those* coordinates. `mip_level` measures the footprint of the surface's own texture coordinates, which is a different quantity. Matcap-coordinate derivatives and mip selection are not implemented.
+A matcap with a mip chain is read down its chain, as a GPU reads it for three.js. The level comes from the footprint of the lookup itself. `mip_level` measures the footprint of the surface's own texture coordinates, which is a different quantity. So `matcap_steps` computes the lookup again at the pixel to the right and at the pixel above, and the two differences choose the level. An anisotropy above one takes its taps along the same footprint.
+
+The footprint comes from the normal before any map, as a toon edge's width does. A matcap with one level and an anisotropy of one is read at that level, as before. See [Screen-space derivatives](Rasterization#screen-space-derivatives).
 
 A matcap's own alpha means nothing: three.js reads `.rgb` and no more. So the texture must be built `IGNORED`, or filtering would weight its channels by an alpha that says nothing. Its color space is free, because a matcap really is color.
 

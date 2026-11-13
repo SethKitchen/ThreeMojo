@@ -154,6 +154,8 @@ A flag has an effect only where three.js's shader for the primitive reads it:
 
 `tone_mapped` and `alpha_to_coverage` are read by every primitive. `RasterState` carries the five flags in five more bits of its `ops_word`, and the blend constant in four float lanes. See [Rasterization](Rasterization).
 
+`alpha_to_coverage` also antialiases two edges, as in three.js. An alpha test becomes a ramp one pixel wide. See [Rasterization](Rasterization#alpha). A wide line fades across its round caps or its outline. See [Lines](Lines#alpha-to-coverage).
+
 ### Blend factors
 
 `CONSTANT_COLOR_FACTOR`, `ONE_MINUS_CONSTANT_COLOR_FACTOR`, `CONSTANT_ALPHA_FACTOR` and `ONE_MINUS_CONSTANT_ALPHA_FACTOR` read `blend_color`, decoded to linear light, and `blend_alpha`. Use them in `custom_blending`. `raster_state()` refuses a `blend_alpha` outside zero to one.
@@ -177,7 +179,8 @@ The loader and the exporter carry `shadowSide`, `blendColor`, `blendAlpha`, `dit
 - **Tone mapping is per pixel.** This port applies the curve when a target is resolved. So `tone_mapped = False` works on opaque fragments only. Under a curve, a frame that holds both an untoned primitive and a blended primitive is refused. A frame with a data material and a blend is refused too.
 - **Dithering is before the curve.** The dither is added to the encoded color and decoded again. With no curve, the resolved byte is the one three.js writes.
 - **Alpha hash uses the world position.** A corner does not carry its object-space position, so the noise stays fixed to the world. It moves across an object that moves. Lines and points have no alpha hash.
-- **Alpha to coverage is an ordered pattern.** A sample is kept where the alpha is above a four-by-four ordered threshold. With `antialias`, the average of the samples follows the alpha. The `fwidth` ramp that three.js puts on an alpha test is not ported. A shadow map approximates alpha to coverage with an alpha test of one half, as three.js does.
+- **Alpha to coverage is an ordered pattern.** A sample is kept where the alpha is above a four-by-four ordered threshold. With `antialias`, the average of the samples follows the alpha. A shadow map approximates alpha to coverage with an alpha test of one half, as three.js does.
+- **An alpha test under alpha to coverage is a ramp.** This is three.js's `smoothstep(alphaTest, alphaTest + fwidth(alpha), alpha)`. The width is measured on the corner alpha and the maps. An alpha that an opacity node sets has no width, and its test stays hard. Write the ramp in the graph with `fwidth` for that alpha. See [Rasterization](Rasterization#alpha).
 - **Premultiplied alpha is for blends.** An opaque fragment is written with an alpha of one, so the premultiply changes only a blended fragment.
 - **The default shadow side is `side`.** See [Shadows](#shadows).
 - **A custom curve is a node program.** three.js replaces a shader chunk with GLSL. The [post-processing](Post-processing) passes apply the default custom curve, which returns the light as it is.
