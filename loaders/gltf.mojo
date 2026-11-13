@@ -105,10 +105,9 @@ the default scene does not reach is left out, and so is an animation left
 with no channel. An animation whose keys all lie at time zero holds a still
 pose; its clip lasts one frame at 30 frames a second, where three.js makes
 a clip of no length. A skin joint the scene does not reach is refused. So is a specular
-color factor outside zero to one, which a `Color` cannot hold; any map
-that reads a third set of texture coordinates or past it, since a
-geometry here has only `uv` and `uv1`; and a skinned node that is
-instanced, where three.js drops the skin.
+color factor outside zero to one, which a `Color` cannot hold; and any
+map that reads a third set of texture coordinates or past it, since a
+geometry here has only `uv` and `uv1`.
 
 **Names.** A node's name is made unique as three.js's `createUniqueName`
 makes it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are
@@ -158,6 +157,8 @@ draws none of them then.
 `KHR_texture_transform` moves, turns and scales a map's coordinates.
 `KHR_lights_punctual` adds directional, point and spot lights to the scene.
 `EXT_mesh_gpu_instancing` draws a node's primitives as `InstancedMesh`es.
+A skin on that node is dropped, as three.js drops it: its instanced
+meshes are drawn in their bind pose.
 `KHR_mesh_quantization` needs nothing: every attribute is read at any
 component type already.
 `EXT_meshopt_compression` decodes each buffer view it compresses with
@@ -960,8 +961,8 @@ def load_gltf(
             camera, a skeleton, a morph target or a track is one its type
             refuses. Also if an extension is malformed, a material's
             texture transforms differ, a specular color factor is outside
-            zero to one, a skinned node is instanced, `targetNames` do not
-            name each target, a texture names no image, a KTX 2.0 image is
+            zero to one, `targetNames` do not name each target, a
+            texture names no image, a KTX 2.0 image is
             refused by `render.ktx2`, a WebP image by `render.webp`, or a
             material, a
             light or an instance matrix is one its type refuses.
@@ -3104,16 +3105,16 @@ struct _Loader(Movable):
         var instancing = self.extension(node, GPU_INSTANCING)
         if mesh >= 0:
             var skinned = self.document.has(node, "skin")
-            if skinned and instancing != NO_NODE:
-                raise Error(
-                    "glTF: a skinned node cannot be instanced: an instanced"
-                    " skinned mesh is not ported"
-                )
-            if skinned:
+            if instancing != NO_NODE and self.instances(mesh, instancing):
+                # three.js builds each `InstancedMesh` from the node's
+                # mesh and binds a skeleton to a `SkinnedMesh` alone. So
+                # the skin of an instanced node is read and then dropped.
+                if skinned:
+                    _ = self.entry("skins", self.required_integer(node, "skin"))
+                self.draw_instanced(mesh, id, instancing, scene, assets)
+            elif skinned:
                 self.skinned_nodes.append(index)
                 self.skinned_ids.append(id)
-            elif instancing != NO_NODE and self.only_triangles(mesh):
-                self.draw_instanced(mesh, index, id, instancing, scene, assets)
             else:
                 self.draw(mesh, index, id, scene, assets)
         var camera = self.integer(node, "camera", -1)
@@ -3293,10 +3294,27 @@ struct _Loader(Movable):
                 return False
         return True
 
+    def instances(self, mesh: Int, instancing: Int) raises -> Bool:
+        """Return True if `EXT_mesh_gpu_instancing` draws a node's mesh
+        as instanced meshes.
+
+        It does when every primitive of the mesh is triangles and the
+        extension names an attribute. Otherwise three.js's
+        `GLTFMeshGpuInstancing.createNodeMesh` returns null, and the node
+        is drawn as a node with no instancing: skinned when it names a
+        skin, plain when it does not. An extension is read only for a
+        mesh of triangles, and one with no `attributes` object is refused
+        then."""
+        if not self.only_triangles(mesh):
+            return False
+        var attributes = self.document.get(instancing, "attributes")
+        if not self.document.has_kind(attributes, OBJECT):
+            raise Error("glTF: " + GPU_INSTANCING + " needs attributes")
+        return self.document.length(attributes) > 0
+
     def draw_instanced(
         mut self,
         mesh: Int,
-        index: Int,
         node: NodeId,
         instancing: Int,
         mut scene: Scene,
@@ -3310,18 +3328,20 @@ struct _Loader(Movable):
         each the identity's part when the file names none. `_COLOR_0`
         colors the instances, as three.js reads it into `instanceColor`.
         Any other attribute is for a custom shader, which this renderer
-        has not got, and is only counted. With no attribute at all the
-        node draws plain meshes, as three.js draws them.
+        has not got, and is only counted. `instances` has checked that
+        the mesh is triangles and that the extension names an attribute.
+        A skin on the node is not bound, as three.js binds none to an
+        `InstancedMesh`.
         """
         var attributes = self.document.get(instancing, "attributes")
-        if not self.document.has_kind(attributes, OBJECT):
-            raise Error("glTF: " + GPU_INSTANCING + " needs attributes")
         var count = -1
         var moves = List[Float32]()
         var turns = List[Float32]()
         var sizes = List[Float32]()
         var tints = List[Float32]()
-        for slot in range(self.document.length(attributes)):
+        # `instances` passes only an extension that names an attribute.
+        var named = self.document.length(attributes)
+        for slot in range(named):  # pragma: no branch
             var name = self.document.key(attributes, slot)
             var values = self.accessor_floats(
                 self.document.integer(self.document.at(attributes, slot))
@@ -3341,9 +3361,6 @@ struct _Loader(Movable):
                 sizes = _instance_attribute(values, 3, name)
             elif name == "_COLOR_0":
                 tints = _instance_attribute(values, 3, name)
-        if count < 0:
-            self.draw(mesh, index, node, scene, assets)
-            return
         var placings = List[Matrix4]()
         for at in range(count):
             var placed = Object3D()
@@ -3365,7 +3382,7 @@ struct _Loader(Movable):
                     sizes[at * 3], sizes[at * 3 + 1], sizes[at * 3 + 2]
                 )
             placings.append(placed.local_matrix())
-        # `place` asks only for a mesh whose primitives are all triangles.
+        # `instances` passes only a mesh whose primitives are triangles.
         var primitives = self.document.get(
             self.entry("meshes", mesh), "primitives"
         )
