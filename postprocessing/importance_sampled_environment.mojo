@@ -24,12 +24,18 @@ shadowing, divided by the lobe's own shadowing toward the viewer.
 `sample_environment_mis` adds a second sample, drawn from the map's
 distributions, and weighs the two by the power heuristic.
 
+**The GGX sample.** `ggx_reflection_sample` draws one reflected ray from
+the GGX lobe by its bounded visible normals, as three.js's
+`ggxReflectionSample` draws it, with the weight that the light along the
+ray takes. `specular_dominant_factor` is the share of a ray's length that
+a rough lobe keeps.
+
 **One difference.** three.js passes the drawn texture coordinate to
 `equirectUV`, which takes a direction. This port turns the coordinate into
 its direction with `equirectUvToDir`, which is what the code means.
 
-No composer pass reads this: three.js's SSR node reads it in its
-environment mode, which `postprocessing.ssr_node` does not port.
+`postprocessing.ssr_node` reads this in its stochastic mode: a ray that
+reaches no surface takes the environment's light.
 """
 
 from core.extent import require_positive_extent, require_texel_count
@@ -38,11 +44,16 @@ from math.matrix4 import Matrix4
 from math.utils import mix_bilinear, mix_delta, rec709_luminance
 from math.norm import squared_length2
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3, reflect_vector
 from postprocessing.sampling import clamped_texel
 from render.color_math import rgb_channels
 from render.framebuffer import FloatColor
-from std.math import asin, atan2, cos, floor, max, min, pi, pow, sin
+from std.math import asin, atan2, cos, floor, log, max, min, pi, pow, sin, sqrt
+
+
+# three.js's `ENV_RAY_LENGTH`: the ray length an SSR pass writes where a
+# ray reaches no surface and takes the environment's light.
+comptime ENV_RAY_LENGTH = Float32(1e4)
 
 
 def half(value: Float32) -> Float32:
@@ -368,6 +379,183 @@ def f_schlick(f0: Vector3, cosine: Float32) -> Vector3:
     return Vector3(
         f0.x + (1 - f0.x) * m5, f0.y + (1 - f0.y) * m5, f0.z + (1 - f0.z) * m5
     )
+
+
+def specular_dominant_factor(n_dot_v: Float32, roughness: Float32) -> Float32:
+    """Return three.js's `getSpecularDominantFactor`: the share of a ray's
+    length that the lobe's dominant direction keeps, from REBLUR.
+
+    Args:
+        n_dot_v: The cosine between the normal and the viewer.
+        roughness: The surface's roughness.
+
+    Returns:
+        The share, zero to one. A cosine above one reads as one.
+    """
+    var a = Float32(0.298475) * log(
+        Float32(39.4115) - Float32(39.0029) * roughness
+    )
+    var grazing = pow(max(1 - n_dot_v, Float32(0)), Float32(10.8649))
+    return min(max(grazing * (1 - a) + a, Float32(0)), Float32(1))
+
+
+def sample_ggx_vndf(
+    view: Vector3, ax: Float32, ay: Float32, r1: Float32, r2: Float32
+) -> Vector3:
+    """Return three.js's `SampleGGXVNDF`: a microfacet normal drawn from
+    the bounded visible normals of a GGX lobe, in the surface's frame.
+
+    Args:
+        view: The direction toward the viewer, with the normal along z.
+        ax: The GGX alpha along x.
+        ay: The GGX alpha along y.
+        r1: The random number that turns the sample about the normal.
+        r2: The random number that picks its height on the cap.
+
+    Returns:
+        The microfacet normal, unit length. Its z is not negative.
+    """
+    var stretched = Vector3(ax * view.x, ay * view.y, view.z)
+    stretched.normalize()
+    var a = min(ax, ay)
+    var s = 1 + sqrt(view.x * view.x + view.y * view.y)
+    var a2 = a * a
+    var s2 = s * s
+    var k = (1 - a2) * s2 / (s2 + a2 * view.z * view.z)
+    var b = stretched.z * k
+    var phi = Float32(6.283185307179586) * r1
+    var z = (1 - r2) * (1 + b) - b
+    var sin_theta = sqrt(max(Float32(0), 1 - z * z))
+    var cap = Vector3(sin_theta * cos(phi), sin_theta * sin(phi), z)
+    var standard = cap + stretched
+    var out = Vector3(
+        ax * standard.x, ay * standard.y, max(Float32(0), standard.z)
+    )
+    out.normalize()
+    return out
+
+
+def ggx_vndf_pdf(
+    n_dot_h: Float32, n_dot_v: Float32, roughness: Float32
+) -> Float32:
+    """Return three.js's `GGXVNDFPdf`: the density of the reflected ray
+    that `sample_ggx_vndf` draws.
+
+    Args:
+        n_dot_h: The cosine between the normal and the half vector.
+        n_dot_v: The cosine between the normal and the viewer.
+        roughness: The GGX alpha.
+
+    Returns:
+        `D / (2 (k n.v + t))`, with the cap's bound `k` and
+        `t = sqrt(a^2 sin^2 + n.v^2)`.
+    """
+    var d = d_gtr(roughness, n_dot_h, 2)
+    var a2 = roughness * roughness
+    var sin_v2 = max(Float32(0), 1 - n_dot_v * n_dot_v)
+    var s = 1 + sqrt(sin_v2)
+    var s2 = s * s
+    var k = (1 - a2) * s2 / (s2 + a2 * n_dot_v * n_dot_v)
+    var t = sqrt(a2 * sin_v2 + n_dot_v * n_dot_v)
+    return d / max(Float32(1e-6), 2 * (k * n_dot_v + t))
+
+
+@fieldwise_init
+struct GgxReflection(ImplicitlyCopyable):
+    """What one GGX reflection sample gives: three.js's
+    `ggxReflectionStruct`."""
+
+    # The reflected ray, in the camera's space.
+    var reflect_dir: Vector3
+    # What the light gathered along the ray is multiplied by.
+    var sample_weight: Vector3
+    # The ray's density, for the power heuristic.
+    var pdf: Float32
+    # The cosine between the normal and the viewer, not below zero.
+    var n_dot_v: Float32
+    # The GGX alpha, the roughness squared, at least a thousandth.
+    var alpha: Float32
+    # The reflectance at normal incidence.
+    var f0: Vector3
+
+
+def ggx_reflection_sample(
+    normal: Vector3,
+    view_dir: Vector3,
+    roughness: Float32,
+    metalness: Float32,
+    albedo: Vector3,
+    xi_x: Float32,
+    xi_y: Float32,
+) -> GgxReflection:
+    """Return three.js's `ggxReflectionSample`: one reflected ray drawn
+    from the GGX lobe, and the weight of the light along it.
+
+    The weight is `F G (k n.v + t) / (2 n.v)`. It is the BRDF times the
+    cosine over the density, with the distribution canceled.
+
+    A normal along the view's z takes the second tangent. three.js tests
+    the length of a normalized zero vector, which is not a number on a
+    GPU. A normalized zero vector is zero here.
+
+    three.js turns a microfacet normal with a negative z over.
+    `sample_ggx_vndf` gives none, so this port has no such step.
+
+    Args:
+        normal: The surface's normal, in the camera's space, unit length.
+        view_dir: The direction toward the viewer, unit length.
+        roughness: The surface's roughness, zero to one.
+        metalness: Its metalness, zero to one.
+        albedo: Its base color, which tints a metal's reflectance.
+        xi_x: The first random number, `Xi.x`.
+        xi_y: The second random number, `Xi.y`.
+
+    Returns:
+        The sample.
+    """
+    var alpha = max(roughness * roughness, Float32(0.001))
+    var tangent = Vector3(0, 0, 1)
+    tangent.cross(normal)
+    tangent.normalize()
+    if tangent.length() < 1e-3:
+        tangent = Vector3(0, 1, 0)
+        tangent.cross(normal)
+        tangent.normalize()
+    var bitangent = normal
+    bitangent.cross(tangent)
+    bitangent.normalize()
+    var local = Vector3(
+        tangent.dot(view_dir), bitangent.dot(view_dir), normal.dot(view_dir)
+    )
+    var facet = sample_ggx_vndf(local, alpha, alpha, xi_x, xi_y)
+    var h = tangent * facet.x + bitangent * facet.y + normal * facet.z
+    h.normalize()
+    var l = reflect_vector(-view_dir, h)
+    l.normalize()
+    var half_vector = view_dir + l
+    half_vector.normalize()
+    var n_dot_v = max(Float32(0), normal.dot(view_dir))
+    var n_dot_l = max(Float32(0), normal.dot(l))
+    var n_dot_h = max(Float32(0), normal.dot(half_vector))
+    var v_dot_h = max(Float32(0), view_dir.dot(half_vector))
+    var f0 = mix_delta3(Vector3(0.04, 0.04, 0.04), albedo, metalness)
+    var fresnel = f_schlick(f0, v_dot_h)
+    var pdf = ggx_vndf_pdf(n_dot_h, n_dot_v, alpha)
+    var a2 = alpha * alpha
+    var sin_v2 = max(1 - n_dot_v * n_dot_v, Float32(0))
+    var s = 1 + sqrt(sin_v2)
+    var s2 = s * s
+    var k = (1 - a2) * s2 / (s2 + a2 * n_dot_v * n_dot_v)
+    var t = sqrt(a2 * sin_v2 + n_dot_v * n_dot_v)
+    var shadowing = geometry_term(n_dot_l, n_dot_v, alpha)
+    var bound = k * n_dot_v + t
+    var divisor = max(2 * n_dot_v, Float32(1e-4))
+    var weight = Vector3(
+        fresnel.x * shadowing * bound / divisor,
+        fresnel.y * shadowing * bound / divisor,
+        fresnel.z * shadowing * bound / divisor,
+    )
+    return GgxReflection(l, weight, pdf, n_dot_v, alpha, f0)
 
 
 def _to_world(direction: Vector3, camera_world: Matrix4) -> Vector3:

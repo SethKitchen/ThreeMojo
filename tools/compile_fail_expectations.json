@@ -866,6 +866,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_denoise_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 21,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'DenoiseMode'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_denoiser_preset_is_not_a_bare_int.mojo": {
     "errors": [
       {
