@@ -159,8 +159,10 @@ from lights.shadow import (
     biased_position,
     bilinear,
     bilinear_texel,
+    NODE_BLEND,
     SUN_BLEND,
     cascade_reach,
+    csm_node_reach,
     sun_reach,
     cube_tap,
     cube_texel,
@@ -967,7 +969,8 @@ comptime PLANE_FLOATS = PLANE_METAL_ROUGH + 2
 # directional light's last eight are its `ShadowCascade`: its start, its
 # end, its span in meters, zero for no cascade, whether it is the last
 # and whether it fades, as one or zero, its `CascadeBlend`, and under
-# `SUN_BLEND` its fade start and where the cascade before it ends. The maps
+# `SUN_BLEND` its fade start and where the cascade before it ends. Under
+# `NODE_BLEND` the first of those two is its near plane over its span. The maps
 # ride after the lights, each `SHADOW_HEADER` floats and then its depths,
 # rather than in a buffer of their own, because Metal binds at most
 # thirty-one arguments to a kernel and this one has thirty-one. A spot
@@ -1701,7 +1704,12 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(Float32(1) if band.last else Float32(0))
         flat.append(Float32(1) if band.fade else Float32(0))
         flat.append(Float32(band.blend.value))
-        flat.append(band.fade_start)
+        # `fade_start` is a sun's alone and `near` a shadow node's alone,
+        # so the two share a float.
+        if band.blend == NODE_BLEND:
+            flat.append(band.near)
+        else:
+            flat.append(band.fade_start)
         flat.append(band.ramp_end)
     for index in range(lighting.point_count()):
         ref position = lighting.positions[index]
@@ -2302,6 +2310,16 @@ def _light_through[
                 lights[unsafe_offset=at + CASCADE_AT + 6],
                 lights[unsafe_offset=at + CASCADE_AT + 1],
                 lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
+            )
+        if lights[unsafe_offset=at + CASCADE_AT + 5] == Float32(
+            NODE_BLEND.value
+        ):
+            reach = csm_node_reach(
+                depth - lights[unsafe_offset=at + CASCADE_AT + 6],
+                lights[unsafe_offset=at + CASCADE_AT],
+                lights[unsafe_offset=at + CASCADE_AT + 1],
+                lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
+                lights[unsafe_offset=at + CASCADE_AT + 4] != 0,
             )
         if reach[0] == 0:
             return Vector3(0, 0, 0)

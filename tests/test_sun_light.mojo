@@ -88,10 +88,12 @@ def a_short_camera() raises -> PerspectiveCamera:
 # --- the blend --------------------------------------------------------------
 
 
-def test_a_cascade_blend_is_one_of_two() raises:
+def test_a_cascade_blend_is_one_of_three() raises:
     assert_true(CSM_BLEND.is_valid())
     assert_true(SUN_BLEND.is_valid())
-    assert_false(CascadeBlend(2).is_valid())
+    # The third is `NODE_BLEND`: see `tests/test_csm_shadow_node.mojo`.
+    assert_true(CascadeBlend(2).is_valid())
+    assert_false(CascadeBlend(3).is_valid())
     assert_equal(ShadowCascade.none().blend, CSM_BLEND)
 
 
@@ -133,7 +135,7 @@ def test_a_suns_cascade_is_refused_when_it_cannot_blend() raises:
     )
     band.validate()
     band.blend = CascadeBlend(7)
-    with assert_raises(contains="none of the two"):
+    with assert_raises(contains="none of the three"):
         band.validate()
     band.blend = SUN_BLEND
     band.fade_start = 4

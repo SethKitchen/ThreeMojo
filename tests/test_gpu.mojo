@@ -113,6 +113,7 @@ from lights.shadow import (
     VSM_SHADOW_MAP,
 )
 from lights.csm import CSM
+from lights.csm_shadow_node import CSMShadowNode
 from geometries.box import cube, box
 from geometries.sphere import sphere
 from math.matrix4 import translation, scaling, Matrix4, rotation_x
@@ -8594,6 +8595,75 @@ def test_both_backends_agree_under_every_shadow_map_type() raises:
                 > 20,
                 "no shadow fell",
             )
+
+
+def test_both_backends_agree_on_a_shadow_nodes_cascades() raises:
+    # A `CSMShadowNode`'s three cascade lights over the bulb and slide
+    # scene, with and without fade. Both rasterizers take the camera's
+    # near plane from the depth and weigh the cascades by the host's own
+    # `csm_node_reach`.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree on a shadow node's cascades"
+    ):
+        return
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(14.0, METER),
+    )
+    camera.place(Vector3(1, 5, 5), Vector3(0, 0, 0))
+    for fade in [False, True]:
+        for kind in [PCF_SHADOW_MAP, BASIC_SHADOW_MAP]:
+            var assets = Assets()
+            var scene = a_bulb_and_slide_scene(assets)
+            scene.lights[0].shadow.intensity = 0.6
+            scene.lights[1].shadow.intensity = 0.3
+            var high = Object3D()
+            high.set_position(-4, 8, -3)
+            var sun = directional_light(
+                Color(255, 240, 220), scene.add(high^), 1.5
+            )
+            sun.cast_shadow = True
+            sun.shadow.map_size = 24
+            sun.shadow.near = Length(0.5, METER)
+            sun.shadow.far = Length(40.0, METER)
+            sun.shadow.intensity = 0.8
+            var csm = CSMShadowNode(
+                scene, camera, sun, light_margin=Length(10.0, METER)
+            )
+            csm.fade = fade
+            csm.update_frustums(scene, camera)
+            csm.update(scene, camera)
+            var renderer = Renderer(48, 36)
+            renderer.set_background(BACKGROUND)
+            renderer.shadow_map_type = kind
+            var corners = renderer.prepare(scene, assets, camera)
+            var lighting = Lighting(
+                scene,
+                camera.visible_layers(),
+                camera_position(scene, camera),
+                toward_camera(scene, camera),
+                camera_up(scene, camera),
+                back=camera_back(scene, camera),
+                shadows=renderer.shadow_maps(scene, assets),
+                spot_maps=renderer.spot_light_maps(scene, assets),
+            )
+            var cpu = renderer.render(scene, assets, camera)
+            var gpu = render_triangles(
+                corners,
+                48,
+                36,
+                BACKGROUND,
+                SHADE_TEXTURE,
+                assets.textures,
+                lighting,
+            )
+            assert_true(
+                count_background(cpu, BACKGROUND) < 48 * 36,
+                "the scene drew nothing",
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def test_both_backends_agree_on_cascades_and_shadow_intensity() raises:

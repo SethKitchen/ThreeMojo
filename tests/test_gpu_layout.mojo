@@ -66,6 +66,7 @@ from lights.ltc import (
 from lights.shadow import (
     BASIC_SHADOW_MAP,
     CSM_BLEND,
+    NODE_BLEND,
     SUN_BLEND,
     PCF_SHADOW_MAP,
     SHADOW_HEADER,
@@ -1298,6 +1299,17 @@ def test_the_light_buffer_carries_cascades_and_shadow_intensities() raises:
     assert_equal(sun[LIGHTS_FIRST + CASCADE_AT + 5], Float32(SUN_BLEND.value))
     assert_equal(sun[LIGHTS_FIRST + CASCADE_AT + 6], Float32(8.5))
     assert_equal(sun[LIGHTS_FIRST + CASCADE_AT + 7], Float32(3))
+    # A shadow node's cascade carries its near plane where a sun's
+    # carries its fade start. The two never ride one light.
+    scene.lights[0].cascade = ShadowCascade(
+        0.25, 0.75, Length(20.0, METER), False, True, NODE_BLEND, near=0.05
+    )
+    var node = flatten_lights(Lighting(scene))
+    assert_equal(node[LIGHTS_FIRST + CASCADE_AT + 5], Float32(NODE_BLEND.value))
+    assert_equal(node[LIGHTS_FIRST + CASCADE_AT + 6], Float32(0.05))
+    assert_equal(node[LIGHTS_FIRST + CASCADE_AT + 7], Float32(0))
+    assert_equal(node[LIGHTS_FIRST + CASCADE_AT + 3], Float32(0))
+    assert_equal(node[LIGHTS_FIRST + CASCADE_AT + 4], Float32(1))
     # A light that is no cascade carries a span of zero.
     var bare = flatten_lights(Lighting(a_shadowed_scene(assets)))
     assert_equal(bare[LIGHTS_FIRST + CASCADE_AT + 2], Float32(0))

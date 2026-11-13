@@ -435,7 +435,45 @@ These are the differences from three.js:
 - A custom split is a list of breaks, not a callback.
 - An argument of zero is kept. three.js's `data.x || default` replaces it with the default.
 - `update` also updates the scene's world matrices.
-- `CSMShadowNode` is not ported. For `CSMHelper`, see [Helpers](Helpers#csmhelper).
+
+For `CSMHelper`, see [Helpers](Helpers#csmhelper).
+
+### A cascaded shadow for one light
+
+`lights/csm_shadow_node.mojo`. A `CSMShadowNode` gives one directional light a shadow in cascades. This is three.js's `CSMShadowNode` from `examples/jsm/csm`. Use it for a light that has its own color, intensity and shadow settings. Use `CSM` when the cascades must make their own suns.
+
+```mojo
+var sun = directional_light(Color(255, 255, 255), sun_node, 3)
+sun.cast_shadow = True
+sun.shadow.map_size = 1024
+var csm = CSMShadowNode(scene, camera, sun, cascades=3, max_far=Length(200.0, METER))
+# For each frame, after the camera or the light moves:
+csm.update(scene, camera)
+var frame = renderer.render(scene, assets, camera)
+```
+
+Do not add the light to the scene. The constructor adds one casting directional light for each cascade, beside the light's node. The shadow node keeps the light in `light`.
+
+`update` gives each cascade light the color, the intensity and the layers of `light`. It moves each cascade light behind its slice, along the direction from the light's node to its target. A light with no target shines toward the origin. Each cascade's shadow is a copy of the light's shadow. Its bias is the light's bias multiplied by the number of the cascade, counted from one, as in three.js.
+
+The arguments `cascades`, `max_far`, `mode`, `light_margin` and `custom_breaks` mean what they mean for a `CSM`. Call `update_frustums` after the camera's projection, `mode` or `fade` changes. `dispose` takes the cascade lights off their parent. Add `light` to the scene after that when you want the light with a plain shadow.
+
+three.js lights a surface one time and reads one shadow value from the cascades. Here each cascade is a light with a `ShadowCascade` of `NODE_BLEND`. `csm_node_reach` gives each cascade light its share, and both rasterizers call it. The shares add to one light at every depth. They differ from the shares of a `CSM` in three ways, as the two shaders of three.js differ:
+
+- The depth is measured from the camera's near plane, not from the camera.
+- Without `fade`, the last slice also holds a depth exactly at its end.
+- With `fade`, the last slice does not reach past its end. Its shadow fades out before the end.
+
+These are the differences from three.js:
+
+- three.js sets the shadow node as the `shadow.shadowNode` of a light in the scene. Here the shadow node holds the light, and the scene holds only the cascade lights.
+- The camera is an argument of `update` and `update_frustums`. three.js keeps the camera of the first frame.
+- A custom split is a list of breaks, not a callback.
+- An argument of zero is kept. three.js's `data.x || default` replaces it with the default.
+- A light that does not cast a shadow is refused. three.js does not use the shadow node for such a light.
+- A light that stands on its target is refused, because it has no direction.
+- `update` also updates the scene's world matrices.
+- With `fade`, the shares are exact when each slice before the last is as wide as the margin at its far edge, or wider. That margin is a quarter of the square of the slice's end. A narrower slice takes less light than in three.js. A uniform split of six or more cascades has such slices.
 
 ## Highlights
 

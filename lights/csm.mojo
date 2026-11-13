@@ -30,8 +30,9 @@ the lights, so every surface reads them and there is no `setupMaterial`.
 A custom split is the list of breaks, not a callback that fills it. An
 argument of zero is kept, where three.js's `data.x || default` replaces
 it with the default. `update` also updates the scene's world matrices,
-as the renderer needs them fresh. The node material `CSMShadowNode` is
-not ported; `CSMHelper` is `helpers.csm`.
+as the renderer needs them fresh. `CSMShadowNode` is
+`lights.csm_shadow_node`, which shares the functions below with `CSM`;
+`CSMHelper` is `helpers.csm`.
 
 ## Numerical range correction
 
@@ -303,6 +304,195 @@ struct CsmFrustum(Copyable, Movable):
         return moved^
 
 
+def require_custom_breaks(breaks: List[Float32], cascades: Int) raises:
+    """Refuse custom breaks that are not one per slice, rising, from zero
+    to one.
+
+    Nothing. The call returns when the breaks fit.
+
+    Args:
+        breaks: Where each slice ends, as fractions of the depth.
+        cascades: How many slices.
+
+    Raises:
+        Error: If there is not one break per slice, or a break is not
+            finite, lies before the one before it or lies past one.
+    """
+    if len(breaks) != cascades:
+        raise Error("A custom CSM split needs one break per cascade")
+    var before = Float32(0)
+    for index in range(len(breaks)):
+        var at = breaks[index]
+        if not isfinite(at) or at < before or at > 1:
+            raise Error(
+                "A custom CSM split's breaks must rise from zero to one"
+            )
+        before = at
+
+
+def csm_breaks(
+    mode: CsmMode,
+    cascades: Int,
+    near: Float32,
+    far: Float32,
+    custom_breaks: List[Float32],
+) raises -> List[Float32]:
+    """Return where each slice ends for a split mode, three.js's
+    `_getBreaks`.
+
+    Args:
+        mode: How the depth is cut.
+        cascades: How many slices.
+        near: The camera's near plane, in meters.
+        far: The furthest depth the slices reach, in meters.
+        custom_breaks: The breaks `CUSTOM_SPLIT` returns.
+
+    Returns:
+        One break per slice, as fractions of `far`.
+
+    Raises:
+        Error: If the mode is none of the four, the count is above
+            16777216, or the custom breaks do not fit `CUSTOM_SPLIT`.
+    """
+    if mode == UNIFORM_SPLIT:
+        return uniform_split(cascades, near, far)
+    if mode == LOGARITHMIC_SPLIT:
+        return logarithmic_split(cascades, near, far)
+    if mode == PRACTICAL_SPLIT:
+        return practical_split(cascades, near, far, PRACTICAL_LAMBDA)
+    if mode == CUSTOM_SPLIT:
+        require_custom_breaks(custom_breaks, cascades)
+        return custom_breaks.copy()
+    raise Error("A CSM split mode that is none of the four")
+
+
+def cascade_extent(
+    frustum: CsmFrustum, fade: Bool, near: Float32, far: Float32
+) -> Float32:
+    """Return how wide a slice's shadow camera is, three.js's
+    `_updateShadowBounds` for one cascade.
+
+    The width is the longer of two diagonals: across the slice's far
+    plane, and through the slice. With `fade`, the width grows by the
+    margin the slice blends across.
+
+    Args:
+        frustum: The slice, in the camera's space.
+        fade: Whether neighboring slices blend.
+        near: The camera's near plane, in meters.
+        far: The camera's far plane or the furthest depth of the slices,
+            whichever is further, in meters.
+
+    Returns:
+        The width, in meters.
+    """
+    var first = frustum.far[0]
+    var second = frustum.near[2]
+    if first.distance_to(frustum.far[2]) > first.distance_to(frustum.near[2]):
+        second = frustum.far[2]
+    var width = first.distance_to(second)
+    if fade:
+        var depth = frustum.far[0].z / (far - near)
+        width += 0.25 * depth * depth * (far - near)
+    return width
+
+
+def cascade_center(
+    frustum: CsmFrustum,
+    to_light: Matrix4,
+    orientation: Matrix4,
+    texel_width: Float32,
+    texel_height: Float32,
+    margin: Float32,
+) -> Vector3:
+    """Return where a slice's light stands, three.js's `update` for one
+    cascade.
+
+    The slice's corners are turned into the light's frame and boxed. The
+    light stands at the box's middle, `margin` beyond its near face,
+    snapped to whole texels of its map so the shadow does not crawl as
+    the camera moves.
+
+    Args:
+        frustum: The slice, in the camera's space.
+        to_light: The transform from the camera's space into the light's
+            frame.
+        orientation: The light's frame, which turns the result back.
+        texel_width: How wide one texel of the shadow map is, in meters.
+        texel_height: How tall one texel is, in meters.
+        margin: How far behind its slice the light stands, in meters.
+
+    Returns:
+        The light's position.
+    """
+    var seen = frustum.to_space(to_light)
+    var low = seen.near[0]
+    var high = seen.near[0]
+    # Four corners, always.
+    for corner in range(4):  # pragma: no branch
+        low = component_min(
+            component_min(low, seen.near[corner]), seen.far[corner]
+        )
+        high = component_max(
+            component_max(high, seen.near[corner]), seen.far[corner]
+        )
+    var center = Vector3(
+        (low.x + high.x) * 0.5, (low.y + high.y) * 0.5, high.z + margin
+    )
+    center.x = floor(center.x / texel_width) * texel_width
+    center.y = floor(center.y / texel_height) * texel_height
+    return orientation.transform_point(center)
+
+
+def require_cascade_lights(
+    scene: Scene,
+    cascades: Int,
+    lights: List[Int],
+    nodes: List[NodeId],
+    targets: List[NodeId],
+) raises:
+    """Refuse missing or malformed cascade mappings before indexing.
+
+    Nothing. The call returns when each cascade has its light, its node
+    and its target in the scene.
+
+    Args:
+        scene: The scene that holds the cascades' lights.
+        cascades: How many slices.
+        lights: Each cascade's light, as its index in `Scene.lights`.
+        nodes: Each cascade light's node.
+        targets: Each cascade light's target node.
+
+    Raises:
+        Error: If there is no cascade, a list does not hold one entry per
+            cascade, a light is not in the scene or is not the
+            directional light of its node and target, or a node is not
+            in the scene.
+    """
+    if (
+        cascades < 1
+        or len(lights) != cascades
+        or len(nodes) != cascades
+        or len(targets) != cascades
+    ):
+        raise Error("A CSM needs one complete mapping per cascade")
+    for index in range(cascades):  # pragma: no branch
+        var at = lights[index]
+        require_index_in_count(
+            at,
+            len(scene.lights),
+            "A CSM's lights are not in this scene",
+        )
+        if (
+            scene.lights[at].kind != DIRECTIONAL
+            or scene.lights[at].node != nodes[index]
+            or scene.lights[at].target != targets[index]
+        ):
+            raise Error("A CSM's lights are not in this scene")
+        _ = scene.get(nodes[index])
+        _ = scene.get(targets[index])
+
+
 struct CSM(Movable):
     """Directional lights that share one sun, each shadowing one slice of
     a camera's depth: three.js's `CSM`.
@@ -407,7 +597,7 @@ struct CSM(Movable):
             "A CSM's light margin must be finite",
         )
         if mode == CUSTOM_SPLIT:
-            _check_breaks(custom_breaks, cascades)
+            require_custom_breaks(custom_breaks, cascades)
         self.cascades = cascades
         self.max_far = max_far
         self.mode = mode
@@ -466,40 +656,23 @@ struct CSM(Movable):
 
     def _get_breaks[C: Camera](mut self, camera: C) raises:
         """Work out the breaks for the mode, three.js's `_getBreaks`."""
-        var near = camera.near_distance()
-        var far = self._furthest(camera)
-        if self.mode == UNIFORM_SPLIT:
-            self.breaks = uniform_split(self.cascades, near, far)
-        elif self.mode == LOGARITHMIC_SPLIT:
-            self.breaks = logarithmic_split(self.cascades, near, far)
-        elif self.mode == PRACTICAL_SPLIT:
-            self.breaks = practical_split(
-                self.cascades, near, far, PRACTICAL_LAMBDA
-            )
-        elif self.mode == CUSTOM_SPLIT:
-            _check_breaks(self.custom_breaks, self.cascades)
-            self.breaks = self.custom_breaks.copy()
-        else:
-            raise Error("A CSM split mode that is none of the four")
+        self.breaks = csm_breaks(
+            self.mode,
+            self.cascades,
+            camera.near_distance(),
+            self._furthest(camera),
+            self.custom_breaks,
+        )
 
     def _update_shadow_bounds[C: Camera](self, mut scene: Scene, camera: C):
         """Size each light's shadow camera to its slice, three.js's
         `_updateShadowBounds`."""
+        var far = max(camera.far_distance(), self.max_far.to(METER))
         # One frustum per cascade, and at least one cascade.
         for index in range(len(self.frustums)):  # pragma: no branch
-            ref frustum = self.frustums[index]
-            var first = frustum.far[0]
-            var second = frustum.near[2]
-            if first.distance_to(frustum.far[2]) > first.distance_to(
-                frustum.near[2]
-            ):
-                second = frustum.far[2]
-            var width = first.distance_to(second)
-            if self.fade:
-                var near = camera.near_distance()
-                var far = max(camera.far_distance(), self.max_far.to(METER))
-                var depth = frustum.far[0].z / (far - near)
-                width += 0.25 * depth * depth * (far - near)
+            var width = cascade_extent(
+                self.frustums[index], self.fade, camera.near_distance(), far
+            )
             ref shadow = scene.lights[self.lights[index]].shadow
             shadow.set_extent(Length(width / 2, METER))
 
@@ -592,25 +765,14 @@ struct CSM(Movable):
             var texel_height = (
                 shadow.top.to(METER) - shadow.bottom.to(METER)
             ) / size
-            var seen = self.frustums[index].to_space(to_light)
-            var low = seen.near[0]
-            var high = seen.near[0]
-            # Four corners, always.
-            for corner in range(4):  # pragma: no branch
-                low = component_min(
-                    component_min(low, seen.near[corner]), seen.far[corner]
-                )
-                high = component_max(
-                    component_max(high, seen.near[corner]), seen.far[corner]
-                )
-            var center = Vector3(
-                (low.x + high.x) * 0.5,
-                (low.y + high.y) * 0.5,
-                high.z + self.light_margin.to(METER),
+            var center = cascade_center(
+                self.frustums[index],
+                to_light,
+                orientation,
+                texel_width,
+                texel_height,
+                self.light_margin.to(METER),
             )
-            center.x = floor(center.x / texel_width) * texel_width
-            center.y = floor(center.y / texel_height) * texel_height
-            center = orientation.transform_point(center)
             scene.node(self.nodes[index]).set_position(
                 center.x, center.y, center.z
             )
@@ -652,41 +814,6 @@ struct CSM(Movable):
 
     def _check_lights(self, scene: Scene) raises:
         """Refuse missing or malformed cascade mappings before indexing."""
-        if (
-            self.cascades < 1
-            or len(self.lights) != self.cascades
-            or len(self.nodes) != self.cascades
-            or len(self.targets) != self.cascades
-        ):
-            raise Error("A CSM needs one complete mapping per cascade")
-        for index in range(self.cascades):  # pragma: no branch
-            var at = self.lights[index]
-            require_index_in_count(
-                at,
-                len(scene.lights),
-                "A CSM's lights are not in this scene",
-            )
-            if (
-                scene.lights[at].kind != DIRECTIONAL
-                or scene.lights[at].node != self.nodes[index]
-                or scene.lights[at].target != self.targets[index]
-            ):
-                raise Error("A CSM's lights are not in this scene")
-            _ = scene.get(self.nodes[index])
-            _ = scene.get(self.targets[index])
-
-
-def _check_breaks(breaks: List[Float32], cascades: Int) raises:
-    """Refuse custom breaks that are not one per slice, rising, from zero
-    to one."""
-    if len(breaks) != cascades:
-        raise Error("A custom CSM split needs one break per cascade")
-    var before = Float32(0)
-    # As many breaks as cascades, and at least one cascade.
-    for index in range(len(breaks)):  # pragma: no branch
-        var at = breaks[index]
-        if not isfinite(at) or at < before or at > 1:
-            raise Error(
-                "A custom CSM split's breaks must rise from zero to one"
-            )
-        before = at
+        require_cascade_lights(
+            scene, self.cascades, self.lights, self.nodes, self.targets
+        )

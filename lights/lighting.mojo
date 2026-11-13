@@ -59,8 +59,10 @@ from lights.shadow import (
     ShadowShape,
     SpotLightMap,
     Unshaped,
+    NODE_BLEND,
     SUN_BLEND,
     cascade_reach,
+    csm_node_reach,
     sun_reach,
     shadow_strength,
     require_shadow_type,
@@ -1965,7 +1967,8 @@ struct Lighting(Movable):
         A light that is no cascade gives `shadow_through`. A cascade measures
         the surface's depth in front of the camera, `view_depth` over the
         cascade's span, and weighs the light and its shadow as
-        `cascade_reach` says.
+        `cascade_reach` says, or `sun_reach` or `csm_node_reach` for the
+        cascade's blend.
 
         Args:
             index: Which directional light, in the order they were
@@ -1997,6 +2000,10 @@ struct Lighting(Movable):
                 band.fade_start,
                 band.end,
                 band.last,
+            )
+        if band.blend == NODE_BLEND:
+            reach = csm_node_reach(
+                depth - band.near, band.start, band.end, band.last, band.fade
             )
         if reach[0] == 0:
             return Vector3(0, 0, 0)
