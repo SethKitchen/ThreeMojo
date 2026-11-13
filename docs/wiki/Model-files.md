@@ -454,7 +454,9 @@ A point or a line gets a `BASIC` material of its own, as three.js makes a `Point
 
 An index here holds triangles. Thus the loader copies the vertices of an indexed point or line primitive out in index order, as three.js's `toNonIndexed` does. The morph targets are copied with them.
 
-A point or a line on a skinned node or an instanced node is refused. A skinned or instanced line is not ported.
+A point or a line on a skinned node is drawn at the node, without the skin. three.js binds a skeleton only to a `SkinnedMesh`, and it has no skinned line. The triangles of the same node are still skinned.
+
+An instanced node whose mesh has a primitive of points or lines draws that mesh one time, without instances. three.js's `GLTFMeshGpuInstancing` instances a mesh only when each primitive is triangles. The loader does not read the extension in that case.
 
 ### Normal maps
 
@@ -693,7 +695,7 @@ The loader raises for:
 - A compressed buffer view that is malformed. See [Compressed buffer views](#compressed-buffer-views).
 - An unknown accessor type or component type. An attribute of the wrong width. Indices that are not unsigned integers.
 - An image that is not PNG, JPEG, WebP, TGA or KTX 2.0. A texture or material that names something the file does not have. A texture with no image.
-- A primitive mode that is not points, lines or triangles. A point or a line on a skinned or instanced node.
+- A primitive mode that is not points, lines or triangles.
 - `targetNames` that do not hold one name per morph target.
 - An unknown wrap mode or alpha mode.
 - A node reached twice. A node matrix that flattens an axis.

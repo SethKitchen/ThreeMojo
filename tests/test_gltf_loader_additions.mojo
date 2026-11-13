@@ -4,7 +4,8 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """Tests for what `loaders.gltf` reads beyond triangles and the material
-extensions: primitives of points and lines, morph target names,
+extensions: primitives of points and lines, alone and on skinned and
+instanced nodes, morph target names,
 `EXT_materials_bump`, `KHR_texture_basisu` and `EXT_texture_webp`.
 
 Each document is written inline. The KTX 2.0 images are the Basis
@@ -44,6 +45,12 @@ comptime TRI = "AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"
 comptime ORDER = "AgAAAAEA"
 # Three RGB float colors: red, green, blue.
 comptime RGB = "AACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/"
+# Three joints of four unsigned bytes, all joint zero.
+comptime JOINTS = "AAAAAAAAAAAAAAAA"
+# Three weights of four floats, all of it on the first joint.
+comptime WEIGHTS = (
+    "AACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAA"
+)
 comptime CHECKER = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGP4z8DwHwyBNBgAAEnICff5q7YNAAAAAElFTkSuQmCC"
 
 
@@ -220,25 +227,141 @@ def test_an_indexed_line_keeps_its_morph_targets_in_order() raises:
     assert_equal(line.morph_normals[0].data[2], 1)
 
 
-def test_a_skinned_or_instanced_line_is_refused() raises:
-    refuses(
+def skinned_doc(primitives: String) -> String:
+    """Return a document of one triangle's positions (accessor 0), its
+    joints (accessor 1) and its weights (accessor 2), one mesh of
+    `primitives` on node 0, and node 1 as the one joint of skin 0."""
+    return doc(
+        ',"buffers":[{"byteLength":36,"uri":"data:application/octet-stream;base64,'
+        + TRI
+        + '"},{"byteLength":12,"uri":"data:application/octet-stream;base64,'
+        + JOINTS
+        + '"},{"byteLength":48,"uri":"data:application/octet-stream;base64,'
+        + WEIGHTS
+        + '"}]'
+        + ',"bufferViews":[{"buffer":0,"byteLength":36},'
+        + '{"buffer":1,"byteLength":12},{"buffer":2,"byteLength":48}]'
+        + ',"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"},'
+        + '{"bufferView":1,"componentType":5121,"count":3,"type":"VEC4"},'
+        + '{"bufferView":2,"componentType":5126,"count":3,"type":"VEC4"}]'
+        + ',"meshes":[{"primitives":['
+        + primitives
+        + "]}]"
+        + ',"nodes":[{"mesh":0,"skin":0},{}],"skins":[{"joints":[1]}]'
+        + ',"scenes":[{"nodes":[0,1]}]'
+    )
+
+
+def test_a_line_on_an_instanced_node_draws_the_mesh_once() raises:
+    # three.js's `GLTFMeshGpuInstancing` returns null for a mesh that
+    # holds a primitive of points or lines. The node then draws plain.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
         geometry_doc(
-            '{"attributes":{"POSITION":0},"mode":1}',
+            '{"attributes":{"POSITION":0}},'
+            + '{"attributes":{"POSITION":0},"mode":1},'
+            + '{"attributes":{"POSITION":0},"mode":0}',
             ',"nodes":[{"mesh":0,"extensions":{"EXT_mesh_gpu_instancing":'
             + '{"attributes":{"TRANSLATION":0}}}}],"scenes":[{"nodes":[0]}]',
         ),
-        "instanced node draws triangles only",
+        scene,
+        assets,
     )
-    refuses(
+    assert_equal(model.instanced_mesh_count, 0)
+    assert_equal(len(scene.instanced_meshes), 0)
+    assert_equal(model.mesh_count, 1)
+    assert_equal(model.line_count, 1)
+    assert_equal(model.points_count, 1)
+    assert_equal(scene.lines[0].mode, SEGMENTS)
+    assert_equal(scene.lines[0].node, model.nodes[0])
+    assert_equal(scene.points[0].node, model.nodes[0])
+    assert_equal(scene.meshes[0].node, model.nodes[0])
+    # The extension is not read then, so what it holds is not checked.
+    var plain = Scene()
+    var kept = Assets()
+    var loose = loaded(
         geometry_doc(
             '{"attributes":{"POSITION":0},"mode":3}',
-            ',"nodes":[{"mesh":0,"skin":0},{}],"skins":[{"joints":[1]}]'
-            + ',"scenes":[{"nodes":[0,1]}]',
+            ',"nodes":[{"mesh":0,"extensions":{"EXT_mesh_gpu_instancing":'
+            + '{}}}],"scenes":[{"nodes":[0]}]',
         ),
-        "skinned node draws triangles only",
+        plain,
+        kept,
     )
+    assert_equal(loose.line_count, 1)
+    assert_equal(plain.lines[0].mode, STRIP)
+    # A mesh of triangles alone is still instanced.
+    var crowd = Scene()
+    var more = Assets()
+    var many = loaded(
+        geometry_doc(
+            '{"attributes":{"POSITION":0}}',
+            ',"nodes":[{"mesh":0,"extensions":{"EXT_mesh_gpu_instancing":'
+            + '{"attributes":{"TRANSLATION":0}}}}],"scenes":[{"nodes":[0]}]',
+        ),
+        crowd,
+        more,
+    )
+    assert_equal(many.instanced_mesh_count, 1)
+    assert_equal(crowd.instanced_meshes[0].count(), 3)
+    assert_equal(many.mesh_count, 0)
+
+
+def test_a_line_on_a_skinned_node_is_drawn_unskinned() raises:
+    # three.js binds a skeleton to a `SkinnedMesh` alone. A `Line` or a
+    # `Points` on the same node keeps its place and takes no skin.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        skinned_doc(
+            '{"attributes":{"POSITION":0},"mode":3},'
+            + '{"attributes":{"POSITION":0,"JOINTS_0":1,"WEIGHTS_0":2}},'
+            + '{"attributes":{"POSITION":0,"JOINTS_0":1,"WEIGHTS_0":2},"mode":0}'
+        ),
+        scene,
+        assets,
+    )
+    assert_equal(model.skinned_mesh_count, 1)
+    assert_equal(model.mesh_count, 0)
+    # The counts include what the skinned node drew.
+    assert_equal(model.line_count, 1)
+    assert_equal(model.points_count, 1)
+    assert_equal(model.first_line, 0)
+    assert_equal(model.first_points, 0)
+    assert_equal(scene.lines[0].mode, STRIP)
+    assert_equal(scene.lines[0].node, model.nodes[0])
+    assert_equal(scene.points[0].node, model.nodes[0])
+    assert_equal(scene.skinned_meshes[0].node, model.nodes[0])
+    # The line's material is the unlit one of a plain line.
+    assert_equal(assets.materials.get(scene.lines[0].material).kind, BASIC)
+    # The points keep the attributes the file gives them, unread.
+    assert_false(
+        assets.materials.get(scene.points[0].material).size_attenuation
+    )
+    # A skinned node of lines alone draws no skinned mesh.
+    var bare = Scene()
+    var others = Assets()
+    var lines = loaded(
+        skinned_doc('{"attributes":{"POSITION":0},"mode":2}'), bare, others
+    )
+    assert_equal(lines.skinned_mesh_count, 0)
+    assert_equal(lines.line_count, 1)
+    assert_equal(bare.lines[0].mode, LOOP)
+
+
+def test_a_strip_or_a_fan_of_triangles_is_refused() raises:
     refuses(
         geometry_doc('{"attributes":{"POSITION":0},"mode":6}'),
+        "strips and fans",
+    )
+    # On an instanced node too: the primitive is refused when it is read.
+    refuses(
+        geometry_doc(
+            '{"attributes":{"POSITION":0},"mode":5}',
+            ',"nodes":[{"mesh":0,"extensions":{"EXT_mesh_gpu_instancing":'
+            + '{"attributes":{"TRANSLATION":0}}}}],"scenes":[{"nodes":[0]}]',
+        ),
         "strips and fans",
     )
 
