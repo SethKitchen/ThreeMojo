@@ -86,7 +86,7 @@ The device takes the same inputs that `Renderer.render` gives the CPU rasterizer
 
 An antialiased frame is different in one way. The device draws at `SUPERSAMPLE` times the size and averages the encoded bytes. The CPU averages the linear light before the tone curve. So an edge pixel can differ by a few levels.
 
-`examples/meadow_gpu.mojo` draws the picture of `examples/meadow.mojo` in this way. `tests/test_vegetation_gpu.mojo` compares a small meadow on both rasterizers. It is a device suite. It is compiled for `sm_80` and has not run on a GPU. [Issue 985](https://github.com/SethKitchen/ThreeMojo/issues/985) stays open until it does.
+`tests/test_vegetation_gpu.mojo` compares a small meadow on both rasterizers. There is no gallery example, because the gallery draws on the CPU. It is a device suite. It is compiled for `sm_80` and has not run on a GPU. [Issue 985](https://github.com/SethKitchen/ThreeMojo/issues/985) stays open until it does.
 
 ## What a frame draws
 
