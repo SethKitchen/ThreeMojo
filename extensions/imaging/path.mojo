@@ -19,15 +19,21 @@ voxel on the grid's edge counts as near the outside.
 
 The path is a list of voxel centers in patient space, from the start to
 the end. Pass it to `curved_reformat` to straighten the structure.
+
+A chain of voxel centers turns in steps of 45 degrees. `smooth_path`
+averages each inner point with its neighbors, with the weights 1, 2 and
+1, and keeps the two ends. A straight run stays where it is, and a zigzag
+of one voxel goes flat in one pass. `resample_path` then places points
+evenly along the path's length, for a curved reformat with even columns.
 """
 
 from extensions.imaging.ids import BACKGROUND, LabelId, require_label
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
 from extensions.imaging.thickness import seed_distances
-from extensions.sdf.vector import V3
-from std.math import inf, sqrt
-from units.si import METER
+from extensions.sdf.vector import V3, distance
+from std.math import inf, isfinite, sqrt
+from units.si import Length64, METER
 
 
 struct _Heap(Movable):
@@ -183,4 +189,81 @@ def label_path(
         var j = (index // map.nx) % map.ny
         var k = index // (map.nx * map.ny)
         out.append(volume.patient_point(Float64(i), Float64(j), Float64(k)))
+    return out^
+
+
+def smooth_path(path: List[V3], passes: Int) raises -> List[V3]:
+    """Return a path with its inner points averaged with their neighbors.
+
+    Each pass puts each inner point at `(before + 2 * point + after) / 4`.
+    The two ends stay.
+
+    Args:
+        path: The points, in meters. At least two.
+        passes: How many passes, from 0 to 1000.
+
+    Returns:
+        The smoothed path, with as many points.
+
+    Raises:
+        Error: If the path has fewer than two points, or `passes` is out
+            of range.
+    """
+    if len(path) < 2:
+        raise Error("A path to smooth needs two or more points")
+    if passes < 0 or passes > 1000:
+        raise Error("A path is smoothed from 0 to 1000 times")
+    var out = path.copy()
+    for _ in range(passes):
+        var before = out.copy()
+        for k in range(1, len(out) - 1):
+            out[k] = (before[k - 1] + before[k] * 2.0 + before[k + 1]) * 0.25
+    return out^
+
+
+def resample_path(path: List[V3], spacing: Length64) raises -> List[V3]:
+    """Return points evenly spaced along a path.
+
+    The points lie at the arc lengths 0, `spacing`, `2 * spacing` and on,
+    and the path's last point ends the list when the last step is shorter.
+
+    Args:
+        path: The points, in meters. At least two, and two in a row must
+            differ.
+        spacing: The distance along the path between two points.
+            Positive and finite.
+
+    Returns:
+        The points, from the first point of the path to its last.
+
+    Raises:
+        Error: If the path has fewer than two points or two equal points
+            in a row, or the spacing is not positive and finite.
+    """
+    if len(path) < 2:
+        raise Error("A path to resample needs two or more points")
+    var step = spacing.to(METER)
+    if not (step > 0) or not isfinite(step):
+        raise Error("A path's spacing must be positive and finite")
+    var starts = List[Float64]()
+    var total = 0.0
+    for k in range(len(path) - 1):  # pragma: no branch
+        var piece = distance(path[k], path[k + 1])
+        if not (piece > 0):
+            raise Error("Two points in a row of a path are one")
+        starts.append(total)
+        total += piece
+    var out = List[V3]()
+    var segment = 0
+    var s = 0.0
+    var index = 0
+    while s < total - 1e-12 * total:
+        while segment + 1 < len(starts) and s >= starts[segment + 1]:
+            segment += 1
+        var piece = distance(path[segment], path[segment + 1])
+        var t = (s - starts[segment]) / piece
+        out.append(path[segment] + (path[segment + 1] - path[segment]) * t)
+        index += 1
+        s = Float64(index) * step
+    out.append(path[len(path) - 1])
     return out^

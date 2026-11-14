@@ -9,8 +9,10 @@
 
 A synthetic vessel with contrast winds through a block of soft tissue in
 all three axes, and narrows to half its radius partway along. A
-threshold labels it, `label_path` finds its centered path, and
-`curved_reformat` straightens it. The top left panel is the maximum
+threshold labels it, and `label_path` finds its centered path.
+`smooth_path` and `resample_path` turn the chain of voxels into a smooth
+path with even steps, and `curved_reformat` straightens the vessel along
+it. The top left panel is the maximum
 intensity projection along z, with the path in yellow. The top right
 panel is one axial slice: no single plane holds the vessel. The band
 below is the straightened vessel, with the narrowing plain to see. The program
@@ -25,7 +27,7 @@ from extensions.imaging.ids import CORNERS, K_AXIS, LabelId, SLAB_MAXIMUM
 from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
 from extensions.imaging.labels import keep_largest, threshold
 from extensions.imaging.overlay import render_slice
-from extensions.imaging.path import label_path
+from extensions.imaging.path import label_path, resample_path, smooth_path
 from extensions.imaging.reformat import slab_projection
 from extensions.imaging.thickness import label_distance
 from extensions.sdf.vector import V3, distance, v3
@@ -149,9 +151,9 @@ def main() raises:
         var q = volume.voxel_point(p)
         projected.set_pixel(Int(q.x + 0.5), Int(q.y + 0.5), Color(255, 220, 40))
     var axial = render_slice(volume, K_AXIS, NZ // 2)
-    var straight = curved_reformat(
-        volume, path, v3(0, 0, 1), 20, Length64(0.25, MILLIMETER64), 0
-    )
+    var fine = Length64(0.25, MILLIMETER64)
+    var smooth = resample_path(smooth_path(path, 4), fine)
+    var straight = curved_reformat(volume, smooth, v3(0, 0, 1), 20, fine, 0)
     var wide = _zoomed(render_slice(straight, K_AXIS, 0), 2)
     var band = wide.height + 20
     var sheet = Framebuffer(2 * PANEL, PANEL + band, Color(0, 0, 0))

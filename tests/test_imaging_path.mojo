@@ -9,9 +9,9 @@ from extensions.imaging.curved import curved_reformat
 from extensions.imaging.ids import BACKGROUND, LabelId
 from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
 from extensions.imaging.labels import LabelMap
-from extensions.imaging.path import label_path
-from extensions.sdf.vector import distance, v3
-from std.math import sqrt
+from extensions.imaging.path import label_path, resample_path, smooth_path
+from extensions.sdf.vector import V3, distance, v3
+from std.math import inf, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -93,6 +93,72 @@ def test_a_bent_tube() raises:
     # One voxel is a path of one point.
     var one = label_path(map, volume, LabelId(1), (3, 5, 8), (3, 5, 8))
     assert_equal(len(one), 1)
+
+
+def test_smoothing() raises:
+    # A straight run stays on its line, with its ends.
+    var line: List[V3] = [v3(0, 0, 0), v3(1, 0, 0), v3(3, 0, 0), v3(4, 0, 0)]
+    var smooth = smooth_path(line, 5)
+    assert_equal(len(smooth), 4)
+    for p in smooth:
+        assert_equal(p.y, 0.0)
+        assert_equal(p.z, 0.0)
+    assert_equal(smooth[0].x, 0.0)
+    assert_equal(smooth[3].x, 4.0)
+    # A zigzag of one step goes flat in one pass.
+    var zigzag = List[V3]()
+    for k in range(9):
+        zigzag.append(v3(Float64(k), 1.0 if k % 2 == 1 else -1.0, 0))
+    var flat = smooth_path(zigzag, 1)
+    for k in range(1, 8):
+        assert_almost_equal(flat[k].y, 0.0, atol=1e-15)
+    assert_equal(flat[0].y, -1.0)
+    # Two points have no inner point to move.
+    var pair: List[V3] = [v3(0, 0, 0), v3(1, 1, 1)]
+    assert_equal(smooth_path(pair, 3)[1].z, 1.0)
+    # No pass keeps the path.
+    assert_equal(smooth_path(zigzag, 0)[1].y, 1.0)
+    var one: List[V3] = [v3(0, 0, 0)]
+    with assert_raises(contains="two or more points"):
+        _ = smooth_path(one, 1)
+    with assert_raises(contains="0 to 1000"):
+        _ = smooth_path(line, -1)
+    with assert_raises(contains="0 to 1000"):
+        _ = smooth_path(line, 1001)
+
+
+def test_resampling() raises:
+    # 6 mm along x, then 7 mm along y.
+    var bent: List[V3] = [_point(0, 0, 0), _point(6, 0, 0), _point(6, 7, 0)]
+    var even = resample_path(bent, Length64(0.5, MILLIMETER64))
+    assert_equal(len(even), 27)
+    assert_almost_equal(even[12].x, 6 * MM, atol=1e-15)
+    assert_almost_equal(even[14].y, 1 * MM, atol=1e-15)
+    assert_almost_equal(even[26].y, 7 * MM, atol=1e-15)
+    for k in range(1, 27):
+        # The corner falls on a sample, so every step is 0.5 mm.
+        assert_almost_equal(
+            distance(even[k], even[k - 1]), 0.5 * MM, atol=1e-15
+        )
+    # A last step shorter than the spacing ends at the path's end.
+    var coarse = resample_path(bent, Length64(2.0, MILLIMETER64))
+    assert_equal(len(coarse), 8)
+    assert_almost_equal(coarse[3].x, 6 * MM, atol=1e-15)
+    assert_almost_equal(coarse[7].y, 7 * MM, atol=1e-15)
+    var one: List[V3] = [v3(0, 0, 0)]
+    with assert_raises(contains="two or more points"):
+        _ = resample_path(one, Length64(1.0, MILLIMETER64))
+    with assert_raises(contains="spacing"):
+        _ = resample_path(bent, Length64(0.0, MILLIMETER64))
+    with assert_raises(contains="spacing"):
+        _ = resample_path(bent, Length64(inf[DType.float64](), MILLIMETER64))
+    var repeated: List[V3] = [v3(0, 0, 0), v3(0, 0, 0)]
+    with assert_raises(contains="are one"):
+        _ = resample_path(repeated, Length64(1.0, MILLIMETER64))
+
+
+def _point(x: Float64, y: Float64, z: Float64) -> V3:
+    return v3(x, y, z) * MM
 
 
 def test_refusals() raises:

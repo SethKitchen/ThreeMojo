@@ -35,7 +35,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
 | `reformat` | `oblique_slice`, `slab_projection` and `sample_point` |
 | `curved` | `curved_reformat` |
-| `path` | `label_path` |
+| `path` | `label_path`, `smooth_path` and `resample_path` |
 | `resample` | `resample_volume` and `resample_labels` |
 
 ## Read a DICOM series
@@ -487,11 +487,19 @@ var image = curved_reformat(volume, centerline, v3(0, 0, 1), 40, Length64(0.5, M
 
 Each step of the path goes to one of the 26 neighbors of a voxel, inside the label. A step of length `s` between voxels at the distances `d1` and `d2` from the label's edge costs `s * (1 / d1^2 + 1 / d2^2) / 2`. A step near the edge costs much more than a step down the middle.
 
-Dijkstra's method finds the path of least total cost. The distances are exact, with the spacing of each axis, and the grid's edge counts as outside. The result keeps the window of the source. It is not a plane in patient space, so its origin is zero and its axes are those of the grid.
+Dijkstra's method finds the path of least total cost. The distances are exact, with the spacing of each axis, and the grid's edge counts as outside.
+
+A chain of voxel centers turns in steps of 45 degrees, so a curved reformat along it has jagged edges. Smooth it first, and give it even steps:
+
+```mojo
+var even = resample_path(smooth_path(centerline, 4), Length64(0.25, MILLIMETER64))
+```
+
+`smooth_path(path, passes)` puts each inner point at `(before + 2 * point + after) / 4` in each pass, and keeps the two ends. A straight run stays where it is, and a zigzag of one step goes flat in one pass. `resample_path(path, spacing)` places points at the arc lengths 0, `spacing`, `2 * spacing` and on, and ends at the path's last point. The result keeps the window of the source. It is not a plane in patient space, so its origin is zero and its axes are those of the grid.
 
 ![A winding vessel: its projection with the centered path in yellow, one axial slice, and the vessel straightened with a narrowing](out/vessel.png)
 
-`examples/vessel.mojo` makes this picture. A synthetic vessel of 300 HU winds through soft tissue of about 40 HU, in all three axes. Its radius is 2.4 mm, and it narrows to half of that partway along. A threshold labels it, and `keep_largest` keeps it whole with `CORNERS`. `label_path` finds its centered path, and `curved_reformat` straightens it.
+`examples/vessel.mojo` makes this picture. A synthetic vessel of 300 HU winds through soft tissue of about 40 HU, in all three axes. Its radius is 2.4 mm, and it narrows to half of that partway along. A threshold labels it, and `keep_largest` keeps it whole with `CORNERS`. `label_path` finds its centered path. `smooth_path` and `resample_path` smooth it, and `curved_reformat` straightens the vessel along it.
 
 The top left panel is the maximum intensity projection along z, with the path in yellow. The top right panel is one axial slice, which cuts the vessel once. The band below is the straightened vessel, where the narrowing is plain to see. Along the path of 54.7 mm, the distance to the edge is least at 34.9 mm: 1.12 mm, against the narrowest radius of 1.2 mm. The distance runs to the centers of the voxels outside, so it is less than the radius.
 
@@ -532,6 +540,7 @@ The tests check these results:
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
 - An oblique reformat of a linear field matches the field at every pixel.
+- Smoothing keeps a straight run on its line and its ends in place, and flattens a zigzag of one step in one pass. A bent path resampled every 0.5 mm has its corner on a sample, and every step is 0.5 mm.
 - The centered path through a straight tube runs down its axis, and a start off the axis joins the axis. Through a bent tube, each step goes to a neighbor inside the label, and the path straightens into a curved reformat.
 - A curved reformat along a straight path matches a linear field at every pixel. Along a bent path, the corner falls at its arc length, and an `up` that leans along the path keeps only its square part. A point past the volume takes the `outside` value.
 - A linear field resampled from 0.5 x 0.5 x 3 mm voxels to 1 mm cubes keeps its value at every new voxel. A label slice of 3 mm becomes the three 1 mm slices nearest to it.
@@ -580,6 +589,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
 | An end of a centered path is outside the grid or the label, or no path joins the ends | `label_path` |
+| A path has fewer than two points or two equal points in a row, or a pass count or a spacing is out of range | `smooth_path`, `resample_path` |
 | A path has fewer than two points or two equal points in a row, `up` is zero or along a segment, or a size is out of range | `curved_reformat` |
 | A circle has a bad axis, slice, center or radius, or holds no pixel center | `circle_statistics` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels` |
@@ -600,7 +610,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
 - Rendering uses the volume frame. It does not apply the patient orientation.
 - A circle counts whole pixels by their centers. It does not weigh the pixels that its edge cuts.
-- A centered path is a chain of voxel centers, with steps of one voxel. It is not smoothed.
+- A centered path is a chain of voxel centers. `smooth_path` smooths it, but does not keep it inside the label at a sharp bend of a thin structure.
 - The connectivity of `label_surface`, the surfaces and the morphology is by faces. The `Connectivity` choice applies to the pieces and to region growing only.
 - The colors of a transfer function are display values. They are not linear light.
 
