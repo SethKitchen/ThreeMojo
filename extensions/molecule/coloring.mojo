@@ -7,7 +7,7 @@
 
 `color_surface` finds, for each vertex, the atom whose van der Waals
 sphere is nearest: the least `|p - center| - radius`. The vertex then
-takes a color from that atom, by one of four `SurfaceColoring` kinds:
+takes a color from that atom, by one of five `SurfaceColoring` kinds:
 
 - `COLOR_BY_ELEMENT`: the CPK color of the element.
 - `COLOR_BY_B_FACTOR`: blue at the least B-factor of the model, white
@@ -16,6 +16,8 @@ takes a color from that atom, by one of four `SurfaceColoring` kinds:
 - `COLOR_BY_HYDROPATHY`: blue at -4.5 on the scale of Kyte and Doolittle,
   white at 0 and orange at +4.5. A residue that is not one of the twenty
   amino acids is gray.
+- `COLOR_BY_CONFIDENCE`: the band of the atom's pLDDT, the B-factor of a
+  predicted model, as `confidence_color` gives it.
 
 The colors are linear, as the renderer takes them.
 """
@@ -26,13 +28,15 @@ from extensions.chemistry.quantities import ANGSTROM
 from extensions.molecule.ids import (
     COLOR_BY_B_FACTOR,
     COLOR_BY_CHAIN,
+    COLOR_BY_CONFIDENCE,
     COLOR_BY_ELEMENT,
     ModelId,
     SurfaceColoring,
     require_surface_coloring,
 )
+from extensions.molecule.confidence import confidence_color
 from extensions.molecule.ribbon import chain_color
-from extensions.molecule.structure import Structure
+from extensions.molecule.structure import SQUARE_ANGSTROM, Structure
 from extensions.molecule.surface import AtomCells, vdw_radius
 from extensions.sdf.vector import V3, distance, v3
 from loaders.pdb import cpk_color
@@ -185,6 +189,8 @@ def _color_of(
         return v3(
             Float64(rgb[0]) / 255, Float64(rgb[1]) / 255, Float64(rgb[2]) / 255
         )
+    if coloring == COLOR_BY_CONFIDENCE:
+        return confidence_color(a.b_factor.to(SQUARE_ANGSTROM))
     ref residue = structure.residues[a.residue.value]
     if coloring == COLOR_BY_CHAIN:
         var first = structure.models[model.value].first_chain

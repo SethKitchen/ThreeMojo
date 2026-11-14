@@ -21,6 +21,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `ribbon` | `ribbon_geometry` and `chain_color` |
 | `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius`, `sphere_points` and `AtomCells` |
 | `coloring` | `color_surface`, `atom_color` and `kyte_doolittle` |
+| `confidence` | `confidence_color`, `confidence_summary` and `ConfidenceSummary` |
 | `superpose` | `superpose`, `Superposition`, `rmsd` and `matched_atoms` |
 | `ensemble` | `ensemble_fluctuation`, `Fluctuation`, `fluctuation_b_factors` and `shared_positions` |
 | `clusters` | `model_distances`, `ModelDistances` and `cluster_models` |
@@ -260,7 +261,7 @@ These torsions make ideal shapes. They do not fold a chain: the strands of a bui
 
 The last residue of a strand ends in an arrow. The arrow starts 1.7 angstroms wide and narrows to a point. A chain breaks where two CA atoms in a row are more than 4.2 angstroms apart, or where a residue has no CA.
 
-`BY_STRUCTURE` colors helices red, strands gold and coils gray. `BY_CHAIN` gives each chain one of eight colors. The colors are linear, as the renderer needs them.
+`BY_STRUCTURE` colors helices red, strands gold and coils gray. `BY_CHAIN` gives each chain one of eight colors. `BY_CONFIDENCE` colors each residue by the pLDDT of a predicted model. See [Color by confidence](#color-by-confidence). The colors are linear, as the renderer needs them.
 
 ## Measure accessible areas
 
@@ -473,6 +474,7 @@ A surface comes with CPK colors. `color_surface(geometry, structure, model, colo
 | `COLOR_BY_B_FACTOR` | Blue at the least B-factor of the model, white halfway and red at the largest |
 | `COLOR_BY_CHAIN` | The chain, in the palette of the ribbons |
 | `COLOR_BY_HYDROPATHY` | Blue at -4.5 on the Kyte-Doolittle scale, white at 0 and orange at +4.5 |
+| `COLOR_BY_CONFIDENCE` | The band of the pLDDT of a predicted model |
 
 ```mojo
 var surface = excluded_surface(structure, model, probe, spacing)
@@ -482,6 +484,28 @@ color_surface(surface, structure, model, COLOR_BY_HYDROPATHY)
 Each vertex takes the color of the atom whose van der Waals sphere is nearest it. A grid of cells, `AtomCells`, finds that atom. A residue that is not one of the twenty amino acids, such as water or a ligand, is gray in the hydropathy coloring. `kyte_doolittle(name)` gives the value of one residue, and `atom_color` gives the sRGB color of one atom. `chain_color(index)` gives the palette color of a chain.
 
 The B-factor coloring shows the flexible parts of a crystal structure. A high B-factor can also show disorder or a poor model. The hydropathy coloring shows oily and charged patches. It does not compute an electrostatic potential.
+
+## Color by confidence
+
+A structure predicted by AlphaFold or a similar model gives each residue a pLDDT from 0 to 100. The file holds it in the B-factor column of every atom of the residue. `BY_CONFIDENCE` colors a ribbon by it, and `COLOR_BY_CONFIDENCE` a surface, in the four bands of the AlphaFold Protein Structure Database.
+
+| Band | pLDDT | Color |
+|---|---|---|
+| Very high | Above 90 | Dark blue, `#0053D6` |
+| Confident | Above 70, to 90 | Light blue, `#65CBF3` |
+| Low | Above 50, to 70 | Yellow, `#FFDB13` |
+| Very low | 50 and below | Orange, `#FF7D45` |
+
+```mojo
+var model = read_pdb_structure("AF-P69905-F1-model_v4.pdb", FIRST_LOCATION)
+var ribbon = ribbon_geometry(model, ModelId(0), BY_CONFIDENCE, 6, 12)
+var summary = confidence_summary(model, ModelId(0))
+print(summary.mean, summary.very_high, summary.very_low)
+```
+
+`confidence_summary(structure, model)` gives the mean pLDDT of the residues with a CA atom, and the number of residues in each band. The pLDDT of a residue is the B-factor of its CA, read in square angstroms as the file gives it. `confidence_color(plddt)` gives the sRGB color of one value. A value on the edge of two bands, such as 90, is in the lower band, to a rounding of 1e-9.
+
+A region of very low pLDDT is often disordered. Do not read its shape as a structure. A high pLDDT says that the local shape is likely right. It does not say that the domains are in the right place relative to each other.
 
 ## Verification
 
@@ -517,6 +541,7 @@ The tests check these results:
 - Six models lie at shifts of 0, 0.5, 1, 5, 5.4 and 20 angstroms. At a cutoff of 1 angstrom, they form the clusters `0 1 2`, `3 4` and `5`. On 12 noisy and moved models, the fitted table matches numpy's SVD solution to 5e-15 angstroms. The medoid and the clusters at four cutoffs match a Python version of the method. That check is not part of the test suite.
 - A local alignment of three tryptophans inside other residues is the three alone, with their start in each sequence. It takes a gap inside when the pairs around it pay for it. On the 40 random pairs, every local score matches Biopython's local `PairwiseAligner`, and each alignment holds the stretch of each sequence from its start. That check is not part of the test suite.
 - BLOSUM62 is symmetric, with its diagonal from 4 to 11. Small alignments give their gaps at the ends, inside and in either sequence, with the scores of each gap. A sequence against itself has no gap and an identity of 1. All 400 BLOSUM62 values match Biopython 1.88. On 40 random pairs with changes, insertions and deletions, every score matches Biopython's `PairwiseAligner`. That check is not part of the test suite.
+- The band colors are the four colors of the AlphaFold Protein Structure Database, with each edge in the lower band. A helix of eight residues with two in each band gives each count and the mean. A residue without a CA does not count. Each CA, and each ring of a ribbon, takes its band's color.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
 ## Errors
@@ -530,6 +555,7 @@ Every function raises `Error` for input it cannot use.
 | A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, an alignment mode is not valid, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
+| A confidence summary has a model id that names no model, no CA atom, or a pLDDT not from 0 to 100 | `confidence_summary` |
 | An ensemble has fewer than two models, too few shared atoms, or a bad fit or reference | `ensemble_fluctuation`, `Fluctuation`, `shared_positions`, `model_distances` |
 | A model id is outside a table, or a cluster cutoff is negative or not finite | `ModelDistances`, `cluster_models` |
 | A structure has no model or no atom, its name holds a blank, or a value holds a line end or both kinds of closing quote | `encode_mmcif`, `cif_value` |
@@ -567,6 +593,8 @@ Every function raises `Error` for input it cannot use.
 - Needleman and Wunsch, "A general method applicable to the search for similarities in the amino acid sequence of two proteins", 1970.
 - Smith and Waterman, "Identification of common molecular subsequences", 1981.
 - Daura and others, "Peptide folding: when simulation meets experiment", Angewandte Chemie International Edition, 1999.
+- Jumper and others, "Highly accurate protein structure prediction with AlphaFold", Nature, 2021.
+- Varadi and others, "AlphaFold Protein Structure Database", Nucleic Acids Research, 2022.
 - Gotoh, "An improved algorithm for matching biological sequences", 1982.
 - Henikoff and Henikoff, "Amino acid substitution matrices from protein blocks", 1992.
 - Tien, Meyer, Sydykova, Spielman and Wilke, "Maximum allowed solvent accessibilities of residues in proteins", 2013.

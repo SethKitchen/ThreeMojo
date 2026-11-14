@@ -372,7 +372,7 @@ def test_kinds() raises:
         require_policy(AltLocPolicy(-1))
     require_coloring(BY_CHAIN)
     with assert_raises(contains="ribbon coloring"):
-        require_coloring(RibbonColoring(2))
+        require_coloring(RibbonColoring(3))
     assert_true(ModelId(0).is_valid())
     assert_false(ChainId(-1).is_valid())
 

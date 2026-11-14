@@ -29,6 +29,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, BufferGeometry
 from extensions.chemistry.quantities import ANGSTROM
 from extensions.molecule.ids import (
+    BY_CONFIDENCE,
     BY_STRUCTURE,
     HELIX,
     ModelId,
@@ -38,7 +39,8 @@ from extensions.molecule.ids import (
     SecondaryKind,
     require_coloring,
 )
-from extensions.molecule.structure import Structure
+from extensions.molecule.confidence import confidence_color
+from extensions.molecule.structure import SQUARE_ANGSTROM, Structure
 from extensions.sdf.vector import (
     V3,
     catmull_rom,
@@ -66,6 +68,8 @@ struct _Trace(Copyable, Movable):
     var sides: List[V3]
     var kinds: List[SecondaryKind]
     var chain: Int
+    # The B-factor of each CA atom, in square angstroms: a pLDDT.
+    var confidence: List[Float64]
 
 
 def _angstrom() -> Float64:
@@ -92,7 +96,9 @@ def _traces(structure: Structure, model: ModelId) raises -> List[_Trace]:
     var limit = MAX_CA_STEP * _angstrom()
     for c in range(m.first_chain, m.first_chain + m.chain_count):
         ref chain = structure.chains[c]
-        var piece = _Trace(List[V3](), List[V3](), List[SecondaryKind](), c)
+        var piece = _Trace(
+            List[V3](), List[V3](), List[SecondaryKind](), c, List[Float64]()
+        )
         var start = chain.first_residue
         for r in range(start, start + chain.residue_count):
             var ca = structure.find_atom(ResidueId(r), "CA")
@@ -102,7 +108,13 @@ def _traces(structure: Structure, model: ModelId) raises -> List[_Trace]:
                 gap = distance(p, piece.points[len(piece.points) - 1]) > limit
             if gap:
                 _keep(out, piece^, c)
-                piece = _Trace(List[V3](), List[V3](), List[SecondaryKind](), c)
+                piece = _Trace(
+                    List[V3](),
+                    List[V3](),
+                    List[SecondaryKind](),
+                    c,
+                    List[Float64](),
+                )
             if ca.value < 0:
                 continue
             var p = structure.atoms[ca.value].position
@@ -113,6 +125,9 @@ def _traces(structure: Structure, model: ModelId) raises -> List[_Trace]:
             piece.points.append(p)
             piece.sides.append(side)
             piece.kinds.append(structure.residues[r].secondary)
+            piece.confidence.append(
+                structure.atoms[ca.value].b_factor.to(SQUARE_ANGSTROM)
+            )
         _keep(out, piece^, c)
     return out^
 
@@ -162,10 +177,14 @@ def chain_color(chain: Int) -> V3:
     return palette[chain % 8]
 
 
-def _color(kind: SecondaryKind, chain: Int, coloring: RibbonColoring) -> V3:
+def _color(
+    kind: SecondaryKind, chain: Int, plddt: Float64, coloring: RibbonColoring
+) -> V3:
     """Return the linear color of one sample of a ribbon."""
     var srgb: V3
-    if coloring == BY_STRUCTURE:
+    if coloring == BY_CONFIDENCE:
+        srgb = confidence_color(plddt)
+    elif coloring == BY_STRUCTURE:
         if kind == HELIX:
             srgb = v3(0.89, 0.25, 0.38)
         elif kind == STRAND:
@@ -213,7 +232,7 @@ def ribbon_geometry(
     Args:
         structure: The structure.
         model: The model to draw.
-        coloring: `BY_STRUCTURE` or `BY_CHAIN`.
+        coloring: `BY_STRUCTURE`, `BY_CHAIN` or `BY_CONFIDENCE`.
         samples: Rings for each residue step, from 2 to 16.
         sides: Vertices around each ring, from 4 to 32.
 
@@ -263,7 +282,10 @@ def ribbon_geometry(
                 )
                 var up = cross(tangent, across)
                 var size = _size(piece, i, t)
-                var color = _color(size[2], piece.chain, coloring)
+                var nearest = i + 1 if t >= 0.5 else i
+                var color = _color(
+                    size[2], piece.chain, piece.confidence[nearest], coloring
+                )
                 _ring(
                     positions,
                     normals,

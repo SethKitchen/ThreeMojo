@@ -91,7 +91,7 @@ def test_atom_colors() raises:
     with assert_raises(contains="not in the model"):
         _ = atom_color(s, model, -1, COLOR_BY_ELEMENT)
     with assert_raises(contains="surface coloring"):
-        _ = atom_color(s, model, 0, SurfaceColoring(4))
+        _ = atom_color(s, model, 0, SurfaceColoring(5))
 
 
 def test_unknown_element_and_one_b_factor() raises:
@@ -170,7 +170,7 @@ def test_color_a_real_surface() raises:
 
 def test_require() raises:
     require_surface_coloring(COLOR_BY_HYDROPATHY)
-    with assert_raises(contains="from 0 to 3"):
+    with assert_raises(contains="from 0 to 4"):
         require_surface_coloring(SurfaceColoring(-1))
 
 

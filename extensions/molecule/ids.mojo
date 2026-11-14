@@ -205,26 +205,29 @@ struct RibbonColoring(Equatable, ImplicitlyCopyable, Writable):
     """How a ribbon is colored.
 
     `BY_STRUCTURE` colors helices, strands and coils apart. `BY_CHAIN`
-    gives each chain its own color.
+    gives each chain its own color. `BY_CONFIDENCE` colors each residue
+    by the pLDDT of a predicted model, in the bands of the AlphaFold
+    Protein Structure Database.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this names one of the two colorings.
+        """Return True if this names one of the three colorings.
 
         Returns:
-            Whether the value is zero or one.
+            Whether the value is from zero to two.
         """
-        return ordinal_valid(self.value, 1)
+        return ordinal_valid(self.value, 2)
 
 
 comptime BY_STRUCTURE = RibbonColoring(0)
 comptime BY_CHAIN = RibbonColoring(1)
+comptime BY_CONFIDENCE = RibbonColoring(2)
 
 
 def require_coloring(coloring: RibbonColoring) raises:
-    """Refuse a ribbon coloring that is not one of the two.
+    """Refuse a ribbon coloring that is not one of the three.
 
     Args:
         coloring: The coloring to check.
@@ -232,7 +235,7 @@ def require_coloring(coloring: RibbonColoring) raises:
     Raises:
         Error: If `coloring` is not valid.
     """
-    require_valid(coloring.is_valid(), "A ribbon coloring must be 0 or 1")
+    require_valid(coloring.is_valid(), "A ribbon coloring must be from 0 to 2")
 
 
 @fieldwise_init
@@ -244,28 +247,30 @@ struct SurfaceColoring(Equatable, ImplicitlyCopyable, Writable):
     to red at the largest. `COLOR_BY_CHAIN` gives each chain its own
     color. `COLOR_BY_HYDROPATHY` runs from blue for the most hydrophilic
     residue to orange for the most hydrophobic, on the scale of Kyte and
-    Doolittle.
+    Doolittle. `COLOR_BY_CONFIDENCE` colors by the pLDDT of a predicted
+    model, in the bands of the AlphaFold Protein Structure Database.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this names one of the four colorings.
+        """Return True if this names one of the five colorings.
 
         Returns:
-            Whether the value is from zero to three.
+            Whether the value is from zero to four.
         """
-        return ordinal_valid(self.value, 3)
+        return ordinal_valid(self.value, 4)
 
 
 comptime COLOR_BY_ELEMENT = SurfaceColoring(0)
 comptime COLOR_BY_B_FACTOR = SurfaceColoring(1)
 comptime COLOR_BY_CHAIN = SurfaceColoring(2)
 comptime COLOR_BY_HYDROPATHY = SurfaceColoring(3)
+comptime COLOR_BY_CONFIDENCE = SurfaceColoring(4)
 
 
 def require_surface_coloring(coloring: SurfaceColoring) raises:
-    """Refuse a surface coloring that is not one of the four.
+    """Refuse a surface coloring that is not one of the five.
 
     Args:
         coloring: The coloring to check.
@@ -273,7 +278,7 @@ def require_surface_coloring(coloring: SurfaceColoring) raises:
     Raises:
         Error: If `coloring` is not valid.
     """
-    require_valid(coloring.is_valid(), "A surface coloring must be from 0 to 3")
+    require_valid(coloring.is_valid(), "A surface coloring must be from 0 to 4")
 
 
 @fieldwise_init
