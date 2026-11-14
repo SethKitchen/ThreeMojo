@@ -7,31 +7,36 @@
 
 `DicomWriter` writes a preamble, `DICM`, a file meta group and then the
 elements that the caller adds, in the order of the calls. DICOM needs
-the tags in increasing order. The caller keeps that order.
+the tags in increasing order. The caller keeps that order. For the
+deflated syntax, `finish` compresses the data set.
 
 `encode_dicom` writes one `DicomSlice` as a CT image. It stores each
 value as `round((value - intercept) / slope)`, held in the range of the
-stored bits.
+stored bits. For the RLE Lossless syntax, it encodes the pixel data as
+one frame in one fragment, each row of each segment on its own, as
+DICOM needs.
 """
 
 from extensions.imaging.dicom import (
     DicomSlice,
-    EXPLICIT_LITTLE_UID,
-    IMPLICIT_LITTLE_UID,
     ITEM,
     ITEM_END,
     ITEM_GROUP,
+    RLE_HEADER,
     SEQUENCE_END,
     UNDEFINED_LENGTH,
+    syntax_uid,
 )
 from extensions.imaging.ids import (
-    EXPLICIT_LITTLE,
+    DEFLATED_EXPLICIT,
+    IMPLICIT_LITTLE,
     MONOCHROME1,
+    RLE_LOSSLESS,
     SIGNED_PIXELS,
     TransferSyntax,
-    require_syntax,
 )
 from loaders.js_number import js_to_fixed
+from render.deflate import deflate
 from std.math import max, min, round
 from extensions.imaging.image_volume import MILLIMETER64
 
@@ -115,6 +120,10 @@ struct DicomWriter(Movable):
     """The file so far."""
     var explicit: Bool
     """Whether the data set is explicit VR."""
+    var syntax: TransferSyntax
+    """How the data set after the meta group is encoded."""
+    var meta_end: Int
+    """The place in `bytes` where the data set starts."""
 
     def __init__(out self, syntax: TransferSyntax) raises:
         """Start a file with its preamble and its file meta group.
@@ -125,11 +134,9 @@ struct DicomWriter(Movable):
         Raises:
             Error: If `syntax` is not valid.
         """
-        require_syntax(syntax)
-        self.explicit = syntax == EXPLICIT_LITTLE
-        var uid = String(IMPLICIT_LITTLE_UID)
-        if self.explicit:
-            uid = String(EXPLICIT_LITTLE_UID)
+        var uid = syntax_uid(syntax)
+        self.explicit = syntax != IMPLICIT_LITTLE
+        self.syntax = syntax
         var meta = List[UInt8]()
         _element(meta, True, 0x0002, 0x0001, "OB", True, 2)
         meta.append(0)
@@ -142,6 +149,7 @@ struct DicomWriter(Movable):
         _element(self.bytes, True, 0x0002, 0x0000, "UL", False, 4)
         _push32(self.bytes, len(meta))
         self.bytes.extend(meta^)
+        self.meta_end = len(self.bytes)
 
     def text(mut self, group: Int, element: Int, vr: String, value: String):
         """Append a text element, padded to an even length with a space.
@@ -240,13 +248,48 @@ struct DicomWriter(Movable):
         _push16(self.bytes, ITEM_END)
         _push32(self.bytes, 0)
 
-    def finish(deinit self) -> List[UInt8]:
+    def encapsulated(mut self, frame: List[UInt8]):
+        """Append pixel data of undefined length that holds one fragment.
+
+        The pixel data holds an empty offset table, `frame` padded to an
+        even length with a zero byte, and the sequence delimiter.
+
+        Args:
+            frame: The bytes of the one frame.
+        """
+        _element(self.bytes, True, 0x7FE0, 0x0010, "OB", True, UNDEFINED_LENGTH)
+        _push16(self.bytes, ITEM_GROUP)
+        _push16(self.bytes, ITEM)
+        _push32(self.bytes, 0)
+        var size = len(frame) + len(frame) % 2
+        _push16(self.bytes, ITEM_GROUP)
+        _push16(self.bytes, ITEM)
+        _push32(self.bytes, size)
+        self.bytes.extend(frame.copy())
+        if size > len(frame):
+            self.bytes.append(0)
+        self.close_sequence()
+
+    def finish(deinit self) raises -> List[UInt8]:
         """Return the bytes of the file and end the writer.
+
+        For the deflated syntax, the data set becomes one raw DEFLATE
+        stream, padded to an even length with a zero byte.
 
         Returns:
             The file.
+
+        Raises:
+            Error: If the compressor fails.
         """
-        return self.bytes^
+        if self.syntax != DEFLATED_EXPLICIT:
+            return self.bytes^
+        var whole = Span(self.bytes)
+        var out = List[UInt8](whole[: self.meta_end])
+        out.extend(deflate(whole[self.meta_end :]))
+        if len(out) % 2 == 1:
+            out.append(0)
+        return out^
 
     def close_sequence(mut self):
         """Append the delimiter that ends a sequence of undefined length."""
@@ -363,6 +406,10 @@ def encode_dicom(image: DicomSlice) raises -> List[UInt8]:
             _push16(data, stored)
         else:
             data.append(UInt8(stored))
+    if image.syntax == RLE_LOSSLESS:
+        var step = image.bits_allocated // 8
+        writer.encapsulated(encode_rle_frame(data, step, image.columns))
+        return writer^.finish()
     if len(data) % 2 == 1:
         data.append(0)
     var vr = String("OB")
@@ -370,3 +417,91 @@ def encode_dicom(image: DicomSlice) raises -> List[UInt8]:
         vr = "OW"
     writer.binary(0x7FE0, 0x0010, vr, data)
     return writer^.finish()
+
+
+def pack_bits(data: Span[UInt8, _]) -> List[UInt8]:
+    """Return the PackBits code of some bytes, as DICOM's RLE uses it.
+
+    A run of two or more equal bytes, up to 128, becomes the byte
+    `257 - length` and the repeated byte. Other bytes become literal runs
+    of up to 128: the byte `length - 1` and the bytes.
+
+    Args:
+        data: The bytes to encode.
+
+    Returns:
+        The code.
+    """
+    var out = List[UInt8]()
+    var at = 0
+    while at < len(data):
+        var run = _run_length(data, at)
+        if run > 1:
+            out.append(UInt8(257 - run))
+            out.append(data[at])
+            at += run
+            continue
+        var start = at
+        at += 1
+        while (
+            at < len(data) and at - start < 128 and _run_length(data, at) == 1
+        ):
+            at += 1
+        out.append(UInt8(at - start - 1))
+        out.extend(data[start:at])
+    return out^
+
+
+def _run_length(data: Span[UInt8, _], at: Int) -> Int:
+    """Return how many bytes from `at` equal the byte at `at`, up to 128."""
+    var run = 1
+    while at + run < len(data) and run < 128 and data[at + run] == data[at]:
+        run += 1
+    return run
+
+
+def encode_rle_frame(
+    samples: List[UInt8], step: Int, columns: Int
+) raises -> List[UInt8]:
+    """Return one RLE Lossless frame of little-endian samples.
+
+    Segment `s` holds byte `step - 1 - s` of each sample: the most
+    significant byte comes first. Each row of a segment is encoded on its
+    own, and each segment is padded to an even length with a zero byte.
+
+    Args:
+        samples: The samples in order, `step` bytes each, the low byte
+            first.
+        step: The bytes of each sample, from 1 to 15.
+        columns: The samples in each row.
+
+    Returns:
+        The frame: its 64-byte header, then its segments.
+
+    Raises:
+        Error: If `step` is not from 1 to 15, or the samples do not fill
+            whole rows of `columns`.
+    """
+    if step < 1 or step > 15:
+        raise Error("An RLE frame holds from 1 to 15 segments")
+    if columns < 1 or len(samples) % (step * columns) != 0:
+        raise Error("RLE samples must fill whole rows")
+    var count = len(samples) // step
+    var frame = List[UInt8]()
+    _push32(frame, step)
+    var segments = List[UInt8]()
+    # A frame holds at least one segment.
+    for segment in range(step):  # pragma: no branch
+        _push32(frame, RLE_HEADER + len(segments))
+        var row = List[UInt8](capacity=columns)
+        for index in range(count):  # pragma: no branch
+            row.append(samples[index * step + step - 1 - segment])
+            if len(row) == columns:
+                segments.extend(pack_bits(row))
+                row.clear()
+        if len(segments) % 2 == 1:
+            segments.append(0)
+    while len(frame) < RLE_HEADER:
+        _push32(frame, 0)
+    frame.extend(segments^)
+    return frame^

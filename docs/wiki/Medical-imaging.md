@@ -14,8 +14,8 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 |---|---|
 | `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode` and `LabelId` |
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
-| `dicom` | `parse_dicom` and `read_dicom`, which give a `DicomSlice` |
-| `dicom_write` | `DicomWriter`, `encode_dicom` and `ds_text` |
+| `dicom` | `parse_dicom` and `read_dicom`, which give a `DicomSlice`, and `decode_rle_frame` |
+| `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
 | `nifti` | `parse_nifti`, `read_nifti`, `encode_nifti`, `encode_nifti_labels` and `labels_from_volume` |
 | `phantom` | `shepp_logan`, a head of ten ellipsoids |
@@ -44,14 +44,20 @@ print(volume.nx, volume.ny, volume.nz, volume.spacing_z.to(MILLIMETER64))
 
 A Part 10 file starts with a preamble of 128 bytes and the letters `DICM`. The file meta group follows in explicit VR little endian. Its transfer syntax UID gives the encoding of the data set.
 
-The reader takes these two transfer syntaxes:
+The reader takes these four transfer syntaxes:
 
-| Transfer syntax | UID |
-|---|---|
-| Explicit VR little endian | `1.2.840.10008.1.2.1` |
-| Implicit VR little endian | `1.2.840.10008.1.2` |
+| Transfer syntax | UID | `TransferSyntax` |
+|---|---|---|
+| Explicit VR little endian | `1.2.840.10008.1.2.1` | `EXPLICIT_LITTLE` |
+| Implicit VR little endian | `1.2.840.10008.1.2` | `IMPLICIT_LITTLE` |
+| Deflated explicit VR little endian | `1.2.840.10008.1.2.1.99` | `DEFLATED_EXPLICIT` |
+| RLE Lossless | `1.2.840.10008.1.2.5` | `RLE_LOSSLESS` |
 
-The reader refuses big endian and every compressed syntax. It refuses encapsulated pixel data too. Convert such a file to an uncompressed syntax first.
+The reader refuses big endian, JPEG, JPEG 2000 and every other compressed syntax. Convert such a file to one of the four first.
+
+A deflated file holds the whole data set as one raw DEFLATE stream after the meta group. The reader expands it to at most 1 GiB, and then reads it as explicit VR little endian.
+
+An RLE Lossless file holds encapsulated pixel data. The element holds an offset table item, then the fragments of the frame, then a sequence delimiter. The frame starts with a header of 64 bytes: the number of segments and the offset of each. Each segment holds one byte of each sample, the most significant byte first, in PackBits code. `decode_rle_frame(frame, count, step)` decodes one frame into little-endian samples. The reader refuses encapsulated pixel data in any other syntax.
 
 The reader keeps the elements in the table. It steps over every other element. It steps over sequences of undefined length, and items of undefined length in them.
 
@@ -246,7 +252,9 @@ Each pixel is a trilinear sample of the volume. A point outside the box of voxel
 
 The tests check these results:
 
-- A slice written by `encode_dicom` reads back with every element equal, in both transfer syntaxes.
+- A slice written by `encode_dicom` reads back with every element equal, in each of the four transfer syntaxes.
+- Three files that pydicom 3.0.1 wrote read with pydicom's values. They are 16-bit signed RLE, 8-bit RLE and deflated. `assets/dicom/make_dicom.py` makes them.
+- `pack_bits` splits runs and literals at 128 bytes, and its code decodes to the same bytes.
 - A 12-bit signed value masks and extends its sign: `0xF800` reads as -2048.
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
@@ -267,7 +275,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | Case | Functions |
 |---|---|
 | A file is not Part 10, or ends inside an element | `parse_dicom`, `read_dicom` |
-| A transfer syntax is compressed or big endian | `parse_dicom`, `read_dicom` |
+| A transfer syntax is not one of the four | `parse_dicom`, `read_dicom` |
+| Encapsulated pixel data, an RLE frame or a deflated data set is malformed | `parse_dicom`, `read_dicom`, `decode_rle_frame` |
 | An image is not one frame of one grayscale sample | `parse_dicom`, `read_dicom` |
 | A grid is empty or holds more than 2^28 voxels | `ImageVolume`, `shepp_logan` |
 | A file is not single-file NIfTI-1, or its datatype, unit or axes are not supported | `parse_nifti`, `read_nifti` |
@@ -278,7 +287,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 
 ## Limits
 
-- The reader takes uncompressed little-endian grayscale images only. It does not read color, multiframe, JPEG, JPEG 2000 or RLE files.
+- The reader takes little-endian grayscale images, uncompressed, deflated or RLE. It does not read color, multiframe, JPEG or JPEG 2000 files.
 - The reader does not read a file that has no preamble.
 - The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
@@ -289,7 +298,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 
 ## References
 
-- NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annex A.
+- NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.
 - NEMA PS3.3, "Information Object Definitions", sections C.7.6.2 and C.11.2.1.
 - NEMA PS3.10, "Media Storage and File Format", section 7.
 - Cox and others, "A (sort of) new image data format standard: NIfTI-1", 2004, and the header `nifti1.h`.

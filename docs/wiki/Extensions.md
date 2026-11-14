@@ -237,7 +237,7 @@ extensions/
   imaging/
     ids.mojo              transfer syntaxes, slice axes, render modes, labels
     image_volume.mojo     a scalar grid with spacing, origin and axes
-    dicom.mojo            the DICOM Part 10 reader
+    dicom.mojo            the DICOM Part 10 reader, with RLE and deflate
     dicom_write.mojo      the DICOM writer
     series.mojo           slice stacks, and volumes cut into slices
     nifti.mojo            NIfTI-1 volumes and label maps, read and written

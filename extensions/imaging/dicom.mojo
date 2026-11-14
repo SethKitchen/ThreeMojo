@@ -8,8 +8,16 @@
 A Part 10 file starts with a 128-byte preamble and the letters `DICM`.
 The file meta group follows in explicit VR little endian. Its transfer
 syntax UID says how the data set after it is encoded. The reader takes
-explicit VR little endian and implicit VR little endian. It refuses big
-endian and every compressed syntax.
+four syntaxes: explicit VR little endian, implicit VR little endian,
+deflated explicit VR little endian and RLE Lossless. It refuses big
+endian, JPEG and every other compressed syntax.
+
+A deflated file holds the whole data set as one raw DEFLATE stream after
+the meta group. An RLE Lossless file holds the pixel data encapsulated:
+an offset table item, then the fragments of the frame, then a sequence
+delimiter. The frame starts with a 64-byte header: the number of
+segments and the offset of each. Each segment holds one byte of every
+sample, the most significant byte first, compressed by PackBits.
 
 The reader keeps the elements that place and scale the image: rows,
 columns, bits, pixel representation, photometric interpretation, rescale
@@ -23,17 +31,21 @@ and 8 or 16 bits allocated.
 """
 
 from extensions.imaging.ids import (
+    DEFLATED_EXPLICIT,
     EXPLICIT_LITTLE,
     IMPLICIT_LITTLE,
     MONOCHROME1,
     MONOCHROME2,
     Photometric,
     PixelRepresentation,
+    RLE_LOSSLESS,
     SIGNED_PIXELS,
     TransferSyntax,
     UNSIGNED_PIXELS,
+    require_syntax,
 )
 from loaders.bytes import bytes_match
+from render.inflate import inflate
 from extensions.sdf.vector import V3, cross, dot, length, v3
 from std.math import isfinite
 from std.pathlib import Path
@@ -42,6 +54,13 @@ from units.si import Length64
 
 comptime EXPLICIT_LITTLE_UID = "1.2.840.10008.1.2.1"
 comptime IMPLICIT_LITTLE_UID = "1.2.840.10008.1.2"
+comptime DEFLATED_EXPLICIT_UID = "1.2.840.10008.1.2.1.99"
+comptime RLE_LOSSLESS_UID = "1.2.840.10008.1.2.5"
+# A deflated data set can expand to at most 1 GiB, so that a small,
+# hostile file cannot fill the memory.
+comptime MAX_INFLATED = 1 << 30
+# The bytes of the header of an RLE frame: a count and 15 offsets.
+comptime RLE_HEADER = 64
 # A row or a column must be a unit vector to this tolerance, and the two
 # must be square to it.
 comptime ORIENTATION_TOLERANCE = 1.0e-3
@@ -346,11 +365,37 @@ def _syntax(uid: String) raises -> TransferSyntax:
         return EXPLICIT_LITTLE
     if uid == IMPLICIT_LITTLE_UID:
         return IMPLICIT_LITTLE
+    if uid == DEFLATED_EXPLICIT_UID:
+        return DEFLATED_EXPLICIT
+    if uid == RLE_LOSSLESS_UID:
+        return RLE_LOSSLESS
     raise Error(
         "The DICOM transfer syntax "
         + uid
-        + " is not explicit or implicit VR little endian"
+        + " is not one of the four that the reader takes"
     )
+
+
+def syntax_uid(syntax: TransferSyntax) raises -> String:
+    """Return the UID of a transfer syntax.
+
+    Args:
+        syntax: The syntax.
+
+    Returns:
+        The UID that a file meta group gives for it.
+
+    Raises:
+        Error: If `syntax` is not valid.
+    """
+    require_syntax(syntax)
+    var uids: List[String] = [
+        EXPLICIT_LITTLE_UID,
+        IMPLICIT_LITTLE_UID,
+        DEFLATED_EXPLICIT_UID,
+        RLE_LOSSLESS_UID,
+    ]
+    return uids[syntax.value]
 
 
 def _photometric(text: String) raises -> Photometric:
@@ -373,8 +418,9 @@ def parse_dicom(bytes: Span[UInt8, _]) raises -> DicomSlice:
 
     Raises:
         Error: If the bytes are not a Part 10 file, the transfer syntax is
-            not little endian and uncompressed, the image is not one frame
-            of one grayscale sample, or an element is short or malformed.
+            not one of the four, the image is not one frame of one
+            grayscale sample, an element is short or malformed, or the
+            compressed data does not decode.
     """
     if len(bytes) < 132:
         raise Error("A DICOM file starts with a 128-byte preamble and DICM")
@@ -388,7 +434,18 @@ def parse_dicom(bytes: Span[UInt8, _]) raises -> DicomSlice:
             uid = _text(bytes, meta)
         at = meta.start + meta.length
     var syntax = _syntax(uid)
-    var explicit = syntax == EXPLICIT_LITTLE
+    if syntax == DEFLATED_EXPLICIT:
+        var data = inflate(bytes, at, MAX_INFLATED)
+        return _parse_data_set(data, 0, syntax)
+    return _parse_data_set(bytes, at, syntax)
+
+
+def _parse_data_set(
+    bytes: Span[UInt8, _], start: Int, syntax: TransferSyntax
+) raises -> DicomSlice:
+    """Read the image from the data set that starts at `start`."""
+    var at = start
+    var explicit = syntax != IMPLICIT_LITTLE
     var rows = 0
     var columns = 0
     var bits_allocated = 0
@@ -396,6 +453,8 @@ def parse_dicom(bytes: Span[UInt8, _]) raises -> DicomSlice:
     var representation = -1
     var pixels = _Element(0, 0, 0, 0, False)
     var has_pixels = False
+    # The fragments of an encapsulated frame.
+    var frame = List[UInt8]()
     var photometric = MONOCHROME2
     var modality = String("")
     var instance = 0
@@ -411,9 +470,16 @@ def parse_dicom(bytes: Span[UInt8, _]) raises -> DicomSlice:
         var element = _header(bytes, at, explicit)
         var tag = (element.group << 16) | element.element
         if element.undefined:
-            if tag == 0x7FE00010:
-                raise Error("Encapsulated DICOM pixel data is not supported")
-            at = _skip_sequence(bytes, element.start, explicit)
+            if tag != 0x7FE00010:
+                at = _skip_sequence(bytes, element.start, explicit)
+                continue
+            if syntax != RLE_LOSSLESS:
+                raise Error(
+                    "Encapsulated DICOM pixel data needs the RLE Lossless"
+                    " syntax"
+                )
+            at = _fragments(bytes, element.start, frame)
+            has_pixels = True
             continue
         at = element.start + element.length
         if tag == 0x00080060:
@@ -455,6 +521,10 @@ def parse_dicom(bytes: Span[UInt8, _]) raises -> DicomSlice:
         elif tag == 0x00281053:
             slope = _numbers(bytes, element, 1, "rescale slope")[0]
         elif tag == 0x7FE00010:
+            if syntax == RLE_LOSSLESS:
+                raise Error(
+                    "RLE Lossless DICOM pixel data must be encapsulated"
+                )
             pixels = element
             has_pixels = True
     if not has_pixels:
@@ -503,8 +573,102 @@ def parse_dicom(bytes: Span[UInt8, _]) raises -> DicomSlice:
         image.window_center = centers[0]
         image.window_width = widths[0]
         image.has_window = True
-    _decode_pixels(bytes, pixels, image)
+    if syntax == RLE_LOSSLESS:
+        var step = bits_allocated // 8
+        var samples = decode_rle_frame(frame, rows * columns, step)
+        var whole = _Element(0x7FE0, 0x0010, 0, len(samples), False)
+        _decode_pixels(samples, whole, image)
+    else:
+        _decode_pixels(bytes, pixels, image)
     return image^
+
+
+def _fragments(
+    bytes: Span[UInt8, _], at: Int, mut frame: List[UInt8]
+) raises -> Int:
+    """Append the fragments of encapsulated pixel data to `frame`.
+
+    Returns:
+        The place after the sequence delimiter.
+    """
+    var table = _header(bytes, at, True)
+    if table.group != ITEM_GROUP or table.element != ITEM or table.undefined:
+        raise Error("Encapsulated DICOM pixel data starts with an offset table")
+    var place = table.start + table.length
+    while True:
+        var item = _header(bytes, place, True)
+        if item.group != ITEM_GROUP:
+            raise Error("Encapsulated DICOM pixel data holds a non-item")
+        if item.element == SEQUENCE_END:
+            return item.start
+        if item.element != ITEM or item.undefined:
+            raise Error("A DICOM pixel fragment needs a defined length")
+        frame.extend(bytes[item.start : item.start + item.length])
+        place = item.start + item.length
+
+
+def decode_rle_frame(
+    frame: Span[UInt8, _], count: Int, step: Int
+) raises -> List[UInt8]:
+    """Return the little-endian samples of one RLE Lossless frame.
+
+    Args:
+        frame: The frame: its 64-byte header, then its segments.
+        count: The samples in the frame, rows times columns.
+        step: The bytes of each sample, and so the segments of the frame.
+
+    Returns:
+        `count * step` bytes, the samples in order, the low byte first.
+
+    Raises:
+        Error: If the header is short, its segment count is not `step`,
+            an offset is outside the frame, or a segment does not decode
+            to `count` bytes.
+    """
+    if len(frame) < RLE_HEADER:
+        raise Error("An RLE frame is shorter than its 64-byte header")
+    if _u32(frame, 0) != step:
+        raise Error("An RLE frame needs one segment per byte of a sample")
+    var samples = List[UInt8](length=count * step, fill=0)
+    for segment in range(step):  # pragma: no branch
+        var start = _u32(frame, 4 + 4 * segment)
+        var end = len(frame)
+        if segment + 1 < step:
+            end = _u32(frame, 8 + 4 * segment)
+        if start < RLE_HEADER or end < start or end > len(frame):
+            raise Error("An RLE segment offset is outside the frame")
+        var data = _unpack(frame, start, end, count)
+        # Segment 0 holds the most significant byte.
+        var place = step - 1 - segment
+        for index in range(count):  # pragma: no branch
+            samples[index * step + place] = data[index]
+    return samples^
+
+
+def _unpack(
+    frame: Span[UInt8, _], start: Int, end: Int, count: Int
+) raises -> List[UInt8]:
+    """Return the first `count` bytes of one PackBits segment."""
+    var out = List[UInt8](capacity=count + 128)
+    var at = start
+    while at < end and len(out) < count:
+        var code = Int(frame[at])
+        at += 1
+        if code == 128:
+            continue
+        var literal = code < 128
+        var need = code + 1 if literal else 1
+        if at + need > end:
+            raise Error("An RLE segment ends inside a run")
+        if literal:
+            out.extend(frame[at : at + need])
+        else:
+            for _ in range(257 - code):  # pragma: no branch
+                out.append(frame[at])
+        at += need
+    if len(out) < count:
+        raise Error("An RLE segment decodes to fewer bytes than the image")
+    return out^
 
 
 def _decode_pixels(

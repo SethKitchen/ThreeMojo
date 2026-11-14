@@ -21,26 +21,32 @@ struct TransferSyntax(Equatable, ImplicitlyCopyable, Writable):
 
     `EXPLICIT_LITTLE` is explicit VR little endian,
     `1.2.840.10008.1.2.1`. `IMPLICIT_LITTLE` is implicit VR little endian,
-    `1.2.840.10008.1.2`. The reader refuses every other syntax.
+    `1.2.840.10008.1.2`. `DEFLATED_EXPLICIT` is explicit VR little endian
+    with the data set compressed by DEFLATE, `1.2.840.10008.1.2.1.99`.
+    `RLE_LOSSLESS` is explicit VR little endian with the pixel data
+    compressed by run-length encoding, `1.2.840.10008.1.2.5`. The reader
+    refuses every other syntax.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this names one of the two syntaxes.
+        """Return True if this names one of the four syntaxes.
 
         Returns:
-            Whether the value is zero or one.
+            Whether the value is from zero to three.
         """
-        return ordinal_valid(self.value, 1)
+        return ordinal_valid(self.value, 3)
 
 
 comptime EXPLICIT_LITTLE = TransferSyntax(0)
 comptime IMPLICIT_LITTLE = TransferSyntax(1)
+comptime DEFLATED_EXPLICIT = TransferSyntax(2)
+comptime RLE_LOSSLESS = TransferSyntax(3)
 
 
 def require_syntax(syntax: TransferSyntax) raises:
-    """Refuse a transfer syntax that is not one of the two.
+    """Refuse a transfer syntax that is not one of the four.
 
     Args:
         syntax: The syntax to check.
@@ -48,7 +54,7 @@ def require_syntax(syntax: TransferSyntax) raises:
     Raises:
         Error: If `syntax` is not valid.
     """
-    require_valid(syntax.is_valid(), "A transfer syntax must be 0 or 1")
+    require_valid(syntax.is_valid(), "A transfer syntax must be from 0 to 3")
 
 
 @fieldwise_init

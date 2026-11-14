@@ -519,8 +519,8 @@ def test_encode_refusals() raises:
     with assert_raises(contains="from 1 bit"):
         _ = encode_dicom(image)
     image = _sample()
-    image.syntax = TransferSyntax(2)
-    with assert_raises(contains="transfer syntax must be 0 or 1"):
+    image.syntax = TransferSyntax(4)
+    with assert_raises(contains="transfer syntax must be from 0 to 3"):
         _ = encode_dicom(image)
     var writer = DicomWriter(EXPLICIT_LITTLE)
     writer.numbers(0x0028, 0x1050, List[Float64]())
@@ -544,7 +544,7 @@ def test_stored_value_range() raises:
 
 def test_ids() raises:
     assert_true(EXPLICIT_LITTLE.is_valid())
-    assert_false(TransferSyntax(2).is_valid())
+    assert_false(TransferSyntax(4).is_valid())
     require_syntax(IMPLICIT_LITTLE)
     with assert_raises(contains="transfer syntax"):
         require_syntax(TransferSyntax(-1))
