@@ -266,6 +266,9 @@ $(call gallery,wijnendale-scan,wijnendale_scan)
 # A head phantom through DICOM files, ray cast with a cutaway, and one axial
 # slice with labels and a measurement.
 $(call gallery,medical-imaging,medical_imaging)
+# A synthetic PET in SUV fused over the head phantom CT, with a lesion
+# labeled, measured and outlined.
+$(call gallery,fusion,fusion)
 # An ideal peptide of a helix, a loop and a strand: its cartoon ribbon, and
 # its excluded surface colored by element and by hydropathy.
 $(call gallery,molecule,molecule)
