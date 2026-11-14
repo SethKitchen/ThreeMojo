@@ -14,7 +14,8 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 |---|---|
 | `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity` and `LabelId` |
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
-| `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, and `decode_rle_frame` |
+| `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL` and `MEGABECQUEREL` |
+| `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
 | `nifti` | `parse_nifti`, `read_nifti`, `encode_nifti`, `encode_nifti_labels` and `labels_from_volume` |
@@ -123,9 +124,43 @@ The reader keeps the elements in the table. It steps over every other element. I
 | (0028,1053) | Rescale Slope | `slope` |
 | (7FE0,0010) | Pixel Data | `values` |
 
+For PET, the reader also keeps the elements in the next table, in the `PetDose` field `pet`. It reads the first item of the Radiopharmaceutical Information Sequence, of defined or undefined length. An empty element is absent, so a CT file with an empty weight reads as before.
+
+| Tag | Element | Field of `pet` |
+|---|---|---|
+| (0008,0031) | Series Time | `series_time`, `has_series_time` |
+| (0010,1030) | Patient's Weight | `patient_weight` |
+| (0018,1072) | Radiopharmaceutical Start Time, in (0054,0016) | `injection_time`, `has_injection_time` |
+| (0018,1074) | Radionuclide Total Dose, in (0054,0016) | `injected_dose` |
+| (0018,1075) | Radionuclide Half Life, in (0054,0016) | `half_life` |
+| (0054,1001) | Units | `units` |
+| (0054,1102) | Decay Correction | `decay_correction` |
+
+A time is `HH`, `HHMM`, `HHMMSS` or `HHMMSS.FFFFFF`, and the field holds the time after midnight.
+
 Each value in `values` is `slope * stored + intercept`. For CT, this gives Hounsfield units. The reader masks each stored value to its stored bits. It extends the sign when the pixel representation is signed.
 
 Lengths are in meters inside the library. DICOM gives them in millimeters. Use `MILLIMETER64` to read them back in millimeters. It has a `Float64` scale, so a length keeps every digit.
+
+## Measure PET uptake
+
+The standardized uptake value (SUV) of a PET image is the activity concentration over the injected activity per gram of body weight. A tracer spread evenly through the body gives an SUV of 1 g/mL everywhere. Oncology research reports the uptake of a tumor as SUV.
+
+```mojo
+var first = read_dicom("pet/slice001.dcm")
+var factor = suv_factor(first.pet)
+var suv = suv_volume(stack_slices(slices), factor)
+var uptake = suv_statistics(suv, map, LabelId(1))
+print(uptake.maximum.to(GRAM_PER_CUBIC_CENTIMETER), uptake.peak.to(GRAM_PER_CUBIC_CENTIMETER))
+```
+
+`suv_factor(dose)` gives the body weight in grams over the injected activity, in g/Bq. The values must be in `BQML`. With the decay correction `START`, the image is corrected to the start of the series. So the injected activity `A0` decays from the injection time to the series time:
+
+    A = A0 2^(-(t_series - t_injection) / T_half)
+
+A series time before the injection time means that midnight passed, so a day is added. With `ADMIN`, the image is corrected to the injection, and `A` is `A0`. The factor refuses `NONE`, other units, and an absent or zero weight, dose, half-life or time.
+
+`suv_volume(volume, factor)` multiplies each value in Bq/mL by the factor, which gives SUV in g/mL. `suv_statistics(suv, map, label)` gives the largest SUV of a label and its mean. It also gives SUVpeak, the largest mean of a sphere of 1 mL centered on a voxel of the label. The sphere holds every voxel whose center is within its radius of 6.2 mm, in the label or not. PERCIST, the PET Response Criteria in Solid Tumors, uses SUVpeak. `peak_voxel` is the center of that sphere.
 
 ## Read and write NIfTI files
 
@@ -666,6 +701,9 @@ The tests check these results:
 - A volume written as a multi-frame file in each of the four transfer syntaxes reads back the same. pydicom reads the native and the RLE files. That check is not part of the test suite.
 - Three files that pydicom 3.0.1 wrote read with pydicom's values. They are 16-bit signed RLE, 8-bit RLE and deflated. `assets/dicom/make_dicom.py` makes them.
 - `pack_bits` splits runs and literals at 128 bytes, and its code decodes to the same bytes.
+- Two PET files that pydicom 3.0.1 wrote read with pydicom's elements. One is explicit VR with a sequence of undefined length, and one is implicit VR with a sequence of defined length. Their SUV factor matches the factor from pydicom's values to 1e-14. `assets/dicom/make_pet.py` makes them.
+- A time reads in each of its four forms, and a leap second is 86400 s. Empty elements are absent. Of two items or two dose sequences, the first counts. Thirteen malformed times and three times past a day are refused.
+- An injection at 23:50 and a series at 00:20 decay the dose for 1800 s. With `ADMIN`, the dose does not decay. On a grid of 4 by 4 by 3 mm voxels, SUVpeak matches a search of every voxel near each center of the label. This holds at the grid's edge too. On a flat SUV, the lowest voxel counts.
 - A 12-bit signed value masks and extends its sign: `0xF800` reads as -2048.
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
@@ -724,6 +762,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | An image is not one grayscale sample, or `read_dicom` gets more than one frame | `parse_dicom`, `read_dicom`, `parse_dicom_frames` |
 | The frames of a file differ in layout, bits or syntax | `encode_dicom_frames` |
 | A grid is empty or holds more than 2^28 voxels | `ImageVolume`, `shepp_logan` |
+| A PET time is not `HHMMSS.FFFFFF` or not a time of day, or a weight, dose or half-life is not a number | `parse_dicom`, `read_dicom` |
+| An SUV has values not in `BQML`, a decay correction not `START` or `ADMIN`, or no weight, dose, half-life or time | `suv_factor` |
+| An SUV factor is not positive and finite, or a label is bad, the background, empty or on another grid | `suv_volume`, `suv_statistics` |
 | A file is not single-file NIfTI-1, or its datatype, unit or axes are not supported | `parse_nifti`, `read_nifti` |
 | Slices disagree, share a position or are not evenly spaced | `stack_slices` |
 | An index is outside the grid | `get`, `set`, `region_grow`, `render_slice` |
@@ -755,6 +796,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The reader takes little-endian grayscale images, uncompressed, deflated or RLE, of one frame or many. It does not read color, JPEG or JPEG 2000 files.
 - The multi-frame reader reads the placement of each frame. It does not read the dimension index or the temporal position of a frame.
 - The reader does not read a file that has no preamble.
+- The writer does not write the PET elements. An SUV is by body weight only, not by lean body mass. The factor takes the series time as the start of the scan, and does not read the private scale factors of a vendor.
 - The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
@@ -768,6 +810,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 ## References
 
 - Haralick, Shanmugam and Dinstein, "Textural features for image classification", 1973.
+- Wahl and others, "From RECIST to PERCIST: Evolving considerations for PET response criteria in solid tumors", Journal of Nuclear Medicine, 2009.
+- Boellaard and others, "FDG PET/CT: EANM procedure guidelines for tumour imaging: version 2.0", 2015.
+- NEMA PS3.3, "Information Object Definitions", sections C.8.9.1 and C.8.9.2, the PET Series and PET Isotope modules.
 - Zwanenburg and others, "The Image Biomarker Standardization Initiative", Radiology, 2020.
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.
 - NEMA PS3.3, "Information Object Definitions", sections C.7.6.2 and C.11.2.1.

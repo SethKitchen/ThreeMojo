@@ -25,6 +25,12 @@ slope and intercept, pixel spacing, slice thickness, image position,
 image orientation, instance number, modality and the first window. It
 steps over every other element, sequences of undefined length too.
 
+For PET, it also keeps what standardized uptake values need, in a
+`PetDose`: the units and the decay correction of the values, the
+patient's weight, the series time, and from the first item of the
+Radiopharmaceutical Information Sequence the injection time, the
+injected activity and the half-life.
+
 The pixel values are rescaled: `slope * stored + intercept`. For CT this
 gives Hounsfield units. The reader takes one sample per pixel, one frame,
 and 8 or 16 bits allocated.
@@ -51,7 +57,13 @@ from std.collections import Dict
 from std.math import isfinite, max
 from std.pathlib import Path
 from extensions.imaging.image_volume import MILLIMETER64
-from units.si import Length64
+from units.quantity import Unit
+from units.si import Duration64, Frequency64, KILOGRAM, Length64, Mass64, SECOND
+
+# An activity: decays per second.
+comptime Activity64 = Frequency64
+comptime BECQUEREL = Unit[0, 0, -1, 0, 0, DType.float64](1.0, "Bq")
+comptime MEGABECQUEREL = Unit[0, 0, -1, 0, 0, DType.float64](1.0e6, "MBq")
 
 comptime EXPLICIT_LITTLE_UID = "1.2.840.10008.1.2.1"
 comptime IMPLICIT_LITTLE_UID = "1.2.840.10008.1.2"
@@ -72,6 +84,43 @@ comptime ITEM_GROUP = 0xFFFE
 comptime ITEM = 0xE000
 comptime ITEM_END = 0xE00D
 comptime SEQUENCE_END = 0xE0DD
+
+
+struct PetDose(Copyable, Movable):
+    """The elements of a PET image that standardized uptake values need."""
+
+    var units: String
+    """The units of the values (0054,1001), such as `BQML`. Empty when
+    absent."""
+    var decay_correction: String
+    """The time the values are decay corrected to (0054,1102): `START`,
+    `ADMIN` or `NONE`. Empty when absent."""
+    var patient_weight: Mass64
+    """The patient's weight (0010,1030). Zero when absent."""
+    var series_time: Duration64
+    """The series time (0008,0031), after midnight."""
+    var has_series_time: Bool
+    """Whether the file gave a series time."""
+    var injection_time: Duration64
+    """The radiopharmaceutical start time (0018,1072), after midnight."""
+    var has_injection_time: Bool
+    """Whether the file gave an injection time."""
+    var injected_dose: Activity64
+    """The radionuclide total dose (0018,1074). Zero when absent."""
+    var half_life: Duration64
+    """The radionuclide half-life (0018,1075). Zero when absent."""
+
+    def __init__(out self):
+        """Create the elements of a file without them."""
+        self.units = String("")
+        self.decay_correction = String("")
+        self.patient_weight = Mass64(0, KILOGRAM)
+        self.series_time = Duration64(0, SECOND)
+        self.has_series_time = False
+        self.injection_time = Duration64(0, SECOND)
+        self.has_injection_time = False
+        self.injected_dose = Activity64(0, BECQUEREL)
+        self.half_life = Duration64(0, SECOND)
 
 
 struct DicomSlice(Copyable, Movable):
@@ -125,6 +174,8 @@ struct DicomSlice(Copyable, Movable):
     """Whether the file gave a window center and width."""
     var values: List[Float32]
     """The rescaled values, row by row from the top."""
+    var pet: PetDose
+    """The PET elements of the file. Empty for other images."""
 
     def __init__(out self, rows: Int, columns: Int) raises:
         """Create an image of zeros with the default elements.
@@ -164,6 +215,7 @@ struct DicomSlice(Copyable, Movable):
         self.window_width = 0.0
         self.has_window = False
         self.values = List[Float32](length=rows * columns, fill=0)
+        self.pet = PetDose()
 
     def normal(self) -> V3:
         """Return the direction from this slice toward the next.
@@ -559,11 +611,14 @@ struct _Groups(Movable):
     var top: Dict[Int, _Element]
     var shared: Dict[Int, _Element]
     var frames: List[Dict[Int, _Element]]
+    # The first item of the Radiopharmaceutical Information Sequence.
+    var dose: Dict[Int, _Element]
 
     def __init__(out self):
         self.top = Dict[Int, _Element]()
         self.shared = Dict[Int, _Element]()
         self.frames = List[Dict[Int, _Element]]()
+        self.dose = Dict[Int, _Element]()
 
     def find(self, tag: Int, frame: Int) -> Optional[_Element]:
         """Return an element of one frame: its own, the shared, or the top."""
@@ -600,6 +655,12 @@ def _parse_data_set(
                             groups.shared[entry.key] = entry.value
             else:
                 groups.frames = read[0].copy()
+            at = read[1]
+            continue
+        if tag == 0x00540016:
+            var read = _sequence_items(bytes, element, explicit)
+            if len(read[0]) > 0 and len(groups.dose) == 0:
+                groups.dose = read[0][0].copy()
             at = read[1]
             continue
         if element.undefined:
@@ -679,6 +740,7 @@ def _frames(
     var instance_element = groups.top.get(0x00200013)
     if instance_element:
         instance = _integer(bytes, instance_element.value(), "instance number")
+    var pet = _pet(bytes, groups)
     var step = bits_allocated // 8
     var frame_bytes = rows * columns * step
     if syntax == RLE_LOSSLESS and count > 1 and len(fragments) != count:
@@ -693,6 +755,7 @@ def _frames(
         image.syntax = syntax
         image.modality = modality
         image.instance_number = instance
+        image.pet = pet.copy()
         _place(bytes, groups, f, image)
         if syntax == RLE_LOSSLESS:
             var frame = List[UInt8]()
@@ -715,6 +778,76 @@ def _frames(
             )
             _decode_pixels(bytes, part, image)
         out.append(image^)
+    return out^
+
+
+def _seconds_of_day(text: String, name: String) raises -> Float64:
+    """Read a DICOM time, `HH`, `HHMM`, `HHMMSS` or `HHMMSS.FFFFFF`, as
+    seconds after midnight."""
+    var parts = text.split(".")
+    var head = String(parts[0])
+    var digits = head.as_bytes()
+    var n = len(digits)
+    var fraction = 0.0
+    var bad = len(parts) > 2 or (n != 2 and n != 4 and n != 6)
+    if len(parts) == 2:
+        var tail = String(parts[1]).as_bytes()
+        bad = bad or n != 6 or len(tail) < 1 or len(tail) > 6
+        var scale = 0.1
+        for b in tail:
+            bad = bad or b < 48 or b > 57
+            fraction += Float64(Int(b) - 48) * scale
+            scale *= 0.1
+    for b in digits:
+        bad = bad or b < 48 or b > 57
+    if bad:
+        raise Error("The DICOM " + name + " is not a time HHMMSS.FFFFFF")
+    var value = List[Int](length=3, fill=0)
+    for k in range(n // 2):  # pragma: no branch
+        value[k] = (Int(digits[2 * k]) - 48) * 10 + Int(digits[2 * k + 1]) - 48
+    if value[0] > 23 or value[1] > 59 or value[2] > 60:
+        raise Error("The DICOM " + name + " is not a time of day")
+    return Float64(value[0] * 3600 + value[1] * 60 + value[2]) + fraction
+
+
+def _filled(
+    bytes: Span[UInt8, _], tags: Dict[Int, _Element], tag: Int
+) -> String:
+    """Return the text of an element, or an empty string when it is absent."""
+    var element = tags.get(tag)
+    if element:
+        return _text(bytes, element.value())
+    return String("")
+
+
+def _pet(bytes: Span[UInt8, _], groups: _Groups) raises -> PetDose:
+    """Read the PET elements of a data set. An empty element is absent."""
+    var out = PetDose()
+    out.units = _filled(bytes, groups.top, 0x00541001)
+    out.decay_correction = _filled(bytes, groups.top, 0x00541102)
+    var weight = _filled(bytes, groups.top, 0x00101030)
+    if weight != "":
+        out.patient_weight = Mass64(_number(weight, "patient weight"), KILOGRAM)
+    var series = _filled(bytes, groups.top, 0x00080031)
+    if series != "":
+        out.series_time = Duration64(
+            _seconds_of_day(series, "series time"), SECOND
+        )
+        out.has_series_time = True
+    var start = _filled(bytes, groups.dose, 0x00181072)
+    if start != "":
+        out.injection_time = Duration64(
+            _seconds_of_day(start, "injection time"), SECOND
+        )
+        out.has_injection_time = True
+    var dose = _filled(bytes, groups.dose, 0x00181074)
+    if dose != "":
+        out.injected_dose = Activity64(
+            _number(dose, "injected dose"), BECQUEREL
+        )
+    var half = _filled(bytes, groups.dose, 0x00181075)
+    if half != "":
+        out.half_life = Duration64(_number(half, "half-life"), SECOND)
     return out^
 
 
