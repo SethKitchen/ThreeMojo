@@ -38,7 +38,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `printing` | `printable_stl` and `label_stl` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement`, `draw_line`, `zoom_image`, `slice_size` and `label_color` |
-| `contour` | `slice_outlines`, `Outline` and `draw_outlines` |
+| `contour` | `slice_outlines`, `slice_isolines`, `Outline` and `draw_outlines` |
 | `fusion` | `overlay_values` and `hot_color` |
 | `reformat` | `oblique_slice`, `slab_projection` and `sample_point` |
 | `curved` | `curved_reformat` |
@@ -706,6 +706,17 @@ The outline crosses each side between a pixel of the label and a pixel outside i
 
 The area of an outer outline is positive, and the area of a hole is negative. So the sum over the outlines of a slice is the area inside the label's outlines. It is a little less than the area of the pixels, because the outline cuts each corner. Use `slice_areas` for the area of the pixels.
 
+## Draw isolines
+
+`slice_isolines(volume, axis, index, level)` gives the lines where the values of a slice cross a level. Use it for the line of an SUV level on a PET, or for an isotherm of a heat field. The lines are `Outline` values, so `draw_outlines` draws them, and each has its length and area.
+
+```mojo
+var half = slice_isolines(suv, K_AXIS, 40, 0.5 * peak)
+draw_outlines(image, K_AXIS, half, 3, Rgba(0.3, 1, 0.4, 1))
+```
+
+A line crosses each side of a square between a pixel at or past the level and a pixel below it. It crosses where the linear blend of the two values is the level, as scikit-image's `find_contours` does. A pixel past the edge of the slice is below every level, so a line closes through the centers of the edge pixels. The area of a line around values past the level is positive, and around a dip below it negative. The level and the values of the slice must be finite.
+
 ## Fuse PET over CT
 
 `overlay_values(image, volume, axis, index, low, high, opacity, zoom)` blends the values of a second volume over a slice image. Use it to show a PET over the anatomy of a CT. The second volume must be on the grid of the slice, so bring it there with `resample_onto` first.
@@ -758,6 +769,8 @@ The tests check these results:
 - Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
 - One pixel has a diamond outline of half its area. A rectangle of 3 by 2 pixels of 0.5 by 0.8 mm has its exact cut length and area. A ring gives its outer outline and a hole with a negative area. Pixels that touch at a corner have two outlines, and pixels that share a side have one.
+- A ramp crossed at 2.5 gives a line at x = 2.5 that closes along the edge, with its exact length and area. A level at a pixel's value puts the line on the pixel. A dip gives a hole of negative area. The half maximum of a Gaussian of sigma 3 pixels is a circle of radius `sigma sqrt(2 ln 2)`, in length and area to 2 percent.
+- A smooth random slice has 8, 6 and 12 isolines at three levels. Each matches scikit-image 0.26's `find_contours` in point count, and in length and area to 2e-5 mm. That is the precision of the values passed to it as text. That check is not part of the test suite.
 - On 9 slices of a random map across the three axes, all 429 outlines match scikit-image 0.26's `find_contours`. Their point counts are the same, their lengths match to 2e-12 mm and their areas to 1e-13 mm^2. That check is not part of the test suite.
 - The hot scale is dark at 0, red at a third, yellow at two thirds and white at 1. On a slice of six values, each pixel blends to the byte of its color and weight. A value below the range keeps its pixel. A value at a sixth of the range fades in at half the weight. Each axis and a zoom of 2 map the pixels to their voxels.
 - A circle of 2 pixels holds the 13 lattice points of its disc. On a ramp, a disc gives the value at its center and the sample deviation of its pixels. With pixels 0.5 mm wide, a circle of 1 mm holds 7 pixels. A circle at a corner keeps the 6 pixels of the grid.
@@ -806,7 +819,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A label is not from 0 to 255, or is the background where a region is needed | Label functions |
 | A connectivity is not one of the three | `region_grow`, `keep_largest`, `label_pieces` |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
-| An outline has a bad label, the background, a bad axis or slice, or a zoom out of range | `slice_outlines`, `draw_outlines`, `zoom_image` |
+| An outline or isoline has a bad label, the background, a bad axis or slice, a level or a value that is not finite, or a zoom out of range | `slice_outlines`, `slice_isolines`, `draw_outlines`, `zoom_image` |
 | An overlay has a bad axis or slice, a range that is not finite or does not rise, an opacity or a zoom out of range, or an image of another size | `overlay_values` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
 | An end of a centered path is outside the grid or the label, or no path joins the ends | `label_path` |

@@ -5,7 +5,12 @@
 
 """Outlines of a label in a slice, and their drawing."""
 
-from extensions.imaging.contour import Outline, draw_outlines, slice_outlines
+from extensions.imaging.contour import (
+    Outline,
+    draw_outlines,
+    slice_isolines,
+    slice_outlines,
+)
 from extensions.imaging.ids import (
     BACKGROUND,
     I_AXIS,
@@ -19,7 +24,7 @@ from extensions.imaging.labels import LabelMap
 from extensions.imaging.overlay import draw_line, render_slice, zoom_image
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Color, Framebuffer
-from std.math import sqrt
+from std.math import exp, inf, log, nan, pi, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -235,6 +240,110 @@ def test_refusals() raises:
         draw_outlines(image, K_AXIS, none, 0, Rgba(1, 1, 1, 1))
     with assert_raises(contains="zoom"):
         draw_outlines(image, K_AXIS, none, 65, Rgba(1, 1, 1, 1))
+
+
+def test_isolines_of_a_ramp_and_a_dip() raises:
+    # The values rise along x: 0 to 5. The level 2.5 cuts between x = 2
+    # and x = 3, and the line closes through the edge pixels' centers.
+    var volume = ImageVolume(
+        6,
+        4,
+        1,
+        Length64(1, MILLIMETER64),
+        Length64(2, MILLIMETER64),
+        Length64(1, MILLIMETER64),
+    )
+    for y in range(4):
+        for x in range(6):
+            volume.set(x, y, 0, Float32(x))
+    var lines = slice_isolines(volume, K_AXIS, 0, 2.5)
+    assert_equal(len(lines), 1)
+    # 2.5 by 3 pixels of 1 by 2 mm.
+    assert_almost_equal(lines[0].area.value / SQUARE_MM, 2.5 * 3 * 2)
+    assert_almost_equal(lines[0].length.to(MILLIMETER64), 2 * 2.5 + 2 * 3 * 2)
+    var least = 10.0
+    for p in lines[0].points:
+        least = min(least, p.x)
+    assert_almost_equal(least, 2.5)
+    # A level at a pixel's value puts the line on that pixel.
+    var exact = slice_isolines(volume, K_AXIS, 0, 3)
+    assert_almost_equal(exact[0].area.value / SQUARE_MM, 2 * 3 * 2)
+    # A dip below the level inside values past it: a negative area.
+    var dip = ImageVolume(
+        5,
+        5,
+        1,
+        Length64(1, MILLIMETER64),
+        Length64(1, MILLIMETER64),
+        Length64(1, MILLIMETER64),
+    )
+    for index in range(25):
+        dip.values[index] = 10
+    dip.set(2, 2, 0, 0)
+    var around = slice_isolines(dip, K_AXIS, 0, 5)
+    assert_equal(len(around), 2)
+    # The outer line runs through the edge pixels, a square of 4 by 4.
+    assert_almost_equal(around[0].area.value / SQUARE_MM, 16.0)
+    assert_almost_equal(around[1].area.value / SQUARE_MM, -0.5)
+    # No line where no value reaches the level.
+    assert_equal(len(slice_isolines(dip, K_AXIS, 0, 11)), 0)
+
+
+def test_the_half_maximum_of_a_blob() raises:
+    # A Gaussian of sigma 3 pixels: its half maximum is a circle of radius
+    # sigma sqrt(2 ln 2).
+    var size = 41
+    var volume = ImageVolume(
+        size,
+        size,
+        1,
+        Length64(0.5, MILLIMETER64),
+        Length64(0.5, MILLIMETER64),
+        Length64(1, MILLIMETER64),
+    )
+    for y in range(size):
+        for x in range(size):
+            var r2 = Float64((x - 20) ** 2 + (y - 20) ** 2)
+            volume.set(x, y, 0, Float32(100 * exp(-r2 / 18.0)))
+    var lines = slice_isolines(volume, K_AXIS, 0, 50)
+    assert_equal(len(lines), 1)
+    var radius = 3.0 * sqrt(2 * log(2.0)) * 0.5
+    var area = lines[0].area.value / SQUARE_MM
+    assert_almost_equal(area, pi * radius * radius, rtol=0.02)
+    assert_almost_equal(
+        lines[0].length.to(MILLIMETER64), 2 * pi * radius, rtol=0.02
+    )
+
+
+def test_isolines_on_every_axis() raises:
+    var volume = ImageVolume(
+        4,
+        5,
+        6,
+        Length64(1, MILLIMETER64),
+        Length64(1, MILLIMETER64),
+        Length64(1, MILLIMETER64),
+    )
+    for k in range(6):
+        for j in range(5):
+            for i in range(4):
+                volume.set(i, j, k, Float32(i + j + k))
+    var across_j = slice_isolines(volume, J_AXIS, 2, 6)
+    assert_equal(across_j[0].points[0].y, 2.0)
+    var across_i = slice_isolines(volume, I_AXIS, 1, 6)
+    assert_equal(across_i[0].points[0].x, 1.0)
+    with assert_raises(contains="axis"):
+        _ = slice_isolines(volume, SliceAxis(3), 0, 1)
+    with assert_raises(contains="slice index"):
+        _ = slice_isolines(volume, K_AXIS, 6, 1)
+    with assert_raises(contains="slice index"):
+        _ = slice_isolines(volume, I_AXIS, -1, 1)
+    for bad in [inf[DType.float64](), nan[DType.float64]()]:
+        with assert_raises(contains="finite level"):
+            _ = slice_isolines(volume, K_AXIS, 0, bad)
+    volume.set(1, 1, 0, nan[DType.float32]())
+    with assert_raises(contains="finite values"):
+        _ = slice_isolines(volume, K_AXIS, 0, 1)
 
 
 def main() raises:

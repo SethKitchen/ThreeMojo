@@ -3,11 +3,19 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The outlines of a label in a slice, by marching squares.
+"""The outlines of a label, and the isolines of values, in a slice.
 
-`slice_outlines` gives the outlines of a label in one slice. Each is a
-closed loop of points in voxel units, `(i, j, k)`, with its length and
-the area that it closes. `draw_outlines` draws them on a slice image.
+`slice_outlines` gives the outlines of a label in one slice, and
+`slice_isolines` the lines where the values of a slice cross a level,
+such as an SUV or a temperature. Each is a closed loop of points in
+voxel units, `(i, j, k)`, with its length and the area that it closes.
+`draw_outlines` draws either on a slice image.
+
+Both use marching squares. An isoline crosses each side of a square
+between a pixel at or past the level and a pixel below it, where the
+linear blend of their values is the level, as scikit-image's
+`find_contours` does. A pixel past the edge of the slice is below every
+level, so an isoline closes through the centers of the edge pixels.
 
 Marching squares looks at each square of four pixel centers. The outline
 crosses each side of the square between a pixel of the label and a
@@ -35,13 +43,14 @@ from extensions.imaging.ids import (
     require_axis,
     require_label,
 )
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
 from extensions.sdf.vector import V3, v3
 from render.framebuffer import Framebuffer
 from std.collections import Dict
-from std.math import floor, sqrt
+from std.math import floor, inf, isfinite, sqrt
 from units.si import Area64, Length64, METER, SQUARE_METER
 
 
@@ -59,33 +68,22 @@ struct Outline(Copyable, Movable):
 
 
 def _plane(
-    map: LabelMap, axis: SliceAxis
+    nx: Int,
+    ny: Int,
+    nz: Int,
+    spacing: Tuple[Length64, Length64, Length64],
+    axis: SliceAxis,
 ) -> Tuple[Int, Int, Int, Float64, Float64]:
     """Return a slice's width, height and depth, and the spacing of its
     pixel `x` and `y`, in meters."""
+    var sx = spacing[0].to(METER)
+    var sy = spacing[1].to(METER)
+    var sz = spacing[2].to(METER)
     if axis == K_AXIS:
-        return (
-            map.nx,
-            map.ny,
-            map.nz,
-            map.spacing_x.to(METER),
-            map.spacing_y.to(METER),
-        )
+        return (nx, ny, nz, sx, sy)
     if axis == J_AXIS:
-        return (
-            map.nx,
-            map.nz,
-            map.ny,
-            map.spacing_x.to(METER),
-            map.spacing_z.to(METER),
-        )
-    return (
-        map.ny,
-        map.nz,
-        map.nx,
-        map.spacing_y.to(METER),
-        map.spacing_z.to(METER),
-    )
+        return (nx, nz, ny, sx, sz)
+    return (ny, nz, nx, sy, sz)
 
 
 def _voxel_point(axis: SliceAxis, x: Float64, y: Float64, index: Int) -> V3:
@@ -105,6 +103,109 @@ def _slice_point(axis: SliceAxis, p: V3) -> Tuple[Float64, Float64]:
     if axis == J_AXIS:
         return (p.x, p.z)
     return (p.y, p.z)
+
+
+def _march(
+    values: List[Float64],
+    w: Int,
+    h: Int,
+    level: Float64,
+    axis: SliceAxis,
+    index: Int,
+    px: Float64,
+    py: Float64,
+) raises -> List[Outline]:
+    """Return the closed lines where a padded grid of values crosses a
+    level. `values` holds `(w + 2) * (h + 2)` values, row by row, with a
+    border of one pixel past the slice."""
+    # A side's middle in doubled coordinates, from -2 to 2 w or 2 h, names
+    # the side; the line crosses it where the values cross the level.
+    var stride = 2 * w + 5
+    var next = Dict[Int, Int]()
+    var at_x = Dict[Int, Float64]()
+    var at_y = Dict[Int, Float64]()
+    var starts = List[Int]()
+    var cx: List[Int] = [0, 1, 1, 0]
+    var cy: List[Int] = [0, 0, 1, 1]
+    for y in range(-1, h):  # pragma: no branch
+        for x in range(-1, w):  # pragma: no branch
+            var v = List[Float64]()
+            for c in range(4):  # pragma: no branch
+                v.append(values[(y + 1 + cy[c]) * (w + 2) + (x + 1 + cx[c])])
+            for a in range(4):  # pragma: no branch
+                # A run of corners at or past the level, counterclockwise
+                # from a.
+                if not (v[a] >= level) or v[(a + 3) % 4] >= level:
+                    continue
+                var b = a
+                while v[(b + 1) % 4] >= level:
+                    b = (b + 1) % 4
+                # From the side after the run to the side before it. Each
+                # side is crossed from its corner at the level toward the
+                # corner below it.
+                var after = (b + 1) % 4
+                var before = (a + 3) % 4
+                var keys = List[Int]()
+                for side in range(2):  # pragma: no branch
+                    var high = b if side == 0 else a
+                    var low = after if side == 0 else before
+                    var key = (2 * y + cy[high] + cy[low] + 2) * stride + (
+                        2 * x + cx[high] + cx[low] + 2
+                    )
+                    if key not in at_x:
+                        var t = (level - v[high]) / (v[low] - v[high])
+                        at_x[key] = Float64(x + cx[high]) + t * Float64(
+                            cx[low] - cx[high]
+                        )
+                        at_y[key] = Float64(y + cy[high]) + t * Float64(
+                            cy[low] - cy[high]
+                        )
+                    keys.append(key)
+                next[keys[0]] = keys[1]
+                starts.append(keys[0])
+    var used = Dict[Int, Bool]()
+    var out = List[Outline]()
+    for first in starts:
+        if first in used:
+            continue
+        var xs = List[Float64]()
+        var ys = List[Float64]()
+        var key = first
+        while True:
+            used[key] = True
+            xs.append(at_x[key])
+            ys.append(at_y[key])
+            key = next[key]
+            if key == first:
+                break
+        var n = len(xs)
+        var length = 0.0
+        var twice = 0.0
+        var points = List[V3]()
+        for p in range(n):  # pragma: no branch
+            var q = (p + 1) % n
+            var dx = (xs[q] - xs[p]) * px
+            var dy = (ys[q] - ys[p]) * py
+            length += sqrt(dx * dx + dy * dy)
+            twice += xs[p] * ys[q] - xs[q] * ys[p]
+            points.append(_voxel_point(axis, xs[p], ys[p], index))
+        out.append(
+            Outline(
+                points^,
+                Length64(length, METER),
+                Area64(0.5 * twice * px * py, SQUARE_METER),
+            )
+        )
+    return out^
+
+
+def _voxel(axis: SliceAxis, x: Int, y: Int, index: Int) -> Tuple[Int, Int, Int]:
+    """Return the voxel of a slice pixel."""
+    if axis == J_AXIS:
+        return (x, index, y)
+    if axis == I_AXIS:
+        return (index, x, y)
+    return (x, y, index)
 
 
 def slice_outlines(
@@ -130,91 +231,79 @@ def slice_outlines(
     if label == BACKGROUND:
         raise Error("An outline needs a label other than the background")
     require_axis(axis)
-    var plane = _plane(map, axis)
+    var plane = _plane(
+        map.nx,
+        map.ny,
+        map.nz,
+        (map.spacing_x, map.spacing_y, map.spacing_z),
+        axis,
+    )
     var w = plane[0]
     var h = plane[1]
     if index < 0 or index >= plane[2]:
         raise Error("The slice index is outside the volume")
     var mark = UInt8(label.value)
-    var inside = List[Bool](length=(w + 2) * (h + 2), fill=False)
+    # The label is 1 and the rest 0, past the edge too, so each line
+    # crosses a side at its middle.
+    var values = List[Float64](length=(w + 2) * (h + 2), fill=0)
     for y in range(h):  # pragma: no branch
         for x in range(w):  # pragma: no branch
-            var i = x
-            var j = y
-            var k = index
-            if axis == J_AXIS:
-                j = index
-                k = y
-            elif axis == I_AXIS:
-                i = index
-                j = x
-                k = y
-            if map.labels[map.index(i, j, k)] == mark:
-                inside[(y + 1) * (w + 2) + (x + 1)] = True
-    # A side's middle in doubled coordinates, from -2 to 2 w or 2 h.
-    var stride = 2 * w + 5
-    var next = Dict[Int, Int]()
-    var starts = List[Int]()
-    var cx: List[Int] = [0, 1, 1, 0]
-    var cy: List[Int] = [0, 0, 1, 1]
-    for y in range(-1, h):  # pragma: no branch
-        for x in range(-1, w):  # pragma: no branch
-            var q = List[Bool]()
-            for c in range(4):  # pragma: no branch
-                q.append(inside[(y + 1 + cy[c]) * (w + 2) + (x + 1 + cx[c])])
-            for a in range(4):  # pragma: no branch
-                # A run of corners in the label, counterclockwise from a.
-                if not q[a] or q[(a + 3) % 4]:
-                    continue
-                var b = a
-                while q[(b + 1) % 4]:
-                    b = (b + 1) % 4
-                # From the side after the run to the side before it.
-                var after = (b + 1) % 4
-                var before = (a + 3) % 4
-                var sx = 2 * x + cx[b] + cx[after]
-                var sy = 2 * y + cy[b] + cy[after]
-                var ex = 2 * x + cx[before] + cx[a]
-                var ey = 2 * y + cy[before] + cy[a]
-                var start = (sy + 2) * stride + (sx + 2)
-                next[start] = (ey + 2) * stride + (ex + 2)
-                starts.append(start)
-    var used = Dict[Int, Bool]()
-    var out = List[Outline]()
-    var px = plane[3]
-    var py = plane[4]
-    for first in starts:
-        if first in used:
-            continue
-        var xs = List[Float64]()
-        var ys = List[Float64]()
-        var at = first
-        while True:
-            used[at] = True
-            xs.append(Float64(at % stride - 2) / 2.0)
-            ys.append(Float64(at // stride - 2) / 2.0)
-            at = next[at]
-            if at == first:
-                break
-        var n = len(xs)
-        var length = 0.0
-        var twice = 0.0
-        var points = List[V3]()
-        for p in range(n):  # pragma: no branch
-            var q = (p + 1) % n
-            var dx = (xs[q] - xs[p]) * px
-            var dy = (ys[q] - ys[p]) * py
-            length += sqrt(dx * dx + dy * dy)
-            twice += xs[p] * ys[q] - xs[q] * ys[p]
-            points.append(_voxel_point(axis, xs[p], ys[p], index))
-        out.append(
-            Outline(
-                points^,
-                Length64(length, METER),
-                Area64(0.5 * twice * px * py, SQUARE_METER),
-            )
-        )
-    return out^
+            var v = _voxel(axis, x, y, index)
+            if map.labels[map.index(v[0], v[1], v[2])] == mark:
+                values[(y + 1) * (w + 2) + (x + 1)] = 1
+    return _march(values, w, h, 0.5, axis, index, plane[3], plane[4])
+
+
+def slice_isolines(
+    volume: ImageVolume, axis: SliceAxis, index: Int, level: Float64
+) raises -> List[Outline]:
+    """Return the lines where the values of a slice cross a level.
+
+    The line crosses each side between a pixel at or past the level and a
+    pixel below it, where the linear blend of their values is the level.
+    A pixel past the edge of the slice is below every level, so each line
+    closes through the centers of the edge pixels.
+
+    Args:
+        volume: The volume.
+        axis: The axis that the slice holds constant.
+        index: The slice, from 0.
+        level: The level, such as an SUV or a temperature. Finite.
+
+    Returns:
+        The closed lines, as outlines: the area of a line around values
+        at or past the level is positive, and around a dip below it
+        negative.
+
+    Raises:
+        Error: If the axis is not valid, the slice is outside the volume,
+            the level is not finite, or a value of the slice is not.
+    """
+    require_axis(axis)
+    if not isfinite(level):
+        raise Error("An isoline needs a finite level")
+    var plane = _plane(
+        volume.nx,
+        volume.ny,
+        volume.nz,
+        (volume.spacing_x, volume.spacing_y, volume.spacing_z),
+        axis,
+    )
+    var w = plane[0]
+    var h = plane[1]
+    if index < 0 or index >= plane[2]:
+        raise Error("The slice index is outside the volume")
+    var values = List[Float64](
+        length=(w + 2) * (h + 2), fill=-inf[DType.float64]()
+    )
+    for y in range(h):  # pragma: no branch
+        for x in range(w):  # pragma: no branch
+            var v = _voxel(axis, x, y, index)
+            var value = Float64(volume.values[volume.index(v[0], v[1], v[2])])
+            if not isfinite(value):
+                raise Error("An isoline needs finite values")
+            values[(y + 1) * (w + 2) + (x + 1)] = value
+    return _march(values, w, h, level, axis, index, plane[3], plane[4])
 
 
 def draw_outlines(
