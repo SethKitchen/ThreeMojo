@@ -217,7 +217,7 @@ print(surface_area(smooth).to(SQUARE_METER), enclosed_volume(smooth).to(CUBIC_ME
 
 `smooth_surface(geometry, passes, shrink, inflate)` first welds the mesh. Then it applies Taubin's lambda-mu filter. Each pass moves each vertex toward the mean of its neighbors by `shrink`, and then away from it by `inflate`. The defaults are 0.5 and -0.53. The filter removes the steps and keeps nearly all of the volume. A plain Laplacian filter shrinks the mesh at each pass.
 
-`weld_surface(geometry)` only welds. Corners at the same position become one vertex, and a triangle without area is dropped. Both functions give an indexed mesh with area-weighted normals.
+`weld_surface(geometry)` only welds. Corners at the same position become one vertex, and a triangle without area is dropped. Both functions give an indexed mesh with area-weighted normals. [From CT slices to stresses](Tetrahedral-FEM#from-ct-slices-to-stresses) smooths two label surfaces and meshes the same labels for a stress analysis.
 
 `surface_area(geometry)` gives an `Area64`. `enclosed_volume(geometry)` gives a `Volume64` from the divergence theorem. It is exact for a closed mesh whose faces turn outward. A label surface has outward faces.
 

@@ -112,6 +112,21 @@ Check `status`. A solve that runs out of iterations returns its last iterate wit
 
 `stress_geometry(mesh, result, scale, low, high)` returns the outer surface. It moves each node by its displacement times `scale`. Each face takes the color of the von Mises stress of its element. The scale runs through blue, cyan, green, yellow and red from `low` to `high`. Each face has its own vertices, so the colors and normals are flat.
 
+## From CT slices to stresses
+
+![Half of a bone segment from CT: its smoothed label surfaces, and its voxel mesh under a platen colored by von Mises stress](out/ct-to-fem.png)
+
+`examples/ct_to_fem.mojo` makes this picture. It takes a synthetic CT of a bone segment through each step from the scanner files to the stresses:
+
+1. Write each slice as an RLE Lossless DICOM file in memory. Read the files back, and stack them with `stack_slices`.
+2. Label the cortical bone from 700 HU and the trabecular bone from 100 HU to 700 HU with `threshold`.
+3. Smooth the surface of each label with `smooth_surface`, for the left panel.
+4. Mesh the two labels as two materials with `voxel_mesh_labels`.
+5. Hold the base on rollers. Press the top with a frictionless platen to a strain of 0.001.
+6. Solve, and draw the stresses with `stress_geometry` for the right panel.
+
+The cortical bone has a modulus of 17 GPa and the trabecular bone 1 GPa. Both have a Poisson ratio of 0.3. With one Poisson ratio, the exact solution is a uniform strain, and linear tetrahedra hold it exactly. The platen force must then equal the rule of mixtures, `strain * sum(E * A)`. The example prints 1310.0000000001 N against 1310 N. The cortical shell carries 93 percent of the load, and its stress is 17 MPa against 1 MPa in the core.
+
 ## Export to ParaView
 
 `vtk_result(mesh, result)` returns a legacy VTK file that ParaView and other analysis tools read. `vtk_mesh(mesh)` returns the mesh alone.
@@ -146,6 +161,8 @@ The tests check these results:
 - A column standing under its own weight puts all of it on its base. With ten-node elements, its top drops by exactly `rho g L^2 / (2 E)`.
 - Two labels meshed together share the nodes of their interface, and each has its own material.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
+
+The example `ct_to_fem` meets the rule of mixtures to 12 digits. See [From CT slices to stresses](#from-ct-slices-to-stresses).
 
 ## Bending accuracy
 

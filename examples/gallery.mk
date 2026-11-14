@@ -272,3 +272,7 @@ $(call gallery,molecule,molecule)
 # A steel cantilever of tetrahedra bent by a tip load, drawn 40 times its
 # deflection and colored by von Mises stress.
 $(call gallery,tetrahedral-fem,tetrahedral_fem)
+# A bone segment from CT: RLE DICOM slices, two labels with smoothed
+# surfaces, and the two-material voxel mesh under a platen, colored by
+# von Mises stress.
+$(call gallery,ct-to-fem,ct_to_fem)
