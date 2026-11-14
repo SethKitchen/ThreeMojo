@@ -108,6 +108,7 @@ The stress of a quadratic element is the stress at its centroid. A quadratic mes
 | `load(node, axis, force)` | Adds a force on one node along one axis |
 | `press_plane(axis, at, tolerance, stress)` | Adds a uniform normal stress on the outer faces of a plane |
 | `apply_gravity(densities, gravity, direction)` | Adds the weight of each element, from a density per material |
+| `heat(expansions, changes)` | Adds the thermal strain of a temperature change at each node |
 
 `press_plane` gives a face of area `A` a force of `stress * A / 3` on each of three nodes. In a linear mesh these are its corners. In a quadratic mesh they are its edge nodes, and its corners get nothing. These are the consistent loads of three-node and six-node triangles. A positive stress pulls along the axis. A force spread over the nodes of a face by hand is not consistent, and its stress is not uniform.
 
@@ -116,6 +117,12 @@ The stress of a quadratic element is the stress at its centroid. A quadratic mes
 ```mojo
 problem.apply_gravity([Density64(1900, KILOGRAM_PER_CUBIC_METER)],
     Acceleration64(9.80665, METER_PER_SECOND_SQUARED), v3(0, 0, -1))
+```
+
+`heat(expansions, changes)` takes a coefficient of thermal expansion for each material and a temperature change for each node. Each element grows by `alpha * dT` along each axis, with `dT` the change at its centroid. Where its growth is held, it is stressed: `solve_static` takes the stress from the strain less this thermal strain. Use the temperatures of `solve_thermal`, less the start temperature, for the stress of a heated part.
+
+```mojo
+problem.heat([ThermalExpansion64(1.2e-5, PER_KELVIN)], changes)
 ```
 
 The supports must stop the mesh from moving as a rigid body. A mesh that can still move has a singular stiffness. The solve then raises, or it runs out of iterations.
@@ -276,6 +283,7 @@ The tests check these results:
 - A quadratic element stiffness is symmetric, and its ten shape gradients sum to zero.
 - A column standing under its own weight puts all of it on its base. With ten-node elements, its top drops by exactly `rho g L^2 / (2 E)`.
 - Two labels meshed together share the nodes of their interface, and each has its own material.
+- A free bar heated by 50 K grows by `alpha dT` times each distance, with no stress. Held at both ends, it has a uniaxial stress of exactly `-E alpha dT`, for both element orders.
 - A rod that is fixed at one end moves along its axis only. It rings at `c / (4 L)` to a relative 1e-6, and at `3 c / (4 L)` to 1e-4.
 - A steel cantilever is 0.6 m long and 60 mm square. With ten-node elements it bends at 136.9 Hz with 10 cells and 136.2 Hz with 20. Euler-Bernoulli gives 135.9 Hz. The two bending modes of the square section agree to 1 percent.
 - The consistent mass coefficients sum to one, and a rigid move carries the whole mass.

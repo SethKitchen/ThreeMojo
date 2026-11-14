@@ -18,6 +18,7 @@ that can still move has a singular stiffness, and the solve refuses it.
 
 from extensions.fem.elasticity import (
     IsotropicMaterial,
+    gauss_points,
     PrincipalStress,
     element_stiffness,
     element_strain,
@@ -37,7 +38,12 @@ from extensions.fem.ids import (
     require_id,
 )
 from extensions.fem.ids import LINEAR
-from extensions.fem.mesh import TetMesh, boundary_faces, edge_pairs
+from extensions.fem.mesh import (
+    TetMesh,
+    boundary_faces,
+    edge_pairs,
+    signed_volume,
+)
 from std.collections import Dict
 from extensions.numerics.iterative import SolveStatus, conjugate_gradient
 from extensions.numerics.sparse import CsrMatrix, SparseBuilder
@@ -53,8 +59,11 @@ from units.si import (
     METER_PER_SECOND_SQUARED,
     NEWTON,
     PASCAL,
+    PER_KELVIN,
     Pressure64,
+    ThermalExpansion64,
 )
+from units.temperature import KELVIN_DIFFERENCE, TemperatureDifference64
 
 
 struct StaticProblem(Movable):
@@ -70,6 +79,8 @@ struct StaticProblem(Movable):
     """The prescribed displacement of each degree of freedom, in meters."""
     var forces: List[Float64]
     """The force on each degree of freedom, in newtons."""
+    var thermal: List[Float64]
+    """The free thermal strain of each element, the same along each axis."""
 
     def __init__(
         out self, var mesh: TetMesh, var materials: List[IsotropicMaterial]
@@ -96,6 +107,89 @@ struct StaticProblem(Movable):
         self.prescribed = List[Bool](length=dofs, fill=False)
         self.values = List[Float64](length=dofs, fill=0)
         self.forces = List[Float64](length=dofs, fill=0)
+        self.thermal = List[Float64](length=self.mesh.element_count(), fill=0)
+
+    def heat(
+        mut self,
+        expansions: List[ThermalExpansion64],
+        changes: List[TemperatureDifference64],
+    ) raises:
+        """Load the mesh with the thermal strain of a temperature change.
+
+        An element of material `m` grows by `alpha_m * dT` along each axis,
+        with `dT` the change at its centroid. Where its growth is held, it
+        is stressed: the stress is the stiffness times the strain less the
+        thermal strain. The consistent nodal forces of that strain join the
+        loads. A second call adds to the first.
+
+        Args:
+            expansions: The coefficient of thermal expansion of each
+                material, in the order of `materials`.
+            changes: The temperature change of each node.
+
+        Raises:
+            Error: If the lists do not fit the materials or the nodes, or a
+                value is not finite.
+        """
+        if len(expansions) != len(self.materials):
+            raise Error("Heating needs one expansion for each material")
+        if len(changes) != self.mesh.node_count():
+            raise Error("Heating needs one temperature change for each node")
+        for expansion in expansions:  # pragma: no branch
+            if not isfinite(expansion.to(PER_KELVIN)):
+                raise Error("A thermal expansion must be finite")
+        for change in changes:  # pragma: no branch
+            if not isfinite(change.to(KELVIN_DIFFERENCE)):
+                raise Error("A temperature change must be finite")
+        var count = self.mesh.nodes_per_element()
+        for e in range(self.mesh.element_count()):  # pragma: no branch
+            var at = count * e
+            # The change at the centroid: the corners alone for a linear
+            # element, and -1/8 of each corner and 1/4 of each edge node for
+            # a quadratic one.
+            var change = 0.0
+            for a in range(count):  # pragma: no branch
+                var weight = 0.25
+                if count == 10:
+                    weight = -0.125 if a < 4 else 0.25
+                var node = self.mesh.corners[at + a]
+                change += weight * changes[node].to(KELVIN_DIFFERENCE)
+            var material = self.materials[self.mesh.materials[e]]
+            var strain = (
+                expansions[self.mesh.materials[e]].to(PER_KELVIN) * change
+            )
+            self.thermal[e] += strain
+            var constants = material.lame()
+            var stress = (3.0 * constants[0] + 2.0 * constants[1]) * strain
+            var corners = _corners(self.mesh, e)
+            var linear = shape_gradients(
+                corners[0], corners[1], corners[2], corners[3]
+            )
+            var volume = signed_volume(
+                corners[0], corners[1], corners[2], corners[3]
+            )
+            # The integral of each gradient over the element.
+            var integrals = List[V3](length=count, fill=v3(0, 0, 0))
+            if count == 4:
+                for a in range(4):  # pragma: no branch
+                    integrals[a] = linear[a] * volume
+            else:
+                var points = gauss_points()
+                for g in range(4):  # pragma: no branch
+                    var weights: List[Float64] = [
+                        points[4 * g],
+                        points[4 * g + 1],
+                        points[4 * g + 2],
+                        points[4 * g + 3],
+                    ]
+                    var grads = quadratic_gradients(linear, weights)
+                    for a in range(10):  # pragma: no branch
+                        integrals[a] = integrals[a] + grads[a] * (volume / 4.0)
+            for a in range(count):  # pragma: no branch
+                var node = self.mesh.corners[at + a]
+                self.forces[3 * node] += stress * integrals[a].x
+                self.forces[3 * node + 1] += stress * integrals[a].y
+                self.forces[3 * node + 2] += stress * integrals[a].z
 
     def fix(
         mut self, node: NodeId, axis: DofAxis, displacement: Length64
@@ -503,7 +597,11 @@ def solve_static(
                 )
             )
         var strain = element_strain(g, moves)
-        var stress = stress_of(strain, problem.materials[mesh.materials[e]])
+        # The stress comes from the strain less the free thermal strain.
+        var elastic = strain.copy()
+        for axis in range(3):  # pragma: no branch
+            elastic[axis] -= problem.thermal[e]
+        var stress = stress_of(elastic, problem.materials[mesh.materials[e]])
         for part in range(6):
             result.strains[6 * e + part] = strain[part]
             result.stresses[6 * e + part] = stress[part]
