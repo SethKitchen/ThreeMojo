@@ -5,7 +5,13 @@
 
 """Transient heat conduction by backward Euler."""
 
-from extensions.fem.ids import DOF_X, NodeId
+from extensions.fem.ids import (
+    CONSISTENT_CAPACITY,
+    CapacityKind,
+    DOF_X,
+    LUMPED_CAPACITY,
+    NodeId,
+)
 from extensions.fem.mesh import TetMesh, box_mesh, quadratic_mesh
 from extensions.fem.thermal import (
     PowerDensity64,
@@ -165,6 +171,86 @@ def test_an_insulated_block_keeps_its_heat() raises:
         assert_almost_equal(value, 333, atol=1e-8)
 
 
+def _step_change(capacity: CapacityKind) raises -> List[List[Float64]]:
+    # A bar of cubes at 310 K whose end is held at 330 K from the start.
+    # A step of 30 s is short against h^2 / alpha = 800 s.
+    var mesh = box_mesh(
+        Length64(LENGTH, METER),
+        Length64(0.02, METER),
+        Length64(0.02, METER),
+        10,
+        2,
+        2,
+    )
+    var problem = ThermalProblem(mesh^, [_material()])
+    for node in problem.mesh.nodes_on_plane(
+        DOF_X, Length64(0, METER), Length64(1e-9, METER)
+    ):
+        problem.fix(node, Temperature64(330, KELVIN))
+    var start = List[Temperature64]()
+    for _ in range(problem.mesh.node_count()):
+        start.append(Temperature64(310, KELVIN))
+    var result = solve_transient(
+        problem,
+        _capacity(),
+        start,
+        _seconds(30),
+        20,
+        5,
+        1e-12,
+        2000,
+        capacity,
+    )
+    return result.temperatures.copy()
+
+
+def test_a_lumped_step_keeps_its_bounds() raises:
+    var lowest = 400.0
+    for record in _step_change(CONSISTENT_CAPACITY):
+        for value in record:
+            lowest = min(lowest, value)
+    # The consistent capacity dips more than a kelvin below the start.
+    assert_true(lowest < 309)
+    # The lumped capacity keeps the bounds, to the solver's tolerance.
+    for record in _step_change(LUMPED_CAPACITY):
+        for value in record:
+            assert_true(value >= 310 - 1e-7 and value <= 330 + 1e-7)
+
+
+def test_a_lumped_block_keeps_its_heat() raises:
+    # An insulated bar from 310 to 320 K evens out at its mean, 315 K, for
+    # both orders: the lumped capacity holds the heat of the element.
+    var linear = box_mesh(
+        Length64(LENGTH, METER),
+        Length64(0.02, METER),
+        Length64(0.02, METER),
+        4,
+        1,
+        1,
+    )
+    var meshes = List[TetMesh]()
+    meshes.append(linear.copy())
+    meshes.append(quadratic_mesh(linear))
+    for k in range(2):
+        var problem = ThermalProblem(meshes[k].copy(), [_material()])
+        var start = List[Temperature64]()
+        for p in problem.mesh.nodes:
+            start.append(Temperature64(310 + 100 * p.x, KELVIN))
+        var result = solve_transient(
+            problem,
+            _capacity(),
+            start,
+            _seconds(1.0e12),
+            2,
+            1,
+            1e-13,
+            2000,
+            LUMPED_CAPACITY,
+        )
+        for value in result.temperatures[2]:
+            assert_almost_equal(value, 315, atol=1e-6)
+
+
 def test_refusals() raises:
     var problem = ThermalProblem(_rod(1), [_material()])
     var start = List[Temperature64]()
@@ -199,6 +285,10 @@ def test_refusals() raises:
     with assert_raises(contains="from 1 to 1000000 steps"):
         _ = solve_transient(
             problem, _capacity(), start, dt, 1000001, 1, 1e-10, 100
+        )
+    with assert_raises(contains="capacity kind"):
+        _ = solve_transient(
+            problem, _capacity(), start, dt, 1, 1, 1e-10, 100, CapacityKind(2)
         )
     with assert_raises(contains="record interval"):
         _ = solve_transient(problem, _capacity(), start, dt, 1, 0, 1e-10, 100)

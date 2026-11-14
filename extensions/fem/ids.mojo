@@ -151,3 +151,41 @@ def require_order(order: ElementOrder) raises:
         Error: If `order` is not valid.
     """
     require_valid(order.is_valid(), "An element order must be 0 or 1")
+
+
+@fieldwise_init
+struct CapacityKind(Equatable, ImplicitlyCopyable, Writable):
+    """How a transient heat step stores heat at the nodes.
+
+    `CONSISTENT_CAPACITY` integrates the products of the shape functions.
+    It is the more accurate. `LUMPED_CAPACITY` puts the heat of each
+    element on the diagonal, in proportion to the diagonal of the
+    consistent matrix. On four-node elements without obtuse angles, a
+    lumped step cannot take a temperature past its bounds.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the two kinds.
+
+        Returns:
+            Whether the value is zero or one.
+        """
+        return ordinal_valid(self.value, 1)
+
+
+comptime CONSISTENT_CAPACITY = CapacityKind(0)
+comptime LUMPED_CAPACITY = CapacityKind(1)
+
+
+def require_capacity(kind: CapacityKind) raises:
+    """Refuse a capacity kind that is not one of the two.
+
+    Args:
+        kind: The kind to check.
+
+    Raises:
+        Error: If `kind` is not valid.
+    """
+    require_valid(kind.is_valid(), "A capacity kind must be 0 or 1")

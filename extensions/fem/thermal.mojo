@@ -27,8 +27,13 @@ the backward Euler method solves
 
     (C / dt + K) T_next = C / dt T + F
 
-where `C` is the consistent capacity matrix. The method is stable for
-every step, and its error falls with the step.
+where `C` is the capacity matrix. The method is stable for every step,
+and its error falls with the step. The consistent capacity is the more
+accurate. Near a sudden change, a step that is short against
+`h^2 / alpha` can then undershoot. The lumped capacity puts the heat of
+each element on its nodes in proportion to the consistent diagonal, the
+method of Hinton, Rock and Zienkiewicz. On four-node elements without
+obtuse angles, a lumped step keeps each temperature between its bounds.
 """
 
 from extensions.fem.elasticity import (
@@ -37,9 +42,13 @@ from extensions.fem.elasticity import (
     shape_gradients,
 )
 from extensions.fem.ids import (
+    CONSISTENT_CAPACITY,
+    CapacityKind,
     DofAxis,
     LINEAR,
+    LUMPED_CAPACITY,
     NodeId,
+    require_capacity,
     require_dof_axis,
     require_id,
 )
@@ -567,6 +576,7 @@ def solve_transient(
     every: Int,
     tolerance: Float64,
     max_iterations: Int,
+    capacity: CapacityKind = CONSISTENT_CAPACITY,
 ) raises -> TransientResult:
     """Follow the temperatures of a problem in time, by backward Euler.
 
@@ -582,6 +592,8 @@ def solve_transient(
         every: Record the temperatures every this many steps. One or more.
         tolerance: The relative residual at which each solve stops.
         max_iterations: The iteration budget of each solve.
+        capacity: `CONSISTENT_CAPACITY`, the default, or
+            `LUMPED_CAPACITY`.
 
     Returns:
         The records.
@@ -589,7 +601,8 @@ def solve_transient(
     Raises:
         Error: If the capacities do not fit the materials, the start does
             not fit the nodes or is not above absolute zero, an argument
-            is out of range, or a step does not converge.
+            is out of range, the capacity kind is not valid, or a step
+            does not converge.
     """
     ref mesh = problem.mesh
     var n = mesh.node_count()
@@ -600,6 +613,7 @@ def solve_transient(
     var dt = step.to(SECOND)
     if not (dt > 0) or not isfinite(dt):
         raise Error("A time step must be positive and finite")
+    require_capacity(capacity)
     if steps < 1 or steps > 1000000:
         raise Error("A transient problem takes from 1 to 1000000 steps")
     if every < 1:
@@ -613,21 +627,19 @@ def solve_transient(
     var builder = SparseBuilder(n)
     var rhs = List[Float64](length=n, fill=0)
     _assemble(problem, builder, rhs)
-    var capacity = _capacity_matrix(mesh, capacities)
+    var stores = _capacity_matrix(mesh, capacities, capacity)
     var inverse = 1.0 / dt
     for row in range(n):  # pragma: no branch
         for at in range(
-            capacity.row_start[row], capacity.row_start[row + 1]
+            stores.row_start[row], stores.row_start[row + 1]
         ):  # pragma: no branch
-            builder.add(
-                row, capacity.columns[at], capacity.values[at] * inverse
-            )
+            builder.add(row, stores.columns[at], stores.values[at] * inverse)
     var matrix = builder.build()
     var out = TransientResult()
     out.times.append(0)
     out.temperatures.append(t.copy())
     for index in range(1, steps + 1):  # pragma: no branch
-        var stored = capacity.multiply(t)
+        var stored = stores.multiply(t)
         for node in range(n):  # pragma: no branch
             stored[node] = stored[node] * inverse + rhs[node]
         var solved = _solve_held(
@@ -644,11 +656,15 @@ def solve_transient(
 
 
 def _capacity_matrix(
-    mesh: TetMesh, capacities: List[ThermalCapacity]
+    mesh: TetMesh, capacities: List[ThermalCapacity], kind: CapacityKind
 ) raises -> CsrMatrix:
-    """Return the consistent capacity matrix, in joules per kelvin."""
+    """Return the capacity matrix of a kind, in joules per kelvin."""
     var count = mesh.nodes_per_element()
     var unit = mass_coefficients(count)
+    var lumped = kind == LUMPED_CAPACITY
+    var diagonal = 0.0
+    for a in range(count):  # pragma: no branch
+        diagonal += unit[count * a + a]
     var builder = SparseBuilder(mesh.node_count())
     for e in range(mesh.element_count()):  # pragma: no branch
         var at = count * e
@@ -665,10 +681,12 @@ def _capacity_matrix(
             * volume
         )
         for a in range(count):  # pragma: no branch
+            var node = mesh.corners[at + a]
+            if lumped:
+                builder.add(node, node, stored * unit[count * a + a] / diagonal)
+                continue
             for b in range(count):  # pragma: no branch
                 builder.add(
-                    mesh.corners[at + a],
-                    mesh.corners[at + b],
-                    stored * unit[count * a + b],
+                    node, mesh.corners[at + b], stored * unit[count * a + b]
                 )
     return builder.build()
