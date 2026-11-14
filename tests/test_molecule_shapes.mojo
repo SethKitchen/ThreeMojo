@@ -35,7 +35,7 @@ from extensions.molecule.structure import (
     Structure,
 )
 from extensions.molecule.surface import (
-    _Cells,
+    AtomCells,
     _crease,
     _exits,
     accessible_areas,
@@ -519,7 +519,7 @@ def test_excluded_surface_fills_the_neck() raises:
 def test_excluded_surface_helpers() raises:
     var centers: List[V3] = [v3(0, 0, 0), v3(2, 0, 0), v3(1, 0, 0)]
     var radii: List[Float64] = [1.5, 1.5, 0.5]
-    var cells = _Cells(centers, 3.0)
+    var cells = AtomCells(centers, 3.0)
     # The circle of spheres 0 and 1 is at x = 1 with radius sqrt(1.25).
     var gap = _crease(v3(1, 3, 0), 0, 1, centers, radii, cells)
     assert_almost_equal(gap, 3 - sqrt(1.25))

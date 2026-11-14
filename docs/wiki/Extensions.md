@@ -259,6 +259,7 @@ extensions/
     dssp.mojo             helices and strands from hydrogen bonds
     ribbon.mojo           cartoon ribbons
     surface.mojo          accessible areas and surface meshes
+    coloring.mojo         surfaces colored by atom properties
   fem/
     ids.mojo              node, element and material ids, and axes
     mesh.mojo             tetrahedral meshes, box and voxel meshers

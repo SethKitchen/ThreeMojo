@@ -140,6 +140,28 @@ def _at_least_zero(index: Int) -> Int:
     return max(index, 0)
 
 
+def chain_color(chain: Int) -> V3:
+    """Return the display color of a chain, from a palette of eight.
+
+    Args:
+        chain: The place of the chain in its model, from zero.
+
+    Returns:
+        An sRGB color from 0 to 1. Chain 8 has the color of chain 0.
+    """
+    var palette: List[V3] = [
+        v3(0.27, 0.53, 0.93),
+        v3(0.93, 0.47, 0.2),
+        v3(0.3, 0.75, 0.42),
+        v3(0.75, 0.35, 0.85),
+        v3(0.95, 0.8, 0.2),
+        v3(0.2, 0.78, 0.82),
+        v3(0.9, 0.3, 0.45),
+        v3(0.6, 0.6, 0.62),
+    ]
+    return palette[chain % 8]
+
+
 def _color(kind: SecondaryKind, chain: Int, coloring: RibbonColoring) -> V3:
     """Return the linear color of one sample of a ribbon."""
     var srgb: V3
@@ -151,17 +173,7 @@ def _color(kind: SecondaryKind, chain: Int, coloring: RibbonColoring) -> V3:
         else:
             srgb = v3(0.82, 0.84, 0.86)
     else:
-        var palette: List[V3] = [
-            v3(0.27, 0.53, 0.93),
-            v3(0.93, 0.47, 0.2),
-            v3(0.3, 0.75, 0.42),
-            v3(0.75, 0.35, 0.85),
-            v3(0.95, 0.8, 0.2),
-            v3(0.2, 0.78, 0.82),
-            v3(0.9, 0.3, 0.45),
-            v3(0.6, 0.6, 0.62),
-        ]
-        srgb = palette[chain % 8]
+        srgb = chain_color(chain)
     return v3(
         Float64(srgb_to_linear(Float32(srgb.x))),
         Float64(srgb_to_linear(Float32(srgb.y))),

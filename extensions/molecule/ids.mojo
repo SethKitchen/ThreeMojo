@@ -233,3 +233,44 @@ def require_coloring(coloring: RibbonColoring) raises:
         Error: If `coloring` is not valid.
     """
     require_valid(coloring.is_valid(), "A ribbon coloring must be 0 or 1")
+
+
+@fieldwise_init
+struct SurfaceColoring(Equatable, ImplicitlyCopyable, Writable):
+    """How a molecular surface is colored.
+
+    `COLOR_BY_ELEMENT` gives each vertex the CPK color of its atom.
+    `COLOR_BY_B_FACTOR` runs from blue at the least B-factor of the model
+    to red at the largest. `COLOR_BY_CHAIN` gives each chain its own
+    color. `COLOR_BY_HYDROPATHY` runs from blue for the most hydrophilic
+    residue to orange for the most hydrophobic, on the scale of Kyte and
+    Doolittle.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the four colorings.
+
+        Returns:
+            Whether the value is from zero to three.
+        """
+        return ordinal_valid(self.value, 3)
+
+
+comptime COLOR_BY_ELEMENT = SurfaceColoring(0)
+comptime COLOR_BY_B_FACTOR = SurfaceColoring(1)
+comptime COLOR_BY_CHAIN = SurfaceColoring(2)
+comptime COLOR_BY_HYDROPATHY = SurfaceColoring(3)
+
+
+def require_surface_coloring(coloring: SurfaceColoring) raises:
+    """Refuse a surface coloring that is not one of the four.
+
+    Args:
+        coloring: The coloring to check.
+
+    Raises:
+        Error: If `coloring` is not valid.
+    """
+    require_valid(coloring.is_valid(), "A surface coloring must be from 0 to 3")

@@ -119,18 +119,31 @@ def _axis(value: Float64, low: Float64, size: Float64, count: Int) -> Int:
     return min(max(cell, 0), count - 1)
 
 
-struct _Cells(Movable):
-    """The atoms of a model sorted into cubic cells."""
+struct AtomCells(Movable):
+    """Points, such as atom centers, sorted into cubic cells."""
 
     var low: V3
+    """The low corner of the first cell."""
     var size: Float64
+    """The edge of a cell."""
     var nx: Int
+    """Cells along x."""
     var ny: Int
+    """Cells along y."""
     var nz: Int
+    """Cells along z."""
     var start: List[Int]
+    """Where the points of each cell start in `atoms`, and one more."""
     var atoms: List[Int]
+    """The points, cell by cell."""
 
     def __init__(out self, centers: List[V3], size: Float64):
+        """Sort points into cells.
+
+        Args:
+            centers: The points. At least one.
+            size: The edge of a cell. Positive.
+        """
         var low = centers[0]
         var high = centers[0]
         for c in centers:  # pragma: no branch
@@ -165,7 +178,15 @@ struct _Cells(Movable):
         self.atoms = atoms^
 
     def near(self, p: V3) -> List[Int]:
-        """Return the atoms in the 27 cells around a point."""
+        """Return the points in the 27 cells around a point.
+
+        Args:
+            p: The point.
+
+        Returns:
+            The indexes of the points in the cell of `p` and its 26
+            neighbors.
+        """
         var i = _axis(p.x, self.low.x, self.size, self.nx)
         var j = _axis(p.y, self.low.y, self.size, self.ny)
         var k = _axis(p.z, self.low.z, self.size, self.nz)
@@ -231,7 +252,7 @@ def accessible_areas(
     var largest = 0.0
     for r in radii:  # pragma: no branch
         largest = max(largest, r)
-    var cells = _Cells(centers, 2.0 * largest)
+    var cells = AtomCells(centers, 2.0 * largest)
     var out = List[Area64]()
     for a in range(len(centers)):  # pragma: no branch
         var neighbors = List[Int]()
@@ -576,7 +597,7 @@ def excluded_surface(
     var largest = 0.0
     for r in radii:  # pragma: no branch
         largest = max(largest, r)
-    var cells = _Cells(centers, 2.0 * largest)
+    var cells = AtomCells(centers, 2.0 * largest)
     var count = grid.px * grid.py * grid.pz
     var reachable = List[Bool](length=count, fill=False)
     for index in range(count):  # pragma: no branch
@@ -619,7 +640,7 @@ def _refine(
     high: Float64,
     centers: List[V3],
     radii: List[Float64],
-    cells: _Cells,
+    cells: AtomCells,
 ) -> Float64:
     """Return a smaller upper bound on the distance from `p` to the region
     the probe's center can reach, from exact candidates."""
@@ -638,7 +659,7 @@ def _crease(
     b: Int,
     centers: List[V3],
     radii: List[Float64],
-    cells: _Cells,
+    cells: AtomCells,
 ) -> Float64:
     """Return the distance from `p` to the circle where grown spheres `a` and
     `b` meet, when the nearest point of the circle is outside every other
@@ -662,7 +683,7 @@ def _crease(
 
 
 def _exits(
-    p: V3, atom: Int, centers: List[V3], radii: List[Float64], cells: _Cells
+    p: V3, atom: Int, centers: List[V3], radii: List[Float64], cells: AtomCells
 ) -> Bool:
     """Return whether the point straight out from an atom's center through
     `p`, on its grown sphere, is outside every other grown sphere."""

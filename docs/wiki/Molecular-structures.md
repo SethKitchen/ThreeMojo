@@ -10,13 +10,14 @@
 
 | Module | What it gives |
 |---|---|
-| `ids` | `AtomId`, `ResidueId`, `ChainId`, `ModelId`, `AtomGroup`, `SecondaryKind`, `AltLocPolicy` and `RibbonColoring` |
+| `ids` | `AtomId`, `ResidueId`, `ChainId`, `ModelId`, `AtomGroup`, `SecondaryKind`, `AltLocPolicy`, `RibbonColoring` and `SurfaceColoring` |
 | `cif` | `parse_cif`, `read_cif`, `cif_tokens`, `CifBlock` and `is_null` |
 | `structure` | `Structure`, `parse_mmcif`, `read_mmcif`, `parse_pdb_structure`, `read_pdb_structure` and `SQUARE_ANGSTROM` |
 | `peptide` | `build_peptide`, `place_atom` and `three_letter` |
 | `dssp` | `assign_secondary`, `secondary_from_bonds` and `bond_energy` |
-| `ribbon` | `ribbon_geometry` |
-| `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius` and `sphere_points` |
+| `ribbon` | `ribbon_geometry` and `chain_color` |
+| `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius`, `sphere_points` and `AtomCells` |
+| `coloring` | `color_surface`, `atom_color` and `kyte_doolittle` |
 
 ## Read an mmCIF file
 
@@ -201,6 +202,26 @@ Elsewhere, an exact Euclidean distance transform of the grid gives the distance 
 
 `distance_transform(seeds, px, py, pz)` is the transform of Felzenszwalb and Huttenlocher, run along x, then y, then z. It gives the squared distance to the nearest seed in grid steps, and the index of that seed.
 
+## Color a surface
+
+A surface comes with CPK colors. `color_surface(geometry, structure, model, coloring)` colors it again by another property of the atom under each vertex:
+
+| `SurfaceColoring` | What the color shows |
+|---|---|
+| `COLOR_BY_ELEMENT` | The CPK color of the element |
+| `COLOR_BY_B_FACTOR` | Blue at the least B-factor of the model, white halfway and red at the largest |
+| `COLOR_BY_CHAIN` | The chain, in the palette of the ribbons |
+| `COLOR_BY_HYDROPATHY` | Blue at -4.5 on the Kyte-Doolittle scale, white at 0 and orange at +4.5 |
+
+```mojo
+var surface = excluded_surface(structure, model, probe, spacing)
+color_surface(surface, structure, model, COLOR_BY_HYDROPATHY)
+```
+
+Each vertex takes the color of the atom whose van der Waals sphere is nearest it. A grid of cells, `AtomCells`, finds that atom. A residue that is not one of the twenty amino acids, such as water or a ligand, is gray in the hydropathy coloring. `kyte_doolittle(name)` gives the value of one residue, and `atom_color` gives the sRGB color of one atom. `chain_color(index)` gives the palette color of a chain.
+
+The B-factor coloring shows the flexible parts of a crystal structure. A high B-factor can also show disorder or a poor model. The hydropathy coloring shows oily and charged patches. It does not compute an electrostatic potential.
+
 ## Verification
 
 The tests check these results:
@@ -218,6 +239,7 @@ The tests check these results:
 - Two carbons 3 angstroms apart have an excluded surface with a neck of 1.313 angstroms, the analytic radius, to within 0.03 angstroms.
 - The distance transform is exact on a grid with one seed.
 - A ribbon of `n` residues has `(n - 1) samples + 1` rings, and every normal is a unit vector.
+- A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
 ## Errors
 
@@ -231,6 +253,7 @@ Every function raises `Error` for input it cannot use.
 | An id names no entry | `require_atom`, `find_atom`, `bounds`, `ribbon_geometry` |
 | A code is not a standard amino acid | `build_peptide`, `three_letter` |
 | A count, a probe or a spacing is out of range | `ribbon_geometry`, `accessible_areas`, `molecular_surface` |
+| A surface coloring is not valid, or an atom is not in the model | `color_surface`, `atom_color` |
 
 ## Limits
 
@@ -257,3 +280,4 @@ Every function raises `Error` for input it cannot use.
 - Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", 2012.
 - Richardson, "The anatomy and taxonomy of protein structure", 1981.
 - Kabsch and Sander, "Dictionary of protein secondary structure: pattern recognition of hydrogen-bonded and geometrical features", 1983.
+- Kyte and Doolittle, "A simple method for displaying the hydropathic character of a protein", 1982.
