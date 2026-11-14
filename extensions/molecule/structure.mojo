@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A macromolecular structure read from an mmCIF file.
+"""A macromolecular structure read from an mmCIF file or a PDB file.
 
 A `Structure` holds models, chains, residues and atoms in four lists. A
 model holds a run of chains, a chain a run of residues and a residue a run
@@ -20,6 +20,15 @@ The secondary structure comes from `_struct_conf`, where each helix has a
 `conf_type_id` that starts with `HELX`, and from `_struct_sheet_range`. A
 range names a chain by `label_asym_id` and its residues by
 `label_seq_id`.
+
+`parse_pdb_structure` reads the same structure from the fixed columns of
+a PDB file: `ATOM`, `HETATM`, `MODEL`, `TER`, `HELIX` and `SHEET`. A PDB
+file has only the author's chain letters and residue numbers. Each
+residue's `seq_id` and `auth_seq_id` are the author's number, and the
+helices and strands name residues by it. A chain starts at a new chain
+letter, after `TER`, or in a new model. A chain that repeats a letter in
+one model, such as the waters after `TER`, gets a label of the letter and
+a count, such as `A2`, so the helices of `A` do not mark it.
 """
 
 from extensions.chemistry.quantities import ANGSTROM
@@ -490,6 +499,216 @@ def _assign_secondary(block: CifBlock, mut out: Structure) raises:
             var first = _integer(begins[row], -1, "strand start", row + 1)
             var last = _integer(ends[row], -1, "strand end", row + 1)
             _mark(out, chains[row], first, last, STRAND)
+
+
+def _column(line: String, first: Int, last: Int) -> String:
+    """Return columns `first` to `last` of a line, counted from one, without
+    spaces at either end. Columns past the line's end are blank."""
+    var bytes = line.as_bytes()
+    var end = min(last, len(bytes))
+    if first - 1 >= end:
+        return String("")
+    return String(String(from_utf8_lossy=bytes[first - 1 : end]).strip())
+
+
+def _element_of(line: String) -> String:
+    """Return a PDB atom's element, from columns 77 to 78 or from its name.
+
+    A name whose column 13 is blank holds a one-letter element in column
+    14, so ` CA ` is carbon. Otherwise columns 13 and 14 hold the element,
+    so `CA  ` is calcium.
+    """
+    var element = _column(line, 77, 78)
+    if element != "":
+        return element.upper()
+    if _column(line, 13, 13) == "":
+        return _column(line, 14, 14).upper()
+    return _column(line, 13, 14).upper()
+
+
+def _pdb_number(
+    line: String, first: Int, last: Int, name: String, row: Int
+) raises -> Float64:
+    """Read a number from columns of a PDB line, or a missing value as 1e18."""
+    var text = _column(line, first, last)
+    if text == "":
+        return 1.0e18
+    return _number(text, name, row)
+
+
+def parse_pdb_structure(text: String, policy: AltLocPolicy) raises -> Structure:
+    """Read the atoms of a PDB file into a structure.
+
+    A missing occupancy is 1, and a missing B-factor is 0. A missing
+    element comes from the atom name.
+
+    Args:
+        text: The text of the file.
+        policy: Which alternate locations to keep.
+
+    Returns:
+        The structure. Its name is the PDB id of the `HEADER` record, or
+        empty.
+
+    Raises:
+        Error: If the policy is not valid, a coordinate is missing or is not
+            a number, a number is not finite, or the file has no atoms.
+    """
+    require_policy(policy)
+    var out = Structure("")
+    var model_number = 1
+    var start_model = True
+    var start_chain = True
+    var chosen = String("")
+    var helices = List[Tuple[String, Int, Int]]()
+    var strands = List[Tuple[String, Int, Int]]()
+    var row = 0
+    for raw in text.splitlines():
+        row += 1
+        var line = String(raw)
+        var record = _column(line, 1, 6)
+        if record == "HEADER":
+            out.name = _column(line, 63, 66)
+        elif record == "MODEL":
+            model_number = Int(_pdb_number(line, 11, 14, "model number", row))
+            start_model = True
+        elif record == "TER":
+            start_chain = True
+        elif record == "HELIX":
+            helices.append(
+                (
+                    _column(line, 20, 20),
+                    Int(_pdb_number(line, 22, 25, "helix start", row)),
+                    Int(_pdb_number(line, 34, 37, "helix end", row)),
+                )
+            )
+        elif record == "SHEET":
+            strands.append(
+                (
+                    _column(line, 22, 22),
+                    Int(_pdb_number(line, 23, 26, "strand start", row)),
+                    Int(_pdb_number(line, 34, 37, "strand end", row)),
+                )
+            )
+        elif record == "ATOM" or record == "HETATM":
+            if start_model:
+                out.models.append(Model(model_number, len(out.chains), 0))
+                start_chain = True
+                start_model = False
+            var letter = _column(line, 22, 22)
+            var seq = Int(_pdb_number(line, 23, 26, "residue number", row))
+            var insertion = _column(line, 27, 27)
+            if insertion == "":
+                insertion = "?"
+            var name = _column(line, 18, 20)
+            ref model = out.models[len(out.models) - 1]
+            if (
+                not start_chain
+                and out.chains[len(out.chains) - 1].author != letter
+            ):
+                start_chain = True
+            if start_chain:
+                var repeats = 0
+                for c in range(model.first_chain, len(out.chains)):
+                    if out.chains[c].author == letter:
+                        repeats += 1
+                var label = letter
+                if repeats > 0:
+                    label = letter + String(repeats + 1)
+                out.chains.append(
+                    Chain(
+                        label,
+                        letter,
+                        ModelId(len(out.models) - 1),
+                        len(out.residues),
+                        0,
+                    )
+                )
+                model.chain_count += 1
+            if start_chain or _residue_changed(
+                out.residues[len(out.residues) - 1], name, seq, seq, insertion
+            ):
+                out.residues.append(
+                    Residue(
+                        name,
+                        seq,
+                        seq,
+                        insertion,
+                        ChainId(len(out.chains) - 1),
+                        len(out.atoms),
+                        0,
+                        COIL,
+                    )
+                )
+                out.chains[len(out.chains) - 1].residue_count += 1
+                chosen = String("")
+            start_chain = False
+            var location = _column(line, 17, 17)
+            if location == "":
+                location = "."
+            if policy == FIRST_LOCATION and not is_null(location):
+                if chosen == "":
+                    chosen = location
+                if location != chosen:
+                    continue
+            var x = _pdb_number(line, 31, 38, "x", row)
+            var y = _pdb_number(line, 39, 46, "y", row)
+            var z = _pdb_number(line, 47, 54, "z", row)
+            if max(x, max(y, z)) >= 1.0e18:
+                raise Error(
+                    String("Atom row ", row, ": a coordinate is missing")
+                )
+            var occupancy = _pdb_number(line, 55, 60, "occupancy", row)
+            if occupancy >= 1.0e18:
+                occupancy = 1.0
+            var b = _pdb_number(line, 61, 66, "B-factor", row)
+            if b >= 1.0e18:
+                b = 0.0
+            var group = ATOM_RECORD
+            if record == "HETATM":
+                group = HETATM_RECORD
+            out.atoms.append(
+                Atom(
+                    _column(line, 13, 16),
+                    _element_of(line),
+                    Int(_pdb_number(line, 7, 11, "serial", row)),
+                    group,
+                    location,
+                    v3(
+                        Length64(x, ANGSTROM).value,
+                        Length64(y, ANGSTROM).value,
+                        Length64(z, ANGSTROM).value,
+                    ),
+                    occupancy,
+                    Area64(b, SQUARE_ANGSTROM),
+                    ResidueId(len(out.residues) - 1),
+                )
+            )
+            out.residues[len(out.residues) - 1].atom_count += 1
+    if len(out.atoms) == 0:
+        raise Error("The PDB file has no atoms")
+    for helix in helices:
+        _mark(out, helix[0], helix[1], helix[2], HELIX)
+    for strand in strands:
+        _mark(out, strand[0], strand[1], strand[2], STRAND)
+    return out^
+
+
+def read_pdb_structure(path: String, policy: AltLocPolicy) raises -> Structure:
+    """Read the atoms of a PDB file.
+
+    Args:
+        path: The file.
+        policy: Which alternate locations to keep.
+
+    Returns:
+        The structure.
+
+    Raises:
+        Error: If the file cannot be read, or `parse_pdb_structure` refuses
+            it.
+    """
+    return parse_pdb_structure(Path(path).read_text(), policy)
 
 
 def read_mmcif(path: String, policy: AltLocPolicy) raises -> Structure:

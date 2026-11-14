@@ -1,6 +1,6 @@
 # Molecular structures
 
-`extensions/molecule/` reads macromolecular structures from mmCIF files and builds ideal peptide backbones. It draws a structure as a cartoon ribbon or as a surface, and it measures the solvent accessible area of each atom. It is a library for research and teaching. Its measurements are not validated for drug design or for any clinical use.
+`extensions/molecule/` reads macromolecular structures from mmCIF and PDB files and builds ideal peptide backbones. It draws a structure as a cartoon ribbon or as a surface, and it measures the solvent accessible area of each atom. It is a library for research and teaching. Its measurements are not validated for drug design or for any clinical use.
 
 ![The cartoon ribbon of an ideal peptide, and its solvent excluded surface colored by element](out/molecule.png)
 
@@ -12,7 +12,7 @@
 |---|---|
 | `ids` | `AtomId`, `ResidueId`, `ChainId`, `ModelId`, `AtomGroup`, `SecondaryKind`, `AltLocPolicy` and `RibbonColoring` |
 | `cif` | `parse_cif`, `read_cif`, `cif_tokens`, `CifBlock` and `is_null` |
-| `structure` | `Structure`, `parse_mmcif`, `read_mmcif` and `SQUARE_ANGSTROM` |
+| `structure` | `Structure`, `parse_mmcif`, `read_mmcif`, `parse_pdb_structure`, `read_pdb_structure` and `SQUARE_ANGSTROM` |
 | `peptide` | `build_peptide`, `place_atom` and `three_letter` |
 | `ribbon` | `ribbon_geometry` |
 | `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius` and `sphere_points` |
@@ -26,6 +26,22 @@ for chain in structure.chains:
 ```
 
 `parse_mmcif(text, policy)` reads text that is already in memory. The PDB distributes each entry as an mmCIF file. The older PDB format cannot hold more than 99,999 atoms, and `loaders/pdb.mojo` reads only atoms and bonds from it.
+
+## Read a PDB file
+
+`read_pdb_structure(path, policy)` reads a PDB file into the same `Structure`. `parse_pdb_structure(text, policy)` reads text in memory. The reader takes these records from their fixed columns:
+
+| Record | What it gives |
+|---|---|
+| `HEADER` | The structure's name, the PDB id in columns 63 to 66 |
+| `MODEL` | A new model with its number |
+| `ATOM`, `HETATM` | An atom, with its residue and chain |
+| `TER` | The end of a chain |
+| `HELIX`, `SHEET` | The helices and strands |
+
+A PDB file has only the author's chain letters and residue numbers. Each residue's `seq_id` and `auth_seq_id` are the author's number, and the helices and strands name residues by it. A chain starts at a new letter, after `TER`, or in a new model. A chain that repeats a letter in one model gets a label of the letter and a count, such as `A2`. The waters after `TER` are such a chain, so the helices of chain `A` do not mark them.
+
+A short line can leave out the occupancy, the B-factor and the element. The occupancy is then 1 and the B-factor 0. The element then comes from the atom name, as the PDB convention gives it. A name with column 13 blank holds a one-letter element in column 14, so ` CA ` is carbon. A name that starts in column 13 holds a two-letter element there, so `CA  ` is calcium.
 
 ## The structure
 
@@ -170,6 +186,7 @@ The tests check these results:
 
 - A built helix has CA atoms 3.80 angstroms apart.
 - The hydrogen bond from O of residue `i` to N of residue `i + 4` is 2.8 to 3.3 angstroms.
+- A PDB fixture gives the expected chains, residues, elements and secondary structure. It holds two models, waters and an ion after `TER`, an insertion code and alternate locations.
 - CB is 1.527 angstroms from CA.
 - One atom with a probe has the whole area of its grown sphere.
 - Two carbons 3 angstroms apart each lose a cap of `2 pi R h`. The measured area matches to within one percent with 2000 points.
@@ -194,6 +211,7 @@ Every function raises `Error` for input it cannot use.
 
 ## Limits
 
+- The PDB reader does not read `CONECT`, `ANISOU` or `SEQRES` records, or the hybrid-36 numbers of very large files.
 - The reader keeps the first data block only. It does not read anisotropic displacements, bonds or the chemical component dictionary.
 - The reader does not infer secondary structure. A file without `_struct_conf` and `_struct_sheet_range` gives coils only.
 - Ribbons need CA atoms. Nucleic acids have no ribbon.
@@ -204,6 +222,7 @@ Every function raises `Error` for input it cannot use.
 
 - Westbrook and others, "PDBx/mmCIF Ecosystem: Foundational Semantic Tools for Structural Biology", 2022.
 - Hall, Allen and Brown, "The Crystallographic Information File (CIF)", 1991.
+- wwPDB, "Atomic Coordinate Entry Format Description", version 3.3, 2012.
 - Engh and Huber, "Accurate bond and angle parameters for X-ray protein structure refinement", 1991.
 - Parsons and others, "Practical conversion from torsion space to Cartesian space for in silico protein synthesis", 2005.
 - Yang and others, "Improved protein structure prediction using predicted interresidue orientations", 2020.
