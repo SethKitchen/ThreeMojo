@@ -261,6 +261,7 @@ extensions/
     surface.mojo          accessible areas and surface meshes
     coloring.mojo         surfaces colored by atom properties
     superpose.mojo        superpositions and RMSD
+    contacts.mojo         residue distance and contact maps
   fem/
     ids.mojo              node, element and material ids, and axes
     mesh.mojo             tetrahedral meshes, box and voxel meshers

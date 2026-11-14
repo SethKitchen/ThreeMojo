@@ -19,6 +19,7 @@
 | `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius`, `sphere_points` and `AtomCells` |
 | `coloring` | `color_surface`, `atom_color` and `kyte_doolittle` |
 | `superpose` | `superpose`, `Superposition`, `rmsd` and `matched_atoms` |
+| `contacts` | `distance_map`, `DistanceMap` and `map_image` |
 
 ## Read an mmCIF file
 
@@ -224,6 +225,20 @@ print(fit.rmsd.to(METER) / Length64(1.0, ANGSTROM).to(METER), "angstroms")
 
 `matched_atoms(fixed, model, moving, model, name)` pairs the atoms of one name, such as `CA`. Two atoms pair when their chains have one label, and their residues one number and insertion code. Of alternate locations, the first in the file pairs.
 
+## Map distances and contacts
+
+A distance map shows a fold at a glance. A helix is a band along the diagonal, two strands that pair make a line across it, and two domains make blocks. A contact map does not change when a model turns, so structure prediction compares contact maps.
+
+```mojo
+var map = distance_map(structure, ModelId(0), "CA")
+var contacts = map.contacts(Length64(8, ANGSTROM), 6)
+Path("map.png").write_bytes(encode(map_image(map, Length64(20, ANGSTROM))))
+```
+
+`distance_map(structure, model, name)` takes one atom of each residue, such as `CA` or `CB`. A residue without the atom has no row. `map.distance(row, column)` gives the distance of one pair, and `map.residues` gives the residue of each row.
+
+`map.contacts(cutoff, separation)` gives the pairs of rows closer than the cutoff, each pair once. Two residues of one chain must be at least `separation` residues apart. Residues of two chains always count. `map_image(map, far)` draws one pixel per pair: dark blue at zero distance, and white at `far` and beyond.
+
 ## Color a surface
 
 A surface comes with CPK colors. `color_surface(geometry, structure, model, coloring)` colors it again by another property of the atom under each vertex:
@@ -261,6 +276,7 @@ The tests check these results:
 - Two carbons 3 angstroms apart have an excluded surface with a neck of 1.313 angstroms, the analytic radius, to within 0.03 angstroms.
 - The distance transform is exact on a grid with one seed.
 - A ribbon of `n` residues has `(n - 1) samples + 1` rings, and every normal is a unit vector.
+- Neighbor CA atoms of an ideal peptide are 3.8 angstroms apart. An alpha helix has its CA contacts within 8 angstroms at `i + 3` and `i + 4` only, and a strand has none.
 - A superposition recovers a known rotation and shift to 1e-12, with a proper rotation. It does not reach a mirror image. A small turn away from the fit gives a larger RMSD. On 40 noisy points, its RMSD matches numpy's SVD solution to 16 digits. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
@@ -278,6 +294,7 @@ Every function raises `Error` for input it cannot use.
 | A count, a probe or a spacing is out of range | `ribbon_geometry`, `accessible_areas`, `molecular_surface` |
 | A surface coloring is not valid, or an atom is not in the model | `color_surface`, `atom_color` |
 | Two sets differ in size, hold fewer than three points, or are not finite | `superpose`, `rmsd` |
+| No residue has the atom, a row is outside the map, or a cutoff or separation is out of range | `distance_map`, `DistanceMap`, `map_image` |
 
 ## Limits
 
