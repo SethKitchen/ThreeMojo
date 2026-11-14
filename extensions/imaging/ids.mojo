@@ -234,3 +234,40 @@ def require_label(label: LabelId) raises:
         Error: If `label` is not from 0 to 255.
     """
     require_valid(label.is_valid(), "A label must be from 0 to 255")
+
+
+@fieldwise_init
+struct SlabMode(Equatable, ImplicitlyCopyable, Writable):
+    """How a thick slab is projected onto its plane.
+
+    `SLAB_MAXIMUM` keeps the largest sample along the normal, as for
+    vessels with contrast. `SLAB_MINIMUM` keeps the least, as for airways.
+    `SLAB_MEAN` averages the samples, like a thicker slice.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the three projections.
+
+        Returns:
+            Whether the value is from zero to two.
+        """
+        return ordinal_valid(self.value, 2)
+
+
+comptime SLAB_MAXIMUM = SlabMode(0)
+comptime SLAB_MINIMUM = SlabMode(1)
+comptime SLAB_MEAN = SlabMode(2)
+
+
+def require_slab_mode(mode: SlabMode) raises:
+    """Refuse a slab projection that is not one of the three.
+
+    Args:
+        mode: The projection to check.
+
+    Raises:
+        Error: If `mode` is not valid.
+    """
+    require_valid(mode.is_valid(), "A slab mode must be from 0 to 2")

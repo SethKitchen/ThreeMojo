@@ -14,8 +14,20 @@ it with `K_AXIS` and index 0.
 
 A point outside the box of voxel centers takes the `outside` value, such
 as -1000 for air in CT.
+
+`slab_projection` samples a thick slab instead: several planes, evenly
+spaced along the normal `right x down` across the slab's thickness. Each
+pixel keeps the largest, the least or the mean of its samples. A slab of
+maximum intensity shows vessels with contrast, and a slab of minimum
+intensity shows airways.
 """
 
+from extensions.imaging.ids import (
+    SLAB_MAXIMUM,
+    SLAB_MINIMUM,
+    SlabMode,
+    require_slab_mode,
+)
 from extensions.imaging.image_volume import ImageVolume, require_spacing
 from extensions.sdf.vector import V3, cross, dot, length, v3
 from std.math import isfinite, max, min
@@ -25,6 +37,8 @@ from units.si import Length64, METER
 comptime SQUARE_TOLERANCE = 1.0e-6
 # The largest side of a reformat, in pixels.
 comptime MAX_SIDE = 8192
+# The most planes in a slab.
+comptime MAX_SLAB_SAMPLES = 256
 
 
 def _unit(direction: V3, name: String) raises -> V3:
@@ -106,4 +120,93 @@ def oblique_slice(
             if inside:
                 value = volume.trilinear(q.x, q.y, q.z)
             out.values[x + width * y] = value
+    return out^
+
+
+def slab_projection(
+    volume: ImageVolume,
+    center: V3,
+    right: V3,
+    down: V3,
+    width: Int,
+    height: Int,
+    spacing: Length64,
+    thickness: Length64,
+    samples: Int,
+    mode: SlabMode,
+    outside: Float32,
+) raises -> ImageVolume:
+    """Return a thick slab through a center point, projected on its plane.
+
+    Plane `k` of the slab lies `(k + 0.5) / samples * thickness -
+    thickness / 2` along the normal `right x down`, so the planes are
+    evenly spaced and centered on the slab. A point outside the volume
+    takes the `outside` value, and it counts in the projection.
+
+    Args:
+        volume: The volume to sample.
+        center: The center of the slab, in patient space, in meters.
+        right: The direction of increasing x across the slab.
+        down: The direction of increasing y. Square to `right`.
+        width: The width in pixels, from 1 to 8192.
+        height: The height in pixels, from 1 to 8192.
+        spacing: The distance between two pixels.
+        thickness: The thickness of the slab. Positive and finite.
+        samples: The planes across the thickness, from 1 to 256.
+        mode: The largest, the least or the mean of the samples.
+        outside: The value of a point outside the volume.
+
+    Returns:
+        A volume of one slice on the center plane, as `oblique_slice`
+        gives.
+
+    Raises:
+        Error: If the mode is not valid, the thickness is not positive and
+            finite, the samples are out of range, or `oblique_slice`
+            refuses the plane.
+    """
+    require_slab_mode(mode)
+    var depth = thickness.to(METER)
+    if not (depth > 0) or not isfinite(depth):
+        raise Error("A slab thickness must be positive and finite")
+    if samples < 1 or samples > MAX_SLAB_SAMPLES:
+        raise Error("A slab has from 1 to 256 planes")
+    var normal = cross(_unit(right, "right"), _unit(down, "down"))
+    var first = 0.5 / Float64(samples) * depth - depth / 2
+    var out = oblique_slice(
+        volume,
+        center + normal * first,
+        right,
+        down,
+        width,
+        height,
+        spacing,
+        outside,
+    )
+    for k in range(1, samples):
+        var offset = (Float64(k) + 0.5) / Float64(samples) * depth - depth / 2
+        var plane = oblique_slice(
+            volume,
+            center + normal * offset,
+            right,
+            down,
+            width,
+            height,
+            spacing,
+            outside,
+        )
+        for index in range(len(plane.values)):  # pragma: no branch
+            var value = plane.values[index]
+            if mode == SLAB_MAXIMUM:
+                out.values[index] = max(out.values[index], value)
+            elif mode == SLAB_MINIMUM:
+                out.values[index] = min(out.values[index], value)
+            else:
+                out.values[index] += value
+    if mode != SLAB_MAXIMUM and mode != SLAB_MINIMUM:
+        var share = Float32(1.0 / Float64(samples))
+        for index in range(len(out.values)):  # pragma: no branch
+            out.values[index] *= share
+    # The first plane placed the slice. Move it back to the center plane.
+    out.origin = out.origin - normal * first
     return out^

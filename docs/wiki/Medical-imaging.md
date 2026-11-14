@@ -12,7 +12,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 
 | Module | What it gives |
 |---|---|
-| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode` and `LabelId` |
+| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode` and `LabelId` |
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
 | `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, and `decode_rle_frame` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
@@ -28,7 +28,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics` and `ThicknessStatistics` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
-| `reformat` | `oblique_slice` |
+| `reformat` | `oblique_slice` and `slab_projection` |
 
 ## Read a DICOM series
 
@@ -331,6 +331,26 @@ var image = render_slice(plane, K_AXIS, 0)
 
 Each pixel is a trilinear sample of the volume. A point outside the box of voxel centers takes the `outside` value, such as -1000 for air in CT. The result is a volume of one slice, placed on the plane, with the source's window and photometric interpretation. `voxel_point(p)` gives the voxel units of a patient-space point. It is the inverse of `patient_point`.
 
+## Project a thick slab
+
+A thin reformat cuts a vessel or an airway into short pieces. A thick slab projects several planes onto one, so a long structure shows whole.
+
+```mojo
+var vessels = slab_projection(volume, center, v3(1, 0, 0), v3(0, 1, 0),
+    256, 256, Length64(0.5, MILLIMETER64), Length64(10, MILLIMETER64), 20,
+    SLAB_MAXIMUM, -1000)
+```
+
+`slab_projection(volume, center, right, down, width, height, spacing, thickness, samples, mode, outside)` samples `samples` planes across the thickness. The planes are evenly spaced along the normal `right x down`, and centered on `center`. Each pixel keeps one value of its samples:
+
+| `SlabMode` | Value | Use |
+|---|---|---|
+| `SLAB_MAXIMUM` | The largest sample | Vessels with contrast, bone |
+| `SLAB_MINIMUM` | The least sample | Airways and other air |
+| `SLAB_MEAN` | The mean of the samples | A thicker slice with less noise |
+
+A point outside the volume takes the `outside` value, and that value counts in the projection. The result is a one-slice volume on the center plane, as `oblique_slice` gives it. Use at least one plane per voxel of the volume across the thickness, or a thin vessel can fall between two planes.
+
 ## Overlays
 
 `overlay_labels(image, map, axis, index, opacity)` blends a color over each labeled pixel. The labels cycle through eight colors from `label_color`. `draw_measurement(image, axis, a, b, color)` draws the line between two points, with a small cross at each end.
@@ -348,6 +368,7 @@ The tests check these results:
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
 - An oblique reformat of a linear field matches the field at every pixel.
+- A slab of four planes through a ramp gives its top plane as its maximum, its bottom plane as its minimum and its center value as its mean.
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
 - An isosurface of a linear ramp has the full iso color along the gradient, and the ambient light across it.
 - An ellipsoid of 904.8 voxels labels 879 voxels, within four percent, with its centroid exact.
@@ -381,6 +402,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | An index is outside the grid | `get`, `set`, `region_grow`, `render_slice` |
 | A label is not from 0 to 255, or is the background where a region is needed | Label functions |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
+| A slab mode, thickness or plane count is out of range | `slab_projection` |
 | A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface` |
 | A histogram has fewer than 2 bins or a bad range, or Otsu's method finds one full bin only | `Histogram`, `otsu_threshold` |
 | A Gaussian width is not positive or reaches past 128 voxels, or a median radius is not from 1 to 3 | `gaussian_filter`, `median_filter` |
