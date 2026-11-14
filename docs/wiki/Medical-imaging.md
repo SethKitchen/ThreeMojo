@@ -26,6 +26,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `shape` | `label_shape`, `LabelShape` and `slice_areas` |
 | `compare` | `compare_labels`, `LabelComparison`, `label_overlaps`, `LabelOverlap`, `mean_dice`, `surface_voxels` and `percentile` |
 | `roi` | `circle_statistics` and `RegionStatistics` |
+| `texture` | `cooccurrence_matrix`, `texture_features` and `TextureFeatures` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
@@ -398,6 +399,29 @@ A pixel counts when its center is at most `radius` from the center of the circle
 
 A `RegionStatistics` holds the pixel count, the `area`, the `mean`, the `deviation`, the `minimum` and the `maximum`. The values are in the units of the volume, such as HU after the rescale. The deviation is the sample one, with `n - 1`, as ImageJ reports it.
 
+## Measure texture
+
+Radiomics describes the texture of a region, such as a lesion, by how often two gray levels sit side by side. `cooccurrence_matrix` counts the gray levels of each pair of pixels at an offset, in one slice and inside one label. `texture_features` gives the Haralick features of the matrix.
+
+```mojo
+var m = cooccurrence_matrix(volume, map, LabelId(1), K_AXIS, 40, 1, 0, 32, -100, 300)
+var f = texture_features(m[0], m[1])
+print(f.contrast, f.homogeneity, f.energy, f.correlation)
+```
+
+The values first go into `levels` gray levels: level `floor((value - low) / (high - low) * levels)`, kept from 0 to `levels - 1`. The offset `(dx, dy)` is in pixels of the slice, as `render_slice` draws it. `(1, 0)` pairs each pixel with its neighbor along pixel x, and `(1, 1)` with its diagonal neighbor. Both pixels of a pair must be in the label. The matrix is symmetric, and its entries `P(i, j)` sum to 1.
+
+| Feature | Formula |
+|---|---|
+| `contrast` | The sum of `P (i - j)^2` |
+| `dissimilarity` | The sum of `P abs(i - j)` |
+| `homogeneity` | The sum of `P / (1 + (i - j)^2)` |
+| `asm` | The angular second moment, the sum of `P^2` |
+| `energy` | The square root of `asm` |
+| `correlation` | The sum of `P (i - mu_i) (j - mu_j) / (sigma_i sigma_j)`, or 1 when a sigma is below 1e-15 |
+
+These are the formulas of scikit-image's `graycoprops`. Its angle `theta` at the distance `d` is the offset `(round(d cos theta), round(d sin theta))`.
+
 ## Measure the shape of a label
 
 `label_shape(map, volume, label)` gives the principal axes of a label and its equivalent ellipsoid. The axes show how an organ lies. Their lengths show whether it is round, flat or long.
@@ -582,6 +606,7 @@ The tests check these results:
 - Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
 - A circle of 2 pixels holds the 13 lattice points of its disc. On a ramp, a disc gives the value at its center and the sample deviation of its pixels. With pixels 0.5 mm wide, a circle of 1 mm holds 7 pixels. A circle at a corner keeps the 6 pixels of the grid.
+- On a checkerboard, neighbors along x give a contrast of 1 and a correlation of -1. Diagonal neighbors give a contrast of 0 and a correlation of 1. The gray levels clamp at both ends, and only pairs in the label count. On a random image of 8 levels, the six features at 8 offsets match scikit-image 0.26 to 4e-15. That check is not part of the test suite.
 - A box of 10 by 6 by 8 mm has voxels of 1 by 1 by 2 mm. Its semi-axes are `sqrt(5 / 12)` times its sides, to 1e-9, along the grid axes. Its axes follow the patient frame of the volume. An ellipsoid of 20, 12 and 8 mm turned 30 degrees gives its semi-axes within 2 percent, and its long axis within one degree. Each slice of the box has its area exactly.
 - A table of four labels gives each label's counts, Dice and Jaccard. The Dice is 1 for a match, 0.5 for half, and 0 for a label in one map only. Its overlap of a label agrees with `compare_labels`.
 - A label against itself has a Dice coefficient of 1 and no surface distance. Two boxes that overlap by half have a Dice of 0.5 and a Jaccard of 1/3. Their Hausdorff distance is their shift, and their HD95 and ASSD match a search of every pair. Two ellipsoids in voxels of 0.7, 0.9 and 1.5 mm match MedPy 0.5 to 1e-7 mm in every measure. That check is not part of the test suite.
@@ -620,6 +645,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A path has fewer than two points or two equal points in a row, or a pass count or a spacing is out of range | `smooth_path`, `resample_path` |
 | A path has fewer than two points or two equal points in a row, `up` is zero or along a segment, or a size is out of range | `curved_reformat` |
 | A circle has a bad axis, slice, center or radius, or holds no pixel center | `circle_statistics` |
+| A texture has a bad label, axis, slice, offset, level count or range, or no pair at its offset | `cooccurrence_matrix`, `texture_features` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels`, `label_overlaps` |
 | A table of overlaps is empty | `mean_dice` |
 | A crop box leaves the grid or holds no voxel, or a label box has a bad label or margin | `crop_volume`, `crop_labels`, `label_box` |
@@ -646,6 +672,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 
 ## References
 
+- Haralick, Shanmugam and Dinstein, "Textural features for image classification", 1973.
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.
 - NEMA PS3.3, "Information Object Definitions", sections C.7.6.2 and C.11.2.1.
 - NEMA PS3.10, "Media Storage and File Format", section 7.
