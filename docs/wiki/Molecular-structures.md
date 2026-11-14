@@ -2,9 +2,9 @@
 
 `extensions/molecule/` reads macromolecular structures from mmCIF files and builds ideal peptide backbones. It draws a structure as a cartoon ribbon or as a surface, and it measures the solvent accessible area of each atom. It is a library for research and teaching. Its measurements are not validated for drug design or for any clinical use.
 
-![The cartoon ribbon of an ideal peptide, and its van der Waals surface colored by element](out/molecule.png)
+![The cartoon ribbon of an ideal peptide, and its solvent excluded surface colored by element](out/molecule.png)
 
-`examples/molecule.mojo` makes this picture. It builds 30 residues of ideal backbone: a helix, a loop and a strand. The top panel is the ribbon, colored by secondary structure. The bottom panel is the van der Waals surface, colored by element. The program also prints the solvent accessible area, 2434 square angstroms.
+`examples/molecule.mojo` makes this picture. It builds 30 residues of ideal backbone: a helix, a loop and a strand. The top panel is the ribbon, colored by secondary structure. The bottom panel is the solvent excluded surface for a water probe, colored by element. The program also prints the solvent accessible area, 2434 square angstroms.
 
 ## Modules
 
@@ -15,7 +15,7 @@
 | `structure` | `Structure`, `parse_mmcif`, `read_mmcif` and `SQUARE_ANGSTROM` |
 | `peptide` | `build_peptide`, `place_atom` and `three_letter` |
 | `ribbon` | `ribbon_geometry` |
-| `surface` | `accessible_areas`, `molecular_surface`, `vdw_radius` and `sphere_points` |
+| `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius` and `sphere_points` |
 
 ## Read an mmCIF file
 
@@ -148,7 +148,21 @@ Any other element gets 1.8 angstroms.
 
 `molecular_surface(structure, model, probe, spacing)` returns the solvent accessible surface as a mesh. It samples the distance to the nearest grown sphere on a grid of the given spacing. It meshes the zero set of that distance by marching tetrahedra. Each vertex takes the CPK color of the atom whose sphere it lies on.
 
-A probe of zero gives the van der Waals surface. The mesh is not the solvent excluded surface, which has smooth patches where the probe touches two or three atoms.
+A probe of zero gives the van der Waals surface.
+
+## Draw the excluded surface
+
+`excluded_surface(structure, model, probe, spacing)` returns the solvent excluded surface: the surface where a rolling probe touches the atoms. Molecular viewers show this surface by default. It follows each atom's van der Waals sphere where the probe touches one atom. It fills each crevice that the probe is too large to enter with a smooth, concave patch.
+
+The probe's center can reach the points outside every grown sphere. The surface is the set of points one probe radius from that region. The distance to that region comes from three bounds:
+
+1. The depth into the deepest grown sphere is a lower bound.
+2. Where the point straight out from that sphere's center is outside every other sphere, the depth is exact. This covers the convex patches.
+3. In a crevice between two spheres, the distance to the circle where they meet is exact when no third sphere holds the circle's nearest point.
+
+Elsewhere, an exact Euclidean distance transform of the grid gives the distance to the nearest reachable grid point. That distance, less the point's own distance to the spheres, is an upper bound within one step of the true distance. This is the method of EDTSurf, with exact corrections.
+
+`distance_transform(seeds, px, py, pz)` is the transform of Felzenszwalb and Huttenlocher, run along x, then y, then z. It gives the squared distance to the nearest seed in grid steps, and the index of that seed.
 
 ## Verification
 
@@ -160,6 +174,9 @@ The tests check these results:
 - One atom with a probe has the whole area of its grown sphere.
 - Two carbons 3 angstroms apart each lose a cap of `2 pi R h`. The measured area matches to within one percent with 2000 points.
 - Every vertex of a van der Waals surface lies within 0.06 angstroms of an atom sphere, at a spacing of 0.3 angstroms.
+- One atom's excluded surface is its van der Waals sphere, to within the chords of a 0.4 angstrom grid.
+- Two carbons 3 angstroms apart have an excluded surface with a neck of 1.313 angstroms, the analytic radius, to within 0.03 angstroms.
+- The distance transform is exact on a grid with one seed.
 - A ribbon of `n` residues has `(n - 1) samples + 1` rings, and every normal is a unit vector.
 
 ## Errors
@@ -180,7 +197,7 @@ Every function raises `Error` for input it cannot use.
 - The reader keeps the first data block only. It does not read anisotropic displacements, bonds or the chemical component dictionary.
 - The reader does not infer secondary structure. A file without `_struct_conf` and `_struct_sheet_range` gives coils only.
 - Ribbons need CA atoms. Nucleic acids have no ribbon.
-- The surface is the solvent accessible surface or the van der Waals surface. The solvent excluded surface is not implemented.
+- Where three or more spheres make a crevice, the excluded surface uses the grid bound. It can lie up to one grid step outside the true surface there.
 - A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
 
 ## References
@@ -192,4 +209,7 @@ Every function raises `Error` for input it cannot use.
 - Yang and others, "Improved protein structure prediction using predicted interresidue orientations", 2020.
 - Shrake and Rupley, "Environment and exposure to solvent of protein atoms", 1973.
 - Bondi, "van der Waals volumes and radii", 1964.
+- Connolly, "Solvent-accessible surfaces of proteins and nucleic acids", 1983.
+- Xu and Zhang, "Generating triangulated macromolecular surfaces by Euclidean distance transform", 2009.
+- Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", 2012.
 - Richardson, "The anatomy and taxonomy of protein structure", 1981.

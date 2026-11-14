@@ -18,7 +18,12 @@ its grown sphere times the fraction of accessible points.
 `molecular_surface` samples the distance to the nearest grown sphere on
 a grid and meshes its zero set by marching tetrahedra. Each vertex takes
 the CPK color of the atom whose sphere it lies on. The mesh is the
-accessible surface, not the solvent excluded surface.
+accessible surface.
+
+`excluded_surface` gives the solvent excluded surface, which molecular
+viewers show by default: the surface where the probe touches the atoms.
+An exact Euclidean distance transform of the grid finds it, as EDTSurf
+does.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -27,7 +32,7 @@ from extensions.chemistry.quantities import ANGSTROM
 from extensions.humanoid.skeleton.isosurface import SampleGrid, mesh_samples
 from extensions.molecule.ids import ModelId
 from extensions.molecule.structure import Structure
-from extensions.sdf.vector import V3, distance, v3
+from extensions.sdf.vector import V3, distance, dot, length, v3
 from loaders.pdb import cpk_color
 from math.vector3 import Vector3
 from render.srgb import srgb_to_linear
@@ -281,26 +286,45 @@ def _owner_colors(
     return colors^
 
 
-def molecular_surface(
+struct _SasGrid(Movable):
+    """The grown spheres of a model sampled on a grid."""
+
+    var field: List[Float32]
+    """The distance to the nearest grown sphere, held at two steps."""
+    var owner: List[Int]
+    """The atom of that sphere, from the model's first atom, or -1."""
+    var low: V3
+    var step: Float64
+    var px: Int
+    var py: Int
+    var pz: Int
+    var first: Int
+
+    def __init__(
+        out self,
+        var field: List[Float32],
+        var owner: List[Int],
+        low: V3,
+        step: Float64,
+        px: Int,
+        py: Int,
+        pz: Int,
+        first: Int,
+    ):
+        self.field = field^
+        self.owner = owner^
+        self.low = low
+        self.step = step
+        self.px = px
+        self.py = py
+        self.pz = pz
+        self.first = first
+
+
+def _sas_grid(
     structure: Structure, model: ModelId, probe: Length64, spacing: Length64
-) raises -> BufferGeometry:
-    """Return the accessible surface of a model as a colored mesh.
-
-    Args:
-        structure: The structure.
-        model: The model.
-        probe: The probe radius. Zero gives the van der Waals surface.
-        spacing: The grid step, such as 0.5 angstroms.
-
-    Returns:
-        A triangle mesh in meters with `position`, `normal`, `uv` and
-        `color` attributes. The colors are linear CPK colors.
-
-    Raises:
-        Error: If the model id names no model, the probe is negative or
-            not finite, the spacing is not positive and finite, or the
-            grid would hold more than 2^24 points.
-    """
+) raises -> _SasGrid:
+    """Sample the distance to the grown spheres of a model on a grid."""
     _require_probe(probe)
     var step = spacing.to(METER)
     if not (step > 0) or not isfinite(step):
@@ -344,29 +368,310 @@ def molecular_surface(
                     if d < Float64(field[at]):
                         field[at] = Float32(d)
                         owner[at] = a
-    var grid = SampleGrid(
-        px - 1,
-        py - 1,
-        pz - 1,
-        Float32(step),
-        Float32(step),
-        Float32(step),
-        px,
-        py,
-        pz,
-        Float32(step * Float64(py - 1)),
+    return _SasGrid(field^, owner^, low, step, px, py, pz, span[0])
+
+
+def _mesh(
+    values: List[Float32], grid: _SasGrid, structure: Structure, name: String
+) raises -> BufferGeometry:
+    """Mesh the zero set of grid values and color it by the nearest atom."""
+    var step = Float32(grid.step)
+    var sample = SampleGrid(
+        grid.px - 1,
+        grid.py - 1,
+        grid.pz - 1,
+        step,
+        step,
+        step,
+        grid.px,
+        grid.py,
+        grid.pz,
+        step * Float32(grid.py - 1),
     )
-    var corner = Vector3(Float32(low.x), Float32(low.y), Float32(low.z))
-    var geometry = mesh_samples(field, corner, grid, "molecular surface")
+    var corner = Vector3(
+        Float32(grid.low.x), Float32(grid.low.y), Float32(grid.low.z)
+    )
+    var geometry = mesh_samples(values, corner, sample, name)
     var colors = _owner_colors(
         geometry.attribute_view(String(POSITION)).data,
-        owner,
-        low,
-        step,
-        px,
-        py,
+        grid.owner,
+        grid.low,
+        grid.step,
+        grid.px,
+        grid.py,
         structure,
-        span[0],
+        grid.first,
     )
     geometry.set_attribute(String(COLOR), BufferAttribute(colors^, 3))
     return geometry^
+
+
+def molecular_surface(
+    structure: Structure, model: ModelId, probe: Length64, spacing: Length64
+) raises -> BufferGeometry:
+    """Return the accessible surface of a model as a colored mesh.
+
+    Args:
+        structure: The structure.
+        model: The model.
+        probe: The probe radius. Zero gives the van der Waals surface.
+        spacing: The grid step, such as 0.5 angstroms.
+
+    Returns:
+        A triangle mesh in meters with `position`, `normal`, `uv` and
+        `color` attributes. The colors are linear CPK colors.
+
+    Raises:
+        Error: If the model id names no model, the probe is negative or
+            not finite, the spacing is not positive and finite, or the
+            grid would hold more than 2^24 points.
+    """
+    var grid = _sas_grid(structure, model, probe, spacing)
+    return _mesh(grid.field, grid, structure, "molecular surface")
+
+
+# A squared distance, in steps, larger than any on a grid.
+comptime _FAR_SQUARE = 1.0e18
+
+
+def _meet(f: List[Float64], p: Int, q: Int) -> Float64:
+    """Return where the parabolas of positions `p` and `q` cross."""
+    var a = f[q] + Float64(q * q)
+    var b = f[p] + Float64(p * p)
+    return (a - b) / Float64(2 * q - 2 * p)
+
+
+def _pass(
+    mut d: List[Float64],
+    mut feature: List[Int],
+    start: Int,
+    stride: Int,
+    n: Int,
+    mut v: List[Int],
+    mut z: List[Float64],
+    mut f: List[Float64],
+    mut g: List[Int],
+):
+    """Run the one-dimensional transform of Felzenszwalb and Huttenlocher
+    along one line, keeping the nearest seed of each point."""
+    for q in range(n):  # pragma: no branch
+        f[q] = d[start + q * stride]
+        g[q] = feature[start + q * stride]
+    var k = 0
+    v[0] = 0
+    z[0] = -_FAR_SQUARE
+    z[1] = _FAR_SQUARE
+    for q in range(1, n):  # pragma: no branch
+        var s = _meet(f, v[k], q)
+        while s <= z[k]:
+            k -= 1
+            s = _meet(f, v[k], q)
+        k += 1
+        v[k] = q
+        z[k] = s
+        z[k + 1] = _FAR_SQUARE
+    k = 0
+    for q in range(n):  # pragma: no branch
+        while z[k + 1] < Float64(q):
+            k += 1
+        var p = v[k]
+        d[start + q * stride] = Float64((q - p) * (q - p)) + f[p]
+        feature[start + q * stride] = g[p]
+
+
+def distance_transform(
+    seeds: List[Bool], px: Int, py: Int, pz: Int
+) raises -> Tuple[List[Float64], List[Int]]:
+    """Return the exact Euclidean distance from each grid point to a seed.
+
+    This is the separable transform of Felzenszwalb and Huttenlocher, run
+    along x, then y, then z. It also keeps the nearest seed.
+
+    Args:
+        seeds: One flag per point, `i` fastest.
+        px: Points along x. At least one.
+        py: Points along y. At least one.
+        pz: Points along z. At least one.
+
+    Returns:
+        The squared distance to the nearest seed, in grid steps, and the
+        index of that seed. A grid with no seed gives distances of 1e18
+        or more and indexes of -1.
+
+    Raises:
+        Error: If a size is not positive, or the flags do not fill the
+            grid.
+    """
+    if px < 1 or py < 1 or pz < 1:
+        raise Error("A distance transform needs at least one point a side")
+    if len(seeds) != px * py * pz:
+        raise Error("The seeds must fill the grid")
+    var count = px * py * pz
+    var d = List[Float64](length=count, fill=_FAR_SQUARE)
+    var feature = List[Int](length=count, fill=-1)
+    for index in range(count):  # pragma: no branch
+        if seeds[index]:
+            d[index] = 0
+            feature[index] = index
+    var longest = max(px, max(py, pz))
+    var v = List[Int](length=longest, fill=0)
+    var z = List[Float64](length=longest + 1, fill=0)
+    var f = List[Float64](length=longest, fill=0)
+    var g = List[Int](length=longest, fill=0)
+    for k in range(pz):  # pragma: no branch
+        for j in range(py):  # pragma: no branch
+            _pass(d, feature, px * (j + py * k), 1, px, v, z, f, g)
+    for k in range(pz):  # pragma: no branch
+        for i in range(px):  # pragma: no branch
+            _pass(d, feature, i + px * py * k, px, py, v, z, f, g)
+    for j in range(py):  # pragma: no branch
+        for i in range(px):  # pragma: no branch
+            _pass(d, feature, i + px * j, px * py, pz, v, z, f, g)
+    return (d^, feature^)
+
+
+def excluded_surface(
+    structure: Structure, model: ModelId, probe: Length64, spacing: Length64
+) raises -> BufferGeometry:
+    """Return the solvent excluded surface of a model as a colored mesh.
+
+    The excluded surface is where a rolling probe touches the atoms. It
+    follows each atom's van der Waals sphere where the probe touches one
+    atom, and fills each crevice that the probe is too large to enter
+    with a smooth, concave patch.
+
+    The probe's center can reach the points outside every grown sphere.
+    The surface is the set of points one probe radius from that region.
+    The distance to that region is at least the depth into the deepest
+    grown sphere. Where the point straight out from that sphere's center
+    is outside every other sphere, the distance is that depth, exactly.
+    In a crevice between two spheres, the distance to the circle where
+    they meet is exact when no third sphere holds the circle's nearest
+    point. Elsewhere a distance transform on the grid gives the distance
+    to the nearest reachable grid point, less that point's distance to
+    the spheres: an upper bound within one step of the true distance.
+
+    Args:
+        structure: The structure.
+        model: The model.
+        probe: The probe radius, such as 1.4 angstroms for water. Zero
+            gives the van der Waals surface.
+        spacing: The grid step, such as 0.4 angstroms.
+
+    Returns:
+        A triangle mesh in meters with `position`, `normal`, `uv` and
+        `color` attributes. Each vertex takes the linear CPK color of the
+        atom nearest it.
+
+    Raises:
+        Error: If the model id names no model, the probe is negative or
+            not finite, the spacing is not positive and finite, or the
+            grid would hold more than 2^24 points.
+    """
+    var grid = _sas_grid(structure, model, probe, spacing)
+    var span = structure.model_atoms(model)
+    var grown = _grown(structure, span[0], span[1], probe)
+    ref centers = grown[0]
+    ref radii = grown[1]
+    var largest = 0.0
+    for r in radii:  # pragma: no branch
+        largest = max(largest, r)
+    var cells = _Cells(centers, 2.0 * largest)
+    var count = grid.px * grid.py * grid.pz
+    var reachable = List[Bool](length=count, fill=False)
+    for index in range(count):  # pragma: no branch
+        reachable[index] = grid.field[index] >= 0
+    var transform = distance_transform(reachable, grid.px, grid.py, grid.pz)
+    ref squared = transform[0]
+    ref nearest = transform[1]
+    var radius = probe.to(METER)
+    var values = List[Float32](length=count, fill=0)
+    for index in range(count):  # pragma: no branch
+        var depth = Float64(grid.field[index])
+        if depth >= 0:
+            values[index] = Float32(radius + depth)
+            continue
+        # The distance to the reachable region is at least the depth into
+        # the deepest sphere, and at most the grid bound.
+        var reach = sqrt(squared[index]) * grid.step
+        var gap = max(reach - Float64(grid.field[nearest[index]]), -depth)
+        var i = index % grid.px
+        var j = (index // grid.px) % grid.py
+        var k = index // (grid.px * grid.py)
+        var p = grid.low + v3(
+            Float64(i) * grid.step,
+            Float64(j) * grid.step,
+            Float64(k) * grid.step,
+        )
+        # Deeper points are inside the surface whatever their distance.
+        if -depth <= radius + 2.0 * grid.step:
+            gap = _refine(
+                p, grid.owner[index], -depth, gap, centers, radii, cells
+            )
+        values[index] = Float32(radius - gap)
+    return _mesh(values, grid, structure, "excluded surface")
+
+
+def _refine(
+    p: V3,
+    deepest: Int,
+    low: Float64,
+    high: Float64,
+    centers: List[V3],
+    radii: List[Float64],
+    cells: _Cells,
+) -> Float64:
+    """Return a smaller upper bound on the distance from `p` to the region
+    the probe's center can reach, from exact candidates."""
+    if _exits(p, deepest, centers, radii, cells):
+        return low
+    var best = high
+    for other in cells.near(p):  # pragma: no branch
+        if other != deepest and distance(p, centers[other]) < radii[other]:
+            best = min(best, _crease(p, deepest, other, centers, radii, cells))
+    return best
+
+
+def _crease(
+    p: V3,
+    a: Int,
+    b: Int,
+    centers: List[V3],
+    radii: List[Float64],
+    cells: _Cells,
+) -> Float64:
+    """Return the distance from `p` to the circle where grown spheres `a` and
+    `b` meet, when the nearest point of the circle is outside every other
+    grown sphere, and 1e18 when it is not."""
+    var axis = centers[b] - centers[a]
+    var d = length(axis)
+    var along = (d * d + radii[a] * radii[a] - radii[b] * radii[b]) / (2.0 * d)
+    var rho2 = radii[a] * radii[a] - along * along
+    var n = axis * (1.0 / d)
+    var w = p - centers[a] - n * along
+    var side = w - n * dot(w, n)
+    var size = length(side)
+    # The spheres meet in a circle, and `p` is off its axis.
+    if not (rho2 > 0) or not (size > 0):
+        return _FAR_SQUARE
+    var e = centers[a] + n * along + side * (sqrt(rho2) / size)
+    for c in cells.near(e):  # pragma: no branch
+        if c != a and c != b and distance(e, centers[c]) < radii[c]:
+            return _FAR_SQUARE
+    return distance(p, e)
+
+
+def _exits(
+    p: V3, atom: Int, centers: List[V3], radii: List[Float64], cells: _Cells
+) -> Bool:
+    """Return whether the point straight out from an atom's center through
+    `p`, on its grown sphere, is outside every other grown sphere."""
+    var outward = p - centers[atom]
+    var size = length(outward)
+    if size == 0:
+        return False
+    var e = centers[atom] + outward * (radii[atom] / size)
+    for b in cells.near(e):  # pragma: no branch
+        if b != atom and distance(e, centers[b]) < radii[b]:
+            return False
+    return True

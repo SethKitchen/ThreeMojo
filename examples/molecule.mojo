@@ -3,16 +3,16 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""An ideal peptide drawn as a cartoon ribbon and as its accessible surface.
+"""An ideal peptide drawn as a cartoon ribbon and as its excluded surface.
 
     mojo run -I . examples/molecule.mojo [out/molecule.png]
 
 The page is Molecular structures. The peptide builder places the backbone
 of 30 residues: a helix, a loop and a strand. The top panel is the
-ribbon, colored by secondary structure. The bottom panel is the van der
-Waals surface, colored by element. The program prints the solvent accessible area for a water
-probe of 1.4 angstroms. Ideal torsions do not fold a chain, so the
-strands do not pair.
+ribbon, colored by secondary structure. The bottom panel is the solvent
+excluded surface for a water probe of 1.4 angstroms, colored by element.
+The program prints the solvent accessible area for the same probe. Ideal
+torsions do not fold a chain, so the strand does not pair.
 """
 
 from core.assets import Assets
@@ -32,7 +32,7 @@ from extensions.sdf.vector import V3, cross, distance, dot, normalize, v3
 from std.math import acos, cos, max, min, pi, sin, tan
 from extensions.molecule.peptide import build_peptide
 from extensions.molecule.ribbon import ribbon_geometry
-from extensions.molecule.surface import accessible_areas, molecular_surface
+from extensions.molecule.surface import accessible_areas, excluded_surface
 from materials.material import Material, PHONG
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -84,8 +84,8 @@ def main() raises:
     var peptide = build_peptide(String(sequence[byte = 0 : len(kinds)]), kinds)
     var ribbon = ribbon_geometry(peptide, ModelId(0), BY_STRUCTURE, 8, 16)
     var probe = Length64(1.4, ANGSTROM)
-    var surface = molecular_surface(
-        peptide, ModelId(0), Length64(0.0, ANGSTROM), Length64(0.4, ANGSTROM)
+    var surface = excluded_surface(
+        peptide, ModelId(0), probe, Length64(0.35, ANGSTROM)
     )
     var areas = accessible_areas(peptide, ModelId(0), probe, 300)
     var total = 0.0

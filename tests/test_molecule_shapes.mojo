@@ -35,7 +35,12 @@ from extensions.molecule.structure import (
     Structure,
 )
 from extensions.molecule.surface import (
+    _Cells,
+    _crease,
+    _exits,
     accessible_areas,
+    distance_transform,
+    excluded_surface,
     molecular_surface,
     sphere_points,
     vdw_radius,
@@ -47,6 +52,7 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -418,6 +424,122 @@ def test_surface_of_one_atom() raises:
         _ = molecular_surface(
             lone, ModelId(0), Length64(-1, METER), Length64(0.3, ANGSTROM)
         )
+
+
+def test_distance_transform_is_exact() raises:
+    # One seed in a 5 by 4 by 3 grid: the squared distance is i^2 + j^2 + k^2
+    # from it, and every point names it.
+    var seeds = List[Bool](length=60, fill=False)
+    seeds[0] = True
+    var result = distance_transform(seeds, 5, 4, 3)
+    var worst = 0.0
+    var named = True
+    for k in range(3):
+        for j in range(4):
+            for i in range(5):
+                var at = i + 5 * (j + 4 * k)
+                worst = max(
+                    worst, abs(result[0][at] - Float64(i * i + j * j + k * k))
+                )
+                named = named and result[1][at] == 0
+    assert_equal(worst, 0)
+    assert_true(named)
+    # Two seeds on a line split it between them.
+    var line: List[Bool] = [True, False, False, False, False, False, True]
+    var split = distance_transform(line, 7, 1, 1)
+    assert_equal(split[0][3], 9)
+    assert_equal(split[1][2], 0)
+    assert_equal(split[1][4], 6)
+    # No seed at all.
+    var none = distance_transform(List[Bool](length=4, fill=False), 2, 2, 1)
+    assert_true(none[0][3] >= 1e18)
+    assert_equal(none[1][3], -1)
+    with assert_raises(contains="at least one point"):
+        _ = distance_transform(List[Bool](), 0, 1, 1)
+    with assert_raises(contains="at least one point"):
+        _ = distance_transform(List[Bool](), 1, 0, 1)
+    with assert_raises(contains="at least one point"):
+        _ = distance_transform(List[Bool](), 1, 1, 0)
+    with assert_raises(contains="fill the grid"):
+        _ = distance_transform(List[Bool](length=3, fill=True), 2, 2, 1)
+
+
+def test_excluded_surface_of_one_atom_is_its_sphere() raises:
+    var lone = _atoms(["C"], [v3(0, 0, 0)])
+    var mesh = excluded_surface(
+        lone, ModelId(0), Length64(1.4, ANGSTROM), Length64(0.4, ANGSTROM)
+    )
+    ref p = mesh.attribute_view(String(POSITION)).data
+    var low = 9.0
+    var high = 0.0
+    for v in range(len(p) // 3):
+        var r = (
+            sqrt(
+                Float64(p[3 * v]) ** 2
+                + Float64(p[3 * v + 1]) ** 2
+                + Float64(p[3 * v + 2]) ** 2
+            )
+            / _a()
+        )
+        low = min(low, r)
+        high = max(high, r)
+    # The van der Waals sphere of 1.7 angstroms, less the chords of the
+    # grid.
+    assert_true(high < 1.7 + 1e-5)
+    assert_true(low > 1.7 - 0.05)
+
+
+def test_excluded_surface_fills_the_neck() raises:
+    # Two carbons 3 angstroms apart. A probe of 1.4 angstroms touching both
+    # has its center sqrt(3.1^2 - 1.5^2) from the axis, so the surface's
+    # neck has a radius of that less 1.4: 1.313 angstroms. The van der
+    # Waals neck is only sqrt(1.7^2 - 1.5^2) = 0.8 angstroms.
+    var pair = _atoms(["C", "C"], [v3(0, 0, 0), v3(3, 0, 0)])
+    var mesh = excluded_surface(
+        pair, ModelId(0), Length64(1.4, ANGSTROM), Length64(0.4, ANGSTROM)
+    )
+    ref p = mesh.attribute_view(String(POSITION)).data
+    var neck = 9.0
+    for v in range(len(p) // 3):
+        var x = Float64(p[3 * v]) / _a()
+        if abs(x - 1.5) < 0.2:
+            var r = sqrt(
+                Float64(p[3 * v + 1]) ** 2 + Float64(p[3 * v + 2]) ** 2
+            )
+            neck = min(neck, r / _a())
+    var exact = sqrt(3.1 * 3.1 - 1.5 * 1.5) - 1.4
+    assert_true(abs(neck - exact) < 0.03)
+    # A probe of zero gives the van der Waals surface.
+    var bare = excluded_surface(
+        pair, ModelId(0), Length64(0, METER), Length64(0.4, ANGSTROM)
+    )
+    assert_true(bare.triangle_count() > 0)
+
+
+def test_excluded_surface_helpers() raises:
+    var centers: List[V3] = [v3(0, 0, 0), v3(2, 0, 0), v3(1, 0, 0)]
+    var radii: List[Float64] = [1.5, 1.5, 0.5]
+    var cells = _Cells(centers, 3.0)
+    # The circle of spheres 0 and 1 is at x = 1 with radius sqrt(1.25).
+    var gap = _crease(v3(1, 3, 0), 0, 1, centers, radii, cells)
+    assert_almost_equal(gap, 3 - sqrt(1.25))
+    # A point on the axis has no nearest point on the circle.
+    assert_true(_crease(v3(0.5, 0, 0), 0, 1, centers, radii, cells) >= 1e18)
+    # Nested spheres meet in no circle.
+    assert_true(_crease(v3(1, 0.2, 0), 0, 2, centers, radii, cells) >= 1e18)
+    # A third sphere that holds the circle's point.
+    var big: List[Float64] = [1.5, 1.5, 1.4]
+    assert_true(_crease(v3(1, 3, 0), 0, 1, centers, big, cells) >= 1e18)
+    # The point straight out from a center, and the center itself.
+    assert_true(_exits(v3(-1, 0, 0), 0, centers, radii, cells))
+    assert_false(_exits(v3(0.5, 0, 0), 0, centers, radii, cells))
+    assert_false(_exits(v3(0, 0, 0), 0, centers, radii, cells))
+    # A hydrogen inside a carbon: their spheres are nested.
+    var nested = _atoms(["C", "H"], [v3(0, 0, 0), v3(0.2, 0, 0)])
+    var mesh = excluded_surface(
+        nested, ModelId(0), Length64(1.4, ANGSTROM), Length64(0.4, ANGSTROM)
+    )
+    assert_true(mesh.triangle_count() > 0)
 
 
 def main() raises:

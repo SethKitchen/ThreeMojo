@@ -854,6 +854,7 @@ Medical images, macromolecules and solid mechanics, for research and teaching. A
 - [x] [Label maps and measurements](https://github.com/SethKitchen/ThreeMojo/wiki/Medical-imaging#label-a-volume): thresholds, region growing, the largest piece, label surfaces, statistics in units, slice overlays and measurement lines [#989](https://github.com/SethKitchen/ThreeMojo/issues/989)
 - [x] [mmCIF structures](https://github.com/SethKitchen/ThreeMojo/wiki/Molecular-structures#read-an-mmcif-file): models, chains, residues, alternate locations, B-factors and secondary structure [#990](https://github.com/SethKitchen/ThreeMojo/issues/990)
 - [x] [Ribbons, surfaces and accessible areas](https://github.com/SethKitchen/ThreeMojo/wiki/Molecular-structures#draw-a-ribbon): an ideal peptide builder, cartoon ribbons, molecular surfaces and Shrake-Rupley areas [#991](https://github.com/SethKitchen/ThreeMojo/issues/991)
+- [x] [Solvent excluded surfaces](https://github.com/SethKitchen/ThreeMojo/wiki/Molecular-structures#draw-the-excluded-surface): exact distance transforms, with exact convex patches and two-sphere crevices [#995](https://github.com/SethKitchen/ThreeMojo/issues/995)
 - [x] [Tetrahedral FEM](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM): static linear elasticity on box and voxel meshes, consistent pressure loads, von Mises stress and reactions [#992](https://github.com/SethKitchen/ThreeMojo/issues/992)
 
 ### Out of scope
