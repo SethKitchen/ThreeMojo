@@ -13,7 +13,8 @@ center. The needle holds 70 C. The tissue conducts heat at 0.5 W/(m K),
 makes 400 W/m^3 of metabolic heat, and blood perfuses it at 37 C. The
 picture shows the half block from its cut face, colored from 37 C (blue)
 to 70 C (red). The program prints the temperature at 2, 5 and 10 mm
-below the needle's tip, and the power that the needle supplies.
+below the needle's tip, where a thermocouple would read it, and the
+power that the needle supplies.
 
 This is a picture of a simple model, for teaching. It is not a plan for
 a treatment.
@@ -25,6 +26,7 @@ from core.scene import Scene
 from extensions.fem.ids import DOF_X, NodeId
 from extensions.fem.mesh import box_mesh
 from extensions.fem.post import temperature_geometry
+from extensions.fem.probe import sample_temperature
 from extensions.fem.thermal import (
     PerfusionCoefficient64,
     PowerDensity64,
@@ -35,6 +37,7 @@ from extensions.fem.thermal import (
     held_heat,
     solve_thermal,
 )
+from extensions.sdf.vector import v3
 from materials.material import Material, PHONG
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -86,7 +89,6 @@ def main() raises:
     var problem = ThermalProblem(mesh^, [tissue])
     # The needle: the nodes on the cut face along y = 20 mm, from the top
     # down to the center.
-    var step = SIDE / Float64(CELLS)
     var tip = -1
     for n in range(problem.mesh.node_count()):
         var p = problem.mesh.nodes[n]
@@ -97,21 +99,16 @@ def main() raises:
             if abs(p.z - SIDE / 2) < 1e-9:
                 tip = n
     var result = solve_thermal(problem, 1e-10, 5000)
+    # Thermocouples on the axis below the tip, read between the nodes.
     for depth in [2.0, 5.0, 10.0]:
-        for n in range(problem.mesh.node_count()):
-            var p = problem.mesh.nodes[n]
-            var below = abs(p.z - (SIDE / 2 - depth / 1000)) < step / 4
-            var on_axis = (
-                abs(p.x - SIDE / 2) < 1e-9 and abs(p.y - SIDE / 2) < 1e-9
-            )
-            if below and on_axis:
-                print(
-                    "Temperature",
-                    depth,
-                    "mm below the tip:",
-                    result.temperature(NodeId(n)).to(CELSIUS),
-                    "C",
-                )
+        var probe = v3(SIDE / 2, SIDE / 2, SIDE / 2 - depth / 1000)
+        print(
+            "Temperature",
+            depth,
+            "mm below the tip:",
+            sample_temperature(problem.mesh, result, probe).to(CELSIUS),
+            "C",
+        )
     # The half block takes half of the needle's heat.
     var half = held_heat(problem, result).total().to(WATT)
     print("The needle supplies", 2 * half, "W")

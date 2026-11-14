@@ -17,6 +17,7 @@
 | `post` | `stress_geometry`, `stress_color`, `mode_geometry` and `temperature_geometry` |
 | `summary` | `stress_summary`, `MaterialStress` and `strain_energy` |
 | `quality` | `element_quality`, `ElementQuality`, `mesh_quality` and `MeshQuality` |
+| `probe` | `locate_point`, `MeshPoint`, `sample_field`, `sample_temperature` and `sample_displacement` |
 | `export` | `vtk_mesh`, `vtk_result`, `vtk_modes`, `vtk_temperatures`, `vtk_heat`, `vtk_record`, `vtk_series` and `series_names` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
@@ -277,7 +278,9 @@ The lumped capacity puts the heat of each element on its nodes in proportion to 
 
 ![Half of a block of perfused tissue, cut through a needle held at 70 C, colored from 37 C to 70 C](out/bioheat.png)
 
-`examples/bioheat.mojo` makes this picture. A needle at 70 C enters a block of tissue 40 mm on a side from the top, and stops at the center. The tissue conducts 0.5 W/(m K), makes 400 W/m^3 of metabolic heat, and has a perfusion coefficient of 1890 W/(m^3 K). The block is cut in half through the needle. The tissue is 51 C at 2 mm below the tip, 45 C at 5 mm and 42 C at 10 mm. The needle supplies 0.64 W.
+`examples/bioheat.mojo` makes this picture. A needle at 70 C enters a block of tissue 40 mm on a side from the top, and stops at the center. The tissue conducts 0.5 W/(m K), makes 400 W/m^3 of metabolic heat, and has a perfusion coefficient of 1890 W/(m^3 K). The block is cut in half through the needle. The tissue is 55 C at 2 mm below the tip, 45 C at 5 mm and 42 C at 10 mm. The needle supplies 0.64 W.
+
+The example reads the temperatures with `sample_temperature`. A point at 2 mm lies between the nodes, which are 2.5 mm apart.
 
 ### Heat flux and held heat
 
@@ -299,6 +302,21 @@ The bioheat example models half of the block, so the needle supplies twice the t
 `vtk_heat(problem, result)` writes a steady result with both the temperatures and the `heat_flux` cell vectors. Use the Glyph filter of ParaView on `heat_flux` to draw arrows from hot to cold. meshio 5.3.5 read the file of a heated rod, with the exact 410 K at its far end and the flux `q (L - x)` at each centroid. That check is not part of the test suite.
 
 `temperature_geometry(mesh, result, low, high)` colors the outer surface by the temperature of each node, from blue at `low` to red at `high`. `vtk_temperatures(mesh, result)` writes the temperatures for ParaView.
+
+## Sample a field at a point
+
+`sample_temperature(mesh, result, point)` gives the temperature at a point inside the mesh, such as the place of a thermocouple. `sample_displacement(mesh, result, point)` gives the displacement there, in meters.
+
+```mojo
+var probe = v3(0.02, 0.02, 0.018)
+print(sample_temperature(problem.mesh, result, probe).to(CELSIUS))
+var at = locate_point(mesh, probe)
+var values = sample_field(mesh, at, result.displacements, 3)
+```
+
+`locate_point(mesh, point)` finds the element that holds the point, and the point's four volume coordinates in it. `sample_field(mesh, at, values, components)` gives any nodal field there, with `components` numbers per node. The value comes from the shape functions of the element. So a four-node element samples a linear field exactly, and a ten-node element samples a quadratic field exactly.
+
+A point counts as inside an element when each volume coordinate is at least `-1e-9`. A point on a face that two elements share is in both, and the element with the lower index counts. The field is continuous across the face, so both elements give the same value to rounding.
 
 ## Draw the result
 
@@ -391,6 +409,7 @@ The tests check these results:
 - The regular tetrahedron has a radius ratio of 1 and every dihedral angle `arccos(1/3)`. A path through a cube has the ratio `sqrt(3) / (1 + sqrt(2))` and angles from 45 to 90 degrees. So does every element of a box of cubes, for both orders. A sliver is the worst element of its mesh.
 - A pulled bar of 200 GPa, 2 m long and 1 m square, stretched 2 mm, stores 200 kJ, for both element orders. Its apparent stiffness `2 U / d^2` is `E A / L`, 100 GN/m.
 - Given stresses on a box of two cubes give each material's count, volume, peak, mean and volume above a threshold exactly. A material without elements has no row. A pulled bar at 200 MPa has that stress as its peak and its mean, with its whole volume above 199 MPa.
+- A linear field sampled at 12 points between the nodes of a box is exact on both orders. A quadratic field is exact on ten-node elements. At a node, the sample is the node's value. A point on a face lies in two elements, the lower one counts, and both give one value. Steady conduction from 300 K to 400 K samples to its straight line at every point.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 - A record of a history is the temperature file of its values, with its time in the title. A series file lists each name with its time, and names get a fifth digit past 10000 records.
 
@@ -430,6 +449,7 @@ Every function raises `Error` for input it cannot use.
 | A result is not for its mesh | `stress_geometry` |
 | A result is not for its mesh, or a stress threshold is negative or not finite | `stress_summary`, `strain_energy` |
 | A mesh has no element, or an element id names no element | `mesh_quality`, `element_quality` |
+| No element holds a point, or a field or a mesh point does not fit the mesh | `locate_point`, `sample_field`, `sample_temperature`, `sample_displacement` |
 | A result is not for its problem, or an element, a node or an axis is out of range | `held_heat`, `heat_flux`, `HeatRates`, `HeatFluxes` |
 | The capacities or the start do not fit the problem, a step or a count is out of range, or a capacity kind is not valid | `solve_transient`, `ThermalCapacity` |
 | A record is outside its history, or a series name is empty or holds a quote, a backslash or a control character | `vtk_record`, `vtk_series`, `series_names` |
