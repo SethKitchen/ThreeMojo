@@ -18,7 +18,7 @@
 | `export` | `vtk_mesh`, `vtk_result`, `vtk_modes` and `vtk_temperatures` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
-| `thermal` | `ThermalMaterial`, `ThermalProblem`, `solve_thermal` and `ThermalResult` |
+| `thermal` | `ThermalMaterial`, `ThermalProblem`, `solve_thermal`, `ThermalResult`, `ThermalCapacity`, `solve_transient` and `TransientResult` |
 
 ## Solve a problem
 
@@ -199,6 +199,19 @@ var result = solve_thermal(problem, 1e-10, 5000)
 
 Pennes' model is a simple model of perfusion. The results are for research and teaching. They are not validated for treatment planning.
 
+### Heat in time
+
+`solve_transient(problem, capacities, initial, step, steps, every, tolerance, max_iterations)` follows the temperatures from a start. Give a `ThermalCapacity` for each material: its density and its specific heat. Give a start temperature for each node.
+
+```mojo
+var water = ThermalCapacity(Density64(1000, KILOGRAM_PER_CUBIC_METER),
+    SpecificHeatCapacity64(4000, JOULE_PER_KILOGRAM_KELVIN))
+var history = solve_transient(problem, [water], start,
+    Duration64(10, SECOND), 360, 30, 1e-10, 5000)
+```
+
+Each step is a step of the backward Euler method: `(C / dt + K) T_next = C / dt T + F`, where `C` is the consistent capacity matrix. The method is stable for every step, and its error falls with the step. The fixed nodes hold their temperatures from the first step on. `history.times` gives the time of each record in seconds, and `history.temperatures` the temperature of each node in kelvin. The start is the first record, and then every `every` steps. A step that does not converge within its budget raises an error.
+
 ![Half of a block of perfused tissue, cut through a needle held at 70 C, colored from 37 C to 70 C](out/bioheat.png)
 
 `examples/bioheat.mojo` makes this picture. A needle at 70 C enters a block of tissue 40 mm on a side from the top, and stops at the center. The tissue conducts 0.5 W/(m K), makes 400 W/m^3 of metabolic heat, and has a perfusion coefficient of 1890 W/(m^3 K). The block is cut in half through the needle. The tissue is 51 C at 2 mm below the tip, 45 C at 5 mm and 42 C at 10 mm.
@@ -269,6 +282,7 @@ The tests check these results:
 - A drawn rod mode moves its free end by the amplitude, in red, and leaves the clamp blue.
 - A linear temperature between two fixed ends is exact, and convection at one end gives the exact line, for both element orders.
 - A uniform source gives the exact parabola `q x (L - x) / (2 k)` at every node of ten-node elements.
+- A sine between two held ends decays as `exp(-t / tau)` within 0.2 percent. Very long steps reach the steady state, and a uniform start in an insulated block stays uniform.
 - A probe in perfused tissue gives the `cosh` profile of Pennes' equation within 1 percent. Without a fixed node, perfusion holds the tissue at `T_a + q / c`.
 - A column of four voxels with four CT numbers, under 1 MPa, shortens by `p * sum(h / E)`, as springs in series, to a relative 1e-9. One bin takes the mean modulus and the mean density.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.

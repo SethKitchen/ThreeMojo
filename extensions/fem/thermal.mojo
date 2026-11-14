@@ -20,6 +20,15 @@ heat to a fluid by convection: a flux `h (T - T_ambient)` out of the
 face. Every integral is exact: the four-point rule for the conduction of
 a ten-node element, and the closed forms of the shape functions for the
 rest. The conjugate gradient method solves the system.
+
+`solve_transient` follows the temperature in time from a start. Each
+material stores heat: its density times its specific heat. A step of
+the backward Euler method solves
+
+    (C / dt + K) T_next = C / dt T + F
+
+where `C` is the consistent capacity matrix. The method is stable for
+every step, and its error falls with the step.
 """
 
 from extensions.fem.elasticity import (
@@ -37,13 +46,23 @@ from extensions.fem.ids import (
 from extensions.fem.mesh import TetMesh, boundary_faces, signed_volume
 from extensions.fem.modal import mass_coefficients
 from extensions.fem.static import edge_node_map
-from extensions.numerics.iterative import SolveStatus, conjugate_gradient
-from extensions.numerics.sparse import SparseBuilder
+from extensions.numerics.iterative import (
+    CONVERGED,
+    SolveStatus,
+    conjugate_gradient,
+)
+from extensions.numerics.sparse import CsrMatrix, SparseBuilder
 from extensions.sdf.vector import V3, cross, dot, length
 from std.math import isfinite, max, min
 from units.quantity import Quantity, Unit
 from units.si import (
+    Density64,
+    Duration64,
+    JOULE_PER_KILOGRAM_KELVIN,
+    KILOGRAM_PER_CUBIC_METER,
     Length64,
+    SECOND,
+    SpecificHeatCapacity64,
     ThermalConductivity64,
     WATT_PER_METER_KELVIN,
     WATT_PER_SQUARE_METER_KELVIN,
@@ -351,9 +370,19 @@ def solve_thermal(
             " perfusion"
         )
     var n = mesh.node_count()
-    var count = mesh.nodes_per_element()
     var builder = SparseBuilder(n)
     var rhs = List[Float64](length=n, fill=0)
+    _assemble(problem, builder, rhs)
+    return _solve_held(builder.build(), rhs, problem, tolerance, max_iterations)
+
+
+def _assemble(
+    problem: ThermalProblem, mut builder: SparseBuilder, mut rhs: List[Float64]
+) raises:
+    """Add conduction, perfusion and convection to a matrix and a load."""
+    ref mesh = problem.mesh
+    var n = mesh.node_count()
+    var count = mesh.nodes_per_element()
     var arterial = problem.arterial.to(KELVIN)
     for e in range(mesh.element_count()):  # pragma: no branch
         var material = problem.materials[mesh.materials[e]]
@@ -430,7 +459,17 @@ def solve_thermal(
                 for j in range(6):  # pragma: no branch
                     var weight = face_mass[6 * i + j]
                     builder.add(face[i], face[j], h * area * weight / 180.0)
-    var k = builder.build()
+
+
+def _solve_held(
+    k: CsrMatrix,
+    rhs: List[Float64],
+    problem: ThermalProblem,
+    tolerance: Float64,
+    max_iterations: Int,
+) raises -> ThermalResult:
+    """Solve `k T = rhs` with the fixed nodes of a problem held."""
+    var n = len(rhs)
     var free_index = List[Int](length=n, fill=-1)
     var free = 0
     for node in range(n):  # pragma: no branch
@@ -470,3 +509,166 @@ def solve_thermal(
         result.status = solved.status
     result.temperatures = t^
     return result^
+
+
+struct ThermalCapacity(ImplicitlyCopyable):
+    """How much heat a material stores: its density and specific heat."""
+
+    var density: Density64
+    """The density."""
+    var specific_heat: SpecificHeatCapacity64
+    """The specific heat capacity."""
+
+    def __init__(
+        out self, density: Density64, specific_heat: SpecificHeatCapacity64
+    ) raises:
+        """Create a capacity.
+
+        Args:
+            density: The density. Positive and finite.
+            specific_heat: The specific heat. Positive and finite.
+
+        Raises:
+            Error: If a value is not positive and finite.
+        """
+        var rho = density.to(KILOGRAM_PER_CUBIC_METER)
+        var heat = specific_heat.to(JOULE_PER_KILOGRAM_KELVIN)
+        if not (rho > 0) or not isfinite(rho):
+            raise Error("A density must be positive and finite")
+        if not (heat > 0) or not isfinite(heat):
+            raise Error("A specific heat must be positive and finite")
+        self.density = density
+        self.specific_heat = specific_heat
+
+
+struct TransientResult(Movable):
+    """The temperatures of a problem at a series of times."""
+
+    var times: List[Float64]
+    """The time of each record after the start, in seconds."""
+    var temperatures: List[List[Float64]]
+    """One list per record: the temperature of each node, in kelvin."""
+    var iterations: Int
+    """How many conjugate gradient iterations ran over every step."""
+
+    def __init__(out self):
+        """Create a result without records."""
+        self.times = List[Float64]()
+        self.temperatures = List[List[Float64]]()
+        self.iterations = 0
+
+
+def solve_transient(
+    problem: ThermalProblem,
+    capacities: List[ThermalCapacity],
+    initial: List[Temperature64],
+    step: Duration64,
+    steps: Int,
+    every: Int,
+    tolerance: Float64,
+    max_iterations: Int,
+) raises -> TransientResult:
+    """Follow the temperatures of a problem in time, by backward Euler.
+
+    The fixed nodes hold their temperatures from the first step on. The
+    start is the first record, at time zero.
+
+    Args:
+        problem: The problem.
+        capacities: The capacity of each material, by material id.
+        initial: The temperature of each node at the start.
+        step: The time step. Positive and finite.
+        steps: How many steps, from 1 to 1000000.
+        every: Record the temperatures every this many steps. One or more.
+        tolerance: The relative residual at which each solve stops.
+        max_iterations: The iteration budget of each solve.
+
+    Returns:
+        The records.
+
+    Raises:
+        Error: If the capacities do not fit the materials, the start does
+            not fit the nodes or is not above absolute zero, an argument
+            is out of range, or a step does not converge.
+    """
+    ref mesh = problem.mesh
+    var n = mesh.node_count()
+    if len(capacities) != len(problem.materials):
+        raise Error("A transient problem needs one capacity per material")
+    if len(initial) != n:
+        raise Error("A transient problem needs one start temperature per node")
+    var dt = step.to(SECOND)
+    if not (dt > 0) or not isfinite(dt):
+        raise Error("A time step must be positive and finite")
+    if steps < 1 or steps > 1000000:
+        raise Error("A transient problem takes from 1 to 1000000 steps")
+    if every < 1:
+        raise Error("A record interval must be one step or more")
+    var t = List[Float64]()
+    for value in initial:  # pragma: no branch
+        var kelvin = value.to(KELVIN)
+        if not (kelvin > 0) or not isfinite(kelvin):
+            raise Error("A temperature must be above absolute zero, and finite")
+        t.append(kelvin)
+    var builder = SparseBuilder(n)
+    var rhs = List[Float64](length=n, fill=0)
+    _assemble(problem, builder, rhs)
+    var capacity = _capacity_matrix(mesh, capacities)
+    var inverse = 1.0 / dt
+    for row in range(n):  # pragma: no branch
+        for at in range(
+            capacity.row_start[row], capacity.row_start[row + 1]
+        ):  # pragma: no branch
+            builder.add(
+                row, capacity.columns[at], capacity.values[at] * inverse
+            )
+    var matrix = builder.build()
+    var out = TransientResult()
+    out.times.append(0)
+    out.temperatures.append(t.copy())
+    for index in range(1, steps + 1):  # pragma: no branch
+        var stored = capacity.multiply(t)
+        for node in range(n):  # pragma: no branch
+            stored[node] = stored[node] * inverse + rhs[node]
+        var solved = _solve_held(
+            matrix, stored, problem, tolerance, max_iterations
+        )
+        if solved.status != CONVERGED:
+            raise Error("A time step did not converge within its budget")
+        out.iterations += solved.iterations
+        t = solved.temperatures.copy()
+        if index % every == 0:
+            out.times.append(Float64(index) * dt)
+            out.temperatures.append(t.copy())
+    return out^
+
+
+def _capacity_matrix(
+    mesh: TetMesh, capacities: List[ThermalCapacity]
+) raises -> CsrMatrix:
+    """Return the consistent capacity matrix, in joules per kelvin."""
+    var count = mesh.nodes_per_element()
+    var unit = mass_coefficients(count)
+    var builder = SparseBuilder(mesh.node_count())
+    for e in range(mesh.element_count()):  # pragma: no branch
+        var at = count * e
+        var volume = signed_volume(
+            mesh.nodes[mesh.corners[at]],
+            mesh.nodes[mesh.corners[at + 1]],
+            mesh.nodes[mesh.corners[at + 2]],
+            mesh.nodes[mesh.corners[at + 3]],
+        )
+        ref material = capacities[mesh.materials[e]]
+        var stored = (
+            material.density.to(KILOGRAM_PER_CUBIC_METER)
+            * material.specific_heat.to(JOULE_PER_KILOGRAM_KELVIN)
+            * volume
+        )
+        for a in range(count):  # pragma: no branch
+            for b in range(count):  # pragma: no branch
+                builder.add(
+                    mesh.corners[at + a],
+                    mesh.corners[at + b],
+                    stored * unit[count * a + b],
+                )
+    return builder.build()
