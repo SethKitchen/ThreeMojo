@@ -374,7 +374,7 @@ for pair in pairs:
 var fit = superpose(fixed, moving)
 ```
 
-Each column that pairs two residues pairs their first atoms of the name, when both residues have one.
+Each column that pairs two residues pairs their first atoms of the name, when both residues have one. A last argument of `LOCAL_ALIGNMENT` pairs a fragment with its part of a whole chain.
 
 ## Superpose two models
 
@@ -491,6 +491,7 @@ The tests check these results:
 - Over three models as given, one CA moved by `+d` and `-d` has an RMSF of `d sqrt(2/3)`, and every other CA has none. Its residue gets the B-factor `16 pi^2 d^2 / 9`. Models that differ by rigid moves fit to an RMSF below 1e-9 angstroms. Five models with up to 0.5 angstroms of noise per coordinate match a numpy fit by SVD to 2e-15 angstroms. That check is not part of the test suite.
 - The largest areas are the 20 values of Tien and others. A residue's area is the sum of its atoms, and its RSA is that sum over the largest area. The middle of a built helix is more buried than its ends. On a peptide of 12 residues with 2000 points per sphere, the areas match Biopython 1.88's Shrake-Rupley to 0.1 percent. That check is not part of the test suite.
 - Two carbons in two chains 3 angstroms apart each bury a cap of `2 pi R h`, within 1 percent with 2000 points. Chains 20 angstroms apart bury nothing, and a third chain does not change the interface of the other two. On two helices 9 angstroms apart, the buried area of each residue matches Biopython 1.88's Shrake-Rupley to 0.001 square angstroms. That check is not part of the test suite.
+- A fragment of 6 residues, renumbered and moved, pairs by a local alignment with residues 4 to 9 of its whole chain. It fits back with an RMSD below 1e-15 m.
 - A peptide numbered from 101, turned and moved, pairs no atom by number. Through the alignment, all 11 CA atoms pair, and the fit has an RMSD below 1e-15 m. A residue that only one chain has, or a residue without the atom, pairs nothing.
 - A local alignment of three tryptophans inside other residues is the three alone, with their start in each sequence. It takes a gap inside when the pairs around it pay for it. On the 40 random pairs, every local score matches Biopython's local `PairwiseAligner`, and each alignment holds the stretch of each sequence from its start. That check is not part of the test suite.
 - BLOSUM62 is symmetric, with its diagonal from 4 to 11. Small alignments give their gaps at the ends, inside and in either sequence, with the scores of each gap. A sequence against itself has no gap and an identity of 1. All 400 BLOSUM62 values match Biopython 1.88. On 40 random pairs with changes, insertions and deletions, every score matches Biopython's `PairwiseAligner`. That check is not part of the test suite.
@@ -529,8 +530,7 @@ Every function raises `Error` for input it cannot use.
 - `assign_secondary` does not report 3-10 or pi helices, turns, bends, isolated bridges or beta bulges.
 - Ribbons need CA atoms. Nucleic acids have no ribbon.
 - An ensemble is fitted on one reference model. The fit is not iterated to the mean of the models.
-- A sequence holds the twenty standard amino acids only. A modified residue, such as selenomethionine `MSE`, is left out. `aligned_atoms` pairs atoms through a global alignment only.
-- A Ramachandran plot shows the angles only. It does not draw the favored and allowed regions of a reference set, and it does not validate a model.
+- A sequence holds the twenty standard amino acids only. A modified residue, such as selenomethionine `MSE`, is left out. - A Ramachandran plot shows the angles only. It does not draw the favored and allowed regions of a reference set, and it does not validate a model.
 - Where three or more spheres make a crevice, the excluded surface uses the grid bound. It can lie up to one grid step outside the true surface there.
 - A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
 

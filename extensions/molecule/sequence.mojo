@@ -421,12 +421,14 @@ def aligned_atoms(
     name: String,
     open: Float64,
     extend: Float64,
+    mode: AlignmentMode = GLOBAL_ALIGNMENT,
 ) raises -> List[Tuple[Int, Int]]:
     """Return the atoms of one name that the sequence alignment pairs.
 
     The two chains are aligned by `align_sequences`. Each column that
     pairs two residues pairs their first atoms of the name, when both
-    residues have one.
+    residues have one. A local alignment pairs the residues of its
+    stretch only, such as a fragment with its part of a whole chain.
 
     Args:
         first: The structure of the first chain.
@@ -436,6 +438,7 @@ def aligned_atoms(
         name: The atom name, such as `CA`.
         open: The gap opening score, such as -10.
         extend: The gap extension score, such as -0.5.
+        mode: `GLOBAL_ALIGNMENT`, the default, or `LOCAL_ALIGNMENT`.
 
     Returns:
         The indexes of the paired atoms in `first.atoms` and
@@ -444,21 +447,22 @@ def aligned_atoms(
 
     Raises:
         Error: If a chain id names no chain, a chain has no standard
-            amino acid, or a gap score is out of range.
+            amino acid, a gap score is out of range, or the mode is not
+            valid.
     """
     # The sequences check the chain ids before the residues are read.
     var first_sequence = chain_sequence(first, first_chain)
     var second_sequence = chain_sequence(second, second_chain)
     var alignment = align_sequences(
-        first_sequence, second_sequence, open, extend
+        first_sequence, second_sequence, open, extend, mode
     )
     var top = _standard_residues(first, first_chain)
     var bottom = _standard_residues(second, second_chain)
     var a = alignment.first.as_bytes()
     var b = alignment.second.as_bytes()
     var out = List[Tuple[Int, Int]]()
-    var i = 0
-    var j = 0
+    var i = alignment.first_start
+    var j = alignment.second_start
     for column in range(len(a)):  # pragma: no branch
         var gap_a = a[column] == 45
         var gap_b = b[column] == 45

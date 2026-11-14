@@ -282,6 +282,44 @@ def test_local_alignments() raises:
         _ = align_sequences("A", "A", -10, -0.5, AlignmentMode(2))
 
 
+def test_a_fragment_pairs_with_its_part() raises:
+    # Residues 4 to 9 of a chain, renumbered, turned and moved.
+    var whole = build_peptide("GSAMKTAYIAKQRQ", _coil(14))
+    var fragment = _renumbered("KTAYIA")
+    var pairs = aligned_atoms(
+        fragment,
+        ChainId(0),
+        whole,
+        ChainId(0),
+        "CA",
+        -10,
+        -0.5,
+        LOCAL_ALIGNMENT,
+    )
+    assert_equal(len(pairs), 6)
+    for k in range(6):
+        var residue = whole.atoms[pairs[k][1]].residue.value
+        assert_equal(residue, 4 + k)
+    var fixed = List[V3]()
+    var moving = List[V3]()
+    for pair in pairs:
+        fixed.append(whole.atoms[pair[1]].position)
+        moving.append(fragment.atoms[pair[0]].position)
+    # The coil of the fragment is the coil of its part of the chain.
+    assert_true(superpose(fixed, moving).rmsd.to(METER) < 1e-15)
+    with assert_raises(contains="alignment mode"):
+        _ = aligned_atoms(
+            fragment,
+            ChainId(0),
+            whole,
+            ChainId(0),
+            "CA",
+            -10,
+            -0.5,
+            AlignmentMode(5),
+        )
+
+
 def test_refusals() raises:
     with assert_raises(contains="not empty"):
         _ = align_sequences("", "A", -10, -0.5)
