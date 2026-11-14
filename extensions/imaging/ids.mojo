@@ -376,3 +376,40 @@ def require_metric(metric: RegistrationMetric) raises:
         Error: If `metric` is not valid.
     """
     require_valid(metric.is_valid(), "A registration metric must be 0 or 1")
+
+
+@fieldwise_init
+struct ResponseCategory(Equatable, ImplicitlyCopyable, Writable):
+    """The response of target lesions after RECIST 1.1.
+
+    `COMPLETE_RESPONSE`, `PARTIAL_RESPONSE`, `STABLE_DISEASE` and
+    `PROGRESSIVE_DISEASE`, from 0 to 3.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the four responses.
+
+        Returns:
+            Whether the value is from zero to three.
+        """
+        return ordinal_valid(self.value, 3)
+
+
+comptime COMPLETE_RESPONSE = ResponseCategory(0)
+comptime PARTIAL_RESPONSE = ResponseCategory(1)
+comptime STABLE_DISEASE = ResponseCategory(2)
+comptime PROGRESSIVE_DISEASE = ResponseCategory(3)
+
+
+def require_response(response: ResponseCategory) raises:
+    """Refuse a response that is not one of the four.
+
+    Args:
+        response: The response to check.
+
+    Raises:
+        Error: If `response` is not valid.
+    """
+    require_valid(response.is_valid(), "A RECIST response must be from 0 to 3")

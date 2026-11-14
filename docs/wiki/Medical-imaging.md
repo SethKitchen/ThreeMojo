@@ -12,7 +12,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 
 | Module | What it gives |
 |---|---|
-| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity`, `LabelId`, `DicomNode` and `RegistrationMetric` |
+| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity`, `LabelId`, `DicomNode`, `RegistrationMetric` and `ResponseCategory` |
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
 | `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL`, `MEGABECQUEREL`, and `parse_dicom_tree` and `read_dicom_tree`, which give a `DicomTree` |
 | `rtstruct` | `RtStructure`, `parse_rt_structures`, `read_rt_structures` and `structure_labels` |
@@ -29,6 +29,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest`, `label_pieces`, `LabelPieces` and `label_surface` |
 | `measure` | `label_statistics`, `voxel_distance`, `line_profile`, `LineProfile` and `full_width_half_maximum` |
 | `shape` | `label_shape`, `LabelShape` and `slice_areas` |
+| `growth` | `doubling_time`, `growth_rate`, `longest_diameter`, `LongestDiameter`, `recist_response`, `response_name`, `DAY64` and `PER_DAY64` |
 | `compare` | `compare_labels`, `LabelComparison`, `label_overlaps`, `LabelOverlap`, `mean_dice`, `surface_voxels` and `percentile` |
 | `roi` | `circle_statistics` and `RegionStatistics` |
 | `texture` | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` and `TextureFeatures` |
@@ -706,6 +707,39 @@ print("mean Dice", mean_dice(table))
 
 A label that only one map holds has a Dice of 0. The table counts voxels only. Use `compare_labels` for the surface distances of a label.
 
+## Follow a tumor over time
+
+Oncology research follows a tumor across scans. The growth module gives the change of its volume and of its diameter.
+
+```mojo
+var before = label_shape(first_map, first_ct, LabelId(1)).volume
+var after = label_shape(second_map, second_ct, LabelId(1)).volume
+print(doubling_time(before, after, Duration64(90, DAY64)).to(DAY64))
+var widest = longest_diameter(second_map, LabelId(1))
+print(response_name(recist_response(baseline_sum, nadir_sum, widest.length)))
+```
+
+`doubling_time(first, second, interval)` is `interval ln 2 / ln(V2 / V1)`, the time in which the volume doubles at its growth. A tumor that shrinks has a negative doubling time, and its size is the halving time. `growth_rate(first, second, interval)` is the specific growth rate, `ln(V2 / V1) / interval`. It is 0 when the volume does not change, so you can average it where a doubling time is not defined.
+
+`longest_diameter(map, label)` is the longest distance between the centers of two voxels of a label in one slice of `k`. It gives the two voxels, which `draw_measurement` can draw. RECIST 1.1 measures a target lesion by this diameter in the axial plane. RECIST measures from edge to edge, which is about one pixel more.
+
+`recist_response(baseline, nadir, current)` gives the response of the target lesions from the sums of their longest diameters. The nadir is the least sum so far, the baseline included.
+
+| Response | Rule |
+|---|---|
+| `COMPLETE_RESPONSE` | The current sum is 0 |
+| `PROGRESSIVE_DISEASE` | The sum grew by 20 percent or more of the nadir, and by 5 mm or more |
+| `PARTIAL_RESPONSE` | The sum fell by 30 percent or more of the baseline |
+| `STABLE_DISEASE` | Neither |
+
+Progressive disease comes before a partial response. The thresholds hold to 1e-9 of the sums, so that sums in millimeters meet them exactly.
+
+![A lesion at two scans of the head phantom, before and after registration, outlined at both sizes](out/longitudinal.png)
+
+`examples/longitudinal.mojo` makes this picture. Two synthetic CT scans of the head phantom are 90 days apart. A lesion of 9 mm radius grows to 12 mm. At the second scan, the head is turned 4 degrees and moved 6 mm, on a grid of other voxels. `register_rigid` aligns the second scan to the first, and a region grown from the lesion's center labels it in each scan.
+
+The left panel is the first scan, with the lesion's outline in green and its longest diameter in yellow. The middle panel is the same slice of the second scan before registration. The right panel is the second scan after registration, with its outline in red. The registration is off by 0.46 mm at the corners. The volume goes from 2.75 to 6.59 cm^3, a doubling time of 71 days, where the balls give 72 days. The diameters go from 16.8 to 23.2 mm, so the response is progressive disease.
+
 ## Measure thickness
 
 Bone research measures the thickness of cortical walls and of trabeculae. `local_thickness(map, label)` gives each voxel of a label the diameter of the largest sphere that holds the voxel and fits in the label. This is the method of Hildebrand and Rüegsegger.
@@ -898,6 +932,9 @@ The tests check these results:
 - A volume registered on itself stays in place, to 1e-6 mm. Through the transform that moves nothing, a resampled volume and its labels are the same as from `resample_onto` and `resample_labels_onto`.
 - The simplex finds the least point of a bowl to 1e-8 and of the valley of Rosenbrock to 1e-6. On a cost that no move improves, it shrinks onto its start in ten iterations.
 - On a larger pair of 40 and 36 voxels, mean squares here finds the transform to 0.27 mm, and mutual information to 0.44 mm. SimpleITK 2.5.7 registers that pair with a regular-step gradient descent on the same two levels. It finds the transform to 0.19 mm by mean squares and to 0.21 mm by Mattes mutual information. At its transforms, the metrics here are higher than at their own, so the difference is in the metrics and not in the search. That check is not part of the test suite.
+- A volume that doubles in 100 days has a doubling time of 100 days, and one that halves has -100 days. Its growth rate is `ln 2 / 100` a day.
+- The longest diameter of an uneven blob on voxels of 0.5 by 0.8 mm matches a search of every pair of voxels. A bar of seven pixels is six pixels long, and a full slice runs corner to corner.
+- RECIST responses hold at their thresholds. A fall of exactly 30 percent is a partial response. A growth of 20 percent and 4 mm is not progression. Progression comes before a partial response, and 5 mm after a complete response is progression.
 - Two RT Dose files that pydicom 3.0.1 wrote read with pydicom's dose at each voxel, as 32-bit floats. One is explicit VR with 32-bit values and offsets from 0. The other is implicit VR with 16-bit values and frames from z = 9 mm down to 0. `assets/dicom/make_rtdose.py` makes them.
 - The tumor and the ring of the structure fixtures, filled on each dose grid, have the DVH that numpy 2.1.3 gives. The test compares the least, mean and largest dose, D98, D95, D50, D2, V20 and V40. It also compares D for 0.03 and 0.1 cm^3, and the gEUD at a = -10 and 5. Each agrees to 1e-12.
 - Written files check signed and 32-bit values, one frame without offsets, frames that go down, offsets that are z, and sagittal frames. A malformed file is refused for each check of the reader.
@@ -1003,6 +1040,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels`, `label_overlaps` |
 | A label map and the volume that places it differ in grid or spacing | `resample_labels_onto`, `resample_labels_transformed` |
 | A rotation axis is zero or not finite, or an angle is not finite | `RigidTransform` |
+| A tumor volume or the time between two scans is not positive and finite, or two volumes are equal for a doubling time | `doubling_time`, `growth_rate` |
+| A diameter has a bad label, the background or an empty label | `longest_diameter` |
+| A RECIST sum is out of its range, or a response is not valid | `recist_response`, `response_name` |
 | A registration has a bad metric, levels out of 1 to 4, a lattice out of 1 to 8 voxels, no overlap at the start of a level, or mutual information of a volume whose values do not vary | `register_rigid` |
 | A simplex search has no parameter, not one step for each, a step that is not positive and finite, a tolerance that is not positive, or no iteration | `minimize_simplex` |
 | A table of overlaps is empty | `mean_dice` |
@@ -1028,6 +1068,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - An RT Dose must be native and in grays. The reader does not read a relative dose, compressed frames or the plan that the dose refers to.
 - A DVH counts each voxel whole, with the dose at its center. It does not split a voxel that the edge of a region cuts, and it does not interpolate the dose between planes.
 - The RT Structure Set, RT Dose and DVH tools are for research. They are not a treatment planning system. Do not use them to plan, check or give a treatment.
+- A longest diameter is between voxel centers in one slice of `k`. It does not measure across slices or along an oblique plane. The RECIST response covers target lesions only, by their sums. It does not judge new lesions, lymph nodes or non-target lesions.
 - Registration is rigid, with six parameters. It does not scale, shear or bend, so it does not follow breathing or soft tissue that changes shape. The simplex finds a nearby least point, so a start far from the answer can end at another one.
 - The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
@@ -1058,6 +1099,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Johnson and others, "The ITK Software Guide, Book 2: Design and Functionality", 4th edition, 2015.
 - Nelder and Mead, "A simplex method for function minimization", The Computer Journal, 1965.
 - Maes and others, "Multimodality image registration by maximization of mutual information", IEEE Transactions on Medical Imaging, 1997.
+- Eisenhauer and others, "New response evaluation criteria in solid tumours: Revised RECIST guideline (version 1.1)", European Journal of Cancer, 2009.
+- Schwartz, "A biomathematical approach to clinical tumor growth", Cancer, 1961.
 - Hildebrand and Rüegsegger, "A new method for the model-independent assessment of thickness in three-dimensional images", 1997.
 - Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", 2012.
 - Shepp and Logan, "The Fourier reconstruction of a head section", 1974.

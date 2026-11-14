@@ -272,6 +272,9 @@ $(call gallery,fusion,fusion)
 # A synthetic five-beam dose over the head phantom CT, with isodose lines,
 # and the dose-volume histograms of a target and an organ at risk.
 $(call gallery,radiotherapy,radiotherapy)
+# A lesion that grows between two scans of the head phantom: the second
+# scan registered onto the first, both outlines and the longest diameters.
+$(call gallery,longitudinal,longitudinal)
 # An ideal peptide of a helix, a loop and a strand: its cartoon ribbon, and
 # its excluded surface colored by element and by hydropathy.
 $(call gallery,molecule,molecule)
