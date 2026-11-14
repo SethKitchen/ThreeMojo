@@ -22,6 +22,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius`, `sphere_points` and `AtomCells` |
 | `coloring` | `color_surface`, `atom_color` and `kyte_doolittle` |
 | `confidence` | `confidence_color`, `confidence_summary` and `ConfidenceSummary` |
+| `lddt` | `lddt`, `ca_lddt`, `lddt_b_factors` and `LddtScores` |
 | `superpose` | `superpose`, `Superposition`, `rmsd` and `matched_atoms` |
 | `ensemble` | `ensemble_fluctuation`, `Fluctuation`, `fluctuation_b_factors` and `shared_positions` |
 | `clusters` | `model_distances`, `ModelDistances` and `cluster_models` |
@@ -511,6 +512,23 @@ print(summary.mean, summary.very_high, summary.very_low)
 
 A region of very low pLDDT is often disordered. Do not read its shape as a structure. A high pLDDT says that the local shape is likely right. It does not say that the domains are in the right place relative to each other.
 
+## Score a model against a reference
+
+`ca_lddt(reference, reference_model, model, model_model)` gives the local distance difference test (lDDT) of a model against a reference structure. Use it to score a predicted model against an experimental structure, or two models against each other. pLDDT is a network's guess of this score.
+
+```mojo
+var scores = ca_lddt(experiment, ModelId(0), prediction, ModelId(0))
+print(scores.total, scores.per_point[0])
+lddt_b_factors(prediction, scores)
+var ribbon = ribbon_geometry(prediction, ModelId(0), BY_CONFIDENCE, 6, 12)
+```
+
+lDDT needs no superposition. Each pair of CA atoms closer than 15 angstroms in the reference is a pair to score. The thresholds are 0.5, 1, 2 and 4 angstroms. A pair scores a quarter for each threshold that the change of its distance in the model is below.
+
+The lDDT of a residue is the mean score of its pairs, and `total` is the mean over all pairs. A residue with no pair within the cutoff scores 1. These are the rules of the CA lDDT in AlphaFold's code.
+
+`ca_lddt` pairs the CA atoms by chain, residue number and insertion code, as `matched_atoms` does. `lddt(reference, model, cutoff)` scores two lists of paired points of your own, at any cutoff. `lddt_b_factors(model, scores)` writes 100 times each residue's score into its B-factors. Then the confidence colorings show the true local accuracy in the bands of pLDDT, beside the prediction's own pLDDT.
+
 ## Verification
 
 The tests check these results:
@@ -545,6 +563,8 @@ The tests check these results:
 - Six models lie at shifts of 0, 0.5, 1, 5, 5.4 and 20 angstroms. At a cutoff of 1 angstrom, they form the clusters `0 1 2`, `3 4` and `5`. On 12 noisy and moved models, the fitted table matches numpy's SVD solution to 5e-15 angstroms. The medoid and the clusters at four cutoffs match a Python version of the method. That check is not part of the test suite.
 - A local alignment of three tryptophans inside other residues is the three alone, with their start in each sequence. It takes a gap inside when the pairs around it pay for it. On the 40 random pairs, every local score matches Biopython's local `PairwiseAligner`, and each alignment holds the stretch of each sequence from its start. That check is not part of the test suite.
 - BLOSUM62 is symmetric, with its diagonal from 4 to 11. Small alignments give their gaps at the ends, inside and in either sequence, with the scores of each gap. A sequence against itself has no gap and an identity of 1. All 400 BLOSUM62 values match Biopython 1.88. On 40 random pairs with changes, insertions and deletions, every score matches Biopython's `PairwiseAligner`. That check is not part of the test suite.
+- Three points 3.8 angstroms apart, with the last moved 0.7 angstroms, give the lDDT 0.875, 0.875 and 0.75, and 5/6 in all. Moved 3 angstroms, the last scores 0.25, and moved 5 angstroms, 0. A turned and moved model scores 1, and a point with no pair scores 1. One CA moved 3 angstroms gives the least score of a helix.
+- A peptide of 60 residues got up to 4.5 angstroms of noise per coordinate. The CA lDDT of each residue matches AlphaFold's formula in numpy to 2e-11. The total matches to 1e-13. That check is not part of the test suite.
 - The band colors are the four colors of the AlphaFold Protein Structure Database, with each edge in the lower band. A helix of eight residues with two in each band gives each count and the mean. A residue without a CA does not count. Each CA, and each ring of a ribbon, takes its band's color.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
@@ -560,6 +580,7 @@ Every function raises `Error` for input it cannot use.
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
 | A confidence summary has a model id that names no model, no CA atom, or a pLDDT not from 0 to 100 | `confidence_summary` |
+| An lDDT has lists of other sizes or none, a cutoff not positive and finite, no shared CA atom, or scores without atom pairs | `lddt`, `ca_lddt`, `lddt_b_factors` |
 | An ensemble has fewer than two models, too few shared atoms, or a bad fit or reference | `ensemble_fluctuation`, `Fluctuation`, `shared_positions`, `model_distances` |
 | A model id is outside a table, or a cluster cutoff is negative or not finite | `ModelDistances`, `cluster_models` |
 | A structure has no model or no atom, its name holds a blank, or a value holds a line end or both kinds of closing quote | `encode_mmcif`, `cif_value` |
@@ -598,6 +619,7 @@ Every function raises `Error` for input it cannot use.
 - Smith and Waterman, "Identification of common molecular subsequences", 1981.
 - Daura and others, "Peptide folding: when simulation meets experiment", Angewandte Chemie International Edition, 1999.
 - Jumper and others, "Highly accurate protein structure prediction with AlphaFold", Nature, 2021.
+- Mariani and others, "lDDT: a local superposition-free score for comparing protein structures and models using distance difference tests", Bioinformatics, 2013.
 - Varadi and others, "AlphaFold Protein Structure Database", Nucleic Acids Research, 2022.
 - Gotoh, "An improved algorithm for matching biological sequences", 1982.
 - Henikoff and Henikoff, "Amino acid substitution matrices from protein blocks", 1992.
