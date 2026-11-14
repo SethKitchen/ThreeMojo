@@ -230,7 +230,7 @@ struct StaticProblem(Movable):
         for node in self.mesh.nodes_on_plane(axis, at, tolerance):
             on_plane[node.value] = True
         var faces = boundary_faces(self.mesh)
-        var middles = _edge_nodes(self.mesh)
+        var middles = edge_node_map(self.mesh)
         var count = 0
         # A problem's mesh has an element, so it has outer faces.
         for face in range(len(faces) // 4):  # pragma: no branch
@@ -261,9 +261,16 @@ struct StaticProblem(Movable):
         return count
 
 
-def _edge_nodes(mesh: TetMesh) -> Dict[Int, Int]:
-    """Return the edge node of each edge of a quadratic mesh, keyed by its
-    two corners as `low * node_count + high`. A linear mesh has none."""
+def edge_node_map(mesh: TetMesh) -> Dict[Int, Int]:
+    """Return the edge node of each edge of a quadratic mesh.
+
+    Args:
+        mesh: The mesh.
+
+    Returns:
+        The edge node of each edge, keyed by its two corners as
+        `low * node_count + high`. A linear mesh has none.
+    """
     var out = Dict[Int, Int]()
     if mesh.order == LINEAR:
         return out^

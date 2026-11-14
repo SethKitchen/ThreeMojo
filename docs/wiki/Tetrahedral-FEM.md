@@ -18,6 +18,7 @@
 | `export` | `vtk_mesh`, `vtk_result` and `vtk_modes` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
+| `thermal` | `ThermalMaterial`, `ThermalProblem`, `solve_thermal` and `ThermalResult` |
 
 ## Solve a problem
 
@@ -175,6 +176,29 @@ The dense fallback of the Sturm check takes at most 4096 free degrees of freedom
 
 `mode_geometry(mesh, shape, amplitude)` draws one mode. A mode shape has no size of its own, so the shape is scaled until the node that moves most moves by `amplitude`. Each vertex takes the color of how far its node moves, from blue at rest to red at `amplitude`. `vtk_modes(mesh, modes)` writes every shape for ParaView. See [Export to ParaView](#export-to-paraview).
 
+## Heat conduction
+
+`solve_thermal(problem, tolerance, max_iterations)` gives the steady temperature of each node. The temperature solves
+
+```
+div(k grad T) + q + c (T_a - T) = 0
+```
+
+where `k` is the conductivity and `q` a heat source per volume, such as the metabolism of tissue or the power of a probe. The term `c (T_a - T)` is Pennes' bioheat term: blood at the arterial temperature `T_a` carries heat away from warmer tissue. The coefficient `c` is the perfusion rate times the density and the specific heat of blood.
+
+```mojo
+var tissue = ThermalMaterial(ThermalConductivity64(0.5, WATT_PER_METER_KELVIN),
+    PowerDensity64(400, WATT_PER_CUBIC_METER),
+    PerfusionCoefficient64(1890, WATT_PER_CUBIC_METER_KELVIN))
+var problem = ThermalProblem(mesh^, [tissue], Temperature64(37, CELSIUS))
+problem.fix(probe, Temperature64(90, CELSIUS))
+var result = solve_thermal(problem, 1e-10, 5000)
+```
+
+`fix(node, temperature)` holds a node at a temperature. `convect_plane(axis, at, tolerance, coefficient, ambient)` lets the outer faces on a plane lose `h (T - T_ambient)` per area to a fluid. Each integral is exact for both element orders. Something must set the level of the temperatures: a fixed node, convection or perfusion. Without one, `solve_thermal` refuses the problem.
+
+Pennes' model is a simple model of perfusion. The results are for research and teaching. They are not validated for treatment planning.
+
 ## Draw the result
 
 `stress_geometry(mesh, result, scale, low, high)` returns the outer surface. It moves each node by its displacement times `scale`. Each face takes the color of the von Mises stress of its element. The scale runs through blue, cyan, green, yellow and red from `low` to `high`. Each face has its own vertices, so the colors and normals are flat.
@@ -236,6 +260,9 @@ The tests check these results:
 - A steel cantilever is 0.6 m long and 60 mm square. With ten-node elements it bends at 136.9 Hz with 10 cells and 136.2 Hz with 20. Euler-Bernoulli gives 135.9 Hz. The two bending modes of the square section agree to 1 percent.
 - The consistent mass coefficients sum to one, and a rigid move carries the whole mass.
 - A drawn rod mode moves its free end by the amplitude, in red, and leaves the clamp blue.
+- A linear temperature between two fixed ends is exact, and convection at one end gives the exact line, for both element orders.
+- A uniform source gives the exact parabola `q x (L - x) / (2 k)` at every node of ten-node elements.
+- A probe in perfused tissue gives the `cosh` profile of Pennes' equation within 1 percent. Without a fixed node, perfusion holds the tissue at `T_a + q / c`.
 - A column of four voxels with four CT numbers, under 1 MPa, shortens by `p * sum(h / E)`, as springs in series, to a relative 1e-9. One bin takes the mean modulus and the mean density.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 
@@ -292,3 +319,4 @@ Every function raises `Error` for input it cannot use.
 - Hestenes and Stiefel, "Methods of conjugate gradients for solving linear systems", 1952.
 - Morgan, Bayraktar and Keaveny, "Trabecular bone modulus-density relationships depend on anatomic site", 2003.
 - Bathe, "Finite Element Procedures", 2nd edition, 2014, sections 10.2 and 11.6.
+- Pennes, "Analysis of tissue and arterial blood temperatures in the resting human forearm", 1948.
