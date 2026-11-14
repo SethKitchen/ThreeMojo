@@ -267,6 +267,7 @@ extensions/
     contacts.mojo         residue distance and contact maps
     hbonds.mojo           hydrogen bonds drawn as dashed tubes
     shape.mojo            mass center, radius of gyration and axes
+    pdb_write.mojo        structures written as PDB files
   fem/
     ids.mojo              node, element and material ids, and axes
     mesh.mojo             tetrahedral meshes, box and voxel meshers

@@ -24,6 +24,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `superpose` | `superpose`, `Superposition`, `rmsd` and `matched_atoms` |
 | `contacts` | `distance_map`, `DistanceMap` and `map_image` |
 | `shape` | `molecular_shape` and `MolecularShape` |
+| `pdb_write` | `encode_pdb` |
 
 ## Read an mmCIF file
 
@@ -50,6 +51,18 @@ for chain in structure.chains:
 A PDB file has only the author's chain letters and residue numbers. Each residue's `seq_id` and `auth_seq_id` are the author's number, and the helices and strands name residues by it. A chain starts at a new letter, after `TER`, or in a new model. A chain that repeats a letter in one model gets a label of the letter and a count, such as `A2`. The waters after `TER` are such a chain, so the helices of chain `A` do not mark them.
 
 A short line can leave out the occupancy, the B-factor and the element. The occupancy is then 1 and the B-factor 0. The element then comes from the atom name, as the PDB convention gives it. A name with column 13 blank holds a one-letter element in column 14, so ` CA ` is carbon. A name that starts in column 13 holds a two-letter element there, so `CA  ` is calcium.
+
+## Write a PDB file
+
+`encode_pdb(structure)` writes a structure as the text of a PDB file, for other molecular viewers. Use it for a structure that this extension built or moved, such as an ideal peptide or a superposed model.
+
+```mojo
+Path("model.pdb").write_text(encode_pdb(structure))
+```
+
+The file holds `ATOM` and `HETATM` records in the fixed columns of the wwPDB format version 3.3, with `TER` after each chain and `END`. Two or more models are written between `MODEL` and `ENDMDL`. The helices and strands of the first model become `HELIX` and `SHEET` records. A name of up to four characters is the PDB id of a `HEADER`, and a longer name is a `TITLE`.
+
+Coordinates have three decimals in angstroms, and the occupancy and the B-factor two. A chain id must be one character. A name or a number that does not fit its columns is refused.
 
 ## The structure
 
@@ -309,6 +322,7 @@ The tests check these results:
 - Two carbons 3 angstroms apart have an excluded surface with a neck of 1.313 angstroms, the analytic radius, to within 0.03 angstroms.
 - The distance transform is exact on a grid with one seed.
 - A ribbon of `n` residues has `(n - 1) samples + 1` rings, and every normal is a unit vector.
+- An ideal peptide reads back the same after `encode_pdb`, to the 0.001 angstrom of three decimals. So does a file of two models with alternate locations and hetero atoms.
 - An ideal helix of 14 residues has 10 hydrogen bonds, each from residue `i + 4` to residue `i`. A strand has none.
 - A carbon and an oxygen 5 angstroms apart have their mass center at the share `m_O / (m_C + m_O)`. Their radius of gyration is `L sqrt(m1 m2) / (m1 + m2)`, along the bond.
 - Neighbor CA atoms of an ideal peptide are 3.8 angstroms apart. An alpha helix has its CA contacts within 8 angstroms at `i + 3` and `i + 4` only, and a strand has none.
