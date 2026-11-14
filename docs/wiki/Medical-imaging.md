@@ -666,6 +666,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
 - Rendering uses the volume frame. It does not apply the patient orientation.
 - A circle counts whole pixels by their centers. It does not weigh the pixels that its edge cuts.
+- Texture features use one slice at a time. There is no co-occurrence matrix in three dimensions.
 - A centered path is a chain of voxel centers. `smooth_path` smooths it, but does not keep it inside the label at a sharp bend of a thin structure.
 - The connectivity of `label_surface`, the surfaces and the morphology is by faces. The `Connectivity` choice applies to the pieces and to region growing only.
 - The colors of a transfer function are display values. They are not linear light.
