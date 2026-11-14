@@ -15,7 +15,7 @@
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of`, `von_mises`, `principal_stresses` and `PrincipalStress` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
 | `post` | `stress_geometry`, `stress_color`, `mode_geometry` and `temperature_geometry` |
-| `export` | `vtk_mesh`, `vtk_result`, `vtk_modes` and `vtk_temperatures` |
+| `export` | `vtk_mesh`, `vtk_result`, `vtk_modes`, `vtk_temperatures`, `vtk_record`, `vtk_series` and `series_names` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
 | `thermal` | `ThermalMaterial`, `ThermalProblem`, `solve_thermal`, `ThermalResult`, `ThermalCapacity`, `solve_transient` and `TransientResult` |
@@ -268,6 +268,23 @@ The file is an ASCII `UNSTRUCTURED_GRID` in meters. A four-node element is cell 
 
 Each number is written in full, so it reads back exactly. meshio 5.3.5 read the linear and the quadratic files of a pressed bar, with the expected stress and stretch. It also read the principal fields of a bent beam, which match the eigenvalues that numpy 2.1.3 gives to a relative 1e-15. It also read the mode shapes of a rod as `mode_1` and `mode_2` on 81 points. These checks are not part of the test suite.
 
+## Write a time series
+
+Write a transient history as a file series to play it in ParaView. Write one VTK file for each record, and one series file that lists them.
+
+```mojo
+var names = series_names("heat", len(history.times))
+for k in range(len(names)):
+    Path(names[k]).write_text(vtk_record(problem.mesh, history, k))
+Path("heat.vtk.series").write_text(vtk_series(names, history))
+```
+
+`series_names(stem, count)` gives the names `heat_0000.vtk`, `heat_0001.vtk` and on. The number has more digits when the count needs them. `vtk_record(mesh, history, record)` writes one record as `vtk_temperatures` does, with its time in the title line.
+
+`vtk_series(names, history)` writes the series file in JSON, version 1.0. It lists each name with its time in seconds. ParaView 5.5 and later opens a file whose name ends in `.vtk.series` as one data set in time. A name is relative to the series file. A name must not hold a quote, a backslash or a control character.
+
+meshio 5.3.5 read the five records of a heated bar, with 99 points and the temperature field of each. Python's JSON reader read the series file with the five times. These checks are not part of the test suite.
+
 ## Verification
 
 The tests check these results:
@@ -294,6 +311,7 @@ The tests check these results:
 - A probe in perfused tissue gives the `cosh` profile of Pennes' equation within 1 percent. Without a fixed node, perfusion holds the tissue at `T_a + q / c`.
 - A column of four voxels with four CT numbers, under 1 MPa, shortens by `p * sum(h / E)`, as springs in series, to a relative 1e-9. One bin takes the mean modulus and the mean density.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
+- A record of a history is the temperature file of its values, with its time in the title. A series file lists each name with its time, and names get a fifth digit past 10000 records.
 
 The example `ct_to_fem` meets the rule of mixtures to 12 digits. See [From CT slices to stresses](#from-ct-slices-to-stresses).
 
@@ -329,13 +347,15 @@ Every function raises `Error` for input it cannot use.
 | A label has no voxels | `voxel_mesh` |
 | A mesh has a node that no element holds, or is free to move | `solve_static` |
 | A result is not for its mesh | `stress_geometry` |
+| A record is outside its history, or a series name is empty or holds a quote, a backslash or a control character | `vtk_record`, `vtk_series`, `series_names` |
 
 ## Limits
 
 - The strains are small, and the materials are linear and isotropic.
 - Four-node tetrahedra are stiff in bending. Both orders lock for a Poisson's ratio near 0.5, the four-node ones much more.
 - Ten-node tetrahedra have straight edges. A curved boundary is a set of flat faces.
-- The loads are static. There is no mass, damping, contact or time.
+- The elastic loads are static. There is no damping, contact or response to a load in time.
+- The capacity of a transient step is consistent. Near a sudden change, a step that is short against `h^2 / alpha` can undershoot. The temperatures then dip below their bounds for a few steps. A finer mesh makes the dip smaller.
 - The solver is iterative. A large or badly conditioned problem needs a large budget.
 - A voxel mesh has stair steps on curved surfaces. The stress at a stair step is not the stress of the smooth shape.
 
