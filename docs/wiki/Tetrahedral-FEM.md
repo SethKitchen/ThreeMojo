@@ -18,7 +18,7 @@
 | `export` | `vtk_mesh`, `vtk_result`, `vtk_modes`, `vtk_temperatures`, `vtk_record`, `vtk_series` and `series_names` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
-| `thermal` | `ThermalMaterial`, `ThermalProblem`, `solve_thermal`, `ThermalResult`, `ThermalCapacity`, `solve_transient` and `TransientResult` |
+| `thermal` | `ThermalMaterial`, `ThermalProblem`, `solve_thermal`, `ThermalResult`, `ThermalCapacity`, `solve_transient`, `TransientResult`, `held_heat`, `HeatRates`, `heat_flux` and `HeatFluxes` |
 
 ## Solve a problem
 
@@ -232,7 +232,24 @@ The lumped capacity puts the heat of each element on its nodes in proportion to 
 
 ![Half of a block of perfused tissue, cut through a needle held at 70 C, colored from 37 C to 70 C](out/bioheat.png)
 
-`examples/bioheat.mojo` makes this picture. A needle at 70 C enters a block of tissue 40 mm on a side from the top, and stops at the center. The tissue conducts 0.5 W/(m K), makes 400 W/m^3 of metabolic heat, and has a perfusion coefficient of 1890 W/(m^3 K). The block is cut in half through the needle. The tissue is 51 C at 2 mm below the tip, 45 C at 5 mm and 42 C at 10 mm.
+`examples/bioheat.mojo` makes this picture. A needle at 70 C enters a block of tissue 40 mm on a side from the top, and stops at the center. The tissue conducts 0.5 W/(m K), makes 400 W/m^3 of metabolic heat, and has a perfusion coefficient of 1890 W/(m^3 K). The block is cut in half through the needle. The tissue is 51 C at 2 mm below the tip, 45 C at 5 mm and 42 C at 10 mm. The needle supplies 0.64 W.
+
+### Heat flux and held heat
+
+`heat_flux(problem, result)` gives the conducted flux `-k grad T` of each element, in W/m^2. `held_heat(problem, result)` gives the heat that each held node supplies to the body, in watts.
+
+```mojo
+var flux = heat_flux(problem, result)
+print(flux.component(0, DOF_X).to(WATT_PER_SQUARE_METER), flux.magnitude(0).to(WATT_PER_SQUARE_METER))
+var rates = held_heat(problem, result)
+print(rates.total().to(WATT), "W")
+```
+
+A four-node element has one gradient. A ten-node element takes its gradient at its centroid. The flux runs from hot to cold.
+
+The heat rate at a held node is its row of `K T - F`. It is the heat that the held temperature supplies to keep its value. Positive heat enters the body, and a free node has zero. `rates.at(node)` gives one node, and `rates.total()` gives the sum. In a steady state, the sum balances the sources, the perfusion and the convection. Use it with a steady result only.
+
+The bioheat example models half of the block, so the needle supplies twice the total of its held nodes.
 
 `temperature_geometry(mesh, result, low, high)` colors the outer surface by the temperature of each node, from blue at `low` to red at `high`. `vtk_temperatures(mesh, result)` writes the temperatures for ParaView.
 
@@ -320,6 +337,7 @@ The tests check these results:
 - A uniform source gives the exact parabola `q x (L - x) / (2 k)` at every node of ten-node elements.
 - A sine between two held ends decays as `exp(-t / tau)` within 0.2 percent. Very long steps reach the steady state, and a uniform start in an insulated block stays uniform.
 - A bar starts at 310 K, and its end is held at 330 K. With a consistent capacity and steps of 30 s, it dips more than 1 K below its start. With a lumped capacity, it stays between 310 K and 330 K to the solver's tolerance. An insulated bar from 310 K to 320 K evens out at 315 K with a lumped capacity, for both element orders.
+- A rod between 310 K and 330 K has the flux `-k dT/dx` in every element, for both orders. `k A dT / L` enters at its hot end and leaves at its cold end, to 1e-9. A uniform source `q` in a rod held at both ends sends `q V` out through the ends, half at each.
 - A probe in perfused tissue gives the `cosh` profile of Pennes' equation within 1 percent. Without a fixed node, perfusion holds the tissue at `T_a + q / c`.
 - A column of four voxels with four CT numbers, under 1 MPa, shortens by `p * sum(h / E)`, as springs in series, to a relative 1e-9. One bin takes the mean modulus and the mean density.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
@@ -359,6 +377,7 @@ Every function raises `Error` for input it cannot use.
 | A label has no voxels | `voxel_mesh` |
 | A mesh has a node that no element holds, or is free to move | `solve_static` |
 | A result is not for its mesh | `stress_geometry` |
+| A result is not for its problem, or an element, a node or an axis is out of range | `held_heat`, `heat_flux`, `HeatRates`, `HeatFluxes` |
 | The capacities or the start do not fit the problem, a step or a count is out of range, or a capacity kind is not valid | `solve_transient`, `ThermalCapacity` |
 | A record is outside its history, or a series name is empty or holds a quote, a backslash or a control character | `vtk_record`, `vtk_series`, `series_names` |
 

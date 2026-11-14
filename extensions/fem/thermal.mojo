@@ -62,15 +62,19 @@ from extensions.numerics.iterative import (
 )
 from extensions.numerics.sparse import CsrMatrix, SparseBuilder
 from extensions.sdf.vector import V3, cross, dot, length
-from std.math import isfinite, max, min
+from std.math import isfinite, max, min, sqrt
 from units.quantity import Quantity, Unit
 from units.si import (
     Density64,
     Duration64,
+    HeatFlux64,
     JOULE_PER_KILOGRAM_KELVIN,
     KILOGRAM_PER_CUBIC_METER,
     Length64,
+    Power64,
     SECOND,
+    WATT,
+    WATT_PER_SQUARE_METER,
     SpecificHeatCapacity64,
     ThermalConductivity64,
     WATT_PER_METER_KELVIN,
@@ -690,3 +694,190 @@ def _capacity_matrix(
                     node, mesh.corners[at + b], stored * unit[count * a + b]
                 )
     return builder.build()
+
+
+struct HeatRates(Movable):
+    """The heat that enters a body at each held node of a steady result."""
+
+    var values: List[Float64]
+    """The heat rate at each node, in watts. Positive heat enters the
+    body. A free node has zero."""
+
+    def __init__(out self, var values: List[Float64]):
+        """Hold heat rates.
+
+        Args:
+            values: One per node, in watts.
+        """
+        self.values = values^
+
+    def at(self, node: NodeId) raises -> Power64:
+        """Return the heat rate at one node.
+
+        Args:
+            node: The node.
+
+        Returns:
+            The heat that enters the body there.
+
+        Raises:
+            Error: If the node id names no node.
+        """
+        require_id(node.is_valid(), node.value, len(self.values), "node")
+        return Power64(self.values[node.value], WATT)
+
+    def total(self) -> Power64:
+        """Return the heat that enters the body at every held node.
+
+        Returns:
+            The sum. In a steady state it balances the sources, the
+            perfusion and the convection.
+        """
+        var sum = 0.0
+        for value in self.values:
+            sum += value
+        return Power64(sum, WATT)
+
+
+def held_heat(
+    problem: ThermalProblem, result: ThermalResult
+) raises -> HeatRates:
+    """Return the heat that enters the body at each held node.
+
+    The rate at a held node is the row of `K T - F` there: the heat that
+    the held temperature must supply to keep its value. A needle held at
+    70 C supplies the heat that the tissue conducts and the blood takes
+    away.
+
+    Args:
+        problem: The problem that was solved.
+        result: Its steady temperatures.
+
+    Returns:
+        The rate at each node, in watts. A free node has zero.
+
+    Raises:
+        Error: If the result is not for this problem.
+    """
+    var n = problem.mesh.node_count()
+    if len(result.temperatures) != n:
+        raise Error("The result is not for this problem")
+    var builder = SparseBuilder(n)
+    var rhs = List[Float64](length=n, fill=0)
+    _assemble(problem, builder, rhs)
+    var k = builder.build()
+    var applied = k.multiply(result.temperatures)
+    var out = List[Float64](length=n, fill=0)
+    for node in range(n):  # pragma: no branch
+        if problem.fixed[node]:
+            out[node] = applied[node] - rhs[node]
+    return HeatRates(out^)
+
+
+struct HeatFluxes(Movable):
+    """The conducted heat flux of each element, at its centroid."""
+
+    var values: List[Float64]
+    """Three components per element, in watts per square meter."""
+
+    def __init__(out self, var values: List[Float64]):
+        """Hold heat fluxes.
+
+        Args:
+            values: Three per element, in watts per square meter.
+        """
+        self.values = values^
+
+    def component(self, element: Int, axis: DofAxis) raises -> HeatFlux64:
+        """Return one component of the flux of an element.
+
+        Args:
+            element: The element, from zero.
+            axis: `DOF_X`, `DOF_Y` or `DOF_Z`.
+
+        Returns:
+            The component, positive along the axis.
+
+        Raises:
+            Error: If the element is outside the result, or the axis is
+                not valid.
+        """
+        require_dof_axis(axis)
+        var count = len(self.values) // 3
+        if element < 0 or element >= count:
+            raise Error("An element is outside the heat fluxes")
+        return HeatFlux64(
+            self.values[3 * element + axis.value], WATT_PER_SQUARE_METER
+        )
+
+    def magnitude(self, element: Int) raises -> HeatFlux64:
+        """Return the size of the flux of an element.
+
+        Args:
+            element: The element, from zero.
+
+        Returns:
+            The length of the flux vector.
+
+        Raises:
+            Error: If the element is outside the result.
+        """
+        var count = len(self.values) // 3
+        if element < 0 or element >= count:
+            raise Error("An element is outside the heat fluxes")
+        var x = self.values[3 * element]
+        var y = self.values[3 * element + 1]
+        var z = self.values[3 * element + 2]
+        return HeatFlux64(sqrt(x * x + y * y + z * z), WATT_PER_SQUARE_METER)
+
+
+def heat_flux(
+    problem: ThermalProblem, result: ThermalResult
+) raises -> HeatFluxes:
+    """Return the conducted heat flux `-k grad T` of each element.
+
+    A four-node element has one gradient. A ten-node element takes its
+    gradient at the centroid. The flux runs from hot to cold.
+
+    Args:
+        problem: The problem that was solved.
+        result: Its temperatures.
+
+    Returns:
+        Three components per element, in watts per square meter.
+
+    Raises:
+        Error: If the result is not for this problem.
+    """
+    ref mesh = problem.mesh
+    if len(result.temperatures) != mesh.node_count():
+        raise Error("The result is not for this problem")
+    var count = mesh.nodes_per_element()
+    var centroid: List[Float64] = [0.25, 0.25, 0.25, 0.25]
+    var out = List[Float64]()
+    for e in range(mesh.element_count()):  # pragma: no branch
+        var at = count * e
+        var linear = shape_gradients(
+            mesh.nodes[mesh.corners[at]],
+            mesh.nodes[mesh.corners[at + 1]],
+            mesh.nodes[mesh.corners[at + 2]],
+            mesh.nodes[mesh.corners[at + 3]],
+        )
+        var grads = linear.copy()
+        if count == 10:
+            grads = quadratic_gradients(linear, centroid)
+        var k = problem.materials[mesh.materials[e]].conductivity.to(
+            WATT_PER_METER_KELVIN
+        )
+        var gx = 0.0
+        var gy = 0.0
+        var gz = 0.0
+        for a in range(count):  # pragma: no branch
+            var t = result.temperatures[mesh.corners[at + a]]
+            gx += t * grads[a].x
+            gy += t * grads[a].y
+            gz += t * grads[a].z
+        out.append(-k * gx)
+        out.append(-k * gy)
+        out.append(-k * gz)
+    return HeatFluxes(out^)

@@ -13,7 +13,7 @@ center. The needle holds 70 C. The tissue conducts heat at 0.5 W/(m K),
 makes 400 W/m^3 of metabolic heat, and blood perfuses it at 37 C. The
 picture shows the half block from its cut face, colored from 37 C (blue)
 to 70 C (red). The program prints the temperature at 2, 5 and 10 mm
-below the needle's tip.
+below the needle's tip, and the power that the needle supplies.
 
 This is a picture of a simple model, for teaching. It is not a plan for
 a treatment.
@@ -32,6 +32,7 @@ from extensions.fem.thermal import (
     ThermalProblem,
     WATT_PER_CUBIC_METER,
     WATT_PER_CUBIC_METER_KELVIN,
+    held_heat,
     solve_thermal,
 )
 from materials.material import Material, PHONG
@@ -53,6 +54,7 @@ from units.si import (
     Length64,
     METER,
     ThermalConductivity64,
+    WATT,
     WATT_PER_METER_KELVIN,
 )
 from units.temperature import CELSIUS, KELVIN, Temperature64
@@ -110,6 +112,9 @@ def main() raises:
                     result.temperature(NodeId(n)).to(CELSIUS),
                     "C",
                 )
+    # The half block takes half of the needle's heat.
+    var half = held_heat(problem, result).total().to(WATT)
+    print("The needle supplies", 2 * half, "W")
     var geometry = temperature_geometry(
         problem.mesh,
         result,
