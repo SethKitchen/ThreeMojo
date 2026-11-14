@@ -26,7 +26,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `shape` | `label_shape`, `LabelShape` and `slice_areas` |
 | `compare` | `compare_labels`, `LabelComparison`, `label_overlaps`, `LabelOverlap`, `mean_dice`, `surface_voxels` and `percentile` |
 | `roi` | `circle_statistics` and `RegionStatistics` |
-| `texture` | `cooccurrence_matrix`, `texture_features` and `TextureFeatures` |
+| `texture` | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` and `TextureFeatures` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
@@ -420,6 +420,8 @@ The values first go into `levels` gray levels: level `floor((value - low) / (hig
 | `energy` | The square root of `asm` |
 | `correlation` | The sum of `P (i - mu_i) (j - mu_j) / (sigma_i sigma_j)`, or 1 when a sigma is below 1e-15 |
 
+`volume_cooccurrence(volume, map, label, di, dj, dk, levels, low, high)` counts the pairs of a whole label in three dimensions instead, at a voxel offset. Use it for a texture across slices, such as along the axis of a bone. With `dk` zero, it is the matrices of every slice pooled.
+
 These are the formulas of scikit-image's `graycoprops`. Its angle `theta` at the distance `d` is the offset `(round(d cos theta), round(d sin theta))`.
 
 ## Measure the shape of a label
@@ -606,6 +608,7 @@ The tests check these results:
 - Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
 - A circle of 2 pixels holds the 13 lattice points of its disc. On a ramp, a disc gives the value at its center and the sample deviation of its pixels. With pixels 0.5 mm wide, a circle of 1 mm holds 7 pixels. A circle at a corner keeps the 6 pixels of the grid.
+- A board in three dimensions flips along k, with a contrast of 1, and not along `(1, 1, 0)`. With `dk` zero, its matrix is the matrices of the slices pooled, to 1e-15.
 - On a checkerboard, neighbors along x give a contrast of 1 and a correlation of -1. Diagonal neighbors give a contrast of 0 and a correlation of 1. The gray levels clamp at both ends, and only pairs in the label count. On a random image of 8 levels, the six features at 8 offsets match scikit-image 0.26 to 4e-15. That check is not part of the test suite.
 - A box of 10 by 6 by 8 mm has voxels of 1 by 1 by 2 mm. Its semi-axes are `sqrt(5 / 12)` times its sides, to 1e-9, along the grid axes. Its axes follow the patient frame of the volume. An ellipsoid of 20, 12 and 8 mm turned 30 degrees gives its semi-axes within 2 percent, and its long axis within one degree. Each slice of the box has its area exactly.
 - A table of four labels gives each label's counts, Dice and Jaccard. The Dice is 1 for a match, 0.5 for half, and 0 for a label in one map only. Its overlap of a label agrees with `compare_labels`.
@@ -645,7 +648,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A path has fewer than two points or two equal points in a row, or a pass count or a spacing is out of range | `smooth_path`, `resample_path` |
 | A path has fewer than two points or two equal points in a row, `up` is zero or along a segment, or a size is out of range | `curved_reformat` |
 | A circle has a bad axis, slice, center or radius, or holds no pixel center | `circle_statistics` |
-| A texture has a bad label, axis, slice, offset, level count or range, or no pair at its offset | `cooccurrence_matrix`, `texture_features` |
+| A texture has a bad label, axis, slice, offset, level count or range, or no pair at its offset | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels`, `label_overlaps` |
 | A table of overlaps is empty | `mean_dice` |
 | A crop box leaves the grid or holds no voxel, or a label box has a bad label or margin | `crop_volume`, `crop_labels`, `label_box` |
@@ -666,7 +669,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
 - Rendering uses the volume frame. It does not apply the patient orientation.
 - A circle counts whole pixels by their centers. It does not weigh the pixels that its edge cuts.
-- Texture features use one slice at a time. There is no co-occurrence matrix in three dimensions.
+- A co-occurrence offset is in voxels. With voxels that are not cubes, two offsets of one count of voxels can differ in length.
 - A centered path is a chain of voxel centers. `smooth_path` smooths it, but does not keep it inside the label at a sharp bend of a thin structure.
 - The connectivity of `label_surface`, the surfaces and the morphology is by faces. The `Connectivity` choice applies to the pieces and to region growing only.
 - The colors of a transfer function are display values. They are not linear light.

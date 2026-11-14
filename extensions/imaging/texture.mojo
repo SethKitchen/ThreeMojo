@@ -31,6 +31,11 @@ The values are first put into `levels` gray levels: level
 The offset `(dx, dy)` is in pixels of the slice: `(1, 0)` pairs each
 pixel with its neighbor along pixel x, and `(1, 1)` with its diagonal
 neighbor.
+
+`volume_cooccurrence` counts the pairs of a whole label in three
+dimensions instead, at a voxel offset `(di, dj, dk)`. A texture across
+slices, such as along the axis of a bone, needs it. With `dk` zero, it
+is the matrices of every slice pooled.
 """
 
 from extensions.imaging.ids import (
@@ -227,3 +232,77 @@ def texture_features(
         sqrt(asm),
         correlation,
     )
+
+
+def volume_cooccurrence(
+    volume: ImageVolume,
+    map: LabelMap,
+    label: LabelId,
+    di: Int,
+    dj: Int,
+    dk: Int,
+    levels: Int,
+    low: Float64,
+    high: Float64,
+) raises -> Tuple[List[Float64], Int]:
+    """Return the normed, symmetric co-occurrence matrix of a label in 3D.
+
+    Args:
+        volume: The volume.
+        map: Its label map.
+        label: The region. Not the background.
+        di: The offset along `i`.
+        dj: The offset along `j`.
+        dk: The offset along `k`. Not all three zero.
+        levels: The gray levels, from 2 to 256.
+        low: The value at the bottom of level 0.
+        high: The value at the top of the last level. Above `low`.
+
+    Returns:
+        The `levels` by `levels` matrix, row by row, and the number of
+        voxel pairs.
+
+    Raises:
+        Error: If the grids differ, the label is not valid or is the
+            background, the offset is zero, `levels` is out of range, the
+            range is not finite or falls, or no pair of the region lies at
+            the offset.
+    """
+    require_same_grid(map, volume)
+    require_label(label)
+    if label == BACKGROUND:
+        raise Error("A texture needs a label other than the background")
+    if di == 0 and dj == 0 and dk == 0:
+        raise Error("A co-occurrence offset cannot be zero")
+    if levels < 2 or levels > 256:
+        raise Error("A co-occurrence matrix has from 2 to 256 gray levels")
+    if not isfinite(low) or not isfinite(high) or not (high > low):
+        raise Error("A gray-level range must be finite and rise")
+    var mark = UInt8(label.value)
+    var scale = Float64(levels) / (high - low)
+    var gray = List[Int](length=volume.count(), fill=-1)
+    for at in range(volume.count()):  # pragma: no branch
+        if map.labels[at] != mark:
+            continue
+        var level = Int(floor((Float64(volume.values[at]) - low) * scale))
+        gray[at] = max(0, min(levels - 1, level))
+    var counts = List[Float64](length=levels * levels, fill=0)
+    var pairs = 0
+    for k in range(volume.nz):  # pragma: no branch
+        for j in range(volume.ny):  # pragma: no branch
+            for i in range(volume.nx):  # pragma: no branch
+                var a = gray[volume.index(i, j, k)]
+                if a < 0 or not volume.contains(i + di, j + dj, k + dk):
+                    continue
+                var b = gray[volume.index(i + di, j + dj, k + dk)]
+                if b < 0:
+                    continue
+                counts[a * levels + b] += 1
+                counts[b * levels + a] += 1
+                pairs += 1
+    if pairs == 0:
+        raise Error("No pair of the region lies at the offset")
+    var total = 2.0 * Float64(pairs)
+    for k in range(len(counts)):  # pragma: no branch
+        counts[k] /= total
+    return (counts^, pairs)

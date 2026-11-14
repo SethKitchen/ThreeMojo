@@ -15,7 +15,11 @@ from extensions.imaging.ids import (
 )
 from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
 from extensions.imaging.labels import LabelMap
-from extensions.imaging.texture import cooccurrence_matrix, texture_features
+from extensions.imaging.texture import (
+    cooccurrence_matrix,
+    texture_features,
+    volume_cooccurrence,
+)
 from std.math import inf, sqrt
 from std.testing import (
     TestSuite,
@@ -120,6 +124,72 @@ def test_levels_labels_and_a_flat_region() raises:
     # level has no spread, the correlation is 1.
     var lopsided: List[Float64] = [0.5, 0.0, 0.5, 0.0]
     assert_almost_equal(texture_features(lopsided, 1).correlation, 1.0)
+
+
+def test_three_dimensions() raises:
+    var parts = _checker()
+    ref volume = parts[0]
+    ref map = parts[1]
+    # Along k the board flips each slice, and along (1, 1, 0) it does not.
+    var deep = volume_cooccurrence(volume, map, LabelId(1), 0, 0, 1, 2, 0, 2)
+    assert_equal(deep[1], 32)
+    var f = texture_features(deep[0], deep[1])
+    assert_almost_equal(f.contrast, 1.0)
+    assert_almost_equal(f.correlation, -1.0)
+    var flat = volume_cooccurrence(volume, map, LabelId(1), 1, 1, 0, 2, 0, 2)
+    assert_almost_equal(texture_features(flat[0], flat[1]).contrast, 0.0)
+    # With dk zero, the matrix pools the matrices of every slice.
+    var mm = Length64(1.0, MILLIMETER64)
+    var mixed = ImageVolume(5, 4, 3, mm, mm, mm)
+    var region = LabelMap(mixed)
+    for k in range(3):
+        for j in range(4):
+            for i in range(5):
+                mixed.set(i, j, k, Float32((i * 7 + j * 3 + k * 5) % 6))
+                if (i + 2 * j + k) % 5 != 0:
+                    region.set(i, j, k, LabelId(3))
+    var pooled = volume_cooccurrence(
+        mixed, region, LabelId(3), 1, -1, 0, 6, 0, 6
+    )
+    var sum = List[Float64](length=36, fill=0)
+    var count = 0
+    for k in range(3):
+        var part = cooccurrence_matrix(
+            mixed, region, LabelId(3), K_AXIS, k, 1, -1, 6, 0, 6
+        )
+        var weight = Float64(part[1])
+        for n in range(36):
+            sum[n] += part[0][n] * weight
+        count += part[1]
+    assert_equal(pooled[1], count)
+    for n in range(36):
+        assert_almost_equal(pooled[0][n], sum[n] / Float64(count), atol=1e-15)
+    var one = LabelId(1)
+    with assert_raises(contains="background"):
+        _ = volume_cooccurrence(volume, map, BACKGROUND, 1, 0, 0, 2, 0, 2)
+    with assert_raises(contains="offset"):
+        _ = volume_cooccurrence(volume, map, one, 0, 0, 0, 2, 0, 2)
+    with assert_raises(contains="gray levels"):
+        _ = volume_cooccurrence(volume, map, one, 1, 0, 0, 300, 0, 2)
+    with assert_raises(contains="gray levels"):
+        _ = volume_cooccurrence(volume, map, one, 1, 0, 0, 1, 0, 2)
+    with assert_raises(contains="range"):
+        _ = volume_cooccurrence(
+            volume, map, one, 1, 0, 0, 2, -inf[DType.float64](), 2
+        )
+    with assert_raises(contains="range"):
+        _ = volume_cooccurrence(
+            volume, map, one, 1, 0, 0, 2, 0, inf[DType.float64]()
+        )
+    # An offset along j alone.
+    var rows = volume_cooccurrence(volume, map, one, 0, 1, 0, 2, 0, 2)
+    assert_almost_equal(texture_features(rows[0], rows[1]).contrast, 1.0)
+    with assert_raises(contains="range"):
+        _ = volume_cooccurrence(volume, map, one, 1, 0, 0, 2, 1, 0)
+    with assert_raises(contains="No pair"):
+        _ = volume_cooccurrence(volume, map, one, 0, 0, 3, 2, 0, 2)
+    with assert_raises(contains="different grids"):
+        _ = volume_cooccurrence(volume, LabelMap(mixed), one, 1, 0, 0, 2, 0, 2)
 
 
 def test_refusals() raises:
