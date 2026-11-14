@@ -4,7 +4,9 @@
 
 ![The cartoon ribbon of an ideal peptide, and its solvent excluded surface colored by element and by hydropathy](out/molecule.png)
 
-`examples/molecule.mojo` makes this picture. It builds 30 residues of ideal backbone: a helix, a loop and a strand. The top panel is the ribbon, colored by secondary structure. The middle panel is the solvent excluded surface for a water probe, colored by element. The bottom panel is the same surface colored by hydropathy. The leucines and alanines of the helix make an orange stripe between its blue glutamates and lysines: the helix is amphipathic. The program also prints the solvent accessible area, 2434 square angstroms.
+`examples/molecule.mojo` makes this picture. It builds 30 residues of ideal backbone: a helix, a loop and a strand. The top panel is the ribbon, colored by secondary structure. The middle panel is the solvent excluded surface for a water probe, colored by element. The program also prints the solvent accessible area, 2434 square angstroms.
+
+The bottom panel is the same surface colored by hydropathy. The leucines and alanines of the helix make an orange stripe between its blue glutamates and lysines: the helix is amphipathic.
 
 ## Modules
 
