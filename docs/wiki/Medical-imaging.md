@@ -17,6 +17,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `dicom` | `parse_dicom` and `read_dicom`, which give a `DicomSlice` |
 | `dicom_write` | `DicomWriter`, `encode_dicom` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
+| `nifti` | `parse_nifti`, `read_nifti`, `encode_nifti`, `encode_nifti_labels` and `labels_from_volume` |
 | `phantom` | `shepp_logan`, a head of ten ellipsoids |
 | `transfer` | `WindowLevel`, `TransferFunction` and `Rgba` |
 | `raycast` | `VolumeCamera`, `orbit_camera`, `ray_box` and `render_volume` |
@@ -78,6 +79,30 @@ The reader keeps the elements in the table. It steps over every other element. I
 Each value in `values` is `slope * stored + intercept`. For CT, this gives Hounsfield units. The reader masks each stored value to its stored bits. It extends the sign when the pixel representation is signed.
 
 Lengths are in meters inside the library. DICOM gives them in millimeters. Use `MILLIMETER64` to read them back in millimeters. It has a `Float64` scale, so a length keeps every digit.
+
+## Read and write NIfTI files
+
+Research imaging tools exchange volumes and segmentations as NIfTI-1 files. `read_nifti(path)` reads a `.nii` file or a `.nii.gz` file into an `ImageVolume`.
+
+```mojo
+var volume = read_nifti("brain.nii.gz")
+var mask = labels_from_volume(read_nifti("brain_mask.nii.gz"))
+Path("tumor.nii.gz").write_bytes(encode_nifti_labels(labels, volume, True))
+```
+
+The reader takes a single file in either byte order. It takes these datatypes: unsigned and signed integers of 8, 16 and 32 bits, and floats of 32 and 64 bits. It reads the first volume of a file with more than three dimensions. Each value is `scl_slope * stored + scl_inter`, and a slope of zero means no scaling.
+
+The placement comes from the first of these that the file sets:
+
+| Source | When |
+|---|---|
+| The sform rows | `sform_code` is above zero |
+| The qform quaternion, with `pixdim[0]` as the flip of k | `qform_code` is above zero |
+| The voxel sizes alone, method 1 of the standard | Neither code is set |
+
+The spatial unit can be meters, millimeters or microns. A file with no unit is in millimeters. NIfTI's world is RAS: x to the right, y to the front and z up. The volume keeps the LPS patient space of DICOM, so x and y change sign. The display range `cal_min` to `cal_max` gives the window when it is a range.
+
+`encode_nifti(volume, compress)` writes 32-bit floats. `encode_nifti_labels(map, volume, compress)` writes unsigned bytes with the label intent, 1002, so a viewer shows the values as labels. Both write the placement as sform rows in millimeters, and `compress` wraps the file in gzip. `labels_from_volume` turns a volume of whole values from 0 to 255 into a label map.
 
 ## Stack slices
 
@@ -214,6 +239,8 @@ The tests check these results:
 - An isosurface of a linear ramp has the full iso color along the gradient, and the ambient light across it.
 - An ellipsoid of 904.8 voxels labels 879 voxels, within four percent, with its centroid exact.
 - One render with one, three and every core gives the same bytes.
+- Four NIfTI files that nibabel 5.3.2 wrote read with nibabel's world points and values. They cover both byte orders, the sform, the qform with a flip, voxel sizes in microns, and gzip. `assets/nifti/make_nifti.py` makes them.
+- A volume and a label map written as NIfTI, plain and in gzip, read back with the same values and placement.
 
 The example labels the left ventricle of a 128-voxel phantom. It measures 77.9 mL. The ellipsoid of the ventricle holds 76.9 mL.
 
@@ -227,6 +254,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A transfer syntax is compressed or big endian | `parse_dicom`, `read_dicom` |
 | An image is not one frame of one grayscale sample | `parse_dicom`, `read_dicom` |
 | A grid is empty or holds more than 2^28 voxels | `ImageVolume`, `shepp_logan` |
+| A file is not single-file NIfTI-1, or its datatype, unit or axes are not supported | `parse_nifti`, `read_nifti` |
 | Slices disagree, share a position or are not evenly spaced | `stack_slices` |
 | An index is outside the grid | `get`, `set`, `region_grow`, `render_slice` |
 | A label is not from 0 to 255, or is the background where a region is needed | Label functions |
@@ -236,6 +264,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 
 - The reader takes uncompressed little-endian grayscale images only. It does not read color, multiframe, JPEG, JPEG 2000 or RLE files.
 - The reader does not read a file that has no preamble.
+- The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
 - Rendering uses the volume frame. It does not apply the patient orientation.
@@ -247,6 +276,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annex A.
 - NEMA PS3.3, "Information Object Definitions", sections C.7.6.2 and C.11.2.1.
 - NEMA PS3.10, "Media Storage and File Format", section 7.
+- Cox and others, "A (sort of) new image data format standard: NIfTI-1", 2004, and the header `nifti1.h`.
 - Shepp and Logan, "The Fourier reconstruction of a head section", 1974.
 - Toft, "The Radon Transform: Theory and Implementation", 1996.
 - Levoy, "Display of surfaces from volume data", 1988.

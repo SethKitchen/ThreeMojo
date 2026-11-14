@@ -240,6 +240,7 @@ extensions/
     dicom.mojo            the DICOM Part 10 reader
     dicom_write.mojo      the DICOM writer
     series.mojo           slice stacks, and volumes cut into slices
+    nifti.mojo            NIfTI-1 volumes and label maps, read and written
     phantom.mojo          the Shepp-Logan head phantom
     transfer.mojo         windows and transfer functions
     raycast.mojo          the CPU volume ray caster
