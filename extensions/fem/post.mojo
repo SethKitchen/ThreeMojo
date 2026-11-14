@@ -16,6 +16,10 @@ of that end.
 `temperature_geometry` colors the outer surface by the temperature of
 each node, on the same scale.
 
+`dose_geometry` colors it by the thermal dose of each node, on the same
+scale but logarithmic, from a low dose to a high one such as 240
+minutes.
+
 `mode_geometry` draws a mode shape the same way. It scales the shape so
 that the node that moves most moves by a given amplitude, and colors
 each vertex by how far its node moves, on the same scale.
@@ -29,8 +33,8 @@ from extensions.fem.thermal import ThermalResult
 from extensions.sdf.vector import V3, cross, dot, normalize, v3
 from geometries.surface import indexed_surface
 from render.srgb import srgb_to_linear
-from std.math import isfinite, max, min
-from units.si import Length64, METER, PASCAL, Pressure64
+from std.math import isfinite, log, max, min
+from units.si import Duration64, Length64, METER, PASCAL, Pressure64, SECOND
 from units.temperature import KELVIN, Temperature64
 
 
@@ -267,4 +271,49 @@ def temperature_geometry(
     var places = List[Float64]()
     for value in result.temperatures:
         places.append((value - cold) / (hot - cold))
+    return _colored_surface(mesh, mesh.nodes.copy(), places)
+
+
+def dose_geometry(
+    mesh: TetMesh,
+    doses: List[Duration64],
+    low: Duration64,
+    high: Duration64,
+) raises -> BufferGeometry:
+    """Return the outer surface, each vertex colored by its thermal dose.
+
+    The scale is logarithmic, because doses span many powers of ten. It
+    runs from blue at `low` to red at `high`. A dose at or below `low` is
+    blue, and a dose past `high` red.
+
+    Args:
+        mesh: The mesh that was solved.
+        doses: The dose of each node, from `thermal_dose`.
+        low: The dose at blue. Positive.
+        high: The dose at red, such as 240 minutes. Above `low` and finite.
+
+    Returns:
+        A triangle mesh in meters with `position`, `normal`, `uv` and
+        `color` attributes.
+
+    Raises:
+        Error: If the doses are not for this mesh, or the scale is not
+            positive, rising and finite.
+    """
+    if len(doses) != mesh.node_count():
+        raise Error("The doses are not for this mesh")
+    var least = low.to(SECOND)
+    var most = high.to(SECOND)
+    if not (least > 0) or not (most > least) or not isfinite(most):
+        raise Error(
+            "A dose scale needs a positive low end below a finite high end"
+        )
+    var span = log(most / least)
+    var places = List[Float64]()
+    for dose in doses:
+        var value = dose.to(SECOND)
+        if value > least:
+            places.append(log(value / least) / span)
+        else:
+            places.append(0.0)
     return _colored_surface(mesh, mesh.nodes.copy(), places)

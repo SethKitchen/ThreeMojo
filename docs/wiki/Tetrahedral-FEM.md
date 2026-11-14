@@ -14,7 +14,7 @@
 | `mesh` | `TetMesh`, `box_mesh`, `voxel_mesh`, `voxel_mesh_labels`, `quadratic_mesh`, `boundary_faces`, `edge_pairs` and `signed_volume` |
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of`, `von_mises`, `principal_stresses` and `PrincipalStress` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
-| `post` | `stress_geometry`, `stress_color`, `mode_geometry` and `temperature_geometry` |
+| `post` | `stress_geometry`, `stress_color`, `mode_geometry`, `temperature_geometry` and `dose_geometry` |
 | `summary` | `stress_summary`, `MaterialStress` and `strain_energy` |
 | `quality` | `element_quality`, `ElementQuality`, `mesh_quality` and `MeshQuality` |
 | `probe` | `locate_point`, `MeshPoint`, `sample_field`, `sample_temperature` and `sample_displacement` |
@@ -318,6 +318,12 @@ Heat kills tissue by the time that it spends hot, and above 43 C each degree dou
 
 Each interval between two records counts at the mean of its two temperatures. This is exact for a steady temperature. Record often enough that the temperature changes little within one interval.
 
+`dose_geometry(mesh, doses, low, high)` colors the outer surface by the dose of each node. The scale is logarithmic, because doses span many powers of ten. It runs from blue at `low` to red at `high`, such as 1 and 240 minutes.
+
+![A needle heats perfused tissue for six minutes: the final temperatures, and the thermal dose with the ablated zone in red](out/ablation.png)
+
+`examples/ablation.mojo` makes this picture. The block, the needle and the tissue are those of the bioheat example. The tissue starts at 37 C, and the needle holds 90 C for six minutes in steps of two seconds. The left panel is the temperature at the end, and the right panel the dose from 1 to 240 minutes. After six minutes, 0.70 mL reach 240 minutes. At 5 mm below the tip, the tissue is at 44.6 C with a dose of 6.8 minutes.
+
 ## Sample a field at a point
 
 `sample_temperature(mesh, result, point)` gives the temperature at a point inside the mesh, such as the place of a thermocouple. `sample_displacement(mesh, result, point)` gives the displacement there, in meters.
@@ -426,6 +432,7 @@ The tests check these results:
 - Given stresses on a box of two cubes give each material's count, volume, peak, mean and volume above a threshold exactly. A material without elements has no row. A pulled bar at 200 MPa has that stress as its peak and its mean, with its whole volume above 199 MPa.
 - A linear field sampled at 12 points between the nodes of a box is exact on both orders. A quadratic field is exact on ten-node elements. At a node, the sample is the node's value. A point on a face lies in two elements, the lower one counts, and both give one value. Steady conduction from 300 K to 400 K samples to its straight line at every point.
 - Ten minutes at 43, 44, 42 and 37 C give doses of 10, 20 and 2.5 minutes, and `10 / 4^6`. An interval from 42 to 44 C counts at 43 C. A block held at 50 C through `solve_transient` for two minutes has a dose of 256 minutes at every node. Its dosed volume is the whole block, or one cube when only that cube's nodes reach the threshold.
+- On a dose map, a dose below the low end takes the scale's blue, and a dose past the high end its red. A mesh without nodes draws nothing.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 - A record of a history is the temperature file of its values, with its time in the title. A series file lists each name with its time, and names get a fifth digit past 10000 records.
 
@@ -465,7 +472,7 @@ Every function raises `Error` for input it cannot use.
 | A result is not for its mesh | `stress_geometry` |
 | A result is not for its mesh, or a stress threshold is negative or not finite | `stress_summary`, `strain_energy` |
 | A mesh has no element, or an element id names no element | `mesh_quality`, `element_quality` |
-| A dose has fewer than two records, times that do not rise, records of other sizes, doses that do not fit the mesh, or a bad threshold | `thermal_dose`, `dose_volume` |
+| A dose has fewer than two records, times that do not rise, records of other sizes, doses that do not fit the mesh, or a bad threshold or scale | `thermal_dose`, `dose_volume`, `dose_geometry` |
 | No element holds a point, or a field or a mesh point does not fit the mesh | `locate_point`, `sample_field`, `sample_temperature`, `sample_displacement` |
 | A result is not for its problem, or an element, a node or an axis is out of range | `held_heat`, `heat_flux`, `HeatRates`, `HeatFluxes` |
 | The capacities or the start do not fit the problem, a step or a count is out of range, or a capacity kind is not valid | `solve_transient`, `ThermalCapacity` |

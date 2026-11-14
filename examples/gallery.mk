@@ -288,6 +288,9 @@ $(call gallery,fem-modes,fem_modes)
 # Half of a block of perfused tissue, cut through a needle held at 70 C,
 # colored by temperature by Pennes' bioheat equation.
 $(call gallery,bioheat,bioheat)
+# The bioheat block heated by a needle for six minutes: its final
+# temperatures, and its thermal dose with the ablated zone in red.
+$(call gallery,ablation,ablation)
 # A synthetic vessel that winds through soft tissue: its projection with
 # the centered path, one axial slice, and the vessel straightened.
 $(call gallery,vessel,vessel)

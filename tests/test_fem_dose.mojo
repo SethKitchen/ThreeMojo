@@ -5,7 +5,10 @@
 
 """Thermal doses in equivalent minutes at 43 C, and dosed volumes."""
 
+from core.buffer_geometry import COLOR
 from extensions.fem.dose import dose_volume, thermal_dose
+from extensions.fem.post import dose_geometry
+from render.srgb import srgb_to_linear
 from extensions.fem.mesh import TetMesh, box_mesh
 from extensions.fem.thermal import (
     ThermalCapacity,
@@ -21,6 +24,7 @@ from std.testing import (
     assert_almost_equal,
     assert_equal,
     assert_raises,
+    assert_true,
 )
 from units.si import (
     CUBIC_METER,
@@ -126,6 +130,61 @@ def test_a_held_block_and_its_volume() raises:
         ),
         0.0,
     )
+
+
+def test_dose_colors() raises:
+    var mesh = box_mesh(
+        Length64(0.02, METER),
+        Length64(0.01, METER),
+        Length64(0.01, METER),
+        2,
+        1,
+        1,
+    )
+    # Doses of 0.1 minute at x = 0, 15.5 at x = 0.01 and 2400 at x = 0.02.
+    var doses = List[Duration64]()
+    for p in mesh.nodes:
+        var minutes = 0.1
+        if p.x > 0.015:
+            minutes = 2400
+        elif p.x > 0.005:
+            minutes = 15.5
+        doses.append(Duration64(minutes, MINUTE))
+    var surface = dose_geometry(
+        mesh, doses, Duration64(1, MINUTE), Duration64(240, MINUTE)
+    )
+    ref colors = surface.attribute_view(COLOR)
+    var bluest = 1.0
+    var reddest = 0.0
+    for v in range(colors.count()):
+        bluest = min(bluest, Float64(colors.component(v, 0)))
+        reddest = max(reddest, Float64(colors.component(v, 0)))
+    # Below the low end is the scale's blue, past the high end its red.
+    assert_almost_equal(bluest, Float64(srgb_to_linear(0.1)), atol=1e-6)
+    assert_almost_equal(reddest, Float64(srgb_to_linear(0.9)), atol=1e-6)
+    # A mesh without nodes draws nothing.
+    var nothing = dose_geometry(
+        TetMesh(),
+        List[Duration64](),
+        Duration64(1, MINUTE),
+        Duration64(2, MINUTE),
+    )
+    assert_equal(nothing.vertex_count(), 0)
+    with assert_raises(contains="not for this mesh"):
+        _ = dose_geometry(
+            mesh,
+            List[Duration64](),
+            Duration64(1, MINUTE),
+            Duration64(2, MINUTE),
+        )
+    for scale in [(0.0, 1.0), (2.0, 2.0), (1.0, inf[DType.float64]())]:
+        with assert_raises(contains="dose scale"):
+            _ = dose_geometry(
+                mesh,
+                doses,
+                Duration64(scale[0], MINUTE),
+                Duration64(scale[1], MINUTE),
+            )
 
 
 def test_refusals() raises:
