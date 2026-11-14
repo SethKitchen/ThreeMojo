@@ -15,7 +15,7 @@
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of`, `von_mises`, `principal_stresses` and `PrincipalStress` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
 | `post` | `stress_geometry`, `stress_color`, `mode_geometry` and `temperature_geometry` |
-| `export` | `vtk_mesh`, `vtk_result`, `vtk_modes`, `vtk_temperatures`, `vtk_record`, `vtk_series` and `series_names` |
+| `export` | `vtk_mesh`, `vtk_result`, `vtk_modes`, `vtk_temperatures`, `vtk_heat`, `vtk_record`, `vtk_series` and `series_names` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
 | `thermal` | `ThermalMaterial`, `ThermalProblem`, `solve_thermal`, `ThermalResult`, `ThermalCapacity`, `solve_transient`, `TransientResult`, `held_heat`, `HeatRates`, `heat_flux` and `HeatFluxes` |
@@ -251,6 +251,8 @@ The heat rate at a held node is its row of `K T - F`. It is the heat that the he
 
 The bioheat example models half of the block, so the needle supplies twice the total of its held nodes.
 
+`vtk_heat(problem, result)` writes a steady result with both the temperatures and the `heat_flux` cell vectors. Use the Glyph filter of ParaView on `heat_flux` to draw arrows from hot to cold. meshio 5.3.5 read the file of a heated rod, with the exact 410 K at its far end and the flux `q (L - x)` at each centroid. That check is not part of the test suite.
+
 `temperature_geometry(mesh, result, low, high)` colors the outer surface by the temperature of each node, from blue at `low` to red at `high`. `vtk_temperatures(mesh, result)` writes the temperatures for ParaView.
 
 ## Draw the result
@@ -287,7 +289,8 @@ The file is an ASCII `UNSTRUCTURED_GRID` in meters. A four-node element is cell 
 | `material` | Cell scalar | The element's material index |
 | `von_mises` | Cell scalar | The von Mises stress, in pascals |
 | `principal` | Cell scalar of 3 | The principal stresses from the largest, in pascals |
-| `temperature` | Point scalar | The temperature of a node, in kelvin, from `vtk_temperatures` |
+| `temperature` | Point scalar | The temperature of a node, in kelvin, from `vtk_temperatures` and `vtk_heat` |
+| `heat_flux` | Cell vector | The conducted heat flux of an element, in W/m^2, from `vtk_heat` |
 | `first_direction` | Cell vector | The direction of the largest principal stress |
 | `stress` | Cell tensor | The symmetric stress tensor, in pascals |
 | `displacement` | Point vector | The node's displacement, in meters |
@@ -337,7 +340,7 @@ The tests check these results:
 - A uniform source gives the exact parabola `q x (L - x) / (2 k)` at every node of ten-node elements.
 - A sine between two held ends decays as `exp(-t / tau)` within 0.2 percent. Very long steps reach the steady state, and a uniform start in an insulated block stays uniform.
 - A bar starts at 310 K, and its end is held at 330 K. With a consistent capacity and steps of 30 s, it dips more than 1 K below its start. With a lumped capacity, it stays between 310 K and 330 K to the solver's tolerance. An insulated bar from 310 K to 320 K evens out at 315 K with a lumped capacity, for both element orders.
-- A rod between 310 K and 330 K has the flux `-k dT/dx` in every element, for both orders. `k A dT / L` enters at its hot end and leaves at its cold end, to 1e-9. A uniform source `q` in a rod held at both ends sends `q V` out through the ends, half at each.
+- A rod between 310 K and 330 K has the flux `-k dT/dx` in every element, for both orders. Its VTK file holds that flux in each cell after the materials. `k A dT / L` enters at its hot end and leaves at its cold end, to 1e-9. A uniform source `q` in a rod held at both ends sends `q V` out through the ends, half at each.
 - A probe in perfused tissue gives the `cosh` profile of Pennes' equation within 1 percent. Without a fixed node, perfusion holds the tissue at `T_a + q / c`.
 - A column of four voxels with four CT numbers, under 1 MPa, shortens by `p * sum(h / E)`, as springs in series, to a relative 1e-9. One bin takes the mean modulus and the mean density.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.

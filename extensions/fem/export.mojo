@@ -17,7 +17,8 @@ its time in the title line. `vtk_series` writes the file series that
 ParaView 5.5 and later reads as a time series: a JSON file named like
 `heat.vtk.series` that lists each file with its time in seconds.
 `series_names` gives the file names `heat_0000.vtk`, `heat_0001.vtk` and
-on.
+on. `vtk_heat` writes a steady result with the cell vectors `heat_flux`,
+in watts per square meter, beside the temperatures.
 `vtk_modes` adds one point vector per mode shape, `mode_1` and on, with
 the frequencies in the title line. `vtk_result` adds the solved fields: the point vectors `displacement`, in
 meters, and the cell scalars `von_mises` and cell tensors `stress`, in
@@ -30,7 +31,12 @@ back exactly.
 from extensions.fem.ids import ElementId, LINEAR
 from extensions.fem.mesh import TetMesh
 from extensions.fem.modal import ModalResult
-from extensions.fem.thermal import ThermalResult, TransientResult
+from extensions.fem.thermal import (
+    ThermalProblem,
+    ThermalResult,
+    TransientResult,
+    heat_flux,
+)
 from extensions.fem.static import StaticResult
 from units.si import PASCAL, PER_SECOND
 
@@ -312,4 +318,37 @@ def vtk_series(names: List[String], history: TransientResult) raises -> String:
             out += ","
         out += "\n"
     out += "  ]\n}\n"
+    return out^
+
+
+def vtk_heat(problem: ThermalProblem, result: ThermalResult) raises -> String:
+    """Return a steady thermal result with its heat flux as a VTK file.
+
+    Use the Glyph filter of ParaView on `heat_flux` to draw arrows from
+    hot to cold.
+
+    Args:
+        problem: The problem that was solved.
+        result: Its temperatures.
+
+    Returns:
+        The text, with each element's material, the cell vectors
+        `heat_flux` in watts per square meter, and each node's
+        temperature in kelvin as the point scalars `temperature`.
+
+    Raises:
+        Error: If the result is not for this problem.
+    """
+    var flux = heat_flux(problem, result)
+    ref mesh = problem.mesh
+    var out = _geometry(mesh, "ThreeMojo heat, meters, kelvin, W/m^2")
+    out += "VECTORS heat_flux double\n"
+    for e in range(mesh.element_count()):  # pragma: no branch
+        out += _number(flux.values[3 * e]) + " "
+        out += _number(flux.values[3 * e + 1]) + " "
+        out += _number(flux.values[3 * e + 2]) + "\n"
+    out += "POINT_DATA " + String(mesh.node_count()) + "\n"
+    out += "SCALARS temperature double 1\nLOOKUP_TABLE default\n"
+    for value in result.temperatures:  # pragma: no branch
+        out += _number(value) + "\n"
     return out^

@@ -562,6 +562,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
 - Rendering uses the volume frame. It does not apply the patient orientation.
+- A circle counts whole pixels by their centers. It does not weigh the pixels that its edge cuts.
 - The connectivity of `label_surface`, the surfaces and the morphology is by faces. The `Connectivity` choice applies to the pieces and to region growing only.
 - The colors of a transfer function are display values. They are not linear light.
 

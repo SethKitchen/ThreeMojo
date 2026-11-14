@@ -5,6 +5,7 @@
 
 """Heat fluxes of elements, and the heat that held nodes supply."""
 
+from extensions.fem.export import vtk_heat
 from extensions.fem.ids import DOF_X, DOF_Y, DOF_Z, DofAxis, NodeId
 from extensions.fem.mesh import TetMesh, box_mesh, quadratic_mesh
 from extensions.fem.thermal import (
@@ -157,6 +158,37 @@ def test_perfusion_alone_holds_no_node() raises:
         flux.magnitude(0).to(WATT_PER_SQUARE_METER), 0.0, atol=1e-6
     )
     assert_equal(HeatRates(List[Float64]()).total().to(WATT), 0.0)
+
+
+def test_the_flux_in_a_vtk_file() raises:
+    var problem = ThermalProblem(_rod(False), [_material(0)])
+    _hold(problem, 310, 330)
+    var result = solve_thermal(problem, 1e-13, 5000)
+    var text = vtk_heat(problem, result)
+    assert_true(
+        text.startswith(
+            "# vtk DataFile Version 3.0\nThreeMojo heat, meters, kelvin,"
+            " W/m^2\n"
+        )
+    )
+    var lines = text.split("\n")
+    var at = 0
+    for k in range(len(lines)):
+        if lines[k] == "VECTORS heat_flux double":
+            at = k
+    assert_true(at > 0)
+    # Each element's flux is -k dT/dx along x, after the materials.
+    for e in range(problem.mesh.element_count()):
+        var parts = lines[at + 1 + e].split(" ")
+        assert_equal(len(parts), 3)
+        assert_almost_equal(Float64(String(parts[0])), -100.0, rtol=1e-9)
+    var count = problem.mesh.node_count()
+    assert_true(String("\nPOINT_DATA ", count, "\n") in text)
+    assert_true(
+        String(lines[len(lines) - 2]) == String(result.temperatures[count - 1])
+    )
+    with assert_raises(contains="not for this problem"):
+        _ = vtk_heat(problem, ThermalResult(List[Float64](length=2, fill=1)))
 
 
 def test_refusals() raises:
