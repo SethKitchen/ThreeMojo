@@ -265,6 +265,7 @@ extensions/
     coloring.mojo         surfaces colored by atom properties
     superpose.mojo        superpositions and RMSD
     contacts.mojo         residue distance and contact maps
+    hbonds.mojo           hydrogen bonds drawn as dashed tubes
   fem/
     ids.mojo              node, element and material ids, and axes
     mesh.mojo             tetrahedral meshes, box and voxel meshers

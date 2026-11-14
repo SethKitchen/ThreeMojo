@@ -29,7 +29,8 @@ make a ladder, and a residue of a ladder is a strand. A helix wins over
 a strand.
 
 This is DSSP's core. It does not report 3-10 or pi helices, turns, bends,
-isolated bridges or beta bulges.
+isolated bridges or beta bulges. `hydrogen_bonds` lists the bonds
+themselves, with their energies.
 """
 
 from extensions.molecule.ids import (
@@ -41,12 +42,18 @@ from extensions.molecule.ids import (
     SecondaryKind,
 )
 from extensions.molecule.structure import Structure
-from extensions.chemistry.quantities import ANGSTROM
+from extensions.chemistry.quantities import (
+    ANGSTROM,
+    MolarEnergy64,
+    MolarEnergyUnit,
+)
 from extensions.sdf.vector import V3, distance, length, v3
 from units.si import Length64
 
 # A bond exists below this energy, in kcal/mol.
 comptime BOND_ENERGY = -0.5
+# The kilocalorie per mole, the unit of DSSP's energies.
+comptime KILOCALORIE_PER_MOLE = MolarEnergyUnit(4184.0, "kcal/mol")
 # Two residues whose CA atoms are farther apart than this, in angstroms,
 # cannot bond.
 comptime CA_REACH = 9.0
@@ -162,18 +169,12 @@ def _backbone(
     return (True, structure.atoms[atom.value].position * scale)
 
 
-def assign_secondary(mut structure: Structure, model: ModelId) raises:
-    """Replace the secondary structure of a model's residues with DSSP's.
-
-    Residues without all of N, CA, C and O are coil and take no part.
-
-    Args:
-        structure: The structure. Its residues of the model change.
-        model: The model.
-
-    Raises:
-        Error: If the model id names no model.
-    """
+def _energies(
+    structure: Structure, model: ModelId
+) raises -> Tuple[List[Int], List[Float64]]:
+    """Return the residues with a whole backbone, and the energy of the
+    bond from the C=O of each to the N-H of each, in kcal/mol: entry
+    `i * count + j`. A pair that cannot bond has zero."""
     structure.require_model(model)
     ref m = structure.models[model.value]
     var picked = List[Int]()
@@ -184,7 +185,6 @@ def assign_secondary(mut structure: Structure, model: ModelId) raises:
         for r in range(
             chain.first_residue, chain.first_residue + chain.residue_count
         ):
-            structure.residues[r].secondary = COIL
             var whole = True
             var atoms = List[V3]()
             for name in ["N", "CA", "C", "O"]:
@@ -213,18 +213,110 @@ def assign_secondary(mut structure: Structure, model: ModelId) raises:
             h = places[4 * k] + back * (1.0 / length(back))
         hydrogen.append(h)
         has_h.append(donor)
-    var bonds = List[Bool](length=count * count, fill=False)
+    var energies = List[Float64](length=count * count, fill=0)
     for i in range(count):
         # The outer loop runs only when there is a residue.
         for j in range(count):  # pragma: no branch
-            if i == j or not has_h[j]:
+            # The N-H right after a C=O shares its peptide plane, and DSSP
+            # does not pair them.
+            if i == j or j == i + 1 or not has_h[j]:
                 continue
             if distance(places[4 * i + 1], places[4 * j + 1]) > CA_REACH:
                 continue
-            var energy = bond_energy(
+            energies[i * count + j] = bond_energy(
                 places[4 * j], hydrogen[j], places[4 * i + 2], places[4 * i + 3]
             )
-            bonds[i * count + j] = energy < BOND_ENERGY
+    return (picked^, energies^)
+
+
+def assign_secondary(mut structure: Structure, model: ModelId) raises:
+    """Replace the secondary structure of a model's residues with DSSP's.
+
+    Residues without all of N, CA, C and O are coil and take no part.
+
+    Args:
+        structure: The structure. Its residues of the model change.
+        model: The model.
+
+    Raises:
+        Error: If the model id names no model.
+    """
+    var table = _energies(structure, model)
+    ref picked = table[0]
+    ref energies = table[1]
+    ref m = structure.models[model.value]
+    for c in range(m.first_chain, m.first_chain + m.chain_count):
+        ref chain = structure.chains[c]
+        for r in range(
+            chain.first_residue, chain.first_residue + chain.residue_count
+        ):
+            structure.residues[r].secondary = COIL
+    var count = len(picked)
+    var bonds = List[Bool](capacity=count * count)
+    for energy in energies:
+        bonds.append(energy < BOND_ENERGY)
     var kinds = secondary_from_bonds(bonds, count)
     for k in range(count):
         structure.residues[picked[k]].secondary = SecondaryKind(kinds[k])
+
+
+struct HydrogenBond(ImplicitlyCopyable):
+    """A backbone hydrogen bond, from the N-H of one residue to the C=O of
+    another."""
+
+    var donor: ResidueId
+    """The residue whose N-H gives the bond."""
+    var acceptor: ResidueId
+    """The residue whose C=O takes the bond."""
+    var energy: MolarEnergy64
+    """The electrostatic energy of the bond, below -0.5 kcal/mol."""
+
+    def __init__(
+        out self, donor: ResidueId, acceptor: ResidueId, energy: MolarEnergy64
+    ):
+        """Create a bond.
+
+        Args:
+            donor: The residue of the N-H.
+            acceptor: The residue of the C=O.
+            energy: The energy.
+        """
+        self.donor = donor
+        self.acceptor = acceptor
+        self.energy = energy
+
+
+def hydrogen_bonds(
+    structure: Structure, model: ModelId
+) raises -> List[HydrogenBond]:
+    """Return the backbone hydrogen bonds of a model, as DSSP finds them.
+
+    Args:
+        structure: The structure.
+        model: The model.
+
+    Returns:
+        Each bond with an energy below -0.5 kcal/mol, by acceptor and then
+        by donor.
+
+    Raises:
+        Error: If the model id names no model.
+    """
+    var table = _energies(structure, model)
+    ref picked = table[0]
+    ref energies = table[1]
+    var count = len(picked)
+    var out = List[HydrogenBond]()
+    for i in range(count):
+        # The outer loop runs only when there is a residue.
+        for j in range(count):  # pragma: no branch
+            var energy = energies[i * count + j]
+            if energy < BOND_ENERGY:
+                out.append(
+                    HydrogenBond(
+                        ResidueId(picked[j]),
+                        ResidueId(picked[i]),
+                        MolarEnergy64(energy, KILOCALORIE_PER_MOLE),
+                    )
+                )
+    return out^

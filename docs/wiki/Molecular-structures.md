@@ -16,7 +16,8 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `cif` | `parse_cif`, `read_cif`, `cif_tokens`, `CifBlock` and `is_null` |
 | `structure` | `Structure`, `parse_mmcif`, `read_mmcif`, `parse_pdb_structure`, `read_pdb_structure` and `SQUARE_ANGSTROM` |
 | `peptide` | `build_peptide`, `place_atom` and `three_letter` |
-| `dssp` | `assign_secondary`, `secondary_from_bonds` and `bond_energy` |
+| `dssp` | `assign_secondary`, `hydrogen_bonds`, `HydrogenBond`, `secondary_from_bonds`, `bond_energy` and `KILOCALORIE_PER_MOLE` |
+| `hbonds` | `bond_geometry` |
 | `ribbon` | `ribbon_geometry` and `chain_color` |
 | `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius`, `sphere_points` and `AtomCells` |
 | `coloring` | `color_surface`, `atom_color` and `kyte_doolittle` |
@@ -125,6 +126,21 @@ The energy of a bond from the N-H of one residue to the C=O of another is DSSP's
 A 4-turn at `i` is a bond from the C=O of `i` to the N-H of `i + 4`. A bridge pairs two residues three or more apart. It is antiparallel when they bond to each other, or when their outer neighbors do. It is parallel when the bonds run past each residue to the next. A helix wins over a strand. A residue without all of N, CA, C and O is coil.
 
 `secondary_from_bonds(bonds, count)` applies the patterns to a matrix of bonds, so a caller can supply bonds from another source.
+
+## Draw hydrogen bonds
+
+The backbone hydrogen bonds make a helix and pair the strands of a sheet. `hydrogen_bonds(structure, model)` lists them as DSSP finds them, and `bond_geometry` draws them.
+
+```mojo
+var bonds = hydrogen_bonds(structure, ModelId(0))
+for bond in bonds:
+    print(bond.donor.value, bond.acceptor.value, bond.energy.to(KILOCALORIE_PER_MOLE))
+var sticks = bond_geometry(structure, bonds, Length64(0.1, ANGSTROM), 8)
+```
+
+A `HydrogenBond` holds its donor residue, the N-H, its acceptor residue, the C=O, and its energy as a `MolarEnergy64`. Only a bond below -0.5 kcal/mol is listed. The N-H right after a C=O shares its peptide plane, so DSSP does not pair them. In an alpha helix, the N-H of residue `i + 4` bonds to the C=O of residue `i`.
+
+`bond_geometry(structure, bonds, radius, sides)` draws each bond as a dashed tube from the N of its donor to the O of its acceptor, in light orange. Draw it over a ribbon: the bonds of a helix run along its axis.
 
 ## CIF text
 
@@ -278,6 +294,7 @@ The tests check these results:
 - Two carbons 3 angstroms apart have an excluded surface with a neck of 1.313 angstroms, the analytic radius, to within 0.03 angstroms.
 - The distance transform is exact on a grid with one seed.
 - A ribbon of `n` residues has `(n - 1) samples + 1` rings, and every normal is a unit vector.
+- An ideal helix of 14 residues has 10 hydrogen bonds, each from residue `i + 4` to residue `i`. A strand has none.
 - Neighbor CA atoms of an ideal peptide are 3.8 angstroms apart. An alpha helix has its CA contacts within 8 angstroms at `i + 3` and `i + 4` only, and a strand has none.
 - A superposition recovers a known rotation and shift to 1e-12, with a proper rotation. It does not reach a mirror image. A small turn away from the fit gives a larger RMSD. On 40 noisy points, its RMSD matches numpy's SVD solution to 16 digits. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
@@ -295,6 +312,7 @@ Every function raises `Error` for input it cannot use.
 | A code is not a standard amino acid | `build_peptide`, `three_letter` |
 | A count, a probe or a spacing is out of range | `ribbon_geometry`, `accessible_areas`, `molecular_surface` |
 | A surface coloring is not valid, or an atom is not in the model | `color_surface`, `atom_color` |
+| A bond radius or side count is out of range, or a bond's residue has no N or O | `bond_geometry` |
 | Two sets differ in size, hold fewer than three points, or are not finite | `superpose`, `rmsd` |
 | No residue has the atom, a row is outside the map, or a cutoff or separation is out of range | `distance_map`, `DistanceMap`, `map_image` |
 
