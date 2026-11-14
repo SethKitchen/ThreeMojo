@@ -905,6 +905,7 @@ Medical images, macromolecules and solid mechanics, for research and teaching. A
 - [x] [Mode shapes](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#natural-frequencies): mode shapes drawn at an amplitude in units and colored by motion, and VTK files of every shape [#1013](https://github.com/SethKitchen/ThreeMojo/issues/1013)
 - [x] [VTK export](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#export-to-paraview): meshes and results as VTK unstructured grids, with displacements, stresses and materials for ParaView [#998](https://github.com/SethKitchen/ThreeMojo/issues/998)
 - [x] [Quadratic tetrahedra](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#quadratic-elements): ten-node elements with exact quadrature, six-node pressure loads, and bending within 2 percent of beam theory on a coarse mesh [#997](https://github.com/SethKitchen/ThreeMojo/issues/997)
+- [x] [Mesh quality](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#mesh-quality): the radius ratio and the dihedral angles of each tetrahedron, and the worst element of a mesh [#1046](https://github.com/SethKitchen/ThreeMojo/issues/1046)
 
 ### Out of scope
 

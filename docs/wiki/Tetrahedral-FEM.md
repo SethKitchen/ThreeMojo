@@ -15,6 +15,7 @@
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of`, `von_mises`, `principal_stresses` and `PrincipalStress` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
 | `post` | `stress_geometry`, `stress_color`, `mode_geometry` and `temperature_geometry` |
+| `quality` | `element_quality`, `ElementQuality`, `mesh_quality` and `MeshQuality` |
 | `export` | `vtk_mesh`, `vtk_result`, `vtk_modes`, `vtk_temperatures`, `vtk_heat`, `vtk_record`, `vtk_series` and `series_names` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
@@ -48,6 +49,24 @@ A `TetMesh` holds nodes in meters and elements of four nodes each. Each element 
 `voxel_mesh_labels(map, labels)` meshes several labels at once. Each label is a material: an element's material index is its label's place in the list. The labels share nodes where they touch, so the materials join at their interfaces.
 
 Each cube becomes six tetrahedra that share the diagonal from its low corner to its high corner. This is the Kuhn split. Neighbor cubes then share whole faces, so the mesh is conforming.
+
+### Mesh quality
+
+A flat or needle-like element makes the stiffness matrix ill conditioned, and the stress near it wrong. `mesh_quality(mesh)` gives the worst shapes of a mesh, and `element_quality(mesh, element)` gives the shape of one element.
+
+```mojo
+var q = mesh_quality(problem.mesh)
+print(q.worst_ratio, q.worst_element.value, q.smallest_angle.to(DEGREE64), q.largest_angle.to(DEGREE64))
+```
+
+| Measure | What it is | Regular tetrahedron |
+|---|---|---|
+| Radius ratio | `3 r / R`, with `r` the radius of the inscribed sphere and `R` of the circumscribed sphere | 1 |
+| Dihedral angle | The angle between the two faces of an edge | `arccos(1/3)`, about 70.5 degrees |
+
+The radius ratio falls toward 0 as an element flattens. A sliver has a dihedral angle near 0 or near 180 degrees. The Kuhn tetrahedra of cubic cells have a radius ratio of `sqrt(3) / (1 + sqrt(2))`, about 0.717. Their dihedral angles are from 45 to 90 degrees. A cell that is not a cube gives other values. A ten-node element is measured by its corners.
+
+A `MeshQuality` holds the least radius ratio and its element, the smallest and largest dihedral angles, and the mean radius ratio.
 
 ## Materials from CT density
 
@@ -343,6 +362,7 @@ The tests check these results:
 - A rod between 310 K and 330 K has the flux `-k dT/dx` in every element, for both orders. Its VTK file holds that flux in each cell after the materials. `k A dT / L` enters at its hot end and leaves at its cold end, to 1e-9. A uniform source `q` in a rod held at both ends sends `q V` out through the ends, half at each.
 - A probe in perfused tissue gives the `cosh` profile of Pennes' equation within 1 percent. Without a fixed node, perfusion holds the tissue at `T_a + q / c`.
 - A column of four voxels with four CT numbers, under 1 MPa, shortens by `p * sum(h / E)`, as springs in series, to a relative 1e-9. One bin takes the mean modulus and the mean density.
+- The regular tetrahedron has a radius ratio of 1 and every dihedral angle `arccos(1/3)`. A path through a cube has the ratio `sqrt(3) / (1 + sqrt(2))` and angles from 45 to 90 degrees. So does every element of a box of cubes, for both orders. A sliver is the worst element of its mesh.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 - A record of a history is the temperature file of its values, with its time in the title. A series file lists each name with its time, and names get a fifth digit past 10000 records.
 
@@ -380,6 +400,7 @@ Every function raises `Error` for input it cannot use.
 | A label has no voxels | `voxel_mesh` |
 | A mesh has a node that no element holds, or is free to move | `solve_static` |
 | A result is not for its mesh | `stress_geometry` |
+| A mesh has no element, or an element id names no element | `mesh_quality`, `element_quality` |
 | A result is not for its problem, or an element, a node or an axis is out of range | `held_heat`, `heat_flux`, `HeatRates`, `HeatFluxes` |
 | The capacities or the start do not fit the problem, a step or a count is out of range, or a capacity kind is not valid | `solve_transient`, `ThermalCapacity` |
 | A record is outside its history, or a series name is empty or holds a quote, a backslash or a control character | `vtk_record`, `vtk_series`, `series_names` |
