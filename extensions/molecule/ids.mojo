@@ -274,3 +274,40 @@ def require_surface_coloring(coloring: SurfaceColoring) raises:
         Error: If `coloring` is not valid.
     """
     require_valid(coloring.is_valid(), "A surface coloring must be from 0 to 3")
+
+
+@fieldwise_init
+struct EnsembleFit(Equatable, ImplicitlyCopyable, Writable):
+    """How the models of an ensemble are placed before they are compared.
+
+    `FIT_TO_REFERENCE` superposes each model on the reference model by
+    the compared atoms, so that only the change of shape counts.
+    `AS_GIVEN` compares the coordinates as the file holds them, such as
+    snapshots that were already fitted.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the two fits.
+
+        Returns:
+            Whether the value is zero or one.
+        """
+        return ordinal_valid(self.value, 1)
+
+
+comptime FIT_TO_REFERENCE = EnsembleFit(0)
+comptime AS_GIVEN = EnsembleFit(1)
+
+
+def require_ensemble_fit(fit: EnsembleFit) raises:
+    """Refuse an ensemble fit that is not one of the two.
+
+    Args:
+        fit: The fit to check.
+
+    Raises:
+        Error: If `fit` is not valid.
+    """
+    require_valid(fit.is_valid(), "An ensemble fit must be 0 or 1")

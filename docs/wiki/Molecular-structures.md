@@ -12,7 +12,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 
 | Module | What it gives |
 |---|---|
-| `ids` | `AtomId`, `ResidueId`, `ChainId`, `ModelId`, `AtomGroup`, `SecondaryKind`, `AltLocPolicy`, `RibbonColoring` and `SurfaceColoring` |
+| `ids` | `AtomId`, `ResidueId`, `ChainId`, `ModelId`, `AtomGroup`, `SecondaryKind`, `AltLocPolicy`, `RibbonColoring`, `SurfaceColoring` and `EnsembleFit` |
 | `cif` | `parse_cif`, `read_cif`, `cif_tokens`, `CifBlock` and `is_null` |
 | `structure` | `Structure`, `parse_mmcif`, `read_mmcif`, `parse_pdb_structure`, `read_pdb_structure` and `SQUARE_ANGSTROM` |
 | `peptide` | `build_peptide`, `place_atom` and `three_letter` |
@@ -22,6 +22,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius`, `sphere_points` and `AtomCells` |
 | `coloring` | `color_surface`, `atom_color` and `kyte_doolittle` |
 | `superpose` | `superpose`, `Superposition`, `rmsd` and `matched_atoms` |
+| `ensemble` | `ensemble_fluctuation`, `Fluctuation` and `fluctuation_b_factors` |
 | `contacts` | `distance_map`, `DistanceMap` and `map_image` |
 | `shape` | `molecular_shape` and `MolecularShape` |
 | `pdb_write` | `encode_pdb` |
@@ -306,6 +307,24 @@ print(fit.rmsd.to(METER) / Length64(1.0, ANGSTROM).to(METER), "angstroms")
 
 `matched_atoms(fixed, model, moving, model, name)` pairs the atoms of one name, such as `CA`. Two atoms pair when their chains have one label, and their residues one number and insertion code. Of alternate locations, the first in the file pairs.
 
+## Measure the spread of an ensemble
+
+An NMR structure is an ensemble of models, and a simulation gives a series of snapshots. The root mean square fluctuation (RMSF) of an atom shows how far it moves over the models. `ensemble_fluctuation` gives it.
+
+```mojo
+var spread = ensemble_fluctuation(structure, "CA", ModelId(0), FIT_TO_REFERENCE)
+for row in range(spread.count()):
+    print(spread.atoms[row].value, spread.fluctuation(row).to(ANGSTROM))
+fluctuation_b_factors(structure, spread)
+color_surface(surface, structure, ModelId(0), COLOR_BY_B_FACTOR)
+```
+
+The RMSF of an atom is `sqrt(mean(|x_k - mean(x)|^2))` over the models `k`. The result has one row for each atom of the reference model with the name that every model has. Atoms pair as `matched_atoms` pairs them.
+
+`FIT_TO_REFERENCE` first superposes each model on the reference model by the compared atoms, so a rigid move does not count. This needs three shared atoms. `AS_GIVEN` uses the coordinates of the file, such as snapshots that were fitted before. `spread.deviation(model)` gives the RMSD of a model from the reference after the fit.
+
+`fluctuation_b_factors(structure, spread)` writes each RMSF into the reference model as an isotropic B-factor, `B = 8 pi^2 RMSF^2 / 3`. Each atom of the residue gets it. The B-factor coloring of a surface then shows the mobile parts in red.
+
 ## Measure size and shape
 
 `molecular_shape(structure, model)` gives the size and shape of a model:
@@ -378,6 +397,7 @@ The tests check these results:
 - A carbon and an oxygen 5 angstroms apart have their mass center at the share `m_O / (m_C + m_O)`. Their radius of gyration is `L sqrt(m1 m2) / (m1 + m2)`, along the bond.
 - Neighbor CA atoms of an ideal peptide are 3.8 angstroms apart. An alpha helix has its CA contacts within 8 angstroms at `i + 3` and `i + 4` only, and a strand has none.
 - A superposition recovers a known rotation and shift to 1e-12, with a proper rotation. It does not reach a mirror image. A small turn away from the fit gives a larger RMSD. On 40 noisy points, its RMSD matches numpy's SVD solution to 16 digits. That check is not part of the test suite.
+- Over three models as given, one CA moved by `+d` and `-d` has an RMSF of `d sqrt(2/3)`, and every other CA has none. Its residue gets the B-factor `16 pi^2 d^2 / 9`. Models that differ by rigid moves fit to an RMSF below 1e-9 angstroms. Five models with up to 0.5 angstroms of noise per coordinate match a numpy fit by SVD to 2e-15 angstroms. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
 ## Errors
@@ -387,6 +407,7 @@ Every function raises `Error` for input it cannot use.
 | Case | Functions |
 |---|---|
 | A quoted value or a text field has no end | `cif_tokens`, `parse_cif`, `parse_mmcif` |
+| An ensemble has fewer than two models, too few shared atoms, or a bad fit or reference | `ensemble_fluctuation`, `Fluctuation` |
 | A structure has no model or no atom, its name holds a blank, or a value holds a line end or both kinds of closing quote | `encode_mmcif`, `cif_value` |
 | No data block, a stray value, or a loop that does not fill its rows | `parse_cif`, `parse_mmcif` |
 | A needed column is missing, or a value is not a number | `parse_mmcif` |
