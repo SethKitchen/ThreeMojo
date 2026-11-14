@@ -25,6 +25,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `measure` | `label_statistics`, `voxel_distance`, `line_profile`, `LineProfile` and `full_width_half_maximum` |
 | `shape` | `label_shape`, `LabelShape` and `slice_areas` |
 | `compare` | `compare_labels`, `LabelComparison`, `surface_voxels` and `percentile` |
+| `roi` | `circle_statistics` and `RegionStatistics` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
@@ -367,6 +368,19 @@ var diameter = full_width_half_maximum(profile, -1000)
 
 `full_width_half_maximum(profile, baseline)` gives the width of the highest peak at half its height above the baseline. It is the usual measure of the diameter of a vessel with contrast, and of how sharp an image is. Each side runs to the first place where the profile falls to the half level, by linear interpolation between points. A profile that does not fall to the half level on both sides is refused.
 
+## Measure a circle on a slice
+
+`circle_statistics(volume, axis, index, x, y, radius)` gives the values inside a circle on one slice. A reader measures a region this way, such as the CT number of a lesion or the noise in a uniform region.
+
+```mojo
+var roi = circle_statistics(volume, K_AXIS, 40, 128.0, 96.5, Length64(5.0, MILLIMETER64))
+print(roi.mean, roi.deviation, roi.pixels, roi.area.to(SQUARE_METER))
+```
+
+A pixel counts when its center is at most `radius` from the center of the circle. The center is in the pixel coordinates of the slice, as `render_slice` draws it, and it can be between pixels. The radius is a length, so a circle on pixels that are not square covers an ellipse of pixels. The grid's edge cuts a circle that reaches past it.
+
+A `RegionStatistics` holds the pixel count, the `area`, the `mean`, the `deviation`, the `minimum` and the `maximum`. The values are in the units of the volume, such as HU after the rescale. The deviation is the sample one, with `n - 1`, as ImageJ reports it.
+
 ## Measure the shape of a label
 
 `label_shape(map, volume, label)` gives the principal axes of a label and its equivalent ellipsoid. The axes show how an organ lies. Their lengths show whether it is round, flat or long.
@@ -496,6 +510,7 @@ The tests check these results:
 - Two voxels that share an edge are one piece with `EDGES` and `CORNERS`, and two with `FACES`. Two that share a corner only are one piece with `CORNERS`. A diagonal line grows from its end with `CORNERS`, and not with `FACES`. On a random grid of 30 by 28 by 26 voxels, the pieces of each connectivity match scipy's `ndimage.label` in count and size. That check is not part of the test suite.
 - Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
+- A circle of 2 pixels holds the 13 lattice points of its disc. On a ramp, a disc gives the value at its center and the sample deviation of its pixels. With pixels 0.5 mm wide, a circle of 1 mm holds 7 pixels. A circle at a corner keeps the 6 pixels of the grid.
 - A box of 10 by 6 by 8 mm has voxels of 1 by 1 by 2 mm. Its semi-axes are `sqrt(5 / 12)` times its sides, to 1e-9, along the grid axes. Its axes follow the patient frame of the volume. An ellipsoid of 20, 12 and 8 mm turned 30 degrees gives its semi-axes within 2 percent, and its long axis within one degree. Each slice of the box has its area exactly.
 - A label against itself has a Dice coefficient of 1 and no surface distance. Two boxes that overlap by half have a Dice of 0.5 and a Jaccard of 1/3. Their Hausdorff distance is their shift, and their HD95 and ASSD match a search of every pair. Two ellipsoids in voxels of 0.7, 0.9 and 1.5 mm match MedPy 0.5 to 1e-7 mm in every measure. That check is not part of the test suite.
 - A voxel dilated by 2 mm becomes the 33 lattice points of the ball, and 15 with slices 2 mm apart. A cube of 7 voxels eroded by 1 mm is a cube of 5. Opening removes a spike, and closing fills a hole.
@@ -529,6 +544,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A connectivity is not one of the three | `region_grow`, `keep_largest`, `label_pieces` |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
+| A circle has a bad axis, slice, center or radius, or holds no pixel center | `circle_statistics` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels` |
 | A shape or a slice area needs the background, an empty label, another grid or a bad axis | `label_shape`, `slice_areas` |
 | A morphology label is the background, or its radius is negative or not finite | Morphology functions |
