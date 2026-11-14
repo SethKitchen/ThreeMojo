@@ -18,11 +18,16 @@ inside the label and a voxel outside it.
 
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.skeleton.isosurface import SampleGrid, mesh_samples
-from extensions.imaging.ids import BACKGROUND, LabelId, require_label
+from extensions.imaging.ids import (
+    BACKGROUND,
+    LabelId,
+    MAX_LABEL,
+    require_label,
+)
 from extensions.imaging.image_volume import ImageVolume
 from math.vector3 import Vector3
 from std.math import isfinite
-from units.si import Length64, METER
+from units.si import CUBIC_METER, Length64, METER, Volume64
 
 
 struct LabelMap(Copyable, Movable):
@@ -287,6 +292,31 @@ def region_grow(
     return map^
 
 
+def _pieces(map: LabelMap, mark: UInt8) -> Tuple[List[Int], List[Int]]:
+    """Return the piece of each voxel of a label, -1 elsewhere, and the
+    voxel count of each piece, in the order of their first voxels."""
+    var count = map.count()
+    var piece = List[Int](length=count, fill=-1)
+    var sizes = List[Int]()
+    for start in range(count):  # pragma: no branch
+        if map.labels[start] != mark or piece[start] >= 0:
+            continue
+        var pieces = len(sizes)
+        piece[start] = pieces
+        var queue = List[Int]()
+        queue.append(start)
+        var head = 0
+        while head < len(queue):
+            var current = queue[head]
+            head += 1
+            for next in _neighbors(map.nx, map.ny, map.nz, current):
+                if map.labels[next] == mark and piece[next] < 0:
+                    piece[next] = pieces
+                    queue.append(next)
+        sizes.append(len(queue))
+    return (piece^, sizes^)
+
+
 def keep_largest(map: LabelMap, label: LabelId) raises -> LabelMap:
     """Return a copy that keeps only the largest connected piece of a label.
 
@@ -307,35 +337,98 @@ def keep_largest(map: LabelMap, label: LabelId) raises -> LabelMap:
     """
     _require_foreground(label)
     var mark = UInt8(label.value)
-    var count = map.count()
-    var piece = List[Int](length=count, fill=-1)
-    var best_piece = -1
-    var best_size = 0
-    var pieces = 0
-    for start in range(count):  # pragma: no branch
-        if map.labels[start] != mark or piece[start] >= 0:
-            continue
-        piece[start] = pieces
-        var queue = List[Int]()
-        queue.append(start)
-        var head = 0
-        while head < len(queue):
-            var current = queue[head]
-            head += 1
-            for next in _neighbors(map.nx, map.ny, map.nz, current):
-                if map.labels[next] == mark and piece[next] < 0:
-                    piece[next] = pieces
-                    queue.append(next)
-        if len(queue) > best_size:
-            best_size = len(queue)
-            best_piece = pieces
-        pieces += 1
-    if best_piece < 0:
+    var found = _pieces(map, mark)
+    ref piece = found[0]
+    ref sizes = found[1]
+    if len(sizes) == 0:
         raise Error("The label has no voxels")
+    var best_piece = 0
+    for k in range(1, len(sizes)):
+        if sizes[k] > sizes[best_piece]:
+            best_piece = k
     var out = map.copy()
-    for index in range(count):  # pragma: no branch
+    for index in range(map.count()):  # pragma: no branch
         if map.labels[index] == mark and piece[index] != best_piece:
             out.labels[index] = 0
+    return out^
+
+
+struct LabelPieces(Movable):
+    """The connected pieces of one label, numbered by size."""
+
+    var map: LabelMap
+    """A map of the pieces: label 1 is the largest, 2 the next, and on, up
+    to 255. Every other voxel is background."""
+    var sizes: List[Int]
+    """The voxel count of every piece, from the largest."""
+    var volumes: List[Volume64]
+    """The volume of every piece, from the largest."""
+
+    def __init__(out self, var map: LabelMap):
+        """Hold an empty list of pieces on a map.
+
+        Args:
+            map: The map of the pieces.
+        """
+        self.map = map^
+        self.sizes = List[Int]()
+        self.volumes = List[Volume64]()
+
+
+def label_pieces(map: LabelMap, label: LabelId) raises -> LabelPieces:
+    """Number the connected pieces of a label by size.
+
+    Two voxels connect when they share a face. Of two pieces of one size,
+    the piece with the lowest voxel index comes first. Only the 255
+    largest pieces get a label in the map, but `sizes` and `volumes` list
+    every piece.
+
+    Args:
+        map: The label map.
+        label: The label. Not the background.
+
+    Returns:
+        The map of the pieces, and the size and volume of each piece.
+
+    Raises:
+        Error: If the label is not valid, is the background, or has no
+            voxels.
+    """
+    _require_foreground(label)
+    var found = _pieces(map, UInt8(label.value))
+    ref piece = found[0]
+    ref sizes = found[1]
+    if len(sizes) == 0:
+        raise Error("The label has no voxels")
+    # Order the pieces by size, the largest first, and stably.
+    var order = List[Int]()
+    for k in range(len(sizes)):  # pragma: no branch
+        order.append(k)
+    for i in range(1, len(order)):
+        var k = order[i]
+        var j = i
+        while j > 0 and sizes[order[j - 1]] < sizes[k]:
+            order[j] = order[j - 1]
+            j -= 1
+        order[j] = k
+    var rank = List[Int](length=len(sizes), fill=0)
+    for place in range(len(order)):  # pragma: no branch
+        rank[order[place]] = place
+    var shape = ImageVolume(
+        map.nx, map.ny, map.nz, map.spacing_x, map.spacing_y, map.spacing_z
+    )
+    var out = LabelPieces(LabelMap(shape))
+    for index in range(map.count()):  # pragma: no branch
+        if piece[index] >= 0 and rank[piece[index]] < MAX_LABEL:
+            out.map.labels[index] = UInt8(rank[piece[index]] + 1)
+    var voxel = (
+        map.spacing_x.to(METER)
+        * map.spacing_y.to(METER)
+        * map.spacing_z.to(METER)
+    )
+    for k in order:  # pragma: no branch
+        out.sizes.append(sizes[k])
+        out.volumes.append(Volume64(Float64(sizes[k]) * voxel, CUBIC_METER))
     return out^
 
 

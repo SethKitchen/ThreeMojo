@@ -21,7 +21,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `phantom` | `shepp_logan`, a head of ten ellipsoids |
 | `transfer` | `WindowLevel`, `TransferFunction` and `Rgba` |
 | `raycast` | `VolumeCamera`, `orbit_camera`, `ray_box` and `render_volume` |
-| `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest` and `label_surface` |
+| `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest`, `label_pieces`, `LabelPieces` and `label_surface` |
 | `measure` | `label_statistics` and `voxel_distance` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
@@ -242,6 +242,8 @@ A `LabelMap` holds one label for each voxel of a volume. Label zero is the backg
 
 Two voxels connect when they share a face. Of two pieces of one size, `keep_largest` keeps the piece with the lowest voxel index.
 
+`label_pieces(map, label)` numbers every connected piece of a label by size, to count the lesions or stones of a segmentation. Its `map` gives label 1 to the largest piece, 2 to the next, and on up to 255. Its `sizes` and `volumes` list every piece from the largest, also past the 255th.
+
 ## Filter a volume
 
 Filter a noisy volume before you label it. A threshold of a noisy volume gives labels with holes and stray voxels.
@@ -410,6 +412,7 @@ The tests check these results:
 - A Gaussian keeps a linear ramp away from the edges. Its response to one voxel is the product of its three kernels, and sums to one.
 - A median removes a hot and a cold voxel and keeps the edge between two regions.
 - On two overlapping distributions, the Otsu edge is the edge with the least variance within the classes, found by brute force over the voxels.
+- Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
 - A voxel dilated by 2 mm becomes the 33 lattice points of the ball, and 15 with slices 2 mm apart. A cube of 7 voxels eroded by 1 mm is a cube of 5. Opening removes a spike, and closing fills a hole.
 - The distance to the edge of an irregular label on an anisotropic grid matches a brute-force search. A slab six voxels thick is six voxels thick. With 2 mm slices and 0.5 mm pixels, a label is limited by its narrower side.
 - The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
