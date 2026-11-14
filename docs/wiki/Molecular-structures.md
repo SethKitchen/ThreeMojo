@@ -27,6 +27,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `shape` | `molecular_shape` and `MolecularShape` |
 | `accessibility` | `residue_accessibility`, `ResidueAccess` and `max_accessible_area` |
 | `interface` | `chain_interface` and `ChainInterface` |
+| `sequence` | `chain_sequence`, `encode_fasta`, `align_sequences`, `SequenceAlignment`, `blosum62` and `one_letter` |
 | `pdb_write` | `encode_pdb` |
 | `cif_write` | `encode_mmcif` and `cif_value` |
 | `dihedral` | `backbone_angles`, `BackboneAngles`, `dihedral`, `ramachandran_image`, `ramachandran_color` and `plot_pixel` |
@@ -318,6 +319,24 @@ Elsewhere, an exact Euclidean distance transform of the grid gives the distance 
 
 `distance_transform(seeds, px, py, pz)` is the transform of Felzenszwalb and Huttenlocher, run along x, then y, then z. It gives the squared distance to the nearest seed in grid steps, and the index of that seed.
 
+## Read and align sequences
+
+`chain_sequence(structure, chain)` gives the one-letter sequence of a chain. `encode_fasta(structure, model)` writes the sequence of each chain of a model as a FASTA file. `align_sequences(first, second, open, extend)` aligns two sequences end to end.
+
+```mojo
+var crystal_seq = chain_sequence(crystal, ChainId(0))
+var model_seq = chain_sequence(predicted, ChainId(0))
+var alignment = align_sequences(crystal_seq, model_seq, -10, -0.5)
+print(alignment.first, alignment.second, alignment.score, alignment.identity())
+Path("model.fasta").write_text(encode_fasta(predicted, ModelId(0)))
+```
+
+A residue that is not one of the twenty standard amino acids, such as a water or a ligand, is left out of a sequence. A FASTA record is `>NAME:CHAIN`, with the sequence in lines of 80 codes. A chain without a standard amino acid has no record.
+
+The alignment is the global method of Needleman and Wunsch, with the affine gaps of Gotoh. A pair of residues scores its BLOSUM62 value, and `blosum62(a, b)` gives that value. A gap of length `L` scores `open + (L - 1) * extend`, at the ends too. The scores -10 and -0.5 are a common choice. Where two paths tie, the trace takes a pair first, then a gap in the second sequence, then a gap in the first.
+
+A `SequenceAlignment` holds the two sequences with `-` for each gap, the score, and the counts of `identical` and `paired` columns. `identity()` is the share of paired columns that hold the same residue. Check it before you superpose two models, to be sure that they are of one protein.
+
 ## Superpose two models
 
 Superpose two models before you compare them, such as two models of an NMR ensemble, or a crystal structure and a prediction.
@@ -432,6 +451,7 @@ The tests check these results:
 - Over three models as given, one CA moved by `+d` and `-d` has an RMSF of `d sqrt(2/3)`, and every other CA has none. Its residue gets the B-factor `16 pi^2 d^2 / 9`. Models that differ by rigid moves fit to an RMSF below 1e-9 angstroms. Five models with up to 0.5 angstroms of noise per coordinate match a numpy fit by SVD to 2e-15 angstroms. That check is not part of the test suite.
 - The largest areas are the 20 values of Tien and others. A residue's area is the sum of its atoms, and its RSA is that sum over the largest area. The middle of a built helix is more buried than its ends. On a peptide of 12 residues with 2000 points per sphere, the areas match Biopython 1.88's Shrake-Rupley to 0.1 percent. That check is not part of the test suite.
 - Two carbons in two chains 3 angstroms apart each bury a cap of `2 pi R h`, within 1 percent with 2000 points. Chains 20 angstroms apart bury nothing, and a third chain does not change the interface of the other two. On two helices 9 angstroms apart, the buried area of each residue matches Biopython 1.88's Shrake-Rupley to 0.001 square angstroms. That check is not part of the test suite.
+- BLOSUM62 is symmetric, with its diagonal from 4 to 11. Small alignments give their gaps at the ends, inside and in either sequence, with the scores of each gap. A sequence against itself has no gap and an identity of 1. All 400 BLOSUM62 values match Biopython 1.88. On 40 random pairs with changes, insertions and deletions, every score matches Biopython's `PairwiseAligner`. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
 ## Errors
@@ -441,6 +461,7 @@ Every function raises `Error` for input it cannot use.
 | Case | Functions |
 |---|---|
 | A quoted value or a text field has no end | `cif_tokens`, `parse_cif`, `parse_mmcif` |
+| A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
 | An ensemble has fewer than two models, too few shared atoms, or a bad fit or reference | `ensemble_fluctuation`, `Fluctuation` |
@@ -473,6 +494,9 @@ Every function raises `Error` for input it cannot use.
 - Westbrook and others, "PDBx/mmCIF Ecosystem: Foundational Semantic Tools for Structural Biology", 2022.
 - Hall, Allen and Brown, "The Crystallographic Information File (CIF)", 1991.
 - wwPDB, "Atomic Coordinate Entry Format Description", version 3.3, 2012.
+- Needleman and Wunsch, "A general method applicable to the search for similarities in the amino acid sequence of two proteins", 1970.
+- Gotoh, "An improved algorithm for matching biological sequences", 1982.
+- Henikoff and Henikoff, "Amino acid substitution matrices from protein blocks", 1992.
 - Tien, Meyer, Sydykova, Spielman and Wilke, "Maximum allowed solvent accessibilities of residues in proteins", 2013.
 - Engh and Huber, "Accurate bond and angle parameters for X-ray protein structure refinement", 1991.
 - Parsons and others, "Practical conversion from torsion space to Cartesian space for in silico protein synthesis", 2005.
