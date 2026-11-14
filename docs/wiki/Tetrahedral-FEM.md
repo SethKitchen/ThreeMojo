@@ -16,6 +16,7 @@
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
 | `post` | `stress_geometry` and `stress_color` |
 | `export` | `vtk_mesh` and `vtk_result` |
+| `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 
 ## Solve a problem
 
@@ -45,6 +46,30 @@ A `TetMesh` holds nodes in meters and elements of four nodes each. Each element 
 `voxel_mesh_labels(map, labels)` meshes several labels at once. Each label is a material: an element's material index is its label's place in the list. The labels share nodes where they touch, so the materials join at their interfaces.
 
 Each cube becomes six tetrahedra that share the diagonal from its low corner to its high corner. This is the Kuhn split. Neighbor cubes then share whole faces, so the mesh is conforming.
+
+## Materials from CT density
+
+The stiffness of bone follows its density. `density_materials(mesh, volume, law, bins)` gives each element a material from the CT number of its voxel. A calibration line turns the CT number into an apparent density, and a power law turns the density into a modulus:
+
+```
+rho = intercept + slope * CT
+E = coefficient * (rho / (1 g/cm^3))^exponent
+```
+
+```mojo
+var law = CtDensityLaw(Density64(0, GRAM_PER_CUBIC_CENTIMETER),
+    Density64(0.001, GRAM_PER_CUBIC_CENTIMETER), Pressure64(6850, MEGAPASCAL),
+    1.49, Density64(0.01, GRAM_PER_CUBIC_CENTIMETER), 0.3)
+var made = density_materials(mesh, volume, law, 64)
+var problem = StaticProblem(mesh^, made.materials.copy())
+problem.apply_gravity(made.densities, gravity, v3(0, 0, -1))
+```
+
+The law here is Morgan's for the human femoral neck: 6850 MPa at 1 g/cm^3, with an exponent of 1.49. Get the calibration line from a phantom of known densities in the same scan. A density below the minimum is held at it, so air and fat give a small positive modulus.
+
+`element_ct(mesh, volume)` reads the voxel that holds the centroid of each element. The mesh must be in the volume frame, as `voxel_mesh` makes it. The elements go in bins of equal modulus width. Each bin that holds an element becomes one material, with the mean modulus and the mean density of its elements, weighted by volume. More bins follow the density more closely.
+
+## Find nodes and faces
 
 `nodes_on_plane(axis, at, tolerance)` gives the nodes whose coordinate on an axis is near a value. Use it to find the nodes of a support or a load. `boundary_faces(mesh)` gives the faces that only one element has, each turned to face out of its element.
 
@@ -175,6 +200,7 @@ The tests check these results:
 - A quadratic element stiffness is symmetric, and its ten shape gradients sum to zero.
 - A column standing under its own weight puts all of it on its base. With ten-node elements, its top drops by exactly `rho g L^2 / (2 E)`.
 - Two labels meshed together share the nodes of their interface, and each has its own material.
+- A column of four voxels with four CT numbers, under 1 MPa, shortens by `p * sum(h / E)`, as springs in series, to a relative 1e-9. One bin takes the mean modulus and the mean density.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 
 The example `ct_to_fem` meets the rule of mixtures to 12 digits. See [From CT slices to stresses](#from-ct-slices-to-stresses).
@@ -228,3 +254,4 @@ Every function raises `Error` for input it cannot use.
 - Kuhn, "Some combinatorial lemmas in topology", 1960.
 - van Rietbergen and others, "A new method to determine trabecular bone elastic properties and loading using micromechanical finite-element models", 1995.
 - Hestenes and Stiefel, "Methods of conjugate gradients for solving linear systems", 1952.
+- Morgan, Bayraktar and Keaveny, "Trabecular bone modulus-density relationships depend on anatomic site", 2003.
