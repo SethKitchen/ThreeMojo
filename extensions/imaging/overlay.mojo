@@ -16,7 +16,8 @@ A slice holds one index constant. Its pixels map to voxels like this:
 `render_slice` shows the values through the volume's window, one pixel
 for each voxel. `overlay_labels` blends a color over each labeled pixel.
 `draw_measurement` draws the line between two points of the slice, with
-a small cross at each end.
+a small cross at each end. `draw_line` draws a line of pixels, and
+`zoom_image` scales an image up by repeating each pixel.
 """
 
 from extensions.imaging.ids import (
@@ -238,10 +239,21 @@ def _plot(mut image: Framebuffer, x: Int, y: Int, color: Rgba):
     image.pixels[at + 2] = _byte(color.b)
 
 
-def _line(
+def draw_line(
     mut image: Framebuffer, x0: Int, y0: Int, x1: Int, y1: Int, color: Rgba
 ):
-    """Draw a line of pixels with Bresenham's algorithm."""
+    """Draw a line of pixels with Bresenham's algorithm.
+
+    Pixels past the image edge are skipped.
+
+    Args:
+        image: The image.
+        x0: The first pixel's column.
+        y0: The first pixel's row.
+        x1: The last pixel's column.
+        y1: The last pixel's row.
+        color: The line color. Its opacity is ignored.
+    """
     var dx = abs(x1 - x0)
     var dy = -abs(y1 - y0)
     var sx = 1 if x0 < x1 else -1
@@ -299,7 +311,7 @@ def draw_measurement(
     var y0 = Int(floor(start[1] + 0.5))
     var x1 = Int(floor(end[0] + 0.5))
     var y1 = Int(floor(end[1] + 0.5))
-    _line(image, x0, y0, x1, y1, color)
+    draw_line(image, x0, y0, x1, y1, color)
     _cross(image, x0, y0, color)
     _cross(image, x1, y1, color)
 
@@ -307,3 +319,35 @@ def draw_measurement(
 def _finite(point: Tuple[Float64, Float64]) -> Bool:
     """Return whether both coordinates are finite and of a sane size."""
     return abs(point[0]) < 1.0e9 and abs(point[1]) < 1.0e9
+
+
+def zoom_image(image: Framebuffer, factor: Int) raises -> Framebuffer:
+    """Return an image scaled up by repeating each pixel.
+
+    Pixel `(x, y)` of the image fills the square from `(factor x, factor y)`
+    to `(factor (x + 1) - 1, factor (y + 1) - 1)` of the result.
+
+    Args:
+        image: The image, such as a slice from `render_slice`.
+        factor: How many times larger, from 1 to 64.
+
+    Returns:
+        The scaled image.
+
+    Raises:
+        Error: If `factor` is out of range.
+    """
+    if factor < 1 or factor > 64:
+        raise Error("An image is zoomed from 1 to 64 times")
+    var width = image.width * factor
+    var height = image.height * factor
+    var pixels = List[UInt8](length=width * height * 4, fill=0)
+    # A framebuffer has a positive size, and the factor is at least 1, so
+    # neither loop can run zero times.
+    for y in range(height):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            var source = ((y // factor) * image.width + x // factor) * 4
+            var target = (y * width + x) * 4
+            for c in range(4):  # pragma: no branch
+                pixels[target + c] = image.pixels[source + c]
+    return Framebuffer(width, height, pixels^)

@@ -14,7 +14,8 @@ threshold labels it, and `label_path` finds its centered path.
 path with even steps, and `curved_reformat` straightens the vessel along
 it. The top left panel is the maximum
 intensity projection along z, with the path in yellow. The top right
-panel is one axial slice: no single plane holds the vessel. The band
+panel is one axial slice, with the outline of the label in yellow: no
+single plane holds the vessel. The band
 below is the straightened vessel, with the narrowing plain to see. The program
 prints the path length and the narrowest radius along it.
 
@@ -22,14 +23,16 @@ This is a picture of a synthetic volume, for teaching. It is not a
 diagnosis.
 """
 
+from extensions.imaging.contour import draw_outlines, slice_outlines
 from extensions.imaging.curved import curved_reformat
 from extensions.imaging.ids import CORNERS, K_AXIS, LabelId, SLAB_MAXIMUM
 from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
 from extensions.imaging.labels import keep_largest, threshold
-from extensions.imaging.overlay import render_slice
+from extensions.imaging.overlay import render_slice, zoom_image
 from extensions.imaging.path import label_path, resample_path, smooth_path
 from extensions.imaging.reformat import slab_projection
 from extensions.imaging.thickness import label_distance
+from extensions.imaging.transfer import Rgba
 from extensions.sdf.vector import V3, distance, v3
 from render.framebuffer import Color, Framebuffer
 from render.png import encode
@@ -60,20 +63,6 @@ def _center(t: Float64) -> V3:
 def _radius(t: Float64) -> Float64:
     """Return the vessel's radius in mm: 2.4, and half that at t = 0.6."""
     return 2.4 * (1.0 - 0.5 * exp(-(((t - 0.6) / 0.05) ** 2)))
-
-
-def _zoomed(image: Framebuffer, factor: Int) raises -> Framebuffer:
-    """Return an image scaled up by repeating each pixel."""
-    var width = image.width * factor
-    var height = image.height * factor
-    var pixels = List[UInt8](length=width * height * 4, fill=0)
-    for y in range(height):
-        for x in range(width):
-            var source = ((y // factor) * image.width + x // factor) * 4
-            var target = (y * width + x) * 4
-            for c in range(4):
-                pixels[target + c] = image.pixels[source + c]
-    return Framebuffer(width, height, pixels^)
 
 
 def main() raises:
@@ -154,11 +143,20 @@ def main() raises:
     var fine = Length64(0.25, MILLIMETER64)
     var smooth = resample_path(smooth_path(path, 4), fine)
     var straight = curved_reformat(volume, smooth, v3(0, 0, 1), 20, fine, 0)
-    var wide = _zoomed(render_slice(straight, K_AXIS, 0), 2)
+    var wide = zoom_image(render_slice(straight, K_AXIS, 0), 2)
     var band = wide.height + 20
     var sheet = Framebuffer(2 * PANEL, PANEL + band, Color(0, 0, 0))
-    blit(sheet, _zoomed(projected, ZOOM), 0, 0)
-    blit(sheet, _zoomed(axial, ZOOM), PANEL, 0)
+    blit(sheet, zoom_image(projected, ZOOM), 0, 0)
+    # The label's outline on the axial slice, in yellow.
+    var axial_zoomed = zoom_image(axial, ZOOM)
+    draw_outlines(
+        axial_zoomed,
+        K_AXIS,
+        slice_outlines(map, LabelId(1), K_AXIS, NZ // 2),
+        ZOOM,
+        Rgba(1, 0.86, 0.16, 1),
+    )
+    blit(sheet, axial_zoomed, PANEL, 0)
     blit(sheet, wide, (2 * PANEL - wide.width) // 2, PANEL + 10)
     Path(destination).write_bytes(encode(sheet))
     print("Wrote", destination)

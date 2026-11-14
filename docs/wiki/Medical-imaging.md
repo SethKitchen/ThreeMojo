@@ -36,7 +36,8 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `holes` | `fill_holes` and `fill_slice_holes` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `printing` | `printable_stl` and `label_stl` |
-| `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
+| `overlay` | `render_slice`, `overlay_labels`, `draw_measurement`, `draw_line`, `zoom_image`, `slice_size` and `label_color` |
+| `contour` | `slice_outlines`, `Outline` and `draw_outlines` |
 | `reformat` | `oblique_slice`, `slab_projection` and `sample_point` |
 | `curved` | `curved_reformat` |
 | `path` | `label_path`, `smooth_path` and `resample_path` |
@@ -609,11 +610,11 @@ var even = resample_path(smooth_path(centerline, 4), Length64(0.25, MILLIMETER64
 
 `smooth_path(path, passes)` puts each inner point at `(before + 2 * point + after) / 4` in each pass, and keeps the two ends. A straight run stays where it is, and a zigzag of one step goes flat in one pass. `resample_path(path, spacing)` places points at the arc lengths 0, `spacing`, `2 * spacing` and on, and ends at the path's last point. The result keeps the window of the source. It is not a plane in patient space, so its origin is zero and its axes are those of the grid.
 
-![A winding vessel: its projection with the centered path in yellow, one axial slice, and the vessel straightened with a narrowing](out/vessel.png)
+![A winding vessel: its projection with the centered path in yellow, one axial slice with the label outlined, and the vessel straightened with a narrowing](out/vessel.png)
 
 `examples/vessel.mojo` makes this picture. A synthetic vessel of 300 HU winds through soft tissue of about 40 HU, in all three axes. Its radius is 2.4 mm, and it narrows to half of that partway along. A threshold labels it, and `keep_largest` keeps it whole with `CORNERS`. `label_path` finds its centered path. `smooth_path` and `resample_path` smooth it, and `curved_reformat` straightens the vessel along it.
 
-The top left panel is the maximum intensity projection along z, with the path in yellow. The top right panel is one axial slice, which cuts the vessel once. The band below is the straightened vessel, where the narrowing is plain to see. Along the path of 54.7 mm, the distance to the edge is least at 34.9 mm: 1.12 mm, against the narrowest radius of 1.2 mm. The distance runs to the centers of the voxels outside, so it is less than the radius.
+The top left panel is the maximum intensity projection along z, with the path in yellow. The top right panel is one axial slice, which cuts the vessel once. `slice_outlines` and `draw_outlines` outline the label in yellow. The band below is the straightened vessel, where the narrowing is plain to see. Along the path of 54.7 mm, the distance to the edge is least at 34.9 mm: 1.12 mm, against the narrowest radius of 1.2 mm. The distance runs to the centers of the voxels outside, so it is less than the radius.
 
 ## Project a thick slab
 
@@ -638,6 +639,23 @@ A point outside the volume takes the `outside` value, and that value counts in t
 ## Overlays
 
 `overlay_labels(image, map, axis, index, opacity)` blends a color over each labeled pixel. The labels cycle through eight colors from `label_color`. `draw_measurement(image, axis, a, b, color)` draws the line between two points, with a small cross at each end.
+
+`zoom_image(image, factor)` scales an image up by repeating each pixel. `draw_line(image, x0, y0, x1, y1, color)` draws a line of pixels, and skips the pixels past the edge.
+
+## Outline a label
+
+`slice_outlines(map, label, axis, index)` gives the outlines of a label in one slice, by marching squares. Each `Outline` holds its points in voxel units, `(i, j, k)`, its length and the area that it closes. `draw_outlines` draws them on a slice image, also a zoomed one.
+
+```mojo
+var outlines = slice_outlines(map, LabelId(1), K_AXIS, 40)
+var image = zoom_image(render_slice(volume, K_AXIS, 40), 3)
+draw_outlines(image, K_AXIS, outlines, 3, Rgba(1, 0.86, 0.16, 1))
+print(outlines[0].length.to(MILLIMETER64))
+```
+
+The outline crosses each side between a pixel of the label and a pixel outside it, at the middle of the side. A pixel past the edge of the slice is outside, so every outline closes. Two pixels of the label that touch only at a corner have outlines of their own. This is the rule of scikit-image's `find_contours` at the level 0.5.
+
+The area of an outer outline is positive, and the area of a hole is negative. So the sum over the outlines of a slice is the area inside the label's outlines. It is a little less than the area of the pixels, because the outline cuts each corner. Use `slice_areas` for the area of the pixels.
 
 ## Verification
 
@@ -667,6 +685,8 @@ The tests check these results:
 - Two voxels that share an edge are one piece with `EDGES` and `CORNERS`, and two with `FACES`. Two that share a corner only are one piece with `CORNERS`. A diagonal line grows from its end with `CORNERS`, and not with `FACES`. On a random grid of 30 by 28 by 26 voxels, the pieces of each connectivity match scipy's `ndimage.label` in count and size. That check is not part of the test suite.
 - Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
+- One pixel has a diamond outline of half its area. A rectangle of 3 by 2 pixels of 0.5 by 0.8 mm has its exact cut length and area. A ring gives its outer outline and a hole with a negative area. Pixels that touch at a corner have two outlines, and pixels that share a side have one.
+- On 9 slices of a random map across the three axes, all 429 outlines match scikit-image 0.26's `find_contours`. Their point counts are the same, their lengths match to 2e-12 mm and their areas to 1e-13 mm^2. That check is not part of the test suite.
 - A circle of 2 pixels holds the 13 lattice points of its disc. On a ramp, a disc gives the value at its center and the sample deviation of its pixels. With pixels 0.5 mm wide, a circle of 1 mm holds 7 pixels. A circle at a corner keeps the 6 pixels of the grid.
 - The values 1, 2, 3, 4 and 10 have a mean of 4 and a deviation of `sqrt(10)`. Their 10th percentile is 1.4, and their 90th percentile is 7.6. Their histogram entropy matches numpy to the last digit. The entropy uses `log`, because the Float64 `log2` of Mojo 1.2 is off by about 1e-9.
 - On the 761 voxels of an ellipsoid, every first-order feature matches numpy 2.1.3 and scipy 1.18.1 to 1e-14, relative. That check is not part of the test suite.
@@ -710,6 +730,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A label is not from 0 to 255, or is the background where a region is needed | Label functions |
 | A connectivity is not one of the three | `region_grow`, `keep_largest`, `label_pieces` |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
+| An outline has a bad label, the background, a bad axis or slice, or a zoom out of range | `slice_outlines`, `draw_outlines`, `zoom_image` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
 | An end of a centered path is outside the grid or the label, or no path joins the ends | `label_path` |
 | A path has fewer than two points or two equal points in a row, or a pass count or a spacing is out of range | `smooth_path`, `resample_path` |
