@@ -23,6 +23,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `raycast` | `VolumeCamera`, `orbit_camera`, `ray_box` and `render_volume` |
 | `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest` and `label_surface` |
 | `measure` | `label_statistics` and `voxel_distance` |
+| `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
 | `reformat` | `oblique_slice` |
@@ -203,6 +204,21 @@ A `LabelMap` holds one label for each voxel of a volume. Label zero is the backg
 
 Two voxels connect when they share a face. Of two pieces of one size, `keep_largest` keeps the piece with the lowest voxel index.
 
+## Find a threshold
+
+Use Otsu's method when the values have no fixed scale, as in MR. `otsu_threshold(histogram)` gives the bin edge that splits the voxels into two classes with the largest variance between them. This is the edge with the smallest variance within the classes.
+
+```mojo
+var span = volume.value_range()
+var counts = volume_histogram(volume, 256, Float64(span[0]), Float64(span[1]))
+var edge = otsu_threshold(counts)
+var bright = threshold(volume, edge, Float64(span[1]), LabelId(1))
+```
+
+`volume_histogram(volume, bins, low, high)` counts the values in bins of equal width. `label_histogram(volume, map, label, bins, low, high)` counts only the voxels of one label. A value outside the range is not counted, and the value `high` goes in the last bin.
+
+Otsu's method moves the edge into the class with the wider spread. For two classes of very different spread, check the edge against the histogram.
+
 `label_surface(map, label)` returns the boundary of a label as a closed triangle mesh. The mesh is in the volume frame, in meters. The surface passes halfway between a voxel inside the label and a voxel outside it.
 
 ## Smooth a label surface
@@ -279,6 +295,7 @@ The tests check these results:
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
 - An isosurface of a linear ramp has the full iso color along the gradient, and the ambient light across it.
 - An ellipsoid of 904.8 voxels labels 879 voxels, within four percent, with its centroid exact.
+- On two overlapping distributions, the Otsu edge is the edge with the least variance within the classes, found by brute force over the voxels.
 - The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
 - Twenty Taubin passes on that ball cut the spread of the radius by more than a third. The volume stays within 2 percent.
 - A welded box of 2 m has 8 vertices, an area of 24 m^2 and a volume of 8 m^3.
@@ -305,6 +322,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A label is not from 0 to 255, or is the background where a region is needed | Label functions |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface` |
+| A histogram has fewer than 2 bins or a bad range, or Otsu's method finds one full bin only | `Histogram`, `otsu_threshold` |
 
 ## Limits
 
@@ -323,6 +341,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - NEMA PS3.3, "Information Object Definitions", sections C.7.6.2 and C.11.2.1.
 - NEMA PS3.10, "Media Storage and File Format", section 7.
 - Cox and others, "A (sort of) new image data format standard: NIfTI-1", 2004, and the header `nifti1.h`.
+- Otsu, "A threshold selection method from gray-level histograms", 1979.
 - Shepp and Logan, "The Fourier reconstruction of a head section", 1974.
 - Toft, "The Radon Transform: Theory and Implementation", 1996.
 - Levoy, "Display of surfaces from volume data", 1988.

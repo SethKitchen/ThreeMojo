@@ -249,6 +249,7 @@ extensions/
     overlay.mojo          slices, label overlays and measurement lines
     reformat.mojo         oblique slices on any plane
     smooth.mojo           welded and smoothed surfaces, areas and volumes
+    histogram.mojo        histograms and Otsu thresholds
   molecule/
     ids.mojo              atom, residue, chain and model ids and kinds
     cif.mojo              the CIF tokenizer and data blocks
