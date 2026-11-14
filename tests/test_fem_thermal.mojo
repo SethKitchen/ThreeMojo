@@ -5,14 +5,18 @@
 
 """Steady heat conduction, convection and Pennes' bioheat term."""
 
+from core.buffer_geometry import COLOR, POSITION
+from extensions.fem.export import vtk_temperatures
 from extensions.fem.ids import DOF_X, DOF_Y, ElementId, NodeId
 from extensions.fem.mesh import TetMesh, box_mesh, quadratic_mesh
+from extensions.fem.post import temperature_geometry
 from extensions.fem.thermal import (
     FilmCoefficient64,
     PerfusionCoefficient64,
     PowerDensity64,
     ThermalMaterial,
     ThermalProblem,
+    ThermalResult,
     WATT_PER_CUBIC_METER,
     WATT_PER_CUBIC_METER_KELVIN,
     solve_thermal,
@@ -176,6 +180,48 @@ def test_perfusion_sets_the_level() raises:
         )
         with assert_raises(contains="node"):
             _ = result.temperature(NodeId(-1))
+
+
+def test_drawing_and_vtk() raises:
+    var problem = ThermalProblem(_rod(2, False), [ThermalMaterial(_k())])
+    _fix_end(problem, 0, 300)
+    _fix_end(problem, LENGTH, 400)
+    var result = solve_thermal(problem, 1e-12, 500)
+    var drawn = temperature_geometry(
+        problem.mesh, result, _kelvin(300), _kelvin(400)
+    )
+    ref points = drawn.attribute_view(POSITION)
+    ref colors = drawn.attribute_view(COLOR)
+    for v in range(points.count()):
+        var x = Float64(points.vector3(v).x)
+        # Blue at the cold end and red at the hot end.
+        if x == 0:
+            assert_true(colors.component(v, 2) > colors.component(v, 0))
+        if abs(x - LENGTH) < 1e-6:
+            assert_true(colors.component(v, 0) > colors.component(v, 2))
+    with assert_raises(contains="high end above"):
+        _ = temperature_geometry(
+            problem.mesh, result, _kelvin(300), _kelvin(300)
+        )
+    var text = vtk_temperatures(problem.mesh, result)
+    assert_true("SCALARS temperature double 1\nLOOKUP_TABLE default\n" in text)
+    assert_true("\n300.0\n" in text)
+    # An empty mesh draws nothing and writes no temperature.
+    var nothing = ThermalResult(List[Float64]())
+    assert_equal(
+        temperature_geometry(
+            TetMesh(), nothing, _kelvin(300), _kelvin(400)
+        ).vertex_count(),
+        0,
+    )
+    assert_true("POINT_DATA 0\n" in vtk_temperatures(TetMesh(), nothing))
+    var other = ThermalResult(List[Float64]())
+    with assert_raises(contains="not for this mesh"):
+        _ = temperature_geometry(
+            problem.mesh, other, _kelvin(300), _kelvin(400)
+        )
+    with assert_raises(contains="not for this mesh"):
+        _ = vtk_temperatures(problem.mesh, other)
 
 
 def test_refusals() raises:

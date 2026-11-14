@@ -279,3 +279,6 @@ $(call gallery,ct-to-fem,ct_to_fem)
 # A steel tuning fork of ten-node tetrahedra: its first three natural
 # modes, colored by motion.
 $(call gallery,fem-modes,fem_modes)
+# Half of a block of perfused tissue, cut through a needle held at 70 C,
+# colored by temperature by Pennes' bioheat equation.
+$(call gallery,bioheat,bioheat)

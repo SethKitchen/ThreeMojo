@@ -13,6 +13,9 @@ The color scale runs through blue, cyan, green, yellow and red, from the
 low stress to the high stress. A stress past either end takes the color
 of that end.
 
+`temperature_geometry` colors the outer surface by the temperature of
+each node, on the same scale.
+
 `mode_geometry` draws a mode shape the same way. It scales the shape so
 that the node that moves most moves by a given amplitude, and colors
 each vertex by how far its node moves, on the same scale.
@@ -22,11 +25,13 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, BufferGeometry
 from extensions.fem.mesh import TetMesh, boundary_faces
 from extensions.fem.static import StaticResult
+from extensions.fem.thermal import ThermalResult
 from extensions.sdf.vector import V3, cross, dot, normalize, v3
 from geometries.surface import indexed_surface
 from render.srgb import srgb_to_linear
 from std.math import isfinite, max, min
 from units.si import Length64, METER, PASCAL, Pressure64
+from units.temperature import KELVIN, Temperature64
 
 
 def stress_color(stress: Pressure64, low: Pressure64, high: Pressure64) -> V3:
@@ -181,6 +186,20 @@ def mode_geometry(
     if not (largest > 0):
         raise Error("A mode shape needs a node that moves")
     var scale = reach / largest**0.5
+    var moved = List[V3]()
+    var places = List[Float64]()
+    for n in range(mesh.node_count()):  # pragma: no branch
+        var d = v3(shape[3 * n], shape[3 * n + 1], shape[3 * n + 2])
+        moved.append(mesh.nodes[n] + d * scale)
+        places.append(dot(d, d) ** 0.5 * scale / reach)
+    return _colored_surface(mesh, moved, places)
+
+
+def _colored_surface(
+    mesh: TetMesh, points: List[V3], places: List[Float64]
+) raises -> BufferGeometry:
+    """Return the outer faces at the given node points, each vertex
+    colored by its node's place from 0 to 1 on the scale."""
     var faces = boundary_faces(mesh)
     var positions = List[Float32]()
     var normals = List[Float32]()
@@ -189,17 +208,13 @@ def mode_geometry(
     var indices = List[Int]()
     for face in range(len(faces) // 4):  # pragma: no branch
         var corners = List[V3]()
-        var motions = List[Float64]()
         for k in range(3):  # pragma: no branch
-            var n = faces[4 * face + k]
-            var d = v3(shape[3 * n], shape[3 * n + 1], shape[3 * n + 2])
-            corners.append(mesh.nodes[n] + d * scale)
-            motions.append(dot(d, d) ** 0.5 * scale / reach)
+            corners.append(points[faces[4 * face + k]])
         var normal = normalize(
             cross(corners[1] - corners[0], corners[2] - corners[0])
         )
         for k in range(3):  # pragma: no branch
-            var color = _ramp(motions[k])
+            var color = _ramp(places[faces[4 * face + k]])
             indices.append(len(positions) // 3)
             positions.append(Float32(corners[k].x))
             positions.append(Float32(corners[k].y))
@@ -216,3 +231,40 @@ def mode_geometry(
     indexed_surface(geometry, positions^, normals^, uvs^, indices^)
     geometry.set_attribute(String(COLOR), BufferAttribute(colors^, 3))
     return geometry^
+
+
+def temperature_geometry(
+    mesh: TetMesh,
+    result: ThermalResult,
+    low: Temperature64,
+    high: Temperature64,
+) raises -> BufferGeometry:
+    """Return the outer surface, each vertex colored by its temperature.
+
+    The scale runs from blue at `low` to red at `high`. A temperature past
+    either end takes the color of that end.
+
+    Args:
+        mesh: The mesh that was solved.
+        result: Its temperatures.
+        low: The temperature at blue.
+        high: The temperature at red. Above `low`.
+
+    Returns:
+        A triangle mesh in meters with `position`, `normal`, `uv` and
+        `color` attributes.
+
+    Raises:
+        Error: If the result is not for this mesh, or `high` is not above
+            `low`.
+    """
+    if len(result.temperatures) != mesh.node_count():
+        raise Error("The result is not for this mesh")
+    var cold = low.to(KELVIN)
+    var hot = high.to(KELVIN)
+    if not (hot > cold):
+        raise Error("A temperature scale needs a high end above its low end")
+    var places = List[Float64]()
+    for value in result.temperatures:
+        places.append((value - cold) / (hot - cold))
+    return _colored_surface(mesh, mesh.nodes.copy(), places)

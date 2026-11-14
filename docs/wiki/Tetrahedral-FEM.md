@@ -14,8 +14,8 @@
 | `mesh` | `TetMesh`, `box_mesh`, `voxel_mesh`, `voxel_mesh_labels`, `quadratic_mesh`, `boundary_faces`, `edge_pairs` and `signed_volume` |
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of`, `von_mises`, `principal_stresses` and `PrincipalStress` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
-| `post` | `stress_geometry`, `stress_color` and `mode_geometry` |
-| `export` | `vtk_mesh`, `vtk_result` and `vtk_modes` |
+| `post` | `stress_geometry`, `stress_color`, `mode_geometry` and `temperature_geometry` |
+| `export` | `vtk_mesh`, `vtk_result`, `vtk_modes` and `vtk_temperatures` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
 | `thermal` | `ThermalMaterial`, `ThermalProblem`, `solve_thermal` and `ThermalResult` |
@@ -199,6 +199,12 @@ var result = solve_thermal(problem, 1e-10, 5000)
 
 Pennes' model is a simple model of perfusion. The results are for research and teaching. They are not validated for treatment planning.
 
+![Half of a block of perfused tissue, cut through a needle held at 70 C, colored from 37 C to 70 C](out/bioheat.png)
+
+`examples/bioheat.mojo` makes this picture. A needle at 70 C enters a block of tissue 40 mm on a side from the top, and stops at the center. The tissue conducts 0.5 W/(m K), makes 400 W/m^3 of metabolic heat, and has a perfusion coefficient of 1890 W/(m^3 K). The block is cut in half through the needle. The tissue is 51 C at 2 mm below the tip, 45 C at 5 mm and 42 C at 10 mm.
+
+`temperature_geometry(mesh, result, low, high)` colors the outer surface by the temperature of each node, from blue at `low` to red at `high`. `vtk_temperatures(mesh, result)` writes the temperatures for ParaView.
+
 ## Draw the result
 
 `stress_geometry(mesh, result, scale, low, high)` returns the outer surface. It moves each node by its displacement times `scale`. Each face takes the color of the von Mises stress of its element. The scale runs through blue, cyan, green, yellow and red from `low` to `high`. Each face has its own vertices, so the colors and normals are flat.
@@ -233,6 +239,7 @@ The file is an ASCII `UNSTRUCTURED_GRID` in meters. A four-node element is cell 
 | `material` | Cell scalar | The element's material index |
 | `von_mises` | Cell scalar | The von Mises stress, in pascals |
 | `principal` | Cell scalar of 3 | The principal stresses from the largest, in pascals |
+| `temperature` | Point scalar | The temperature of a node, in kelvin, from `vtk_temperatures` |
 | `first_direction` | Cell vector | The direction of the largest principal stress |
 | `stress` | Cell tensor | The symmetric stress tensor, in pascals |
 | `displacement` | Point vector | The node's displacement, in meters |

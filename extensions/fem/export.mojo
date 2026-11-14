@@ -11,6 +11,7 @@ an ASCII `UNSTRUCTURED_GRID`. A four-node element is cell type 10,
 whose edge order is this extension's: 0-1, 1-2, 2-0, 0-3, 1-3 and 2-3.
 
 Each element has its material index as the cell scalar `material`.
+`vtk_temperatures` adds the point scalars `temperature`, in kelvin.
 `vtk_modes` adds one point vector per mode shape, `mode_1` and on, with
 the frequencies in the title line. `vtk_result` adds the solved fields: the point vectors `displacement`, in
 meters, and the cell scalars `von_mises` and cell tensors `stress`, in
@@ -23,6 +24,7 @@ back exactly.
 from extensions.fem.ids import ElementId, LINEAR
 from extensions.fem.mesh import TetMesh
 from extensions.fem.modal import ModalResult
+from extensions.fem.thermal import ThermalResult
 from extensions.fem.static import StaticResult
 from units.si import PASCAL, PER_SECOND
 
@@ -163,4 +165,28 @@ def vtk_modes(mesh: TetMesh, modes: ModalResult) raises -> String:
             out += _number(shape[3 * n]) + " "
             out += _number(shape[3 * n + 1]) + " "
             out += _number(shape[3 * n + 2]) + "\n"
+    return out^
+
+
+def vtk_temperatures(mesh: TetMesh, result: ThermalResult) raises -> String:
+    """Return a mesh and its temperatures as the text of a legacy VTK file.
+
+    Args:
+        mesh: The mesh that was solved.
+        result: Its temperatures.
+
+    Returns:
+        The text, with each element's material and each node's
+        temperature in kelvin as the point scalars `temperature`.
+
+    Raises:
+        Error: If the result is not for this mesh.
+    """
+    if len(result.temperatures) != mesh.node_count():
+        raise Error("The result is not for this mesh")
+    var out = _geometry(mesh, "ThreeMojo temperatures, meters, kelvin")
+    out += "POINT_DATA " + String(mesh.node_count()) + "\n"
+    out += "SCALARS temperature double 1\nLOOKUP_TABLE default\n"
+    for value in result.temperatures:
+        out += _number(value) + "\n"
     return out^
