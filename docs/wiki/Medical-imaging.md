@@ -31,6 +31,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
+| `gap` | `distance_from_label`, `label_gap`, `LabelGap` and `volume_within` |
 | `morphology` | `dilate_label`, `erode_label`, `open_label` and `close_label` |
 | `holes` | `fill_holes` and `fill_slice_holes` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
@@ -530,6 +531,27 @@ A sphere fits when its radius is the distance from its center to the nearest vox
 
 Only the spheres that no neighbor's sphere holds can be the largest, so only they are drawn. Both maps are volumes on the grid of the label map, in millimeters, with 0 outside the label. A slab of `n` voxels is `n` voxels thick. A thin wall of one or two voxels is measured coarsely, so use voxels several times smaller than the wall.
 
+## Measure the gap between two labels
+
+`label_gap(map, first, second)` gives the least distance between a voxel of one label and a voxel of another. Use it for the distance from a tumor to a vessel, or from a lesion to an organ. It also gives the two voxels, as `(i, j, k)`.
+
+```mojo
+var gap = label_gap(map, LabelId(1), LabelId(2))
+print(gap.distance.to(MILLIMETER64), gap.first_voxel[2], gap.second_voxel[2])
+var near = volume_within(map, LabelId(1), LabelId(2), Length64(5, MILLIMETER64))
+var field = distance_from_label(map, LabelId(1))
+```
+
+| Function | What it gives |
+|---|---|
+| `label_gap(map, first, second)` | The least distance, and the voxel of each label where it is |
+| `volume_within(map, first, second, limit)` | The volume of the voxels of `second` within `limit` of `first` |
+| `distance_from_label(map, label)` | A volume in millimeters: the distance of each voxel to the nearest voxel of the label |
+
+Every distance is center to center, with the spacing of each axis, and exact. So two labels that share a face are one spacing apart. The clear space between the faces of their voxels is less, by about one voxel. Of two pairs at one distance, the voxel of `second` with the lowest index counts. Then the nearest voxel of `first` with the lowest index counts.
+
+Draw `distance_from_label` with `render_slice`, or give it to `label_statistics` with the map of another label. The second label then gets the mean, the least and the largest distance of its voxels.
+
 ## Draw a slice
 
 `render_slice(volume, axis, index)` shows one slice through the volume's window, one pixel for each voxel. A `MONOCHROME1` volume shows inverted.
@@ -656,6 +678,8 @@ The tests check these results:
 - A hollow cube fills its 27 voxels, and a voxel of another label in it keeps its label. A center walled by its 6 face neighbors fills with `FACES` only. A wall of its 18 neighbors fills it with `FACES` and `EDGES`, and not with `CORNERS`.
 - A label on the grid's edge closes off the inside, and one gap opens it. A tube open at its ends has no hole in three dimensions, and the slices across its axis fill its center.
 - On a random grid of 30 by 28 by 26 voxels, each fill matches scipy's `binary_fill_holes`. The check covers each connectivity, in three dimensions and in the slices of each axis. That check is not part of the test suite.
+- Two boxes four voxels of 0.5 mm apart have a gap of 2 mm, at the voxels that face each other. A slanted pair in voxels of 0.5, 0.8 and 2 mm has its exact gap. A pair that shares a face is one spacing apart. The distance map matches a search of every seed at every voxel. With `label_statistics`, it gives the least, the mean and the largest distance of a label.
+- A lumpy ball and a winding tube lie in voxels of 0.7, 0.9 and 2.5 mm. Their gap and its two voxels match a search of every pair of voxels. The distance map matches scipy's `distance_transform_edt` to 1e-7, relative. That check is not part of the test suite.
 - A voxel dilated by 2 mm becomes the 33 lattice points of the ball, and 15 with slices 2 mm apart. A cube of 7 voxels eroded by 1 mm is a cube of 5. Opening removes a spike, and closing fills a hole.
 - The distance to the edge of an irregular label on an anisotropic grid matches a brute-force search. A slab six voxels thick is six voxels thick. With 2 mm slices and 0.5 mm pixels, a label is limited by its narrower side.
 - The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
@@ -699,6 +723,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A shape or a slice area needs the background, an empty label, another grid or a bad axis | `label_shape`, `slice_areas` |
 | A morphology label is the background, or its radius is negative or not finite | Morphology functions |
 | A hole fill has a bad label, the background, a bad connectivity or a bad axis | `fill_holes`, `fill_slice_holes` |
+| A gap has a bad, background or empty label, the same label twice, or a negative or infinite limit | `label_gap`, `volume_within`, `distance_from_label` |
 | A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface`, `label_stl` |
 | A mesh has no positions | `printable_stl` |
 | A histogram has fewer than 2 bins or a bad range, or Otsu's method finds one full bin only | `Histogram`, `otsu_threshold` |
