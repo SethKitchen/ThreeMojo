@@ -37,6 +37,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `curved` | `curved_reformat` |
 | `path` | `label_path`, `smooth_path` and `resample_path` |
 | `resample` | `resample_volume` and `resample_labels` |
+| `crop` | `crop_volume`, `crop_labels`, `label_box` and `VoxelBox` |
 
 ## Read a DICOM series
 
@@ -171,6 +172,20 @@ var labels = resample_labels(map, mm, mm, mm)
 ```
 
 The new grid keeps the first voxel center, the axes, the window and the extent of the old grid. Along each axis it has `floor(extent / spacing) + 1` voxels, so a step that does not divide the extent stops at the last whole step. `resample_volume` takes the trilinear blend of the old voxels at each new voxel center. `resample_labels` takes the label of the nearest old voxel center, because labels cannot blend.
+
+## Crop to a region
+
+An analysis often needs only the region around one structure. Crop the volume and its label map to that region, and every later step runs on fewer voxels.
+
+```mojo
+var box = label_box(map, LabelId(1), 4)
+var part = crop_volume(volume, box)
+var labels = crop_labels(map, box)
+```
+
+A `VoxelBox` holds the first and the last voxel of a region along each axis. Both are kept. `label_box(map, label, margin)` gives the box of one label, grown by `margin` voxels on each side and cut at the grid's edge. `crop_volume` and `crop_labels` copy the voxels of a box. A box that leaves the grid or holds no voxel is refused.
+
+The cropped volume keeps its place in patient space. Its origin is the center of the box's first voxel, with the same axes and spacing. So a point has the same patient position before and after the crop. The crop keeps the window and the photometric interpretation of the volume.
 
 ## The volume grid
 
@@ -554,6 +569,7 @@ The tests check these results:
 - Smoothing keeps a straight run on its line and its ends in place, and flattens a zigzag of one step in one pass. A bent path resampled every 0.5 mm has its corner on a sample, and every step is 0.5 mm.
 - The centered path through a straight tube runs down its axis, and a start off the axis joins the axis. Through a bent tube, each step goes to a neighbor inside the label, and the path straightens into a curved reformat.
 - A curved reformat along a straight path matches a linear field at every pixel. Along a bent path, the corner falls at its arc length, and an `up` that leans along the path keeps only its square part. A point past the volume takes the `outside` value.
+- A crop keeps each value, and each voxel keeps its patient position on turned axes. A label box grows by its margin, and the grid's edge cuts it.
 - A linear field resampled from 0.5 x 0.5 x 3 mm voxels to 1 mm cubes keeps its value at every new voxel. A label slice of 3 mm becomes the three 1 mm slices nearest to it.
 - A slab of four planes through a ramp gives its top plane as its maximum and its bottom plane as its minimum. Its mean is its center value.
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
@@ -606,6 +622,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A circle has a bad axis, slice, center or radius, or holds no pixel center | `circle_statistics` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels`, `label_overlaps` |
 | A table of overlaps is empty | `mean_dice` |
+| A crop box leaves the grid or holds no voxel, or a label box has a bad label or margin | `crop_volume`, `crop_labels`, `label_box` |
 | A shape or a slice area needs the background, an empty label, another grid or a bad axis | `label_shape`, `slice_areas` |
 | A morphology label is the background, or its radius is negative or not finite | Morphology functions |
 | A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface`, `label_stl` |
