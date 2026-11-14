@@ -25,6 +25,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `measure` | `label_statistics` and `voxel_distance` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
+| `thickness` | `label_distance`, `local_thickness`, `thickness_statistics` and `ThicknessStatistics` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
 | `reformat` | `oblique_slice` |
@@ -291,6 +292,21 @@ The volume of a label is a count of voxels. It is not the volume inside a smooth
 
 `voxel_distance(volume, a, b)` gives the length between two points in voxel units. It uses the spacing of each axis.
 
+## Measure thickness
+
+Bone research measures the thickness of cortical walls and of trabeculae. `local_thickness(map, label)` gives each voxel of a label the diameter of the largest sphere that holds the voxel and fits in the label. This is the method of Hildebrand and Rüegsegger.
+
+```mojo
+var thickness = local_thickness(map, LabelId(1))
+var stats = thickness_statistics(thickness, map, LabelId(1))
+print(stats.mean.to(MILLIMETER64), stats.maximum.to(MILLIMETER64))
+var image = render_slice(thickness, K_AXIS, 40)
+```
+
+A sphere fits when its radius is the distance from its center to the nearest voxel outside the label. `label_distance(map, label)` gives that distance, center to center, for each voxel. The transform is exact: it is the method of Felzenszwalb and Huttenlocher, with the spacing of each axis in its pass. The grid counts as surrounded by voxels outside every label.
+
+Only the spheres that no neighbor's sphere holds can be the largest, so only they are drawn. Both maps are volumes on the grid of the label map, in millimeters, with 0 outside the label. A slab of `n` voxels is `n` voxels thick. A thin wall of one or two voxels is measured coarsely, so use voxels several times smaller than the wall.
+
 ## Draw a slice
 
 `render_slice(volume, axis, index)` shows one slice through the volume's window, one pixel for each voxel. A `MONOCHROME1` volume shows inverted.
@@ -338,6 +354,7 @@ The tests check these results:
 - A Gaussian keeps a linear ramp away from the edges. Its response to one voxel is the product of its three kernels, and sums to one.
 - A median removes a hot and a cold voxel and keeps the edge between two regions.
 - On two overlapping distributions, the Otsu edge is the edge with the least variance within the classes, found by brute force over the voxels.
+- The distance to the edge of an irregular label on an anisotropic grid matches a brute-force search. A slab six voxels thick is six voxels thick. With 2 mm slices and 0.5 mm pixels, a label is limited by its narrower side.
 - The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
 - Twenty Taubin passes on that ball cut the spread of the radius by more than a third. The volume stays within 2 percent.
 - A welded box of 2 m has 8 vertices, an area of 24 m^2 and a volume of 8 m^3.
@@ -387,6 +404,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - NEMA PS3.10, "Media Storage and File Format", section 7.
 - Cox and others, "A (sort of) new image data format standard: NIfTI-1", 2004, and the header `nifti1.h`.
 - Otsu, "A threshold selection method from gray-level histograms", 1979.
+- Hildebrand and Rüegsegger, "A new method for the model-independent assessment of thickness in three-dimensional images", 1997.
+- Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", 2012.
 - Shepp and Logan, "The Fourier reconstruction of a head section", 1974.
 - Toft, "The Radon Transform: Theory and Implementation", 1996.
 - Levoy, "Display of surfaces from volume data", 1988.

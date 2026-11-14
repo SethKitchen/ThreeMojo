@@ -251,6 +251,7 @@ extensions/
     smooth.mojo           welded and smoothed surfaces, areas and volumes
     histogram.mojo        histograms and Otsu thresholds
     filter.mojo           Gaussian and median filters
+    thickness.mojo        distances to a label's edge and local thickness
   molecule/
     ids.mojo              atom, residue, chain and model ids and kinds
     cif.mojo              the CIF tokenizer and data blocks
