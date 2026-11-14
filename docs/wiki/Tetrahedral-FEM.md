@@ -17,6 +17,7 @@
 | `post` | `stress_geometry` and `stress_color` |
 | `export` | `vtk_mesh` and `vtk_result` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
+| `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
 
 ## Solve a problem
 
@@ -145,6 +146,27 @@ var along = principal.directions[0]
 
 The three `values` run from the largest to the smallest. Each of the `directions` is a unit vector, and the three are square to each other. A direction has an arbitrary sign. When two principal stresses are equal, any two square directions in their plane are correct. The cyclic Jacobi method finds the values and the directions. It runs ten sweeps, and a 3 by 3 tensor reaches rounding within five.
 
+## Natural frequencies
+
+`natural_modes(problem, densities, count, tolerance, max_iterations)` gives the lowest natural frequencies of a problem and their mode shapes. The supports of the problem hold during the vibration. Its loads do not matter.
+
+```mojo
+var modes = natural_modes(problem, [Density64(7850, KILOGRAM_PER_CUBIC_METER)],
+    3, 1e-10, 200)
+print(modes.frequencies[0].to(PER_SECOND), "Hz")
+```
+
+Mode `i` solves `K phi = omega^2 M phi`, and its frequency is `omega / (2 pi)`. `M` is the consistent mass from `assemble_mass(mesh, densities)`, with one density for each material. The integrals of the shape functions are exact. `mass_coefficients(nodes)` gives them for an element of unit mass:
+
+| Element | Pair of nodes | Coefficient |
+|---|---|---|
+| Four nodes | The same node, or two nodes | 1/10, or 1/20 |
+| Ten nodes | The same corner, or two corners | 6/420, or 1/420 |
+| Ten nodes | A corner and an edge that holds it, or another edge | -4/420, or -6/420 |
+| Ten nodes | The same edge, two edges with a shared corner, or opposite edges | 32/420, 16/420, or 8/420 |
+
+The prescribed degrees of freedom are removed, and the subspace iteration of the [Numerics](Numerics) extension solves for the lowest modes. A Sturm check makes sure that no lower mode was missed. Each shape has `phi^T M phi = 1`, and is zero where a degree of freedom is prescribed. Use ten-node elements for bending modes. Four-node elements are too stiff in bending, as in a static problem.
+
 ## Draw the result
 
 `stress_geometry(mesh, result, scale, low, high)` returns the outer surface. It moves each node by its displacement times `scale`. Each face takes the color of the von Mises stress of its element. The scale runs through blue, cyan, green, yellow and red from `low` to `high`. Each face has its own vertices, so the colors and normals are flat.
@@ -200,6 +222,9 @@ The tests check these results:
 - A quadratic element stiffness is symmetric, and its ten shape gradients sum to zero.
 - A column standing under its own weight puts all of it on its base. With ten-node elements, its top drops by exactly `rho g L^2 / (2 E)`.
 - Two labels meshed together share the nodes of their interface, and each has its own material.
+- A rod that is fixed at one end moves along its axis only. It rings at `c / (4 L)` to a relative 1e-6, and at `3 c / (4 L)` to 1e-4.
+- A steel cantilever is 0.6 m long and 60 mm square. With ten-node elements it bends at 136.9 Hz with 10 cells and 136.2 Hz with 20. Euler-Bernoulli gives 135.9 Hz. The two bending modes of the square section agree to 1 percent.
+- The consistent mass coefficients sum to one, and a rigid move carries the whole mass.
 - A column of four voxels with four CT numbers, under 1 MPa, shortens by `p * sum(h / E)`, as springs in series, to a relative 1e-9. One bin takes the mean modulus and the mean density.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 
@@ -255,3 +280,4 @@ Every function raises `Error` for input it cannot use.
 - van Rietbergen and others, "A new method to determine trabecular bone elastic properties and loading using micromechanical finite-element models", 1995.
 - Hestenes and Stiefel, "Methods of conjugate gradients for solving linear systems", 1952.
 - Morgan, Bayraktar and Keaveny, "Trabecular bone modulus-density relationships depend on anatomic site", 2003.
+- Bathe, "Finite Element Procedures", 2nd edition, 2014, sections 10.2 and 11.6.

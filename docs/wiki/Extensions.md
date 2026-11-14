@@ -269,6 +269,7 @@ extensions/
     post.mojo             the deformed surface colored by stress
     export.mojo           meshes and results as VTK files
     density.mojo          materials from CT density
+    modal.mojo            mass matrices and natural frequencies
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.
