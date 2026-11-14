@@ -14,6 +14,7 @@
 | `cif` | `parse_cif`, `read_cif`, `cif_tokens`, `CifBlock` and `is_null` |
 | `structure` | `Structure`, `parse_mmcif`, `read_mmcif`, `parse_pdb_structure`, `read_pdb_structure` and `SQUARE_ANGSTROM` |
 | `peptide` | `build_peptide`, `place_atom` and `three_letter` |
+| `dssp` | `assign_secondary`, `secondary_from_bonds` and `bond_energy` |
 | `ribbon` | `ribbon_geometry` |
 | `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius` and `sphere_points` |
 
@@ -99,6 +100,26 @@ An atom can have more than one position in a crystal. Each position has an alter
 ## Secondary structure
 
 The reader marks helices from `_struct_conf`. A row is a helix when its `conf_type_id` starts with `HELX`. It marks strands from `_struct_sheet_range`. Each row names a chain by `beg_label_asym_id` and a run of residues by `beg_label_seq_id` and `end_label_seq_id`. The marks apply to every model. Other residues are `COIL`.
+
+## Assign secondary structure
+
+`assign_secondary(structure, model)` replaces the secondary structure of a model's residues with the one that its backbone hydrogen bonds make. Use it for a file with no helix and strand records, such as a structure prediction. The method is the core of DSSP, by Kabsch and Sander.
+
+```mojo
+var structure = read_pdb_structure("predicted.pdb", FIRST_LOCATION)
+assign_secondary(structure, ModelId(0))
+```
+
+The energy of a bond from the N-H of one residue to the C=O of another is DSSP's electrostatic model, in kcal/mol. A bond exists below -0.5. The H of a residue is 1 angstrom from its N, along the direction from the O to the C of the residue before. A chain's first residue and a proline have no H.
+
+| Pattern | Gives |
+|---|---|
+| Two 4-turns in a row, at `i - 1` and `i` | A helix from `i` to `i + 3` |
+| Two bridges of one kind in a row | A strand at all four residues |
+
+A 4-turn at `i` is a bond from the C=O of `i` to the N-H of `i + 4`. A bridge pairs two residues three or more apart. It is antiparallel when they bond to each other, or when their outer neighbors do. It is parallel when the bonds run past each residue to the next. A helix wins over a strand. A residue without all of N, CA, C and O is coil.
+
+`secondary_from_bonds(bonds, count)` applies the patterns to a matrix of bonds, so a caller can supply bonds from another source.
 
 ## CIF text
 
@@ -186,6 +207,8 @@ The tests check these results:
 
 - A built helix has CA atoms 3.80 angstroms apart.
 - The hydrogen bond from O of residue `i` to N of residue `i + 4` is 2.8 to 3.3 angstroms.
+- A built alpha helix of 14 residues gives DSSP's pattern: coil at each end and helix between.
+- Crafted bond matrices give antiparallel and parallel ladders by each rule, and a lone bridge gives none.
 - A PDB fixture gives the expected chains, residues, elements and secondary structure. It holds two models, waters and an ion after `TER`, an insertion code and alternate locations.
 - CB is 1.527 angstroms from CA.
 - One atom with a probe has the whole area of its grown sphere.
@@ -213,7 +236,8 @@ Every function raises `Error` for input it cannot use.
 
 - The PDB reader does not read `CONECT`, `ANISOU` or `SEQRES` records, or the hybrid-36 numbers of very large files.
 - The reader keeps the first data block only. It does not read anisotropic displacements, bonds or the chemical component dictionary.
-- The reader does not infer secondary structure. A file without `_struct_conf` and `_struct_sheet_range` gives coils only.
+- The readers do not infer secondary structure themselves. Call `assign_secondary` for a file without helix and strand records.
+- `assign_secondary` does not report 3-10 or pi helices, turns, bends, isolated bridges or beta bulges.
 - Ribbons need CA atoms. Nucleic acids have no ribbon.
 - Where three or more spheres make a crevice, the excluded surface uses the grid bound. It can lie up to one grid step outside the true surface there.
 - A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
@@ -232,3 +256,4 @@ Every function raises `Error` for input it cannot use.
 - Xu and Zhang, "Generating triangulated macromolecular surfaces by Euclidean distance transform", 2009.
 - Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", 2012.
 - Richardson, "The anatomy and taxonomy of protein structure", 1981.
+- Kabsch and Sander, "Dictionary of protein secondary structure: pattern recognition of hydrogen-bonded and geometrical features", 1983.

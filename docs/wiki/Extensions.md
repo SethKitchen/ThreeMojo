@@ -252,6 +252,7 @@ extensions/
     cif.mojo              the CIF tokenizer and data blocks
     structure.mojo        the mmCIF structure reader
     peptide.mojo          ideal peptide backbones
+    dssp.mojo             helices and strands from hydrogen bonds
     ribbon.mojo           cartoon ribbons
     surface.mojo          accessible areas and surface meshes
   fem/
