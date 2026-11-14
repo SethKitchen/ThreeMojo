@@ -41,7 +41,18 @@ from extensions.numerics.iterative import SolveStatus, conjugate_gradient
 from extensions.numerics.sparse import CsrMatrix, SparseBuilder
 from extensions.sdf.vector import V3, cross, length, v3
 from std.math import isfinite, max, min
-from units.si import Force64, Length64, METER, NEWTON, PASCAL, Pressure64
+from units.si import (
+    Acceleration64,
+    Density64,
+    Force64,
+    KILOGRAM_PER_CUBIC_METER,
+    Length64,
+    METER,
+    METER_PER_SECOND_SQUARED,
+    NEWTON,
+    PASCAL,
+    Pressure64,
+)
 
 
 struct StaticProblem(Movable):
@@ -125,6 +136,61 @@ struct StaticProblem(Movable):
         if not isfinite(newtons):
             raise Error("A force must be finite")
         self.forces[3 * node.value + axis.value] += newtons
+
+    def apply_gravity(
+        mut self,
+        densities: List[Density64],
+        gravity: Acceleration64,
+        direction: V3,
+    ) raises:
+        """Load every element with its own weight.
+
+        An element of volume `V` and density `rho` weighs
+        `W = rho * gravity * V`. A four-node element puts `W / 4` on each
+        corner. A ten-node element puts `-W / 20` on each corner and
+        `W / 5` on each edge node. These are the consistent loads of a
+        uniform body force.
+
+        Args:
+            densities: The density of each material, in the order of
+                `materials`. Zero or more.
+            gravity: The acceleration of gravity, such as 9.80665 m/s^2.
+                Finite.
+            direction: The direction gravity pulls. Not zero.
+
+        Raises:
+            Error: If the densities do not match the materials, a density
+                is negative or not finite, the acceleration is not finite,
+                or the direction is zero or not finite.
+        """
+        if len(densities) != len(self.materials):
+            raise Error("Gravity needs one density for each material")
+        for density in densities:  # pragma: no branch
+            var value = density.to(KILOGRAM_PER_CUBIC_METER)
+            if not (value >= 0) or not isfinite(value):
+                raise Error("A density must be zero or more and finite")
+        var g = gravity.to(METER_PER_SECOND_SQUARED)
+        if not isfinite(g):
+            raise Error("The acceleration of gravity must be finite")
+        var size = length(direction)
+        if not (size > 0) or not isfinite(size):
+            raise Error("Gravity needs a direction that is not zero")
+        var unit = direction * (1.0 / size)
+        var count = self.mesh.nodes_per_element()
+        for e in range(self.mesh.element_count()):  # pragma: no branch
+            var weight = (
+                densities[self.mesh.materials[e]].to(KILOGRAM_PER_CUBIC_METER)
+                * g
+                * self.mesh.volume(ElementId(e)).value
+            )
+            for a in range(count):  # pragma: no branch
+                var share = weight / 4.0
+                if count == 10:
+                    share = -weight / 20.0 if a < 4 else weight / 5.0
+                var node = self.mesh.corners[count * e + a]
+                self.forces[3 * node] += share * unit.x
+                self.forces[3 * node + 1] += share * unit.y
+                self.forces[3 * node + 2] += share * unit.z
 
     def press_plane(
         mut self,

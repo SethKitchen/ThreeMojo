@@ -37,6 +37,7 @@ from extensions.fem.mesh import (
     quadratic_mesh,
     signed_volume,
     voxel_mesh,
+    voxel_mesh_labels,
 )
 from extensions.imaging.ids import BACKGROUND, LabelId
 from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
@@ -169,6 +170,29 @@ def test_voxel_mesh() raises:
         _ = voxel_mesh(map, LabelId(5))
     with assert_raises(contains="from 0 to 255"):
         _ = voxel_mesh(map, LabelId(256))
+
+
+def test_voxel_mesh_of_several_labels() raises:
+    var spacing = Length64(1, MILLIMETER64)
+    var volume = ImageVolume(3, 1, 1, spacing, spacing, spacing)
+    var map = LabelMap(volume)
+    map.set(0, 0, 0, LabelId(7))
+    map.set(1, 0, 0, LabelId(2))
+    map.set(2, 0, 0, LabelId(9))
+    var mesh = voxel_mesh_labels(map, [LabelId(2), LabelId(7)])
+    # Two voxels that share a face: twelve nodes, and a material each.
+    assert_equal(mesh.node_count(), 12)
+    assert_equal(mesh.element_count(), 12)
+    assert_equal(mesh.materials[0], 1)
+    assert_equal(mesh.materials[6], 0)
+    with assert_raises(contains="at least one label"):
+        _ = voxel_mesh_labels(map, List[LabelId]())
+    with assert_raises(contains="only be meshed once"):
+        _ = voxel_mesh_labels(map, [LabelId(2), LabelId(2)])
+    with assert_raises(contains="from 0 to 255"):
+        _ = voxel_mesh_labels(map, [LabelId(-3)])
+    with assert_raises(contains="no voxels"):
+        _ = voxel_mesh_labels(map, [LabelId(4)])
 
 
 def test_material() raises:

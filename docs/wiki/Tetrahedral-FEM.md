@@ -11,7 +11,7 @@
 | Module | What it gives |
 |---|---|
 | `ids` | `NodeId`, `ElementId`, `MaterialId`, `DofAxis` and `ElementOrder` |
-| `mesh` | `TetMesh`, `box_mesh`, `voxel_mesh`, `quadratic_mesh`, `boundary_faces`, `edge_pairs` and `signed_volume` |
+| `mesh` | `TetMesh`, `box_mesh`, `voxel_mesh`, `voxel_mesh_labels`, `quadratic_mesh`, `boundary_faces`, `edge_pairs` and `signed_volume` |
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of` and `von_mises` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
 | `post` | `stress_geometry` and `stress_color` |
@@ -41,6 +41,8 @@ A real problem needs supports on all three axes. The fragment above holds only x
 A `TetMesh` holds nodes in meters and elements of four nodes each. Each element names a material by a `MaterialId`. `add_element` turns an element inside out when its volume is negative, so every element has a positive volume. It refuses a flat element.
 
 `box_mesh(size_x, size_y, size_z, nx, ny, nz)` fills a box from the origin with a grid of cubes. `voxel_mesh(map, label)` fills the voxels of one label of a label map from the imaging extension. Its voxel `(i, j, k)` is the box of one voxel around the center at `(i * spacing_x, j * spacing_y, k * spacing_z)`. This is the volume frame of [Medical imaging](Medical-imaging).
+
+`voxel_mesh_labels(map, labels)` meshes several labels at once. Each label is a material: an element's material index is its label's place in the list. The labels share nodes where they touch, so the materials join at their interfaces.
 
 Each cube becomes six tetrahedra that share the diagonal from its low corner to its high corner. This is the Kuhn split. Neighbor cubes then share whole faces, so the mesh is conforming.
 
@@ -78,8 +80,16 @@ The stress of a quadratic element is the stress at its centroid. A quadratic mes
 | `fix(node, axis, displacement)` | Prescribes the displacement of one node along one axis |
 | `load(node, axis, force)` | Adds a force on one node along one axis |
 | `press_plane(axis, at, tolerance, stress)` | Adds a uniform normal stress on the outer faces of a plane |
+| `apply_gravity(densities, gravity, direction)` | Adds the weight of each element, from a density per material |
 
 `press_plane` gives a face of area `A` a force of `stress * A / 3` on each of three nodes. In a linear mesh these are its corners. In a quadratic mesh they are its edge nodes, and its corners get nothing. These are the consistent loads of three-node and six-node triangles. A positive stress pulls along the axis. A force spread over the nodes of a face by hand is not consistent, and its stress is not uniform.
+
+`apply_gravity` gives an element of weight `W` its consistent loads. A four-node element puts `W / 4` on each corner. A ten-node element puts `-W / 20` on each corner and `W / 5` on each edge node.
+
+```mojo
+problem.apply_gravity([Density64(1900, KILOGRAM_PER_CUBIC_METER)],
+    Acceleration64(9.80665, METER_PER_SECOND_SQUARED), v3(0, 0, -1))
+```
 
 The supports must stop the mesh from moving as a rigid body. A mesh that can still move has a singular stiffness. The solve then raises, or it runs out of iterations.
 
@@ -133,6 +143,8 @@ The tests check these results:
 - A quadratic bar under a pull or a pressure has the exact uniform stress and stretch.
 - A quadratic cantilever of 60 elements bends to 98 percent of beam theory.
 - A quadratic element stiffness is symmetric, and its ten shape gradients sum to zero.
+- A column standing under its own weight puts all of it on its base. With ten-node elements, its top drops by exactly `rho g L^2 / (2 E)`.
+- Two labels meshed together share the nodes of their interface, and each has its own material.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 
 ## Bending accuracy

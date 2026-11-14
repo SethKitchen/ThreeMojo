@@ -413,8 +413,35 @@ def voxel_mesh(map: LabelMap, label: LabelId) raises -> TetMesh:
     Raises:
         Error: If the label is not valid or has no voxels.
     """
-    require_label(label)
-    var mark = UInt8(label.value)
+    return voxel_mesh_labels(map, [label])
+
+
+def voxel_mesh_labels(map: LabelMap, labels: List[LabelId]) raises -> TetMesh:
+    """Return the voxels of several labels filled with tetrahedra.
+
+    Each label is a material: an element's material index is its label's
+    place in `labels`. Voxels that touch share their nodes, across labels
+    too, so the materials join at their interfaces.
+
+    Args:
+        map: The label map.
+        labels: The labels to mesh, each once.
+
+    Returns:
+        A mesh of six elements for each voxel of the labels.
+
+    Raises:
+        Error: If the list is empty, a label is not valid or comes twice,
+            or the labels have no voxels.
+    """
+    if len(labels) == 0:
+        raise Error("A voxel mesh needs at least one label")
+    var material = List[Int](length=256, fill=-1)
+    for index in range(len(labels)):  # pragma: no branch
+        require_label(labels[index])
+        if material[labels[index].value] >= 0:
+            raise Error("A label can only be meshed once")
+        material[labels[index].value] = index
     var sx = map.spacing_x.to(METER)
     var sy = map.spacing_y.to(METER)
     var sz = map.spacing_z.to(METER)
@@ -425,7 +452,8 @@ def voxel_mesh(map: LabelMap, label: LabelId) raises -> TetMesh:
     for k in range(map.nz):  # pragma: no branch
         for j in range(map.ny):  # pragma: no branch
             for i in range(map.nx):  # pragma: no branch
-                if map.labels[map.index(i, j, k)] != mark:
+                var which = material[Int(map.labels[map.index(i, j, k)])]
+                if which < 0:
                     continue
                 var corner = List[Int]()
                 for bit in range(8):
@@ -442,9 +470,9 @@ def voxel_mesh(map: LabelMap, label: LabelId) raises -> TetMesh:
                             )
                         ).value
                     corner.append(node_of[key])
-                _add_cube(mesh, corner, MaterialId(0))
+                _add_cube(mesh, corner, MaterialId(which))
     if mesh.element_count() == 0:
-        raise Error("The label has no voxels")
+        raise Error("The labels have no voxels")
     return mesh^
 
 

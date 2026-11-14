@@ -24,7 +24,11 @@ from std.testing import (
     assert_true,
 )
 from units.si import (
+    Acceleration64,
+    Density64,
     Force64,
+    KILOGRAM_PER_CUBIC_METER,
+    METER_PER_SECOND_SQUARED,
     GIGAPASCAL,
     Length64,
     MEGAPASCAL,
@@ -335,6 +339,79 @@ def test_quadratic_cantilever_bends_like_a_beam() raises:
         problem.mesh, result, 10, Pressure64(0, PASCAL), Pressure64(1, PASCAL)
     )
     assert_equal(drawn.triangle_count(), len(boundary_faces(problem.mesh)) // 4)
+
+
+def _column(quadratic: Bool) raises -> StaticProblem:
+    """A column 1 m tall and 0.1 m square, standing on its base. Poisson's
+    ratio is zero, so a flat base holds it in a state of uniaxial stress.
+    """
+    var mesh = box_mesh(_m(0.1), _m(0.1), _m(1), 1, 1, 4)
+    if quadratic:
+        mesh = quadratic_mesh(mesh)
+    var material = IsotropicMaterial(Pressure64(200, GIGAPASCAL), 0.0)
+    var problem = StaticProblem(mesh^, [material])
+    var near = _m(1e-9)
+    for n in problem.mesh.nodes_on_plane(DOF_Z, _m(0), near):
+        problem.fix(n, DOF_Z, _m(0))
+    for n in problem.mesh.nodes_on_plane(DOF_X, _m(0), near):
+        problem.fix(n, DOF_X, _m(0))
+    for n in problem.mesh.nodes_on_plane(DOF_Y, _m(0), near):
+        problem.fix(n, DOF_Y, _m(0))
+    problem.apply_gravity(
+        [Density64(7850, KILOGRAM_PER_CUBIC_METER)],
+        Acceleration64(9.80665, METER_PER_SECOND_SQUARED),
+        v3(0, 0, -2),
+    )
+    return problem^
+
+
+def test_a_column_under_its_own_weight() raises:
+    var weight = 7850.0 * 9.80665 * 0.01
+    # A column shortens by rho g L^2 / (2 E) at its top. Quadratic elements
+    # hold the quadratic displacement exactly.
+    var exact = -7850.0 * 9.80665 / (2 * 200e9)
+    for quadratic in [False, True]:
+        var problem = _column(quadratic)
+        var result = solve_static(problem, 1e-13, 5000)
+        var base = 0.0
+        for n in problem.mesh.nodes_on_plane(DOF_Z, _m(0), _m(1e-9)):
+            base += result.reactions[3 * n.value + 2]
+        # The base holds the whole weight.
+        assert_almost_equal(base, weight, atol=1e-9 * weight)
+        var top = problem.mesh.nodes_on_plane(DOF_Z, _m(1), _m(1e-9))
+        var drop = result.displacement(top[0]).z
+        if quadratic:
+            assert_almost_equal(drop, exact, atol=1e-6 * abs(exact))
+        else:
+            assert_true(abs(drop - exact) < 0.05 * abs(exact))
+
+
+def test_gravity_refusals() raises:
+    var problem = _bar()
+    var steel = Density64(7850, KILOGRAM_PER_CUBIC_METER)
+    var g = Acceleration64(9.8, METER_PER_SECOND_SQUARED)
+    with assert_raises(contains="one density for each material"):
+        problem.apply_gravity([steel, steel], g, v3(0, 0, -1))
+    with assert_raises(contains="density must be zero or more"):
+        problem.apply_gravity(
+            [Density64(-1, KILOGRAM_PER_CUBIC_METER)], g, v3(0, 0, -1)
+        )
+    with assert_raises(contains="density must be zero or more"):
+        problem.apply_gravity(
+            [Density64(inf[DType.float64](), KILOGRAM_PER_CUBIC_METER)],
+            g,
+            v3(0, 0, -1),
+        )
+    with assert_raises(contains="gravity must be finite"):
+        problem.apply_gravity(
+            [steel],
+            Acceleration64(nan[DType.float64](), METER_PER_SECOND_SQUARED),
+            v3(0, 0, -1),
+        )
+    with assert_raises(contains="direction that is not zero"):
+        problem.apply_gravity([steel], g, v3(0, 0, 0))
+    with assert_raises(contains="direction that is not zero"):
+        problem.apply_gravity([steel], g, v3(inf[DType.float64](), 0, 0))
 
 
 def main() raises:
