@@ -20,7 +20,7 @@ and xy. A strain's shear parts are engineering shears, twice the tensor
 parts.
 """
 
-from extensions.fem.mesh import signed_volume
+from extensions.fem.mesh import edge_pairs, signed_volume
 from extensions.sdf.vector import V3, cross, dot, v3
 from std.math import isfinite, sqrt
 from units.si import Pressure64, PASCAL
@@ -140,17 +140,18 @@ def element_stiffness(
 def element_strain(
     gradients: List[V3], displacements: List[V3]
 ) -> List[Float64]:
-    """Return the strain of one tetrahedron from its corner displacements.
+    """Return the strain at a point of a tetrahedron from its node
+    displacements.
 
     Args:
-        gradients: The four shape function gradients.
-        displacements: The four corner displacements, in meters.
+        gradients: The shape function gradients at the point, one per node.
+        displacements: The node displacements, in meters, one per gradient.
 
     Returns:
         Six strains in Voigt order, with engineering shears.
     """
     var out = List[Float64](length=6, fill=0)
-    for a in range(4):
+    for a in range(len(gradients)):
         var g = gradients[a]
         var u = displacements[a]
         out[0] += g.x * u.x
@@ -205,3 +206,90 @@ def von_mises(stress: List[Float64]) -> Pressure64:
     return Pressure64(
         sqrt((dx * dx + dy * dy + dz * dz) / 2.0 + 3.0 * shear), PASCAL
     )
+
+
+def quadratic_gradients(linear: List[V3], weights: List[Float64]) -> List[V3]:
+    """Return the gradients of the ten quadratic shape functions at a point.
+
+    A corner node `i` has `N = L_i (2 L_i - 1)`, and the node of edge `i-j`
+    has `N = 4 L_i L_j`, where `L` are the volume coordinates. The edges are
+    straight, so the gradients of `L` are those of the linear element.
+
+    Args:
+        linear: The four gradients of the volume coordinates, per meter.
+        weights: The four volume coordinates of the point. They sum to one.
+
+    Returns:
+        Ten gradients: the corners, then edges 0-1, 1-2, 0-2, 0-3, 1-3 and
+        2-3.
+    """
+    var out = List[V3]()
+    for i in range(4):
+        out.append(linear[i] * (4.0 * weights[i] - 1.0))
+    var pairs = edge_pairs()
+    for edge in range(6):
+        var i = pairs[2 * edge]
+        var j = pairs[2 * edge + 1]
+        out.append((linear[i] * weights[j] + linear[j] * weights[i]) * 4.0)
+    return out^
+
+
+def gauss_points() -> List[Float64]:
+    """Return the four points of the degree-two rule for a tetrahedron.
+
+    Returns:
+        Sixteen volume coordinates, four for each point. Each point weighs
+        a quarter of the volume. The rule is exact for quadratic integrands.
+    """
+    var a = 0.5854101966249685
+    var b = 0.1381966011250105
+    return [a, b, b, b, b, a, b, b, b, b, a, b, b, b, b, a]
+
+
+def quadratic_stiffness(
+    corners: List[V3], material: IsotropicMaterial
+) -> List[Float64]:
+    """Return the 30 by 30 stiffness of a ten-node tetrahedron, row by row.
+
+    The integrand is quadratic for straight edges, so the four-point rule
+    is exact.
+
+    Args:
+        corners: The four corners, with a positive volume.
+        material: The material.
+
+    Returns:
+        900 entries in newtons per meter. Row `3a + i` is the force on node
+        `a` along axis `i`, with the nodes in `element_nodes` order.
+    """
+    var linear = shape_gradients(corners[0], corners[1], corners[2], corners[3])
+    var volume = signed_volume(corners[0], corners[1], corners[2], corners[3])
+    var constants = material.lame()
+    var lam = constants[0]
+    var mu = constants[1]
+    var points = gauss_points()
+    var out = List[Float64](length=900, fill=0)
+    for point in range(4):
+        var weights: List[Float64] = [
+            points[4 * point],
+            points[4 * point + 1],
+            points[4 * point + 2],
+            points[4 * point + 3],
+        ]
+        var g = quadratic_gradients(linear, weights)
+        var scale = volume / 4.0
+        for a in range(10):
+            for b in range(10):
+                var shared = mu * dot(g[a], g[b])
+                for i in range(3):
+                    var ga_i = _part(g[a], i)
+                    var gb_i = _part(g[b], i)
+                    for j in range(3):
+                        var value = (
+                            lam * ga_i * _part(g[b], j)
+                            + mu * _part(g[a], j) * gb_i
+                        )
+                        if i == j:
+                            value += shared
+                        out[(3 * a + i) * 30 + 3 * b + j] += scale * value
+    return out^

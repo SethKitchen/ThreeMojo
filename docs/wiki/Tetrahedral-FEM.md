@@ -1,18 +1,18 @@
 # Tetrahedral FEM
 
-`extensions/fem/` solves static linear elasticity on meshes of four-node tetrahedra. It meshes a box, or the voxels of one label of a label map. It applies supports, nodal forces and surface pressures, and it solves for displacements, stresses and reactions. It draws the deformed surface colored by von Mises stress. It is a library for research and teaching. Its results are not validated for the design of a structure or of a medical device.
+`extensions/fem/` solves static linear elasticity on meshes of four-node and ten-node tetrahedra. It meshes a box, or the voxels of one label of a label map. It applies supports, nodal forces and surface pressures, and it solves for displacements, stresses and reactions. It draws the deformed surface colored by von Mises stress. It is a library for research and teaching. Its results are not validated for the design of a structure or of a medical device.
 
-![A steel cantilever of tetrahedra, bent by a load at its tip and colored by von Mises stress](out/tetrahedral-fem.png)
+![A steel cantilever of ten-node tetrahedra, bent by a load at its tip and colored by von Mises stress](out/tetrahedral-fem.png)
 
-`examples/tetrahedral_fem.mojo` makes this picture. A steel beam 600 mm long and 60 mm square is clamped at one end. A force of 20 kN pulls its tip down. The picture shows the beam at 40 times its deflection. The colors run from 0 MPa in blue to 300 MPa in red.
+`examples/tetrahedral_fem.mojo` makes this picture. A steel beam 600 mm long and 60 mm square is clamped at one end and meshed with 1620 ten-node tetrahedra. A force of 20 kN pulls its tip down 6.66 mm. Beam theory gives 6.67 mm. The picture shows the beam at 40 times its deflection. The colors run from 0 MPa in blue to 300 MPa in red.
 
 ## Modules
 
 | Module | What it gives |
 |---|---|
-| `ids` | `NodeId`, `ElementId`, `MaterialId` and `DofAxis` |
-| `mesh` | `TetMesh`, `box_mesh`, `voxel_mesh`, `boundary_faces` and `signed_volume` |
-| `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `element_strain`, `stress_of` and `von_mises` |
+| `ids` | `NodeId`, `ElementId`, `MaterialId`, `DofAxis` and `ElementOrder` |
+| `mesh` | `TetMesh`, `box_mesh`, `voxel_mesh`, `quadratic_mesh`, `boundary_faces`, `edge_pairs` and `signed_volume` |
+| `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of` and `von_mises` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
 | `post` | `stress_geometry` and `stress_color` |
 
@@ -57,6 +57,19 @@ Here `g_a` is the gradient of the shape function of node `a`, and `lambda` and `
 
 A strain or a stress has six parts in Voigt order: xx, yy, zz, yz, xz and xy. The shear parts of a strain are engineering shears, twice the tensor parts.
 
+## Quadratic elements
+
+`quadratic_mesh(mesh)` adds a node at the middle of each edge of a linear mesh. Elements that share an edge share its node. Each element then has ten nodes: its four corners, then edges 0-1, 1-2, 0-2, 0-3, 1-3 and 2-3. The mesh's `order` is `QUADRATIC`.
+
+A corner node `i` has the shape function `L_i (2 L_i - 1)`, and the node of edge `i-j` has `4 L_i L_j`, where `L` are the volume coordinates. The strain then varies linearly through the element, so the element can bend. The edges stay straight, and a four-point rule integrates the stiffness exactly.
+
+```mojo
+var mesh = quadratic_mesh(box_mesh(Length64(0.6, METER),
+    Length64(0.06, METER), Length64(0.06, METER), 10, 1, 1))
+```
+
+The stress of a quadratic element is the stress at its centroid. A quadratic mesh refuses `add_element`, which makes four-node elements.
+
 ## Supports and loads
 
 | Method | What it does |
@@ -65,7 +78,7 @@ A strain or a stress has six parts in Voigt order: xx, yy, zz, yz, xz and xy. Th
 | `load(node, axis, force)` | Adds a force on one node along one axis |
 | `press_plane(axis, at, tolerance, stress)` | Adds a uniform normal stress on the outer faces of a plane |
 
-`press_plane` gives each node of a face of area `A` a force of `stress * A / 3`. These are the consistent loads of a linear triangle. A positive stress pulls along the axis. A force spread over the nodes of a face by hand is not consistent, and its stress is not uniform.
+`press_plane` gives a face of area `A` a force of `stress * A / 3` on each of three nodes. In a linear mesh these are its corners. In a quadratic mesh they are its edge nodes, and its corners get nothing. These are the consistent loads of three-node and six-node triangles. A positive stress pulls along the axis. A force spread over the nodes of a face by hand is not consistent, and its stress is not uniform.
 
 The supports must stop the mesh from moving as a rigid body. A mesh that can still move has a singular stiffness. The solve then raises, or it runs out of iterations.
 
@@ -97,19 +110,29 @@ The tests check these results:
 - An element stiffness is symmetric. A translation and a small rotation cause no force.
 - `von_mises` gives the stress for a uniaxial stress and `sqrt(3) tau` for a pure shear.
 - The six tetrahedra of each voxel fill its volume exactly.
+- A quadratic bar under a pull or a pressure has the exact uniform stress and stretch.
+- A quadratic cantilever of 60 elements bends to 98 percent of beam theory.
+- A quadratic element stiffness is symmetric, and its ten shape gradients sum to zero.
 
-## Bending needs fine meshes
+## Bending accuracy
 
-A four-node tetrahedron cannot bend inside itself, so a coarse mesh is too stiff in bending. The table shows the tip deflection of the example's cantilever for four meshes. Euler-Bernoulli beam theory gives `F L^3 / (3 E I)` = 6.67 mm.
+Use quadratic elements for any part that bends. A four-node tetrahedron has a constant strain, so it cannot bend inside itself, and a coarse mesh of them is far too stiff. The tables show the tip deflection of the example's cantilever. Euler-Bernoulli beam theory gives `F L^3 / (3 E I)` = 6.67 mm.
 
-| Mesh | Tetrahedra | Tip deflection (mm) | Fraction of beam theory |
+| Linear mesh | Tetrahedra | Tip deflection (mm) | Fraction of beam theory |
 |---|---|---|---|
 | 20 by 2 by 2 | 480 | 3.38 | 0.51 |
 | 40 by 4 by 4 | 3840 | 5.29 | 0.79 |
 | 60 by 6 by 6 | 12960 | 5.96 | 0.89 |
 | 80 by 8 by 8 | 30720 | 6.25 | 0.94 |
 
-Shear adds about 0.05 mm to the beam theory value. Use several elements through any part that bends. Check a result against a finer mesh.
+| Quadratic mesh | Tetrahedra | Tip deflection (mm) | Fraction of beam theory |
+|---|---|---|---|
+| 10 by 1 by 1 | 60 | 6.56 | 0.98 |
+| 20 by 2 by 2 | 480 | 6.64 | 1.00 |
+| 30 by 3 by 3 | 1620 | 6.66 | 1.00 |
+| 40 by 4 by 4 | 3840 | 6.66 | 1.00 |
+
+Shear adds about 0.05 mm to the beam theory value. Check a result against a finer mesh.
 
 ## Errors
 
@@ -127,7 +150,8 @@ Every function raises `Error` for input it cannot use.
 ## Limits
 
 - The strains are small, and the materials are linear and isotropic.
-- The elements are four-node tetrahedra. They are stiff in bending and lock for a Poisson's ratio near 0.5.
+- Four-node tetrahedra are stiff in bending. Both orders lock for a Poisson's ratio near 0.5, the four-node ones much more.
+- Ten-node tetrahedra have straight edges. A curved boundary is a set of flat faces.
 - The loads are static. There is no mass, damping, contact or time.
 - The solver is iterative. A large or badly conditioned problem needs a large budget.
 - A voxel mesh has stair steps on curved surfaces. The stress at a stair step is not the stress of the smooth shape.

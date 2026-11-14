@@ -3,12 +3,13 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A steel cantilever of tetrahedra, bent by a load at its tip.
+"""A steel cantilever of ten-node tetrahedra, bent by a load at its tip.
 
     mojo run -I . examples/tetrahedral_fem.mojo [out/tetrahedral-fem.png]
 
 The page is Tetrahedral FEM. The beam is 600 mm long and 60 mm square,
-clamped at x = 0. A force of 20 kN pulls its tip face down. The picture
+clamped at x = 0, and meshed with quadratic tetrahedra. A force of 20 kN
+pulls its tip face down. The picture
 shows the bent beam, drawn 40 times its true deflection, colored by von
 Mises stress from 0 (blue) to 300 MPa (red). The program prints the tip
 deflection and the deflection that Euler-Bernoulli beam theory gives.
@@ -19,7 +20,7 @@ from core.object3d import Object3D
 from core.scene import Scene
 from extensions.fem.elasticity import IsotropicMaterial
 from extensions.fem.ids import DOF_X, DOF_Y, DOF_Z, NodeId
-from extensions.fem.mesh import box_mesh
+from extensions.fem.mesh import box_mesh, quadratic_mesh
 from extensions.fem.post import stress_geometry
 from extensions.fem.static import StaticProblem, solve_static
 from materials.material import Material, PHONG
@@ -59,13 +60,15 @@ comptime SCALE = 40.0
 
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
-    var mesh = box_mesh(
-        Length64(LENGTH, METER),
-        Length64(SIDE, METER),
-        Length64(SIDE, METER),
-        40,
-        4,
-        4,
+    var mesh = quadratic_mesh(
+        box_mesh(
+            Length64(LENGTH, METER),
+            Length64(SIDE, METER),
+            Length64(SIDE, METER),
+            30,
+            3,
+            3,
+        )
     )
     var steel = IsotropicMaterial(Pressure64(YOUNG / 1e9, GIGAPASCAL), 0.3)
     var problem = StaticProblem(mesh^, [steel])

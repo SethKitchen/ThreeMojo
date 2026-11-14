@@ -105,3 +105,49 @@ def require_dof_axis(axis: DofAxis) raises:
         Error: If `axis` is not valid.
     """
     require_valid(axis.is_valid(), "A degree of freedom axis must be 0 to 2")
+
+
+@fieldwise_init
+struct ElementOrder(Equatable, ImplicitlyCopyable, Writable):
+    """The order of the shape functions of a mesh's tetrahedra.
+
+    `LINEAR` elements have four nodes, one at each corner. `QUADRATIC`
+    elements have ten: the corners, and one node at the middle of each
+    edge.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the two orders.
+
+        Returns:
+            Whether the value is zero or one.
+        """
+        return ordinal_valid(self.value, 1)
+
+    def nodes(self) -> Int:
+        """Return how many nodes an element of this order has.
+
+        Returns:
+            4 for `LINEAR` and 10 for `QUADRATIC`.
+        """
+        if self.value == 1:
+            return 10
+        return 4
+
+
+comptime LINEAR = ElementOrder(0)
+comptime QUADRATIC = ElementOrder(1)
+
+
+def require_order(order: ElementOrder) raises:
+    """Refuse an element order that is not one of the two.
+
+    Args:
+        order: The order to check.
+
+    Raises:
+        Error: If `order` is not valid.
+    """
+    require_valid(order.is_valid(), "An element order must be 0 or 1")

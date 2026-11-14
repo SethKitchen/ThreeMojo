@@ -8,8 +8,9 @@
 from core.buffer_geometry import COLOR, POSITION
 from extensions.fem.elasticity import IsotropicMaterial
 from extensions.fem.ids import DOF_X, DOF_Y, DOF_Z, DofAxis, MaterialId, NodeId
-from extensions.fem.mesh import TetMesh, box_mesh
-from extensions.fem.post import boundary_faces, stress_color, stress_geometry
+from extensions.fem.mesh import TetMesh, box_mesh, quadratic_mesh
+from extensions.fem.mesh import boundary_faces
+from extensions.fem.post import stress_color, stress_geometry
 from extensions.fem.static import StaticProblem, StaticResult, solve_static
 from extensions.numerics.iterative import BUDGET_EXHAUSTED, CONVERGED
 from extensions.sdf.vector import v3
@@ -265,6 +266,75 @@ def test_stress_geometry() raises:
             Pressure64(1, PASCAL),
             Pressure64(1, PASCAL),
         )
+
+
+def _quadratic_bar() raises -> StaticProblem:
+    """The bar of `_bar`, with ten-node elements, its end free along x."""
+    var mesh = quadratic_mesh(box_mesh(_m(2), _m(1), _m(1), 2, 1, 1))
+    var problem = StaticProblem(mesh^, [_steel()])
+    var tolerance = _m(1e-9)
+    for n in problem.mesh.nodes_on_plane(DOF_X, _m(0), tolerance):
+        problem.fix(n, DOF_X, _m(0))
+    for n in problem.mesh.nodes_on_plane(DOF_Y, _m(0), tolerance):
+        problem.fix(n, DOF_Y, _m(0))
+    for n in problem.mesh.nodes_on_plane(DOF_Z, _m(0), tolerance):
+        problem.fix(n, DOF_Z, _m(0))
+    return problem^
+
+
+def test_quadratic_patch_and_pressure() raises:
+    # A pull of 1 mm on the end: the stress is uniform and exact.
+    var pulled = _quadratic_bar()
+    for n in pulled.mesh.nodes_on_plane(DOF_X, _m(2), _m(1e-9)):
+        pulled.fix(n, DOF_X, _m(0.001))
+    var result = solve_static(pulled, 1e-12, 2000)
+    var worst = 0.0
+    for e in range(pulled.mesh.element_count()):
+        worst = max(worst, abs(result.stresses[6 * e] - 100e6))
+    assert_true(worst < 1e-3)
+    # A pressure of 9 MPa loads only the edge nodes of the end faces, and
+    # stretches the bar sigma L / E = 90 micrometers.
+    var pressed = _quadratic_bar()
+    var faces = pressed.press_plane(
+        DOF_X, _m(2), _m(1e-9), Pressure64(9, MEGAPASCAL)
+    )
+    assert_equal(faces, 2)
+    var corner = pressed.mesh.nodes_on_plane(DOF_X, _m(2), _m(1e-9))[0]
+    assert_equal(pressed.forces[3 * corner.value], 0)
+    var stretched = solve_static(pressed, 1e-12, 2000)
+    var tip = stretched.displacement(corner)
+    assert_almost_equal(tip.x, 9e-5, atol=1e-13)
+
+
+def test_quadratic_cantilever_bends_like_a_beam() raises:
+    # Sixty ten-node elements reach 98 percent of beam theory, where the
+    # same cubes as four-node elements reach 51 percent.
+    var length = 0.6
+    var side = 0.06
+    var mesh = quadratic_mesh(
+        box_mesh(_m(length), _m(side), _m(side), 10, 1, 1)
+    )
+    var problem = StaticProblem(mesh^, [_steel()])
+    var tolerance = _m(1e-9)
+    for n in problem.mesh.nodes_on_plane(DOF_X, _m(0), tolerance):
+        problem.fix(n, DOF_X, _m(0))
+        problem.fix(n, DOF_Y, _m(0))
+        problem.fix(n, DOF_Z, _m(0))
+    var tip = problem.mesh.nodes_on_plane(DOF_X, _m(length), tolerance)
+    for n in tip:
+        problem.load(n, DOF_Z, Force64(-20000.0 / Float64(len(tip)), NEWTON))
+    var result = solve_static(problem, 1e-10, 5000)
+    var deflection = 0.0
+    for n in tip:
+        deflection -= result.displacement(n).z
+    deflection /= Float64(len(tip))
+    var beam = 20000.0 * length**3 / (3 * 200e9 * side**4 / 12)
+    assert_true(deflection > 0.98 * beam)
+    assert_true(deflection < 1.01 * beam)
+    var drawn = stress_geometry(
+        problem.mesh, result, 10, Pressure64(0, PASCAL), Pressure64(1, PASCAL)
+    )
+    assert_equal(drawn.triangle_count(), len(boundary_faces(problem.mesh)) // 4)
 
 
 def main() raises:

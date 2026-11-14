@@ -20,6 +20,8 @@ from extensions.fem.elasticity import (
     IsotropicMaterial,
     element_stiffness,
     element_strain,
+    quadratic_gradients,
+    quadratic_stiffness,
     shape_gradients,
     stress_of,
     von_mises,
@@ -32,11 +34,13 @@ from extensions.fem.ids import (
     require_dof_axis,
     require_id,
 )
-from extensions.fem.mesh import TetMesh, boundary_faces
+from extensions.fem.ids import LINEAR
+from extensions.fem.mesh import TetMesh, boundary_faces, edge_pairs
+from std.collections import Dict
 from extensions.numerics.iterative import SolveStatus, conjugate_gradient
 from extensions.numerics.sparse import CsrMatrix, SparseBuilder
 from extensions.sdf.vector import V3, cross, length, v3
-from std.math import isfinite
+from std.math import isfinite, max, min
 from units.si import Force64, Length64, METER, NEWTON, PASCAL, Pressure64
 
 
@@ -133,8 +137,10 @@ struct StaticProblem(Movable):
 
         The plane holds the points whose coordinate on `axis` is `at`. A
         face is on it when its three nodes are within `tolerance` of it.
-        Each face of area `A` adds `stress * A / 3` to each of its nodes,
-        along `axis`. These are the consistent loads of linear triangles.
+        Each face of area `A` adds `stress * A / 3` along `axis`: to each of
+        its corners in a linear mesh, and to each of its edge nodes in a
+        quadratic one. These are the consistent loads of three-node and
+        six-node triangles.
 
         Args:
             axis: The axis normal to the plane.
@@ -156,6 +162,7 @@ struct StaticProblem(Movable):
         for node in self.mesh.nodes_on_plane(axis, at, tolerance):
             on_plane[node.value] = True
         var faces = boundary_faces(self.mesh)
+        var middles = _edge_nodes(self.mesh)
         var count = 0
         # A problem's mesh has an element, so it has outer faces.
         for face in range(len(faces) // 4):  # pragma: no branch
@@ -170,11 +177,36 @@ struct StaticProblem(Movable):
                 length(cross(nodes[b] - nodes[a], nodes[c] - nodes[a])) / 2
             )
             var share = pascals * area / 3.0
-            self.forces[3 * a + axis.value] += share
-            self.forces[3 * b + axis.value] += share
-            self.forces[3 * c + axis.value] += share
+            var loaded: List[Int] = [a, b, c]
+            if self.mesh.order != LINEAR:
+                # A six-node triangle carries a uniform stress on its edge
+                # nodes alone.
+                var n = self.mesh.node_count()
+                loaded = [
+                    middles[min(a, b) * n + max(a, b)],
+                    middles[min(b, c) * n + max(b, c)],
+                    middles[min(a, c) * n + max(a, c)],
+                ]
+            for node in loaded:  # pragma: no branch
+                self.forces[3 * node + axis.value] += share
             count += 1
         return count
+
+
+def _edge_nodes(mesh: TetMesh) -> Dict[Int, Int]:
+    """Return the edge node of each edge of a quadratic mesh, keyed by its
+    two corners as `low * node_count + high`. A linear mesh has none."""
+    var out = Dict[Int, Int]()
+    if mesh.order == LINEAR:
+        return out^
+    var n = mesh.node_count()
+    var pairs = edge_pairs()
+    for e in range(mesh.element_count()):  # pragma: no branch
+        for edge in range(6):
+            var a = mesh.corners[10 * e + pairs[2 * edge]]
+            var b = mesh.corners[10 * e + pairs[2 * edge + 1]]
+            out[min(a, b) * n + max(a, b)] = mesh.corners[10 * e + 4 + edge]
+    return out^
 
 
 struct StaticResult(Movable):
@@ -240,7 +272,7 @@ struct StaticResult(Movable):
 
 def _corners(mesh: TetMesh, element: Int) -> List[V3]:
     """Return the four corners of an element."""
-    var at = 4 * element
+    var at = mesh.nodes_per_element() * element
     return [
         mesh.nodes[mesh.corners[at]],
         mesh.nodes[mesh.corners[at + 1]],
@@ -264,20 +296,25 @@ def assemble(problem: StaticProblem) raises -> CsrMatrix:
     """
     ref mesh = problem.mesh
     var builder = SparseBuilder(3 * mesh.node_count())
+    var count = mesh.nodes_per_element()
+    var size = 3 * count
     for e in range(mesh.element_count()):  # pragma: no branch
-        var k = element_stiffness(
-            _corners(mesh, e), problem.materials[mesh.materials[e]]
-        )
-        for a in range(4):
-            var row_node = mesh.corners[4 * e + a]
-            for b in range(4):
-                var col_node = mesh.corners[4 * e + b]
+        var material = problem.materials[mesh.materials[e]]
+        var k: List[Float64]
+        if mesh.order == LINEAR:
+            k = element_stiffness(_corners(mesh, e), material)
+        else:
+            k = quadratic_stiffness(_corners(mesh, e), material)
+        for a in range(count):  # pragma: no branch
+            var row_node = mesh.corners[count * e + a]
+            for b in range(count):  # pragma: no branch
+                var col_node = mesh.corners[count * e + b]
                 for i in range(3):
                     for j in range(3):
                         builder.add(
                             3 * row_node + i,
                             3 * col_node + j,
-                            k[(3 * a + i) * 12 + 3 * b + j],
+                            k[(3 * a + i) * size + 3 * b + j],
                         )
     return builder.build()
 
@@ -348,9 +385,14 @@ def solve_static(
     for e in range(mesh.element_count()):  # pragma: no branch
         var corners = _corners(mesh, e)
         var g = shape_gradients(corners[0], corners[1], corners[2], corners[3])
+        var count = mesh.nodes_per_element()
+        if mesh.order != LINEAR:
+            # The strain at the centroid, where each volume coordinate is a
+            # quarter.
+            g = quadratic_gradients(g, [0.25, 0.25, 0.25, 0.25])
         var moves = List[V3]()
-        for a in range(4):
-            var n = mesh.corners[4 * e + a]
+        for a in range(count):  # pragma: no branch
+            var n = mesh.corners[count * e + a]
             moves.append(
                 v3(
                     result.displacements[3 * n],

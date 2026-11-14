@@ -9,6 +9,9 @@ from extensions.fem.elasticity import (
     IsotropicMaterial,
     element_stiffness,
     element_strain,
+    gauss_points,
+    quadratic_gradients,
+    quadratic_stiffness,
     shape_gradients,
     stress_of,
     von_mises,
@@ -19,14 +22,19 @@ from extensions.fem.ids import (
     DOF_Z,
     DofAxis,
     ElementId,
+    ElementOrder,
+    LINEAR,
     MaterialId,
     NodeId,
+    QUADRATIC,
     require_dof_axis,
+    require_order,
 )
 from extensions.fem.mesh import (
     MAX_MESH_ENTRIES,
     TetMesh,
     box_mesh,
+    quadratic_mesh,
     signed_volume,
     voxel_mesh,
 )
@@ -241,6 +249,8 @@ def test_strain_stress_and_von_mises() raises:
     var pure_shear = stress_of(shear, material)
     assert_almost_equal(pure_shear[5], 1.0)
     assert_almost_equal(von_mises(pure_shear).to(PASCAL), sqrt(3.0))
+    var none = element_strain(List[V3](), List[V3]())
+    assert_equal(none[0], 0)
     var other: List[Float64] = [0, 0, 0, 1, 1, 0]
     assert_almost_equal(von_mises(other).to(PASCAL), sqrt(6.0))
 
@@ -252,6 +262,88 @@ def test_ids() raises:
     assert_true(NodeId(0).is_valid())
     assert_false(ElementId(-1).is_valid())
     assert_true(MaterialId(2).is_valid())
+
+
+def test_quadratic_mesh() raises:
+    var cube = box_mesh(_m(1), _m(1), _m(1), 1, 1, 1)
+    var quadratic = quadratic_mesh(cube)
+    # Eight corners and one node on each of the 19 edges: 12 cube edges,
+    # 6 face diagonals and the body diagonal.
+    assert_equal(quadratic.node_count(), 27)
+    assert_equal(quadratic.nodes_per_element(), 10)
+    assert_true(quadratic.order == QUADRATIC)
+    var nodes = quadratic.element_nodes(ElementId(0))
+    assert_equal(len(nodes), 10)
+    var middle = quadratic.nodes[nodes[4]]
+    var expected = (quadratic.nodes[nodes[0]] + quadratic.nodes[nodes[1]]) * 0.5
+    assert_true(length(middle - expected) < 1e-15)
+    assert_almost_equal(quadratic.total_volume().value, 1.0, atol=1e-12)
+    with assert_raises(contains="already quadratic"):
+        _ = quadratic_mesh(quadratic)
+    assert_equal(quadratic_mesh(TetMesh()).element_count(), 0)
+    with assert_raises(contains="four-node elements"):
+        _ = quadratic.add_element(
+            NodeId(0), NodeId(1), NodeId(2), NodeId(3), MaterialId(0)
+        )
+    assert_equal(LINEAR.nodes(), 4)
+    require_order(QUADRATIC)
+    with assert_raises(contains="element order"):
+        require_order(ElementOrder(2))
+
+
+def test_quadratic_shape_functions() raises:
+    var linear = shape_gradients(
+        v3(0, 0, 0), v3(1, 0, 0), v3(0, 1, 0), v3(0, 0, 1)
+    )
+    var points = gauss_points()
+    var worst = 0.0
+    for point in range(4):
+        var weights: List[Float64] = [
+            points[4 * point],
+            points[4 * point + 1],
+            points[4 * point + 2],
+            points[4 * point + 3],
+        ]
+        var g = quadratic_gradients(linear, weights)
+        var total = v3(0, 0, 0)
+        for a in range(10):
+            total = total + g[a]
+        worst = max(worst, length(total))
+    # The ten functions sum to one, so their gradients sum to zero.
+    assert_true(worst < 1e-14)
+    var corners: List[V3] = [
+        v3(0.1, 0, 0),
+        v3(1, 0.2, 0),
+        v3(0, 1, 0.1),
+        v3(0.2, 0.3, 1),
+    ]
+    var k = quadratic_stiffness(
+        corners, IsotropicMaterial(Pressure64(1, GIGAPASCAL), 0.25)
+    )
+    var asymmetry = 0.0
+    var largest = 0.0
+    for r in range(30):
+        for c in range(30):
+            asymmetry = max(asymmetry, abs(k[r * 30 + c] - k[c * 30 + r]))
+            largest = max(largest, abs(k[r * 30 + c]))
+    assert_true(asymmetry < 1e-6 * largest)
+    # A translation along y and a small turn about z cause no force.
+    var places = corners.copy()
+    var pairs: List[Int] = [0, 1, 1, 2, 0, 2, 0, 3, 1, 3, 2, 3]
+    for edge in range(6):
+        places.append(
+            (corners[pairs[2 * edge]] + corners[pairs[2 * edge + 1]]) * 0.5
+        )
+    var rigid = 0.0
+    for r in range(30):
+        var translate = 0.0
+        var rotate = 0.0
+        for a in range(10):
+            translate += k[r * 30 + 3 * a + 1]
+            rotate += k[r * 30 + 3 * a] * (-places[a].y)
+            rotate += k[r * 30 + 3 * a + 1] * places[a].x
+        rigid = max(rigid, max(abs(translate), abs(rotate)))
+    assert_true(rigid < 1e-6 * largest)
 
 
 def main() raises:

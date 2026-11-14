@@ -25,11 +25,15 @@ from extensions.fem.ids import (
     DOF_Y,
     DofAxis,
     ElementId,
+    ElementOrder,
+    LINEAR,
     MaterialId,
     NodeId,
+    QUADRATIC,
     require_dof_axis,
     require_id,
 )
+from std.collections import Dict
 from extensions.imaging.ids import LabelId, require_label
 from extensions.imaging.labels import LabelMap
 from extensions.sdf.vector import V3, cross, dot, v3
@@ -63,15 +67,27 @@ struct TetMesh(Copyable, Movable):
     var nodes: List[V3]
     """The node positions, in meters."""
     var corners: List[Int]
-    """The four node indexes of each element, element by element."""
+    """The node indexes of each element, element by element: four for a
+    linear mesh, ten for a quadratic one."""
     var materials: List[Int]
     """The material index of each element."""
+    var order: ElementOrder
+    """`LINEAR` or `QUADRATIC`."""
 
     def __init__(out self):
-        """Create an empty mesh."""
+        """Create an empty linear mesh."""
         self.nodes = List[V3]()
         self.corners = List[Int]()
         self.materials = List[Int]()
+        self.order = LINEAR
+
+    def nodes_per_element(self) -> Int:
+        """Return how many nodes each element has.
+
+        Returns:
+            4 for a linear mesh and 10 for a quadratic one.
+        """
+        return self.order.nodes()
 
     def node_count(self) -> Int:
         """Return how many nodes the mesh holds.
@@ -151,9 +167,11 @@ struct TetMesh(Copyable, Movable):
             The new element.
 
         Raises:
-            Error: If a node id names no node, the material id is
-                negative, or the tetrahedron is flat.
+            Error: If the mesh is quadratic, a node id names no node, the
+                material id is negative, or the tetrahedron is flat.
         """
+        if self.order != LINEAR:
+            raise Error("add_element makes four-node elements of a linear mesh")
         self.require_node(a)
         self.require_node(b)
         self.require_node(c)
@@ -186,25 +204,25 @@ struct TetMesh(Copyable, Movable):
         return ElementId(len(self.materials) - 1)
 
     def element_nodes(self, element: ElementId) raises -> List[Int]:
-        """Return the four node indexes of an element.
+        """Return the node indexes of an element.
 
         Args:
             element: The element.
 
         Returns:
-            The indexes, in an order with a positive volume.
+            The four corners, in an order with a positive volume, and for a
+            quadratic mesh the six edge nodes after them: edges 0-1, 1-2,
+            0-2, 0-3, 1-3 and 2-3.
 
         Raises:
             Error: If the id names no element.
         """
         self.require_element(element)
-        var at = 4 * element.value
-        return [
-            self.corners[at],
-            self.corners[at + 1],
-            self.corners[at + 2],
-            self.corners[at + 3],
-        ]
+        var count = self.nodes_per_element()
+        var out = List[Int]()
+        for k in range(count):  # pragma: no branch
+            out.append(self.corners[count * element.value + k])
+        return out^
 
     def volume(self, element: ElementId) raises -> Volume64:
         """Return the volume of an element.
@@ -448,9 +466,10 @@ def boundary_faces(mesh: TetMesh) -> List[Int]:
     var faces = List[Int]()
     for e in range(mesh.element_count()):
         for f in range(4):
-            var a = mesh.corners[4 * e + table[4 * f]]
-            var b = mesh.corners[4 * e + table[4 * f + 1]]
-            var c = mesh.corners[4 * e + table[4 * f + 2]]
+            var at = mesh.nodes_per_element() * e
+            var a = mesh.corners[at + table[4 * f]]
+            var b = mesh.corners[at + table[4 * f + 1]]
+            var c = mesh.corners[at + table[4 * f + 2]]
             keys.append(_sorted(a, b, c))
             faces.append(a)
             faces.append(b)
@@ -468,6 +487,56 @@ def boundary_faces(mesh: TetMesh) -> List[Int]:
             for part in range(4):
                 out.append(faces[4 * face + part])
         at = next
+    return out^
+
+
+def edge_pairs() -> List[Int]:
+    """Return the corner pairs of the six edges of a tetrahedron.
+
+    Returns:
+        Twelve corner indexes, two for each edge: 0-1, 1-2, 0-2, 0-3, 1-3
+        and 2-3. Edge `k` has its node at index `4 + k` of a quadratic
+        element.
+    """
+    return [0, 1, 1, 2, 0, 2, 0, 3, 1, 3, 2, 3]
+
+
+def quadratic_mesh(mesh: TetMesh) raises -> TetMesh:
+    """Return a linear mesh with a node added at the middle of each edge.
+
+    Elements that share an edge share its node. The edges stay straight.
+
+    Args:
+        mesh: A linear mesh.
+
+    Returns:
+        A quadratic mesh of the same elements and materials.
+
+    Raises:
+        Error: If the mesh is already quadratic.
+    """
+    if mesh.order != LINEAR:
+        raise Error("The mesh is already quadratic")
+    var out = TetMesh()
+    out.nodes = mesh.nodes.copy()
+    out.materials = mesh.materials.copy()
+    out.order = QUADRATIC
+    var middles = Dict[Int, Int]()
+    var count = mesh.node_count()
+    var pairs = edge_pairs()
+    for e in range(mesh.element_count()):
+        for k in range(4):
+            out.corners.append(mesh.corners[4 * e + k])
+        for edge in range(6):
+            var a = mesh.corners[4 * e + pairs[2 * edge]]
+            var b = mesh.corners[4 * e + pairs[2 * edge + 1]]
+            var key = min(a, b) * count + max(a, b)
+            var node = middles.get(key, -1)
+            if node < 0:
+                node = len(out.nodes)
+                out.nodes.append((mesh.nodes[a] + mesh.nodes[b]) * 0.5)
+                middles[key] = node
+            out.corners.append(node)
     return out^
 
 
