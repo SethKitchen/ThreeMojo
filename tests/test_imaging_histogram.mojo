@@ -7,7 +7,9 @@
 
 from extensions.imaging.histogram import (
     Histogram,
+    label_classes,
     label_histogram,
+    multi_otsu_thresholds,
     otsu_threshold,
     volume_histogram,
 )
@@ -137,6 +139,89 @@ def test_label_histogram() raises:
     assert_equal(
         label_histogram(volume, map, BACKGROUND, 6, 0.5, 6.5).total(), 3
     )
+
+
+def _random_histogram(seed: UInt64, bins: Int) raises -> Histogram:
+    """Return a histogram of a mixture of three bumps, with some noise."""
+    var histogram = Histogram(bins, -100, 300)
+    var h = seed
+    for _ in range(3000):
+        h = h * 6364136223846793005 + 1442695040888963407
+        var part = Int((h >> 33) % 3)
+        h = h * 6364136223846793005 + 1442695040888963407
+        var spread = Float64((h >> 20) % 1000) / 1000.0 - 0.5
+        histogram.add(
+            Float64(part) * 120.0
+            - 50.0
+            + 90.0 * spread * abs(spread)
+            + 40.0 * spread
+        )
+    return histogram^
+
+
+def test_multi_otsu_with_two_classes_is_otsu() raises:
+    for seed in range(1, 6):
+        var histogram = _random_histogram(UInt64(seed), 64)
+        var edges = multi_otsu_thresholds(histogram, 2)
+        assert_equal(len(edges), 1)
+        assert_almost_equal(edges[0], otsu_threshold(histogram), atol=1e-9)
+
+
+def test_three_peaks() raises:
+    # Peaks in bins 10, 50 and 90 of 100: any edge between two peaks gives
+    # the same split, and the lowest edges win.
+    var histogram = Histogram(100, 0, 100)
+    histogram.counts[10] = 40
+    histogram.counts[50] = 30
+    histogram.counts[90] = 20
+    var edges = multi_otsu_thresholds(histogram, 3)
+    assert_equal(len(edges), 2)
+    assert_almost_equal(edges[0], 11.0)
+    assert_almost_equal(edges[1], 51.0)
+    # Four classes from three filled bins and one more: each filled bin is
+    # a class.
+    histogram.counts[70] = 5
+    var four = multi_otsu_thresholds(histogram, 4)
+    assert_almost_equal(four[0], 11.0)
+    assert_almost_equal(four[1], 51.0)
+    assert_almost_equal(four[2], 71.0)
+
+
+def test_label_classes() raises:
+    var mm = Length64(1.0, MILLIMETER64)
+    var volume = ImageVolume(5, 1, 1, mm, mm, mm)
+    var values: List[Float32] = [-5, 11, 30, 51, 0]
+    for n in range(5):
+        volume.values[n] = values[n]
+    volume.set(4, 0, 0, nan[DType.float32]())
+    var map = label_classes(volume, [11.0, 51.0])
+    assert_true(map.get(0, 0, 0) == LabelId(1))
+    # A value at an edge joins the class above it.
+    assert_true(map.get(1, 0, 0) == LabelId(2))
+    assert_true(map.get(2, 0, 0) == LabelId(2))
+    assert_true(map.get(3, 0, 0) == LabelId(3))
+    assert_true(map.get(4, 0, 0) == BACKGROUND)
+    with assert_raises(contains="from 1 to 254"):
+        _ = label_classes(volume, List[Float64]())
+    with assert_raises(contains="from 1 to 254"):
+        _ = label_classes(volume, List[Float64](length=255, fill=0))
+    with assert_raises(contains="rise"):
+        _ = label_classes(volume, [5.0, 5.0])
+    with assert_raises(contains="rise"):
+        _ = label_classes(volume, [inf[DType.float64]()])
+
+
+def test_multi_otsu_refusals() raises:
+    var histogram = Histogram(10, 0, 1)
+    histogram.counts[2] = 3
+    histogram.counts[7] = 4
+    for classes in [1, 9]:
+        with assert_raises(contains="2 to 8 classes"):
+            _ = multi_otsu_thresholds(histogram, classes)
+    with assert_raises(contains="Fewer bins"):
+        _ = multi_otsu_thresholds(histogram, 3)
+    with assert_raises(contains="4096 bins"):
+        _ = multi_otsu_thresholds(Histogram(4097, 0, 1), 2)
 
 
 def main() raises:

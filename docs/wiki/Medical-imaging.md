@@ -29,7 +29,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `roi` | `circle_statistics` and `RegionStatistics` |
 | `texture` | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` and `TextureFeatures` |
 | `firstorder` | `intensity_features` and `IntensityFeatures` |
-| `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
+| `histogram` | `Histogram`, `volume_histogram`, `label_histogram`, `otsu_threshold`, `multi_otsu_thresholds` and `label_classes` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
 | `gap` | `distance_from_label`, `label_gap`, `LabelGap` and `volume_within` |
@@ -412,6 +412,15 @@ var bright = threshold(volume, edge, Float64(span[1]), LabelId(1))
 
 Otsu's method moves the edge into the class with the wider spread. For two classes of very different spread, check the edge against the histogram.
 
+`multi_otsu_thresholds(histogram, classes)` splits the voxels into 2 to 8 classes, such as the fluid, the gray matter and the white matter of a brain. It gives the `classes - 1` edges with the largest variance between the classes. A search by dynamic programming finds the best split exactly, and each class holds a voxel. With two classes, it gives the edge of `otsu_threshold`.
+
+```mojo
+var edges = multi_otsu_thresholds(counts, 3)
+var tissues = label_classes(volume, edges)
+```
+
+`label_classes(volume, thresholds)` gives each voxel the label `1 + k`, where `k` is the number of edges at or below its value. So the darkest class is label 1, and a value that is not a number is background. Of two splits with the same variance, the search keeps the lower edges, class by class from the top. The histogram can have up to 4096 bins.
+
 `label_surface(map, label)` returns the boundary of a label as a closed triangle mesh. The mesh is in the volume frame, in meters. The surface passes halfway between a voxel inside the label and a voxel outside it.
 
 ## Smooth a label surface
@@ -778,6 +787,8 @@ The tests check these results:
 - A Gaussian keeps a linear ramp away from the edges. Its response to one voxel is the product of its three kernels, and sums to one.
 - A median removes a hot and a cold voxel and keeps the edge between two regions.
 - On two overlapping distributions, the Otsu edge is the edge with the least variance within the classes, found by brute force over the voxels.
+- With two classes, the multi-level split gives the Otsu edge on five random histograms. Three peaks split at the lowest edges between them. Each filled bin is a class when there are as many classes as filled bins. A value at an edge joins the class above it.
+- On 12 histograms of four bumps, the splits into 3, 4 and 5 classes match scikit-image 0.26's `threshold_multiotsu` bin for bin. That check is not part of the test suite.
 - A textured box of 100 in a background of 0 grows to its edge. It does so from one seed, from two seeds, and from one seed given twice. A seed at the grid's corner grows the background. A spike or a dip outside its own range grows nothing. A box of radius 0 grows only the seed's own value, and a flat volume fills.
 - From five seeds with other multipliers, iterations and radii, the regions on a smooth random volume match SimpleITK 2.5.7's `ConfidenceConnected` voxel for voxel. They hold from 9,000 to 26,000 voxels. That check is not part of the test suite.
 - Two voxels that share an edge are one piece with `EDGES` and `CORNERS`, and two with `FACES`. Two that share a corner only are one piece with `CORNERS`. A diagonal line grows from its end with `CORNERS`, and not with `FACES`. On a random grid of 30 by 28 by 26 voxels, the pieces of each connectivity match scipy's `ndimage.label` in count and size. That check is not part of the test suite.
@@ -855,6 +866,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface`, `label_stl` |
 | A mesh has no positions | `printable_stl` |
 | A histogram has fewer than 2 bins or a bad range, or Otsu's method finds one full bin only | `Histogram`, `otsu_threshold` |
+| A split has classes out of 2 to 8, more than 4096 bins or too few full bins, or thresholds that are not finite and rising | `multi_otsu_thresholds`, `label_classes` |
 | A Gaussian width is not positive or reaches past 128 voxels, or a median radius is not from 1 to 3 | `gaussian_filter`, `median_filter` |
 
 ## Limits

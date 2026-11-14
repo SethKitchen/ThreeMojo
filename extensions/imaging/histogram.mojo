@@ -18,6 +18,15 @@ gives the largest variance between the classes (Otsu, 1979):
 over the bin centers of its class. The largest variance between the
 classes is the smallest variance within them. Use the threshold as the
 low end of `threshold` to label the brighter class.
+
+`multi_otsu_thresholds` splits a histogram in more classes, such as the
+fluid, the gray matter and the white matter of a brain. It finds the
+edges that give the largest variance between the classes, `sum(S^2 /
+P)` over the classes, where `P` is the voxel count of a class and `S`
+the sum of its bin centers times their counts. A search over the edges
+by dynamic programming finds the best split exactly, with each class
+holding a voxel. `label_classes` then gives each voxel the label of its
+class, from 1 for the darkest.
 """
 
 from extensions.imaging.ids import LabelId, require_label
@@ -212,3 +221,109 @@ def otsu_threshold(histogram: Histogram) raises -> Float64:
     if split < 0:
         raise Error("Otsu's method needs voxels in two bins at least")
     return histogram.low + Float64(split + 1) * histogram.width()
+
+
+def multi_otsu_thresholds(
+    histogram: Histogram, classes: Int
+) raises -> List[Float64]:
+    """Return the bin edges that best split a histogram in classes.
+
+    Of two splits with the same variance between the classes, the search
+    keeps the one with the lower edges, class by class from the top.
+
+    Args:
+        histogram: The histogram, of up to 4096 bins.
+        classes: The classes, from 2 to 8.
+
+    Returns:
+        The `classes - 1` edges, rising. A value below the first edge is
+        in the darkest class.
+
+    Raises:
+        Error: If `classes` is out of range, the histogram has more than
+            4096 bins, or fewer bins than `classes` hold voxels.
+    """
+    if classes < 2 or classes > 8:
+        raise Error("A histogram splits in from 2 to 8 classes")
+    var n = histogram.bins()
+    if n > 4096:
+        raise Error("A split in classes takes a histogram of 4096 bins at most")
+    var filled = 0
+    var counts = List[Float64](length=n + 1, fill=0)
+    var sums = List[Float64](length=n + 1, fill=0)
+    for b in range(n):  # pragma: no branch
+        var count = Float64(histogram.counts[b])
+        if count > 0:
+            filled += 1
+        counts[b + 1] = counts[b] + count
+        sums[b + 1] = sums[b] + count * histogram.center(b)
+    if filled < classes:
+        raise Error("Fewer bins than classes hold voxels")
+    # best[c * (n + 1) + e] is the largest sum of S^2 / P of c + 1 classes
+    # over the bins below e, and start[...] the first bin of the last one.
+    var best = List[Float64](length=classes * (n + 1), fill=-1.0)
+    var start = List[Int](length=classes * (n + 1), fill=-1)
+    for e in range(1, n + 1):  # pragma: no branch
+        var p = counts[e]
+        if p > 0:
+            best[e] = sums[e] * sums[e] / p
+            start[e] = 0
+    for c in range(1, classes):  # pragma: no branch
+        for e in range(c + 1, n + 1):  # pragma: no branch
+            for a in range(c, e):  # pragma: no branch
+                var before = best[(c - 1) * (n + 1) + a]
+                var p = counts[e] - counts[a]
+                if before < 0 or not (p > 0):
+                    continue
+                var d = sums[e] - sums[a]
+                var value = before + d * d / p
+                if value > best[c * (n + 1) + e]:
+                    best[c * (n + 1) + e] = value
+                    start[c * (n + 1) + e] = a
+    var edges = List[Float64](length=classes - 1, fill=0)
+    var e = n
+    for c in range(classes - 1, 0, -1):  # pragma: no branch
+        var a = start[c * (n + 1) + e]
+        edges[c - 1] = histogram.low + Float64(a) * histogram.width()
+        e = a
+    return edges^
+
+
+def label_classes(
+    volume: ImageVolume, thresholds: List[Float64]
+) raises -> LabelMap:
+    """Return a map that labels each voxel by its class.
+
+    A voxel takes the label `1 + k`, where `k` is the number of thresholds
+    at or below its value. A value that is not a number is background.
+
+    Args:
+        volume: The volume.
+        thresholds: The edges, rising, such as `multi_otsu_thresholds`
+            gives. One to 254 of them.
+
+    Returns:
+        The map, with labels from 1 to the number of thresholds plus one.
+
+    Raises:
+        Error: If there are no thresholds or more than 254, or they do not
+            rise or are not finite.
+    """
+    var t = len(thresholds)
+    if t < 1 or t > 254:
+        raise Error("A class map takes from 1 to 254 thresholds")
+    for k in range(t):  # pragma: no branch
+        if not isfinite(thresholds[k]):
+            raise Error("Class thresholds must be finite and rise")
+        if k > 0 and not (thresholds[k] > thresholds[k - 1]):
+            raise Error("Class thresholds must be finite and rise")
+    var out = LabelMap(volume)
+    for at in range(volume.count()):  # pragma: no branch
+        var v = Float64(volume.values[at])
+        if v != v:
+            continue
+        var k = 0
+        while k < t and v >= thresholds[k]:
+            k += 1
+        out.labels[at] = UInt8(k + 1)
+    return out^
