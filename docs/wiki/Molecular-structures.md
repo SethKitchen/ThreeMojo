@@ -22,7 +22,8 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius`, `sphere_points` and `AtomCells` |
 | `coloring` | `color_surface`, `atom_color` and `kyte_doolittle` |
 | `superpose` | `superpose`, `Superposition`, `rmsd` and `matched_atoms` |
-| `ensemble` | `ensemble_fluctuation`, `Fluctuation` and `fluctuation_b_factors` |
+| `ensemble` | `ensemble_fluctuation`, `Fluctuation`, `fluctuation_b_factors` and `shared_positions` |
+| `clusters` | `model_distances`, `ModelDistances` and `cluster_models` |
 | `contacts` | `distance_map`, `DistanceMap` and `map_image` |
 | `shape` | `molecular_shape` and `MolecularShape` |
 | `accessibility` | `residue_accessibility`, `ResidueAccess` and `max_accessible_area` |
@@ -415,6 +416,25 @@ The RMSF of an atom is `sqrt(mean(|x_k - mean(x)|^2))` over the models `k`. The 
 
 `fluctuation_b_factors(structure, spread)` writes each RMSF into the reference model as an isotropic B-factor, `B = 8 pi^2 RMSF^2 / 3`. Each atom of the residue gets it. The B-factor coloring of a surface then shows the mobile parts in red.
 
+## Cluster the models of an ensemble
+
+`model_distances` gives the RMSD between every two models of an ensemble, over one atom of each residue. `cluster_models` groups the models that are close to each other. Use them to find the representative model of an NMR ensemble, or the main shapes of a simulation.
+
+```mojo
+var table = model_distances(structure, "CA", FIT_TO_REFERENCE)
+print(table.distance(ModelId(0), ModelId(3)).to(ANGSTROM), table.medoid().value)
+var groups = cluster_models(table, Length64(1.5, ANGSTROM))
+print(len(groups), groups[0][0].value, len(groups[0]))
+```
+
+With `FIT_TO_REFERENCE`, the second model of each pair is first superposed on the first model, so only the change of shape counts. With `AS_GIVEN`, the coordinates are compared as they are. The compared atoms are those of the first model that every model has. `shared_positions(structure, name, reference)` gives them and their positions in each model.
+
+`table.medoid()` gives the model with the least sum of RMSDs to the others. It is the most central model of the ensemble.
+
+`cluster_models` uses the method of Daura and others, the `gromos` method of GROMACS. Two models are neighbors when their RMSD is at most the cutoff, and each model is its own neighbor. The model with the most neighbors is the center of the first cluster. The cluster holds the center and its neighbors, and those models leave the pool. The next cluster forms from the rest, until no model is left.
+
+The first model of each cluster is its center, and the clusters come largest first. Of two models with as many neighbors, the lower model counts.
+
 ## Measure size and shape
 
 `molecular_shape(structure, model)` gives the size and shape of a model:
@@ -493,6 +513,8 @@ The tests check these results:
 - Two carbons in two chains 3 angstroms apart each bury a cap of `2 pi R h`, within 1 percent with 2000 points. Chains 20 angstroms apart bury nothing, and a third chain does not change the interface of the other two. On two helices 9 angstroms apart, the buried area of each residue matches Biopython 1.88's Shrake-Rupley to 0.001 square angstroms. That check is not part of the test suite.
 - A fragment of 6 residues, renumbered and moved, pairs by a local alignment with residues 4 to 9 of its whole chain. It fits back with an RMSD below 1e-15 m.
 - A peptide numbered from 101, turned and moved, pairs no atom by number. Through the alignment, all 11 CA atoms pair, and the fit has an RMSD below 1e-15 m. A residue that only one chain has, or a residue without the atom, pairs nothing.
+- Four models shifted 1 angstrom apart along x have RMSDs of `abs(a - b)` angstroms as given, and none after the fit. Their medoid is model 1. One CA of eight moved by 3 angstroms gives an RMSD of `3 / sqrt(8)` angstroms as given.
+- Six models lie at shifts of 0, 0.5, 1, 5, 5.4 and 20 angstroms. At a cutoff of 1 angstrom, they form the clusters `0 1 2`, `3 4` and `5`. On 12 noisy and moved models, the fitted table matches numpy's SVD solution to 5e-15 angstroms. The medoid and the clusters at four cutoffs match a Python version of the method. That check is not part of the test suite.
 - A local alignment of three tryptophans inside other residues is the three alone, with their start in each sequence. It takes a gap inside when the pairs around it pay for it. On the 40 random pairs, every local score matches Biopython's local `PairwiseAligner`, and each alignment holds the stretch of each sequence from its start. That check is not part of the test suite.
 - BLOSUM62 is symmetric, with its diagonal from 4 to 11. Small alignments give their gaps at the ends, inside and in either sequence, with the scores of each gap. A sequence against itself has no gap and an identity of 1. All 400 BLOSUM62 values match Biopython 1.88. On 40 random pairs with changes, insertions and deletions, every score matches Biopython's `PairwiseAligner`. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
@@ -508,7 +530,8 @@ Every function raises `Error` for input it cannot use.
 | A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, an alignment mode is not valid, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
-| An ensemble has fewer than two models, too few shared atoms, or a bad fit or reference | `ensemble_fluctuation`, `Fluctuation` |
+| An ensemble has fewer than two models, too few shared atoms, or a bad fit or reference | `ensemble_fluctuation`, `Fluctuation`, `shared_positions`, `model_distances` |
+| A model id is outside a table, or a cluster cutoff is negative or not finite | `ModelDistances`, `cluster_models` |
 | A structure has no model or no atom, its name holds a blank, or a value holds a line end or both kinds of closing quote | `encode_mmcif`, `cif_value` |
 | No data block, a stray value, or a loop that does not fill its rows | `parse_cif`, `parse_mmcif` |
 | A needed column is missing, or a value is not a number | `parse_mmcif` |
@@ -530,7 +553,8 @@ Every function raises `Error` for input it cannot use.
 - `assign_secondary` does not report 3-10 or pi helices, turns, bends, isolated bridges or beta bulges.
 - Ribbons need CA atoms. Nucleic acids have no ribbon.
 - An ensemble is fitted on one reference model. The fit is not iterated to the mean of the models.
-- A sequence holds the twenty standard amino acids only. A modified residue, such as selenomethionine `MSE`, is left out. - A Ramachandran plot shows the angles only. It does not draw the favored and allowed regions of a reference set, and it does not validate a model.
+- A sequence holds the twenty standard amino acids only. A modified residue, such as selenomethionine `MSE`, is left out.
+- A Ramachandran plot shows the angles only. It does not draw the favored and allowed regions of a reference set, and it does not validate a model.
 - Where three or more spheres make a crevice, the excluded surface uses the grid bound. It can lie up to one grid step outside the true surface there.
 - A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
 
@@ -542,6 +566,7 @@ Every function raises `Error` for input it cannot use.
 - Barlow and Thornton, "Ion-pairs in proteins", 1983.
 - Needleman and Wunsch, "A general method applicable to the search for similarities in the amino acid sequence of two proteins", 1970.
 - Smith and Waterman, "Identification of common molecular subsequences", 1981.
+- Daura and others, "Peptide folding: when simulation meets experiment", Angewandte Chemie International Edition, 1999.
 - Gotoh, "An improved algorithm for matching biological sequences", 1982.
 - Henikoff and Henikoff, "Amino acid substitution matrices from protein blocks", 1992.
 - Tien, Meyer, Sydykova, Spielman and Wilke, "Maximum allowed solvent accessibilities of residues in proteins", 2013.

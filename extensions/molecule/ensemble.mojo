@@ -99,6 +99,55 @@ struct Fluctuation(Copyable, Movable):
         return Length64(self.deviations[model.value], METER)
 
 
+def shared_positions(
+    structure: Structure, name: String, reference: ModelId
+) raises -> Tuple[List[AtomId], List[List[V3]]]:
+    """Return the atoms of a name that every model has, and where they are.
+
+    Atoms pair by chain label, residue number, insertion code and name, as
+    `matched_atoms` pairs them.
+
+    Args:
+        structure: The structure.
+        name: The atom name, such as `CA`.
+        reference: The model whose atoms and order the result takes.
+
+    Returns:
+        The atoms of the reference model that every model shares, in the
+        reference's order. Then, for each model, the positions of its
+        paired atoms in that order, in meters.
+
+    Raises:
+        Error: If the reference names no model.
+    """
+    structure.require_model(reference)
+    var models = len(structure.models)
+    # The atoms of each model that pair with each reference atom.
+    var maps = List[Dict[Int, Int]]()
+    for k in range(models):  # pragma: no branch
+        var found = Dict[Int, Int]()
+        for pair in matched_atoms(
+            structure, reference, structure, ModelId(k), name
+        ):
+            found[pair[0]] = pair[1]
+        maps.append(found^)
+    var atoms = List[AtomId]()
+    for pair in matched_atoms(structure, reference, structure, reference, name):
+        var shared = True
+        for k in range(models):  # pragma: no branch
+            if pair[0] not in maps[k]:
+                shared = False
+        if shared:
+            atoms.append(AtomId(pair[0]))
+    var positions = List[List[V3]]()
+    for k in range(models):  # pragma: no branch
+        var placed = List[V3]()
+        for atom in atoms:
+            placed.append(structure.atoms[maps[k][atom.value]].position)
+        positions.append(placed^)
+    return (atoms^, positions^)
+
+
 def ensemble_fluctuation(
     structure: Structure,
     name: String,
@@ -127,37 +176,20 @@ def ensemble_fluctuation(
     var models = len(structure.models)
     if models < 2:
         raise Error("An ensemble needs two or more models")
-    # The atoms of each model that pair with each reference atom.
-    var maps = List[Dict[Int, Int]]()
-    for k in range(models):  # pragma: no branch
-        var found = Dict[Int, Int]()
-        for pair in matched_atoms(
-            structure, reference, structure, ModelId(k), name
-        ):
-            found[pair[0]] = pair[1]
-        maps.append(found^)
+    var shared = shared_positions(structure, name, reference)
     var out = Fluctuation()
-    for pair in matched_atoms(structure, reference, structure, reference, name):
-        var shared = True
-        for k in range(models):  # pragma: no branch
-            if pair[0] not in maps[k]:
-                shared = False
-        if shared:
-            out.atoms.append(AtomId(pair[0]))
+    out.atoms = shared[0].copy()
+    var positions = shared[1].copy()
     var n = out.count()
     var fitted = fit == FIT_TO_REFERENCE
     if n == 0 or (fitted and n < 3):
         raise Error(
             "An ensemble needs three shared atoms to fit, and one to compare"
         )
-    var fixed = List[V3]()
-    for atom in out.atoms:  # pragma: no branch
-        fixed.append(structure.atoms[atom.value].position)
+    var fixed = positions[reference.value].copy()
     var placed = List[List[V3]]()
     for k in range(models):  # pragma: no branch
-        var moving = List[V3]()
-        for atom in out.atoms:  # pragma: no branch
-            moving.append(structure.atoms[maps[k][atom.value]].position)
+        var moving = positions[k].copy()
         if fitted and k != reference.value:
             var move = superpose(fixed, moving)
             for i in range(n):  # pragma: no branch
