@@ -20,7 +20,8 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `hbonds` | `bond_geometry` |
 | `ribbon` | `ribbon_geometry` and `chain_color` |
 | `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius`, `sphere_points` and `AtomCells` |
-| `coloring` | `color_surface`, `atom_color` and `kyte_doolittle` |
+| `coloring` | `color_surface`, `color_surface_potential`, `atom_color` and `kyte_doolittle` |
+| `charge` | `formal_charges`, `Charges` and `coulomb_potential` |
 | `confidence` | `confidence_color`, `confidence_summary` and `ConfidenceSummary` |
 | `lddt` | `lddt`, `ca_lddt`, `lddt_b_factors` and `LddtScores` |
 | `superpose` | `superpose`, `Superposition`, `rmsd` and `matched_atoms` |
@@ -486,6 +487,31 @@ Each vertex takes the color of the atom whose van der Waals sphere is nearest it
 
 The B-factor coloring shows the flexible parts of a crystal structure. A high B-factor can also show disorder or a poor model. The hydropathy coloring shows oily and charged patches. It does not compute an electrostatic potential.
 
+## Color by Coulomb potential
+
+`color_surface_potential(geometry, structure, model, limit)` colors a surface by the electrostatic potential of the protein's charged groups at each vertex. Red is negative, white neutral and blue positive, from `-limit` to `+limit`. Use it to find the charged patches where a ligand or a partner binds.
+
+```mojo
+var surface = excluded_surface(structure, model, probe, spacing)
+color_surface_potential(surface, structure, model, MolarEnergy64(10, KILOCALORIE_PER_MOLE))
+```
+
+`formal_charges(structure, model)` places the charges of the groups that carry one at pH 7:
+
+| Group | Atoms | Charge |
+|---|---|---|
+| Arginine | NH1 and NH2 | +0.5 each |
+| Lysine | NZ | +1 |
+| Aspartate | OD1 and OD2 | -0.5 each |
+| Glutamate | OE1 and OE2 | -0.5 each |
+| The N terminus of a chain | N of its first amino acid | +1 |
+| The C terminus of a chain | OXT and O of its last amino acid | -0.5 each, or -1 on O without OXT |
+| Ions of two charges | ZN, MG, CA, MN, FE, CU, NI, CO and CD | +2 |
+| Ions of one charge | NA and K | +1 |
+| Chloride | CL | -1 |
+
+Histidine is neutral, as it mostly is at pH 7. `coulomb_potential(charges, point)` gives `332.0636 * sum(q / (4 r^2))` kcal/(mol e), with `r` in angstroms. This is the distance-dependent dielectric `4 r` of UCSF Chimera's Coulombic coloring. A charge closer than 0.5 angstroms counts at 0.5 angstroms.
+
 ## Color by confidence
 
 A structure predicted by AlphaFold or a similar model gives each residue a pLDDT from 0 to 100. The file holds it in the B-factor column of every atom of the residue. `BY_CONFIDENCE` colors a ribbon by it, and `COLOR_BY_CONFIDENCE` a surface, in the four bands of the AlphaFold Protein Structure Database.
@@ -565,6 +591,7 @@ The tests check these results:
 - BLOSUM62 is symmetric, with its diagonal from 4 to 11. Small alignments give their gaps at the ends, inside and in either sequence, with the scores of each gap. A sequence against itself has no gap and an identity of 1. All 400 BLOSUM62 values match Biopython 1.88. On 40 random pairs with changes, insertions and deletions, every score matches Biopython's `PairwiseAligner`. That check is not part of the test suite.
 - Three points 3.8 angstroms apart, with the last moved 0.7 angstroms, give the lDDT 0.875, 0.875 and 0.75, and 5/6 in all. Moved 3 angstroms, the last scores 0.25, and moved 5 angstroms, 0. A turned and moved model scores 1, and a point with no pair scores 1. One CA moved 3 angstroms gives the least score of a helix.
 - A peptide of 60 residues got up to 4.5 angstroms of noise per coordinate. The CA lDDT of each residue matches AlphaFold's formula in numpy to 2e-11. The total matches to 1e-13. That check is not part of the test suite.
+- A test file holds each charged group, a water at a chain's end and four ions. It has a terminus with OXT and one without. It gives each charge, and a net charge of +5. One charge at 5 angstroms gives 332.0636 / 100 kcal/(mol e), and two opposite charges cancel halfway. A vertex near a lysine is blue, near a chloride red, and far from every charge white.
 - The band colors are the four colors of the AlphaFold Protein Structure Database, with each edge in the lower band. A helix of eight residues with two in each band gives each count and the mean. A residue without a CA does not count. Each CA, and each ring of a ribbon, takes its band's color.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
@@ -579,6 +606,7 @@ Every function raises `Error` for input it cannot use.
 | A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, an alignment mode is not valid, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
+| A potential coloring has a model id that names no model, a limit that is not positive and finite, or a geometry without positions | `formal_charges`, `color_surface_potential` |
 | A confidence summary has a model id that names no model, no CA atom, or a pLDDT not from 0 to 100 | `confidence_summary` |
 | An lDDT has lists of other sizes or none, a cutoff not positive and finite, no shared CA atom, or scores without atom pairs | `lddt`, `ca_lddt`, `lddt_b_factors` |
 | An ensemble has fewer than two models, too few shared atoms, or a bad fit or reference | `ensemble_fluctuation`, `Fluctuation`, `shared_positions`, `model_distances` |
@@ -608,6 +636,7 @@ Every function raises `Error` for input it cannot use.
 - A Ramachandran plot shows the angles only. It does not draw the favored and allowed regions of a reference set, and it does not validate a model.
 - Where three or more spheres make a crevice, the excluded surface uses the grid bound. It can lie up to one grid step outside the true surface there.
 - A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
+- The Coulomb potential uses formal charges at pH 7 and the dielectric `4 r`. It is not a Poisson-Boltzmann solution. It leaves out a charged histidine, other protonation states and the ions of the solvent.
 
 ## References
 
@@ -620,6 +649,7 @@ Every function raises `Error` for input it cannot use.
 - Daura and others, "Peptide folding: when simulation meets experiment", Angewandte Chemie International Edition, 1999.
 - Jumper and others, "Highly accurate protein structure prediction with AlphaFold", Nature, 2021.
 - Mariani and others, "lDDT: a local superposition-free score for comparing protein structures and models using distance difference tests", Bioinformatics, 2013.
+- Pettersen and others, "UCSF Chimera: a visualization system for exploratory research and analysis", Journal of Computational Chemistry, 2004.
 - Varadi and others, "AlphaFold Protein Structure Database", Nucleic Acids Research, 2022.
 - Gotoh, "An improved algorithm for matching biological sequences", 1982.
 - Henikoff and Henikoff, "Amino acid substitution matrices from protein blocks", 1992.

@@ -24,7 +24,8 @@ The colors are linear, as the renderer takes them.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
-from extensions.chemistry.quantities import ANGSTROM
+from extensions.chemistry.quantities import ANGSTROM, MolarEnergy64
+from extensions.molecule.charge import coulomb_potential, formal_charges
 from extensions.molecule.ids import (
     COLOR_BY_B_FACTOR,
     COLOR_BY_CHAIN,
@@ -41,7 +42,7 @@ from extensions.molecule.surface import AtomCells, vdw_radius
 from extensions.sdf.vector import V3, distance, v3
 from loaders.pdb import cpk_color
 from render.srgb import srgb_to_linear
-from std.math import max, min
+from std.math import isfinite, max, min
 from units.si import Length64, METER, SQUARE_METER
 
 # The gray of an element without a CPK color, or a residue without a
@@ -269,4 +270,47 @@ def color_surface(
         out.append(Float32(colors[best].x))
         out.append(Float32(colors[best].y))
         out.append(Float32(colors[best].z))
+    geometry.set_attribute(String(COLOR), BufferAttribute(out^, 3))
+
+
+def color_surface_potential(
+    mut geometry: BufferGeometry,
+    structure: Structure,
+    model: ModelId,
+    limit: MolarEnergy64,
+) raises:
+    """Set the color of each vertex from the Coulomb potential there.
+
+    The charges are the formal charges of `formal_charges`, and the
+    potential is that of `coulomb_potential`, with the dielectric `4 r`.
+    The color runs from red at `-limit` through white at 0 to blue at
+    `+limit`, as UCSF Chimera's Coulombic coloring does.
+
+    Args:
+        geometry: A mesh in meters, such as `excluded_surface` makes.
+        structure: The structure.
+        model: The model whose charges color the surface.
+        limit: The potential of full red and blue, such as 10 kcal/mol
+            per elementary charge. Positive and finite.
+
+    Raises:
+        Error: If the model id names no model, the limit is not positive
+            and finite, or the geometry has no positions.
+    """
+    var most = limit.value
+    if not (most > 0) or not isfinite(most):
+        raise Error("A potential limit must be positive and finite")
+    var charges = formal_charges(structure, model)
+    ref points = geometry.attribute_view(POSITION)
+    var red = v3(0.85, 0.2, 0.2)
+    var blue = v3(0.2, 0.4, 0.85)
+    var out = List[Float32]()
+    for vertex in range(points.count()):
+        var p = points.vector3(vertex)
+        var at = v3(Float64(p.x), Float64(p.y), Float64(p.z))
+        var phi = coulomb_potential(charges, at).value
+        var color = _linear(_diverging(red, blue, phi / most))
+        out.append(Float32(color.x))
+        out.append(Float32(color.y))
+        out.append(Float32(color.z))
     geometry.set_attribute(String(COLOR), BufferAttribute(out^, 3))
