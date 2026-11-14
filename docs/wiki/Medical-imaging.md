@@ -368,7 +368,7 @@ The tests check these results:
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
 - An oblique reformat of a linear field matches the field at every pixel.
-- A slab of four planes through a ramp gives its top plane as its maximum, its bottom plane as its minimum and its center value as its mean.
+- A slab of four planes through a ramp gives its top plane as its maximum and its bottom plane as its minimum. Its mean is its center value.
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
 - An isosurface of a linear ramp has the full iso color along the gradient, and the ambient light across it.
 - An ellipsoid of 904.8 voxels labels 879 voxels, within four percent, with its centroid exact.
