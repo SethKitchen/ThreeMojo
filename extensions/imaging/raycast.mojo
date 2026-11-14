@@ -19,12 +19,20 @@ light at the eye. The ray stops when it is 99 percent opaque.
 `MAXIMUM_INTENSITY` keeps the largest sample and shows it through the
 volume's window. `MONOCHROME1` volumes show it inverted.
 
+`ISOSURFACE` stops at the first sample whose value reaches the iso value.
+The crossing lies on the straight line between that sample and the one
+before it. The surface there takes the transfer function's color at the
+iso value, opaque, and is shaded by the gradient with a light at the eye.
+A ray that enters the box at or above the iso value stops at its first
+sample, so a crop shows the cut face.
+
 The rows of the image are split among CPU tasks. Each pixel depends only
 on its own ray, so the image does not depend on the number of tasks.
 """
 
 from extensions.imaging.ids import (
     COMPOSITE,
+    ISOSURFACE,
     MONOCHROME1,
     RenderMode,
     require_mode,
@@ -40,7 +48,7 @@ from extensions.imaging.transfer import (
 from extensions.sdf.vector import V3, cross, dot, length, normalize, v3
 from render.framebuffer import Framebuffer
 from render.tasks import TaskGroup
-from std.math import cos, inf, max, min, pi, sin, tan
+from std.math import cos, inf, isfinite, max, min, pi, sin, tan
 from std.sys import num_logical_cores
 from units.si import Angle64, METER, RADIAN
 
@@ -255,6 +263,8 @@ struct _Scene(ImplicitlyCopyable):
     var background: Rgba
     var window: WindowLevel
     var inverted: Bool
+    var iso_value: Float64
+    var iso_color: Rgba
 
 
 def _gradient(
@@ -342,6 +352,80 @@ def _maximum(
     return Rgba(gray, gray, gray, 1)
 
 
+def _crossing(
+    before: Float64,
+    before_value: Float64,
+    at: Float64,
+    value: Float64,
+    iso: Float64,
+) -> Float64:
+    """Return where a straight line between two samples reaches `iso`.
+
+    `before_value` is below `iso` and `value` is at or above it.
+    """
+    return before + (iso - before_value) / (value - before_value) * (
+        at - before
+    )
+
+
+def _sample(
+    volume: ImageVolume, scene: _Scene, direction: V3, t: Float64
+) -> Float64:
+    """Return the value at distance `t` along a ray."""
+    var p = scene.camera.eye + direction * t
+    return Float64(
+        volume.trilinear(
+            p.x * scene.scale.x, p.y * scene.scale.y, p.z * scene.scale.z
+        )
+    )
+
+
+def _shade(
+    volume: ImageVolume, scene: _Scene, direction: V3, t: Float64
+) -> Rgba:
+    """Return the iso color at distance `t`, lit by the gradient there."""
+    var p = scene.camera.eye + direction * t
+    var normal = _gradient(
+        volume,
+        p.x * scene.scale.x,
+        p.y * scene.scale.y,
+        p.z * scene.scale.z,
+        scene.scale,
+    )
+    var light = Float32(1)
+    var size = length(normal)
+    if size > 0:
+        var facing = Float32(abs(dot(normal, direction)) / size)
+        light = scene.ambient + (1 - scene.ambient) * facing
+    ref color = scene.iso_color
+    return Rgba(color.r * light, color.g * light, color.b * light, 1)
+
+
+def _first_hit(
+    volume: ImageVolume,
+    scene: _Scene,
+    direction: V3,
+    near: Float64,
+    far: Float64,
+) -> Rgba:
+    """Return the shaded surface where a ray first reaches the iso value."""
+    var iso = scene.iso_value
+    var before = near + scene.step * 0.5
+    var before_value = _sample(volume, scene, direction, before)
+    if before_value >= iso:
+        return _shade(volume, scene, direction, before)
+    var t = before + scene.step
+    while t < far:
+        var value = _sample(volume, scene, direction, t)
+        if value >= iso:
+            var hit = _crossing(before, before_value, t, value, iso)
+            return _shade(volume, scene, direction, hit)
+        before = t
+        before_value = value
+        t += scene.step
+    return Rgba(0, 0, 0, 0)
+
+
 def _byte(value: Float32) -> UInt8:
     """Return a channel from zero to one as a byte."""
     return UInt8(Int(clamp_unit(value) * 255 + 0.5))
@@ -368,6 +452,10 @@ __async def _render_rows(
                 if scene.mode == COMPOSITE:
                     color = _composite(
                         volume[], table[], scene, direction, hit[1], hit[2]
+                    )
+                elif scene.mode == ISOSURFACE:
+                    color = _first_hit(
+                        volume[], scene, direction, hit[1], hit[2]
                     )
                 else:
                     color = _maximum(volume[], scene, direction, hit[1], hit[2])
@@ -429,6 +517,7 @@ def render_volume(
     background: Rgba,
     crop_low: V3 = V3(0, 0, 0),
     crop_high: V3 = V3(1, 1, 1),
+    iso_value: Float64 = 0.0,
     threads: Int = 0,
 ) raises -> Framebuffer:
     """Return the image of a volume seen by a camera.
@@ -436,9 +525,10 @@ def render_volume(
     Args:
         volume: The volume to draw.
         camera: The camera, in the volume frame.
-        transfer: The colors and opacities for `COMPOSITE`. It needs at
-            least one point in either mode.
-        mode: `COMPOSITE` or `MAXIMUM_INTENSITY`.
+        transfer: The colors and opacities for `COMPOSITE`, and the color
+            of the surface for `ISOSURFACE`. It needs at least one point in
+            every mode.
+        mode: `COMPOSITE`, `MAXIMUM_INTENSITY` or `ISOSURFACE`.
         step_voxels: The distance between samples, in units of the
             smallest spacing. From 0.05 to 4.
         ambient: The light a sample gets when it faces away from the eye,
@@ -448,6 +538,7 @@ def render_volume(
             fraction of the box on each axis.
         crop_high: The high corner of the part to draw, as a fraction.
             Each fraction is from zero to one and above `crop_low`'s.
+        iso_value: The value of the surface for `ISOSURFACE`. Finite.
         threads: The tasks to use. Zero means one for each logical core.
 
     Returns:
@@ -455,8 +546,10 @@ def render_volume(
 
     Raises:
         Error: If the mode is not valid, the step or the ambient light is
-            out of range, `threads` is negative, or the transfer function
-            has no points.
+            out of range, the crop is out of range or empty, the iso value
+            is not finite, `threads` is negative, the transfer function has
+            no points, or the volume's window is not finite with a positive
+            width.
     """
     require_mode(mode)
     if not (step_voxels >= 0.05) or not (step_voxels <= 4.0):
@@ -466,6 +559,8 @@ def render_volume(
     _require_crop(crop_low.x, crop_high.x)
     _require_crop(crop_low.y, crop_high.y)
     _require_crop(crop_low.z, crop_high.z)
+    if not isfinite(iso_value):
+        raise Error("An iso value must be finite")
     if threads < 0:
         raise Error("A thread count must not be negative")
     var span = volume.value_range()
@@ -502,6 +597,8 @@ def render_volume(
         background,
         WindowLevel(volume.window_center, volume.window_width),
         volume.photometric == MONOCHROME1,
+        iso_value,
+        transfer.sample(iso_value),
     )
     var tasks = threads
     if tasks == 0:

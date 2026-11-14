@@ -2,9 +2,11 @@
 
 `extensions/imaging/` reads grayscale DICOM images and stacks them into volumes with physical spacing. It draws a volume with a ray caster, and it draws slices with labels and measurements. It is a library for research and teaching. It is not a medical device. Do not use it to diagnose, monitor or treat a patient.
 
-![A head phantom with its front half cut away, and one axial slice with three labels and a measurement](out/medical-imaging.png)
+![A cut head phantom, composited and as an isosurface, and one labeled axial slice with a measurement](out/medical-imaging.png)
 
-`examples/medical_imaging.mojo` makes this picture. It cuts a head phantom into DICOM slices and writes each slice as a Part 10 file in memory. It then reads the files back and stacks them. The left panel is the ray cast volume, cut in half. The right panel is the middle axial slice. The skull, the left ventricle and the largest feature are labeled, and a yellow line measures the head.
+`examples/medical_imaging.mojo` makes this picture. It cuts a head phantom into DICOM slices and writes each slice as a Part 10 file in memory. It then reads the files back and stacks them.
+
+The left panel is the ray cast volume, cut in half. The middle panel is the same cut as an isosurface at 0.27. The right panel is the middle axial slice. The skull, the left ventricle and the largest feature are labeled, and a yellow line measures the head.
 
 ## Modules
 
@@ -133,10 +135,18 @@ The rays are in the volume frame. Voxel `(i, j, k)` has its center at `(i * spac
 |---|---|
 | `COMPOSITE` | The transfer function's colors, blended from front to back |
 | `MAXIMUM_INTENSITY` | The largest sample on the ray, through the volume's window |
+| `ISOSURFACE` | The shaded surface where the ray first reaches `iso_value` |
 
 A `TransferFunction` holds control points. Each point is a value with a color and an opacity. A value between two points blends them in a straight line. The opacity of a point is for a step of one voxel. The ray caster corrects it for the real step: a step of `s` voxels gives `1 - (1 - opacity)^s`.
 
 `COMPOSITE` shades each sample by the gradient of the values. The light is at the eye. The `ambient` argument is the light a sample gets when it faces away. An ambient light of one turns the shading off. A ray stops when it is 99 percent opaque.
+
+`ISOSURFACE` stops at the first sample at or above `iso_value`. The crossing lies on the straight line between that sample and the one before it. The surface takes the transfer function's color at the iso value, opaque, and the gradient shades it. A ray that enters the box at or above the iso value stops at its first sample, so a crop shows the cut face.
+
+```mojo
+var bone = render_volume(volume, camera, transfer, ISOSURFACE, 0.5, 0.25,
+    Rgba(0, 0, 0, 1), iso_value=0.6)
+```
 
 `crop_low` and `crop_high` keep part of the box. Each is a fraction of the box on each axis. Use `v3(0, 0.5, 0)` and `v3(1, 1, 1)` to cut away the half of the volume with `j` below the middle.
 
@@ -201,6 +211,7 @@ The tests check these results:
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
+- An isosurface of a linear ramp has the full iso color along the gradient, and the ambient light across it.
 - An ellipsoid of 904.8 voxels labels 879 voxels, within four percent, with its centroid exact.
 - One render with one, three and every core gives the same bytes.
 

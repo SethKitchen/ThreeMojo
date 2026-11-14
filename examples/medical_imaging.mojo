@@ -7,15 +7,16 @@
 
 The phantom is cut into DICOM slices, written as Part 10 files in memory,
 read back and stacked into a volume. The left panel casts rays through
-the volume with its front half cropped away. The right panel is one axial
-slice with three labels and one measurement over it.
+the volume with its front half cropped away. The middle panel shows the
+same cut as an isosurface. The right panel is one axial slice with three
+labels and one measurement over it.
 
     mojo run -I . examples/medical_imaging.mojo [out/medical-imaging.png]
 """
 
 from extensions.imaging.dicom import DicomSlice, parse_dicom
 from extensions.imaging.dicom_write import encode_dicom
-from extensions.imaging.ids import COMPOSITE, K_AXIS, LabelId
+from extensions.imaging.ids import COMPOSITE, ISOSURFACE, K_AXIS, LabelId
 from extensions.imaging.image_volume import MILLIMETER64
 from extensions.imaging.labels import (
     LabelMap,
@@ -39,7 +40,7 @@ from extensions.imaging.raycast import (
 from extensions.imaging.series import stack_slices, volume_slices
 from extensions.imaging.transfer import Rgba, TransferFunction
 from extensions.sdf.vector import v3
-from render.framebuffer import Framebuffer
+from render.framebuffer import Color, Framebuffer
 from render.png import encode
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
@@ -124,6 +125,22 @@ def main() raises:
         v3(0, 0.5, 0),
         v3(1, 1, 1),
     )
+    # The same cut, as the surface where the value first reaches 0.27: the
+    # cut edge of the skull, and the small features inside the brain.
+    var surface_colors = TransferFunction()
+    surface_colors.add_point(0.27, Rgba(0.92, 0.62, 0.45, 1))
+    var surfaces = render_volume(
+        volume,
+        camera,
+        surface_colors,
+        ISOSURFACE,
+        0.25,
+        0.25,
+        background,
+        v3(0, 0.5, 0),
+        v3(1, 1, 1),
+        iso_value=0.27,
+    )
     var middle = SIZE // 2
     var labels = threshold(volume, 0.6, 2.0, LabelId(1))
     var ventricle = region_grow(
@@ -143,13 +160,12 @@ def main() raises:
     var left = v3(21, center, center)
     var right = v3(107, center, center)
     draw_measurement(slice, K_AXIS, left, right, Rgba(1, 0.9, 0.1, 1))
-    var sheet = Framebuffer(
-        2 * PANEL, PANEL, List[UInt8](length=2 * PANEL * PANEL * 4, fill=0)
-    )
+    var sheet = Framebuffer(3 * PANEL, PANEL, Color(0, 0, 0))
     blit(sheet, rendered, 0, 0)
+    blit(sheet, surfaces, PANEL, 0)
     var zoomed = _zoomed(slice, ZOOM)
     var margin = (PANEL - SIZE * ZOOM) // 2
-    blit(sheet, zoomed, PANEL + margin, margin)
+    blit(sheet, zoomed, 2 * PANEL + margin, margin)
     Path(destination).write_bytes(encode(sheet))
     var stats = label_statistics(ventricle, volume, LabelId(2))
     print(

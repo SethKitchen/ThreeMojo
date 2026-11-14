@@ -23,6 +23,7 @@ from extensions.imaging.ids import (
     EXPLICIT_LITTLE,
     I_AXIS,
     IMPLICIT_LITTLE,
+    ISOSURFACE,
     K_AXIS,
     LabelId,
     MAXIMUM_INTENSITY,
@@ -559,8 +560,9 @@ def test_ids() raises:
         require_axis(SliceAxis(3))
     require_mode(COMPOSITE)
     require_mode(MAXIMUM_INTENSITY)
+    require_mode(ISOSURFACE)
     with assert_raises(contains="render mode"):
-        require_mode(RenderMode(2))
+        require_mode(RenderMode(3))
     require_label(BACKGROUND)
     require_label(LabelId(255))
     with assert_raises(contains="label must be from 0 to 255"):

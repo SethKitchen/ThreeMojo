@@ -168,26 +168,28 @@ struct RenderMode(Equatable, ImplicitlyCopyable, Writable):
 
     `COMPOSITE` blends the colors of a transfer function from front to
     back. `MAXIMUM_INTENSITY` keeps the largest value on the ray and shows
-    it through a window.
+    it through a window. `ISOSURFACE` stops where the value first reaches
+    an iso value and shades the surface there.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this names one of the two modes.
+        """Return True if this names one of the three modes.
 
         Returns:
-            Whether the value is zero or one.
+            Whether the value is from zero to two.
         """
-        return ordinal_valid(self.value, 1)
+        return ordinal_valid(self.value, 2)
 
 
 comptime COMPOSITE = RenderMode(0)
 comptime MAXIMUM_INTENSITY = RenderMode(1)
+comptime ISOSURFACE = RenderMode(2)
 
 
 def require_mode(mode: RenderMode) raises:
-    """Refuse a render mode that is not one of the two.
+    """Refuse a render mode that is not one of the three.
 
     Args:
         mode: The mode to check.
@@ -195,7 +197,7 @@ def require_mode(mode: RenderMode) raises:
     Raises:
         Error: If `mode` is not valid.
     """
-    require_valid(mode.is_valid(), "A render mode must be 0 or 1")
+    require_valid(mode.is_valid(), "A render mode must be from 0 to 2")
 
 
 @fieldwise_init

@@ -7,6 +7,7 @@
 
 from extensions.imaging.ids import (
     COMPOSITE,
+    ISOSURFACE,
     MAXIMUM_INTENSITY,
     MONOCHROME1,
     RenderMode,
@@ -14,6 +15,7 @@ from extensions.imaging.ids import (
 from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
 from extensions.imaging.raycast import (
     VolumeCamera,
+    _crossing,
     orbit_camera,
     ray_box,
     render_volume,
@@ -363,6 +365,110 @@ def test_crop_removes_part_of_the_box() raises:
     assert_true(abs(Float64(_gray(half, 2, 2)) - expected) <= 0.6)
 
 
+def _ramp_along_z() raises -> ImageVolume:
+    """A 4 by 4 by 4 volume whose value is k."""
+    var spacing = Length64(1, MILLIMETER64)
+    var volume = ImageVolume(4, 4, 4, spacing, spacing, spacing)
+    for k in range(4):
+        for j in range(4):
+            for i in range(4):
+                volume.set(i, j, k, Float32(k))
+    return volume^
+
+
+def test_crossing_is_linear() raises:
+    assert_almost_equal(_crossing(1.0, 2.0, 3.0, 6.0, 3.0), 1.5)
+    assert_almost_equal(_crossing(0.0, -1.0, 1.0, 1.0, 1.0), 1.0)
+
+
+def test_isosurface_shading_and_misses() raises:
+    var volume = _ramp_along_z()
+    var transfer = TransferFunction()
+    transfer.add_point(0, Rgba(0, 0, 0, 0))
+    transfer.add_point(3, Rgba(1, 0.6, 0.3, 0.5))
+    var black = Rgba(0, 0, 0, 1)
+    var center = volume_center(volume)
+    var along = VolumeCamera(
+        center - v3(0, 0, 1),
+        center,
+        v3(0, -1, 0),
+        Angle64(0.2, DEGREE64),
+        3,
+        3,
+    )
+    # The ray along the gradient faces the surface: the full iso color.
+    # The color is the transfer function at 1.5, opaque.
+    var faced = render_volume(
+        volume, along, transfer, ISOSURFACE, 0.5, 0.2, black, iso_value=1.5
+    )
+    var pixel = faced.get_pixel(1, 1)
+    assert_equal(Int(pixel.r), 128)
+    assert_equal(Int(pixel.g), 77)
+    # A ray across the gradient gets only the ambient light.
+    var across = VolumeCamera(
+        center - v3(1, 0, 0),
+        center,
+        v3(0, -1, 0),
+        Angle64(0.2, DEGREE64),
+        3,
+        3,
+    )
+    var grazed = render_volume(
+        volume, across, transfer, ISOSURFACE, 0.5, 0.2, black, iso_value=1.5
+    )
+    assert_equal(Int(grazed.get_pixel(1, 1).r), 26)
+    # No sample reaches the iso value: the background shows.
+    var missed = render_volume(
+        volume,
+        along,
+        transfer,
+        ISOSURFACE,
+        0.5,
+        0.2,
+        Rgba(0, 0, 1, 1),
+        iso_value=9,
+    )
+    assert_equal(Int(missed.get_pixel(1, 1).b), 255)
+    # A crop that starts above the iso value stops at its first sample.
+    var cut = render_volume(
+        volume,
+        along,
+        transfer,
+        ISOSURFACE,
+        0.5,
+        0.2,
+        black,
+        v3(0, 0, 0.75),
+        v3(1, 1, 1),
+        iso_value=1.5,
+    )
+    assert_true(Int(cut.get_pixel(1, 1).r) > 0)
+    # A uniform volume has no gradient: the color is unshaded.
+    var flat = _uniform(2)
+    var plain = render_volume(
+        flat,
+        _look_along_z(flat, 3),
+        transfer,
+        ISOSURFACE,
+        0.5,
+        0.2,
+        black,
+        iso_value=1,
+    )
+    assert_equal(Int(plain.get_pixel(1, 1).r), 85)
+    with assert_raises(contains="iso value must be finite"):
+        _ = render_volume(
+            volume,
+            along,
+            transfer,
+            ISOSURFACE,
+            0.5,
+            0.2,
+            black,
+            iso_value=inf[DType.float64](),
+        )
+
+
 def test_render_refusals() raises:
     var volume = _uniform(1)
     var transfer = TransferFunction()
@@ -370,7 +476,7 @@ def test_render_refusals() raises:
     var camera = _look_along_z(volume, 2)
     var black = Rgba(0, 0, 0, 1)
     with assert_raises(contains="render mode"):
-        _ = render_volume(volume, camera, transfer, RenderMode(5), 1, 1, black)
+        _ = render_volume(volume, camera, transfer, RenderMode(3), 1, 1, black)
     with assert_raises(contains="ray step"):
         _ = render_volume(volume, camera, transfer, COMPOSITE, 0.01, 1, black)
     with assert_raises(contains="ray step"):
