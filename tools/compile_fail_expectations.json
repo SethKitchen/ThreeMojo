@@ -1012,6 +1012,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_dicom_node_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 19,
+        "message": "invalid call to 'text': value passed to 'node' cannot be converted from 'IntLiteral[0]' to 'DicomNode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_differential_type_is_not_a_bare_int.mojo": {
     "errors": [
       {

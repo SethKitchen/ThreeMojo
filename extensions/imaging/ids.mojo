@@ -237,6 +237,25 @@ def require_label(label: LabelId) raises:
 
 
 @fieldwise_init
+struct DicomNode(Equatable, ImplicitlyCopyable, Writable):
+    """A node of a `DicomTree`: its index. Node 0 is the data set, and
+    each item of a sequence is a node of its own."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if the index is not negative.
+
+        Returns:
+            Whether the value can index a node.
+        """
+        return self.value >= 0
+
+
+comptime DATA_SET = DicomNode(0)
+
+
+@fieldwise_init
 struct SlabMode(Equatable, ImplicitlyCopyable, Writable):
     """How a thick slab is projected onto its plane.
 

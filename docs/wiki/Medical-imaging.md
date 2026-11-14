@@ -12,9 +12,10 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 
 | Module | What it gives |
 |---|---|
-| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity` and `LabelId` |
+| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity`, `LabelId` and `DicomNode` |
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
-| `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL` and `MEGABECQUEREL` |
+| `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL`, `MEGABECQUEREL`, and `parse_dicom_tree` and `read_dicom_tree`, which give a `DicomTree` |
+| `rtstruct` | `RtStructure`, `parse_rt_structures`, `read_rt_structures` and `structure_labels` |
 | `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
@@ -163,6 +164,24 @@ print(uptake.maximum.to(GRAM_PER_CUBIC_CENTIMETER), uptake.peak.to(GRAM_PER_CUBI
 A series time before the injection time means that midnight passed, so a day is added. With `ADMIN`, the image is corrected to the injection, and `A` is `A0`. The factor refuses `NONE`, other units, and an absent or zero weight, dose, half-life or time.
 
 `suv_volume(volume, factor)` multiplies each value in Bq/mL by the factor, which gives SUV in g/mL. `suv_statistics(suv, map, label)` gives the largest SUV of a label and its mean. It also gives SUVpeak, the largest mean of a sphere of 1 mL centered on a voxel of the label. The sphere holds every voxel whose center is within its radius of 6.2 mm, in the label or not. PERCIST, the PET Response Criteria in Solid Tumors, uses SUVpeak. `peak_voxel` is the center of that sphere.
+
+## Read an RT Structure Set
+
+Radiotherapy plans and many research data sets give their regions as an RT Structure Set. A region, such as a tumor or an organ at risk, is a set of polygons on the slices of a CT. `read_rt_structures(path)` reads the regions, and `structure_labels` fills one region in a label map on the grid of a volume.
+
+```mojo
+var ct = stack_slices(slices)
+var regions = read_rt_structures("plan/rtstruct.dcm")
+for r in range(len(regions)):
+    var map = structure_labels(regions[r], ct, LabelId(1))
+    print(regions[r].name, map.voxels(LabelId(1)))
+```
+
+Each `RtStructure` has its ROI number, its name and its contours. Each point of a contour is in patient space, in meters. The reader keeps only the contours of the type `CLOSED_PLANAR`. It does not keep points, open contours or other types.
+
+`structure_labels(structure, volume, label)` puts each contour on the slice nearest to the mean of its points. A pixel is in the region when its center is inside an odd number of the region's contours on its slice. Thus a contour inside another contour makes a hole, as most planning systems draw one. A contour of fewer than three points, or on a slice outside the volume, adds nothing.
+
+`parse_dicom_tree(bytes)` and `read_dicom_tree(path)` read the elements of any Part 10 file into a `DicomTree`. Use them for a file that is not an image. The node `DATA_SET` is the data set, and each item of a sequence is a `DicomNode` of its own. `text`, `numbers`, `has` and `items` read a node by tag, such as `0x30060020`.
 
 ## Read and write NIfTI files
 
@@ -769,6 +788,10 @@ The tests check these results:
 - Two PET files that pydicom 3.0.1 wrote read with pydicom's elements. One is explicit VR with a sequence of undefined length, and one is implicit VR with a sequence of defined length. Their SUV factor matches the factor from pydicom's values to 1e-14. `assets/dicom/make_pet.py` makes them.
 - A time reads in each of its four forms, and a leap second is 86400 s. Empty elements are absent. Of two items or two dose sequences, the first counts. Thirteen malformed times and three times past a day are refused.
 - An injection at 23:50 and a series at 00:20 decay the dose for 1800 s. With `ADMIN`, the dose does not decay. On a grid of 4 by 4 by 3 mm voxels, SUVpeak matches a search of every voxel near each center of the label. This holds at the grid's edge too. On a flat SUV, the lowest voxel counts.
+- Two RT Structure Sets that pydicom 3.0.1 wrote read with pydicom's regions and points. One is explicit VR with sequences and items of undefined length. The other is implicit VR with defined lengths. `assets/dicom/make_rtstruct.py` makes them.
+- The fixture grid has 24 by 20 by 4 voxels of 2 by 2.5 by 3 mm. On it, each region fills the voxels that scikit-image 0.26's `points_in_poly` puts inside. The contours of a slice join by exclusive or. The test compares each voxel. The tumor has 68 voxels, the ring with a square hole has 87, and the marker point has none.
+- A square from 0 to 10 mm fills the 20 pixel centers inside it. Contours past the grid, beside it and of two points fill nothing.
+- A tree reads nested sequences, sequences of defined length in implicit VR, and empty elements. It steps over encapsulated pixel data. Of two elements or two sequences with one tag, the first counts. A bad preamble, a bad syntax, a stray or unknown delimiter, an item without an end and nesting past 64 levels are refused.
 - A 12-bit signed value masks and extends its sign: `0xF800` reads as -2048.
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
@@ -839,6 +862,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A PET time is not `HHMMSS.FFFFFF` or not a time of day, or a weight, dose or half-life is not a number | `parse_dicom`, `read_dicom` |
 | An SUV has values not in `BQML`, a decay correction not `START` or `ADMIN`, or no weight, dose, half-life or time | `suv_factor` |
 | An SUV factor is not positive and finite, or a label is bad, the background, empty or on another grid | `suv_volume`, `suv_statistics` |
+| A file is not an RT Structure Set, a region has not one ROI number, a contour refers to no region, or a closed contour has fewer than three points | `parse_rt_structures`, `read_rt_structures` |
+| A sequence holds an element that is not an item, an item has no end, the sequences nest more than 64 deep, or a node is not in the tree | `parse_dicom_tree`, `read_dicom_tree`, `DicomTree` |
+| A structure label is not valid or is the background | `structure_labels` |
 | A file is not single-file NIfTI-1, or its datatype, unit or axes are not supported | `parse_nifti`, `read_nifti` |
 | Slices disagree, share a position or are not evenly spaced | `stack_slices` |
 | An index is outside the grid | `get`, `set`, `region_grow`, `render_slice` |
@@ -875,6 +901,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The multi-frame reader reads the placement of each frame. It does not read the dimension index or the temporal position of a frame.
 - The reader does not read a file that has no preamble.
 - The writer does not write the PET elements. An SUV is by body weight only, not by lean body mass. The factor takes the series time as the start of the scan, and does not read the private scale factors of a vendor.
+- A structure set gives its closed planar contours only. A pixel is in a region by its center and the even-odd rule. A pixel that a contour cuts counts whole or not at all. A contour goes to its nearest slice. The reader does not check the CT series or the frame of reference that the structure set refers to.
 - The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
@@ -891,6 +918,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Wahl and others, "From RECIST to PERCIST: Evolving considerations for PET response criteria in solid tumors", Journal of Nuclear Medicine, 2009.
 - Boellaard and others, "FDG PET/CT: EANM procedure guidelines for tumour imaging: version 2.0", 2015.
 - NEMA PS3.3, "Information Object Definitions", sections C.8.9.1 and C.8.9.2, the PET Series and PET Isotope modules.
+- NEMA PS3.3, "Information Object Definitions", sections C.8.8.5 and C.8.8.6, the Structure Set and ROI Contour modules.
 - Zwanenburg and others, "The Image Biomarker Standardization Initiative", Radiology, 2020.
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.
 - NEMA PS3.3, "Information Object Definitions", sections C.7.6.2 and C.11.2.1.

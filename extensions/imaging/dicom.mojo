@@ -37,7 +37,9 @@ and 8 or 16 bits allocated.
 """
 
 from extensions.imaging.ids import (
+    DATA_SET,
     DEFLATED_EXPLICIT,
+    DicomNode,
     EXPLICIT_LITTLE,
     IMPLICIT_LITTLE,
     MONOCHROME1,
@@ -1075,3 +1077,264 @@ def read_dicom(path: String) raises -> DicomSlice:
     """
     var bytes = Path(path).read_bytes()
     return parse_dicom(bytes)
+
+
+struct DicomTree(Movable):
+    """Every element of a data set, with each item of a sequence a node.
+
+    `DATA_SET`, node 0, is the data set itself. Each item of a sequence
+    is a node of its own, whose elements and sequences the methods read
+    by tag. A tag is `(group << 16) | element`, such as `0x30060020`.
+    """
+
+    var bytes: List[UInt8]
+    """The bytes of the data set, expanded when the file is deflated."""
+    var explicit: Bool
+    """Whether the data set is explicit VR."""
+    var elements: List[Dict[Int, _Element]]
+    """The elements of each node, by tag."""
+    var children: List[Dict[Int, List[DicomNode]]]
+    """The item nodes of each sequence of each node, by tag."""
+
+    def __init__(out self, var bytes: List[UInt8], explicit: Bool):
+        """Create a tree of one empty node.
+
+        Args:
+            bytes: The bytes that the elements point into.
+            explicit: Whether the data set is explicit VR.
+        """
+        self.bytes = bytes^
+        self.explicit = explicit
+        self.elements = List[Dict[Int, _Element]]()
+        self.children = List[Dict[Int, List[DicomNode]]]()
+
+    def _require_node(self, node: DicomNode) raises:
+        if not node.is_valid() or node.value >= len(self.elements):
+            raise Error("A DICOM tree has no such node")
+
+    def has(self, node: DicomNode, tag: Int) raises -> Bool:
+        """Return whether a node holds an element or a sequence of a tag.
+
+        Args:
+            node: The node, such as `DATA_SET`.
+            tag: The tag.
+
+        Returns:
+            Whether it is there.
+
+        Raises:
+            Error: If the node is not in the tree.
+        """
+        self._require_node(node)
+        return (
+            tag in self.elements[node.value] or tag in self.children[node.value]
+        )
+
+    def text(self, node: DicomNode, tag: Int) raises -> String:
+        """Return the text of an element without its padding.
+
+        Args:
+            node: The node, such as `DATA_SET`.
+            tag: The tag.
+
+        Returns:
+            The text, or an empty string when the node has no such
+            element.
+
+        Raises:
+            Error: If the node is not in the tree.
+        """
+        self._require_node(node)
+        var element = self.elements[node.value].get(tag)
+        if element:
+            return _text(Span(self.bytes), element.value())
+        return String("")
+
+    def numbers(self, node: DicomNode, tag: Int) raises -> List[Float64]:
+        """Return every value of a decimal or integer string element.
+
+        Args:
+            node: The node, such as `DATA_SET`.
+            tag: The tag.
+
+        Returns:
+            The values, split at backslashes. None when the node has no
+            such element or it is empty.
+
+        Raises:
+            Error: If the node is not in the tree, or a value is not a
+                finite number.
+        """
+        var text = self.text(node, tag)
+        var out = List[Float64]()
+        if text == "":
+            return out^
+        # A text that is not empty splits in one part at least.
+        for part in text.split("\\"):  # pragma: no branch
+            out.append(_number(String(part), "value"))
+        return out^
+
+    def items(self, node: DicomNode, tag: Int) raises -> List[DicomNode]:
+        """Return the item nodes of a sequence of a node.
+
+        Args:
+            node: The node, such as `DATA_SET`.
+            tag: The tag of the sequence.
+
+        Returns:
+            The nodes of its items, in order. None when the node has no
+            such sequence.
+
+        Raises:
+            Error: If the node is not in the tree.
+        """
+        self._require_node(node)
+        var found = self.children[node.value].get(tag)
+        if found:
+            return found.value().copy()
+        return List[DicomNode]()
+
+
+def _is_sequence(
+    bytes: Span[UInt8, _], at: Int, element: _Element, explicit: Bool
+) -> Bool:
+    """Return whether the element that starts at `at` is a sequence."""
+    if element.undefined:
+        return True
+    if explicit:
+        return bytes[at + 4] == 0x53 and bytes[at + 5] == 0x51
+    # Implicit VR has no VR: a value that starts with an item is one.
+    return (
+        element.length >= 8
+        and _u16(bytes, element.start) == ITEM_GROUP
+        and _u16(bytes, element.start + 2) == ITEM
+    )
+
+
+def _tree_node(
+    bytes: Span[UInt8, _],
+    start: Int,
+    length: Int,
+    undefined: Bool,
+    explicit: Bool,
+    mut tree: DicomTree,
+    depth: Int,
+) raises -> Int:
+    """Read the elements from `start` into a new node of the tree, and
+    return the place after them."""
+    if depth > 64:
+        raise Error("A DICOM data set nests its sequences too deep")
+    var node = len(tree.elements)
+    tree.elements.append(Dict[Int, _Element]())
+    tree.children.append(Dict[Int, List[DicomNode]]())
+    var end = start + length
+    var place = start
+    while True:
+        if not undefined and place >= end:
+            return end
+        if undefined and place >= len(bytes):
+            raise Error("A DICOM item of undefined length has no end")
+        var element = _header(bytes, place, explicit)
+        if element.group == ITEM_GROUP:
+            if undefined and element.element == ITEM_END:
+                return element.start
+            raise Error("A DICOM item holds a stray delimiter")
+        var tag = (element.group << 16) | element.element
+        if tag == 0x7FE00010 and element.undefined:
+            place = _skip_sequence(bytes, element.start, explicit)
+            continue
+        if not _is_sequence(bytes, place, element, explicit):
+            if tag not in tree.elements[node]:
+                tree.elements[node][tag] = element
+            place = element.start + element.length
+            continue
+        var items = List[DicomNode]()
+        var at = element.start
+        var stop = element.start + element.length
+        while True:
+            if not element.undefined and at >= stop:
+                place = stop
+                break
+            var item = _header(bytes, at, explicit)
+            if item.group != ITEM_GROUP:
+                raise Error(
+                    "A DICOM sequence holds an element that is not an item"
+                )
+            if item.element == SEQUENCE_END:
+                place = item.start
+                break
+            if item.element != ITEM:
+                raise Error("A DICOM sequence holds an unknown delimiter")
+            items.append(DicomNode(len(tree.elements)))
+            at = _tree_node(
+                bytes,
+                item.start,
+                item.length,
+                item.undefined,
+                explicit,
+                tree,
+                depth + 1,
+            )
+            if not item.undefined:
+                at = item.start + item.length
+        if tag not in tree.children[node]:
+            tree.children[node][tag] = items^
+
+
+def parse_dicom_tree(bytes: Span[UInt8, _]) raises -> DicomTree:
+    """Read every element of a Part 10 file into a tree of nodes.
+
+    Use it for the files that are not images, such as an RT Structure
+    Set. The reader takes the four transfer syntaxes of `parse_dicom`.
+    It steps over encapsulated pixel data. Of two elements with one tag
+    in a node, the first counts.
+
+    Args:
+        bytes: The whole file.
+
+    Returns:
+        The tree. `DATA_SET` is the data set.
+
+    Raises:
+        Error: If the bytes are not a Part 10 file, the transfer syntax is
+            not one of the four, an element is short or malformed, or the
+            sequences nest more than 64 deep.
+    """
+    if len(bytes) < 132:
+        raise Error("A DICOM file starts with a 128-byte preamble and DICM")
+    if not bytes_match(bytes, 128, len(bytes), "DICM"):
+        raise Error("A DICOM file has DICM after its preamble")
+    var at = 132
+    var uid = String("")
+    while at + 2 <= len(bytes) and _u16(bytes, at) == 0x0002:
+        var meta = _header(bytes, at, True)
+        if meta.element == 0x0010:
+            uid = _text(bytes, meta)
+        at = meta.start + meta.length
+    var syntax = _syntax(uid)
+    var data: List[UInt8]
+    if syntax == DEFLATED_EXPLICIT:
+        data = inflate(bytes, at, MAX_INFLATED)
+    else:
+        data = List[UInt8](bytes[at:])
+    var explicit = syntax != IMPLICIT_LITTLE
+    var tree = DicomTree(data.copy(), explicit)
+    _ = _tree_node(Span(data), 0, len(data), False, explicit, tree, 0)
+    return tree^
+
+
+def read_dicom_tree(path: String) raises -> DicomTree:
+    """Read every element of a Part 10 file from disk into a tree.
+
+    Args:
+        path: The file.
+
+    Returns:
+        The tree. `DATA_SET` is the data set.
+
+    Raises:
+        Error: If the file cannot be read, or `parse_dicom_tree` refuses
+            it.
+    """
+    var bytes = Path(path).read_bytes()
+    return parse_dicom_tree(bytes)
