@@ -25,6 +25,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `contacts` | `distance_map`, `DistanceMap` and `map_image` |
 | `shape` | `molecular_shape` and `MolecularShape` |
 | `pdb_write` | `encode_pdb` |
+| `cif_write` | `encode_mmcif` and `cif_value` |
 | `dihedral` | `backbone_angles`, `BackboneAngles`, `dihedral`, `ramachandran_image`, `ramachandran_color` and `plot_pixel` |
 
 ## Read an mmCIF file
@@ -64,6 +65,27 @@ Path("model.pdb").write_text(encode_pdb(structure))
 The file holds `ATOM` and `HETATM` records in the fixed columns of the wwPDB format version 3.3, with `TER` after each chain and `END`. Two or more models are written between `MODEL` and `ENDMDL`. The helices and strands of the first model become `HELIX` and `SHEET` records. A name of up to four characters is the PDB id of a `HEADER`, and a longer name is a `TITLE`.
 
 Coordinates have three decimals in angstroms, and the occupancy and the B-factor two. A chain id must be one character. A name or a number that does not fit its columns is refused.
+
+## Write an mmCIF file
+
+`encode_mmcif(structure)` writes a structure as the text of an mmCIF file. Use it when a structure does not fit the PDB format. Examples are more than 99999 atoms, a chain id of two characters, and a long atom name.
+
+```mojo
+Path("model.cif").write_text(encode_mmcif(structure))
+```
+
+The file is one data block, `data_` and the structure's name, or `data_unnamed` for a structure without one. It holds these categories:
+
+| Category | What it holds |
+|---|---|
+| `_entry` | The structure's name as `id` |
+| `_struct_conf` | A `HELX_P` row for each run of helix residues of the first model |
+| `_struct_sheet_range` | A row for each run of strand residues of the first model, each in a sheet of its own |
+| `_atom_site` | One row per atom, with every column that `parse_mmcif` reads |
+
+A helix or a strand names its first and last residues by the label ids and the insertion codes. It names them again by the author ids, as wwPDB files do. Coordinates have three decimals in angstroms, and the occupancy and the B-factor two. A residue whose `seq_id` is zero, such as a water, gets the null `label_seq_id` `.`.
+
+`cif_value(text)` gives a value as a CIF token. A value that is empty, holds a blank, or starts like a name, a comment or a reserved word such as `loop_` goes in quotes. It goes in single quotes, or in double quotes when it holds a single quote and a blank. A value that holds a line end is refused.
 
 ## The structure
 
@@ -349,6 +371,7 @@ The tests check these results:
 - Two carbons 3 angstroms apart have an excluded surface with a neck of 1.313 angstroms, the analytic radius, to within 0.03 angstroms.
 - The distance transform is exact on a grid with one seed.
 - A ribbon of `n` residues has `(n - 1) samples + 1` rings, and every normal is a unit vector.
+- An ideal peptide and a file of two models with alternate locations and hetero atoms read back the same after `encode_mmcif`. So does a structure with a chain id of two characters, an atom name of six and a residue number of 123456. gemmi 0.7.5 read the written files with their models, atoms, helices, strands and insertion codes. Biopython 1.88 read the same atoms. That check is not part of the test suite.
 - An ideal peptide reads back the same after `encode_pdb`, to the 0.001 angstrom of three decimals. So does a file of two models with alternate locations and hetero atoms.
 - Torsions of four points have the IUPAC sign: 0 for cis, 180 for trans, and +90 when the far bond turns clockwise. An ideal peptide gives the phi and psi of each of its kinds, and an omega of 180 degrees, to 1e-6 degrees. A residue without an N, a CA or a C has no entry. A chain break of 10 angstroms ends the angles at each side. A peptide of 20 residues got up to 0.3 angstroms of noise per coordinate and was written as a PDB file. Its angles match Biopython 1.88 to within 1e-4 degrees. That check is not part of the test suite.
 - An ideal helix of 14 residues has 10 hydrogen bonds, each from residue `i + 4` to residue `i`. A strand has none.
@@ -364,6 +387,7 @@ Every function raises `Error` for input it cannot use.
 | Case | Functions |
 |---|---|
 | A quoted value or a text field has no end | `cif_tokens`, `parse_cif`, `parse_mmcif` |
+| A structure has no model or no atom, its name holds a blank, or a value holds a line end or both kinds of closing quote | `encode_mmcif`, `cif_value` |
 | No data block, a stray value, or a loop that does not fill its rows | `parse_cif`, `parse_mmcif` |
 | A needed column is missing, or a value is not a number | `parse_mmcif` |
 | An id names no entry | `require_atom`, `find_atom`, `bounds`, `ribbon_geometry` |
