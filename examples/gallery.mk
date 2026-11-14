@@ -267,7 +267,7 @@ $(call gallery,wijnendale-scan,wijnendale_scan)
 # slice with labels and a measurement.
 $(call gallery,medical-imaging,medical_imaging)
 # An ideal peptide of a helix, a loop and a strand: its cartoon ribbon, and
-# its van der Waals surface colored by element.
+# its excluded surface colored by element and by hydropathy.
 $(call gallery,molecule,molecule)
 # A steel cantilever of tetrahedra bent by a tip load, drawn 40 times its
 # deflection and colored by von Mises stress.

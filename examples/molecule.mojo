@@ -9,19 +9,24 @@
 
 The page is Molecular structures. The peptide builder places the backbone
 of 30 residues: a helix, a loop and a strand. The top panel is the
-ribbon, colored by secondary structure. The bottom panel is the solvent
+ribbon, colored by secondary structure. The middle panel is the solvent
 excluded surface for a water probe of 1.4 angstroms, colored by element.
-The program prints the solvent accessible area for the same probe. Ideal
-torsions do not fold a chain, so the strand does not pair.
+The bottom panel is the same surface colored by Kyte-Doolittle
+hydropathy: the leucines of the amphipathic helix make an orange stripe
+between its blue glutamates and lysines. The program prints the solvent
+accessible area for the same probe. Ideal torsions do not fold a chain,
+so the strand does not pair.
 """
 
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.chemistry.quantities import ANGSTROM
+from extensions.molecule.coloring import color_surface
 from extensions.molecule.ids import (
     BY_STRUCTURE,
     COIL,
+    COLOR_BY_HYDROPATHY,
     HELIX,
     ModelId,
     ResidueId,
@@ -87,6 +92,8 @@ def main() raises:
     var surface = excluded_surface(
         peptide, ModelId(0), probe, Length64(0.35, ANGSTROM)
     )
+    var oily = surface.clone()
+    color_surface(oily, peptide, ModelId(0), COLOR_BY_HYDROPATHY)
     var areas = accessible_areas(peptide, ModelId(0), probe, 300)
     var total = 0.0
     for area in areas:
@@ -124,15 +131,17 @@ def main() raises:
     )
     var eye_distance = Float32((fit + high.z - shift.z) * Float64(scale))
     var sheet = Framebuffer(
-        WIDTH, 2 * HEIGHT, List[UInt8](length=2 * WIDTH * HEIGHT * 4, fill=0)
+        WIDTH, 3 * HEIGHT, List[UInt8](length=3 * WIDTH * HEIGHT * 4, fill=0)
     )
-    for side in range(2):
+    for side in range(3):
         var renderer = gallery_renderer(WIDTH, HEIGHT, Color(14, 16, 24))
         var assets = Assets()
         var scene = Scene()
         var mesh_id = assets.geometries.add(ribbon.clone())
         if side == 1:
             mesh_id = assets.geometries.add(surface.clone())
+        elif side == 2:
+            mesh_id = assets.geometries.add(oily.clone())
         var material = assets.materials.add(
             Material(
                 Color(255, 255, 255),
