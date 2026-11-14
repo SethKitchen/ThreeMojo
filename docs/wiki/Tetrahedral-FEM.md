@@ -18,6 +18,7 @@
 | `summary` | `stress_summary`, `MaterialStress` and `strain_energy` |
 | `quality` | `element_quality`, `ElementQuality`, `mesh_quality` and `MeshQuality` |
 | `probe` | `locate_point`, `MeshPoint`, `sample_field`, `sample_temperature` and `sample_displacement` |
+| `dose` | `thermal_dose` and `dose_volume` |
 | `export` | `vtk_mesh`, `vtk_result`, `vtk_modes`, `vtk_temperatures`, `vtk_heat`, `vtk_record`, `vtk_series` and `series_names` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
@@ -303,6 +304,20 @@ The bioheat example models half of the block, so the needle supplies twice the t
 
 `temperature_geometry(mesh, result, low, high)` colors the outer surface by the temperature of each node, from blue at `low` to red at `high`. `vtk_temperatures(mesh, result)` writes the temperatures for ParaView.
 
+### Thermal dose
+
+`thermal_dose(result)` gives the thermal dose of each node over the records of `solve_transient`, in cumulative equivalent minutes at 43 C (CEM43). `dose_volume(mesh, doses, threshold)` gives the volume of the elements whose corner nodes all reach a dose. Use them for the ablated volume around a heated needle, at the common threshold of 240 minutes.
+
+```mojo
+var history = solve_transient(problem, capacities, start, Duration64(1, SECOND), 600, 5, 1e-10, 2000)
+var doses = thermal_dose(history)
+var ablated = dose_volume(problem.mesh, doses, Duration64(240, MINUTE))
+```
+
+Heat kills tissue by the time that it spends hot, and above 43 C each degree doubles the rate. The method of Sapareto and Dewey sums `R^(43 - T) dt` over the intervals, with `T` in Celsius and `dt` in minutes. `R` is 0.5 at or above 43 C, and 0.25 below. Ten minutes at 44 C give 20 minutes, and ten minutes at 42 C give 2.5.
+
+Each interval between two records counts at the mean of its two temperatures. This is exact for a steady temperature. Record often enough that the temperature changes little within one interval.
+
 ## Sample a field at a point
 
 `sample_temperature(mesh, result, point)` gives the temperature at a point inside the mesh, such as the place of a thermocouple. `sample_displacement(mesh, result, point)` gives the displacement there, in meters.
@@ -410,6 +425,7 @@ The tests check these results:
 - A pulled bar of 200 GPa, 2 m long and 1 m square, stretched 2 mm, stores 200 kJ, for both element orders. Its apparent stiffness `2 U / d^2` is `E A / L`, 100 GN/m.
 - Given stresses on a box of two cubes give each material's count, volume, peak, mean and volume above a threshold exactly. A material without elements has no row. A pulled bar at 200 MPa has that stress as its peak and its mean, with its whole volume above 199 MPa.
 - A linear field sampled at 12 points between the nodes of a box is exact on both orders. A quadratic field is exact on ten-node elements. At a node, the sample is the node's value. A point on a face lies in two elements, the lower one counts, and both give one value. Steady conduction from 300 K to 400 K samples to its straight line at every point.
+- Ten minutes at 43, 44, 42 and 37 C give doses of 10, 20 and 2.5 minutes, and `10 / 4^6`. An interval from 42 to 44 C counts at 43 C. A block held at 50 C through `solve_transient` for two minutes has a dose of 256 minutes at every node. Its dosed volume is the whole block, or one cube when only that cube's nodes reach the threshold.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 - A record of a history is the temperature file of its values, with its time in the title. A series file lists each name with its time, and names get a fifth digit past 10000 records.
 
@@ -449,6 +465,7 @@ Every function raises `Error` for input it cannot use.
 | A result is not for its mesh | `stress_geometry` |
 | A result is not for its mesh, or a stress threshold is negative or not finite | `stress_summary`, `strain_energy` |
 | A mesh has no element, or an element id names no element | `mesh_quality`, `element_quality` |
+| A dose has fewer than two records, times that do not rise, records of other sizes, doses that do not fit the mesh, or a bad threshold | `thermal_dose`, `dose_volume` |
 | No element holds a point, or a field or a mesh point does not fit the mesh | `locate_point`, `sample_field`, `sample_temperature`, `sample_displacement` |
 | A result is not for its problem, or an element, a node or an axis is out of range | `held_heat`, `heat_flux`, `HeatRates`, `HeatFluxes` |
 | The capacities or the start do not fit the problem, a step or a count is out of range, or a capacity kind is not valid | `solve_transient`, `ThermalCapacity` |
@@ -463,6 +480,7 @@ Every function raises `Error` for input it cannot use.
 - A consistent capacity can undershoot near a sudden change, when the step is short against `h^2 / alpha`. Use `LUMPED_CAPACITY` or a finer mesh. A lumped capacity keeps the bounds on four-node elements without obtuse angles only.
 - The solver is iterative. A large or badly conditioned problem needs a large budget.
 - A voxel mesh has stair steps on curved surfaces. The stress at a stair step is not the stress of the smooth shape.
+- A thermal dose of 240 minutes is a threshold from research, and tissues differ. A dosed volume is not a prediction of a treatment.
 
 ## References
 
@@ -475,3 +493,4 @@ Every function raises `Error` for input it cannot use.
 - Bathe, "Finite Element Procedures", 2nd edition, 2014, sections 10.2 and 11.6.
 - Hinton, Rock and Zienkiewicz, "A note on mass lumping and related processes in the finite element method", 1976.
 - Pennes, "Analysis of tissue and arterial blood temperatures in the resting human forearm", 1948.
+- Sapareto and Dewey, "Thermal dose determination in cancer therapy", International Journal of Radiation Oncology, Biology, Physics, 1984.
