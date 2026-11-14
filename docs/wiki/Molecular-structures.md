@@ -517,6 +517,7 @@ Every function raises `Error` for input it cannot use.
 - The PDB reader does not read `CONECT`, `ANISOU` or `SEQRES` records, or the hybrid-36 numbers of very large files.
 - The reader keeps the first data block only. It does not read anisotropic displacements, bonds or the chemical component dictionary.
 - The readers do not infer secondary structure themselves. Call `assign_secondary` for a file without helix and strand records.
+- Disulfide bonds and salt bridges are found by distance only. A salt bridge does not check the angle of its atoms, and leaves out histidine.
 - `assign_secondary` does not report 3-10 or pi helices, turns, bends, isolated bridges or beta bulges.
 - Ribbons need CA atoms. Nucleic acids have no ribbon.
 - An ensemble is fitted on one reference model. The fit is not iterated to the mean of the models.
