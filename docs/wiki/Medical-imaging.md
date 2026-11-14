@@ -12,7 +12,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 
 | Module | What it gives |
 |---|---|
-| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode` and `LabelId` |
+| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity` and `LabelId` |
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
 | `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, and `decode_rle_frame` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
@@ -243,7 +243,22 @@ A `LabelMap` holds one label for each voxel of a volume. Label zero is the backg
 | `region_grow(volume, i, j, k, low, high, label)` | Each voxel in the range that connects to the seed |
 | `keep_largest(map, label)` | Only the largest connected piece of the label |
 
-Two voxels connect when they share a face. Of two pieces of one size, `keep_largest` keeps the piece with the lowest voxel index.
+By default two voxels connect when they share a face. Of two pieces of one size, `keep_largest` keeps the piece with the lowest voxel index.
+
+The three functions that connect voxels take a `Connectivity` as their last argument:
+
+| Connectivity | Neighbors of a voxel |
+|---|---|
+| `FACES`, the default | The 6 that share a face |
+| `EDGES` | Also the 12 that share an edge, 18 in all |
+| `CORNERS` | Also the 8 that share a corner, 26 in all |
+
+A thin vessel that runs at a slant through the grid holds together only with `EDGES` or `CORNERS`. scipy's `ndimage.label` calls these the structures of rank 1, 2 and 3.
+
+```mojo
+var vessel = keep_largest(map, LabelId(1), CORNERS)
+var grown = region_grow(volume, i, j, k, 150, 600, LabelId(2), CORNERS)
+```
 
 `label_pieces(map, label)` numbers every connected piece of a label by size, to count the lesions or stones of a segmentation. Its `map` gives label 1 to the largest piece, 2 to the next, and on up to 255. Its `sizes` and `volumes` list every piece from the largest, also past the 255th.
 
@@ -478,6 +493,7 @@ The tests check these results:
 - A Gaussian keeps a linear ramp away from the edges. Its response to one voxel is the product of its three kernels, and sums to one.
 - A median removes a hot and a cold voxel and keeps the edge between two regions.
 - On two overlapping distributions, the Otsu edge is the edge with the least variance within the classes, found by brute force over the voxels.
+- Two voxels that share an edge are one piece with `EDGES` and `CORNERS`, and two with `FACES`. Two that share a corner only are one piece with `CORNERS`. A diagonal line grows from its end with `CORNERS`, and not with `FACES`. On a random grid of 30 by 28 by 26 voxels, the pieces of each connectivity match scipy's `ndimage.label` in count and size. That check is not part of the test suite.
 - Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
 - A box of 10 by 6 by 8 mm has voxels of 1 by 1 by 2 mm. Its semi-axes are `sqrt(5 / 12)` times its sides, to 1e-9, along the grid axes. Its axes follow the patient frame of the volume. An ellipsoid of 20, 12 and 8 mm turned 30 degrees gives its semi-axes within 2 percent, and its long axis within one degree. Each slice of the box has its area exactly.
@@ -510,6 +526,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | Slices disagree, share a position or are not evenly spaced | `stack_slices` |
 | An index is outside the grid | `get`, `set`, `region_grow`, `render_slice` |
 | A label is not from 0 to 255, or is the background where a region is needed | Label functions |
+| A connectivity is not one of the three | `region_grow`, `keep_largest`, `label_pieces` |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels` |
@@ -529,7 +546,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
 - Rendering uses the volume frame. It does not apply the patient orientation.
-- Connectivity is by faces only. Edge and corner neighbors do not connect.
+- The connectivity of `label_surface`, the surfaces and the morphology is by faces. The `Connectivity` choice applies to the pieces and to region growing only.
 - The colors of a transfer function are display values. They are not linear light.
 
 ## References

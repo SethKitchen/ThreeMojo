@@ -8,8 +8,11 @@
 Label zero is the background. A label map has the grid and the spacing
 of the volume it was made for. `threshold` labels the voxels in a range
 of values. `region_grow` labels the voxels in a range that connect to a
-seed. `keep_largest` keeps the largest connected piece of a label. Two
-voxels connect when they share a face, so each voxel has six neighbors.
+seed. `keep_largest` keeps the largest connected piece of a label, and
+`label_pieces` numbers the pieces. By default two voxels connect when
+they share a face, so each voxel has six neighbors. A `Connectivity` of
+`EDGES` or `CORNERS` also connects voxels that share an edge or a
+corner, 18 or 26 neighbors in all.
 
 `label_surface` returns the boundary of a label as a triangle mesh in
 the volume frame, in meters. The surface passes halfway between a voxel
@@ -20,8 +23,12 @@ from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.skeleton.isosurface import SampleGrid, mesh_samples
 from extensions.imaging.ids import (
     BACKGROUND,
+    CORNERS,
+    Connectivity,
+    FACES,
     LabelId,
     MAX_LABEL,
+    require_connectivity,
     require_label,
 )
 from extensions.imaging.image_volume import ImageVolume
@@ -216,12 +223,36 @@ def _require_foreground(label: LabelId) raises:
         raise Error("This operation needs a label other than the background")
 
 
-def _neighbors(nx: Int, ny: Int, nz: Int, index: Int) -> List[Int]:
-    """Return the indexes of the face neighbors of a voxel."""
+def _neighbors(
+    nx: Int, ny: Int, nz: Int, index: Int, connectivity: Connectivity
+) -> List[Int]:
+    """Return the indexes of the neighbors of a voxel inside the grid."""
     var i = index % nx
     var j = (index // nx) % ny
     var k = index // (nx * ny)
     var out = List[Int]()
+    if connectivity != FACES:
+        # An edge neighbor moves along two axes, and a corner along three.
+        var most = 3 if connectivity == CORNERS else 2
+        for dk in range(-1, 2):  # pragma: no branch
+            for dj in range(-1, 2):  # pragma: no branch
+                for di in range(-1, 2):  # pragma: no branch
+                    var moves = abs(di) + abs(dj) + abs(dk)
+                    if moves == 0 or moves > most:
+                        continue
+                    var x = i + di
+                    var y = j + dj
+                    var z = k + dk
+                    if (
+                        x >= 0
+                        and x < nx
+                        and y >= 0
+                        and y < ny
+                        and z >= 0
+                        and z < nz
+                    ):
+                        out.append(x + nx * (y + ny * z))
+        return out^
     if i > 0:
         out.append(index - 1)
     if i + 1 < nx:
@@ -245,6 +276,7 @@ def region_grow(
     low: Float64,
     high: Float64,
     label: LabelId,
+    connectivity: Connectivity = FACES,
 ) raises -> LabelMap:
     """Return a map of the voxels in a range that connect to a seed.
 
@@ -256,17 +288,20 @@ def region_grow(
         low: The lowest value to grow into.
         high: The highest value to grow into.
         label: The label. Not the background.
+        connectivity: Which neighbors connect: `FACES`, the default,
+            `EDGES` or `CORNERS`.
 
     Returns:
         The map. Every voxel outside the grown region is background.
 
     Raises:
         Error: If the seed is outside the volume or its value is outside
-            the range, the range is not finite or falls, or the label is
-            not valid or is the background.
+            the range, the range is not finite or falls, the label is not
+            valid or is the background, or the connectivity is not valid.
     """
     _require_range(low, high)
     _require_foreground(label)
+    require_connectivity(connectivity)
     if not volume.contains(i, j, k):
         raise Error("The seed is outside the volume")
     var seed = volume.index(i, j, k)
@@ -282,7 +317,9 @@ def region_grow(
     while head < len(queue):
         var current = queue[head]
         head += 1
-        for next in _neighbors(volume.nx, volume.ny, volume.nz, current):
+        for next in _neighbors(
+            volume.nx, volume.ny, volume.nz, current, connectivity
+        ):
             if map.labels[next] == mark:
                 continue
             var value = Float64(volume.values[next])
@@ -292,7 +329,9 @@ def region_grow(
     return map^
 
 
-def _pieces(map: LabelMap, mark: UInt8) -> Tuple[List[Int], List[Int]]:
+def _pieces(
+    map: LabelMap, mark: UInt8, connectivity: Connectivity
+) -> Tuple[List[Int], List[Int]]:
     """Return the piece of each voxel of a label, -1 elsewhere, and the
     voxel count of each piece, in the order of their first voxels."""
     var count = map.count()
@@ -309,7 +348,9 @@ def _pieces(map: LabelMap, mark: UInt8) -> Tuple[List[Int], List[Int]]:
         while head < len(queue):
             var current = queue[head]
             head += 1
-            for next in _neighbors(map.nx, map.ny, map.nz, current):
+            for next in _neighbors(
+                map.nx, map.ny, map.nz, current, connectivity
+            ):
                 if map.labels[next] == mark and piece[next] < 0:
                     piece[next] = pieces
                     queue.append(next)
@@ -317,7 +358,9 @@ def _pieces(map: LabelMap, mark: UInt8) -> Tuple[List[Int], List[Int]]:
     return (piece^, sizes^)
 
 
-def keep_largest(map: LabelMap, label: LabelId) raises -> LabelMap:
+def keep_largest(
+    map: LabelMap, label: LabelId, connectivity: Connectivity = FACES
+) raises -> LabelMap:
     """Return a copy that keeps only the largest connected piece of a label.
 
     The other pieces of the label become background. Of two pieces of one
@@ -327,17 +370,20 @@ def keep_largest(map: LabelMap, label: LabelId) raises -> LabelMap:
     Args:
         map: The label map.
         label: The label. Not the background.
+        connectivity: Which neighbors connect: `FACES`, the default,
+            `EDGES` or `CORNERS`.
 
     Returns:
         The new map.
 
     Raises:
         Error: If the label is not valid, is the background, or has no
-            voxels.
+            voxels, or the connectivity is not valid.
     """
     _require_foreground(label)
+    require_connectivity(connectivity)
     var mark = UInt8(label.value)
-    var found = _pieces(map, mark)
+    var found = _pieces(map, mark, connectivity)
     ref piece = found[0]
     ref sizes = found[1]
     if len(sizes) == 0:
@@ -375,10 +421,13 @@ struct LabelPieces(Movable):
         self.volumes = List[Volume64]()
 
 
-def label_pieces(map: LabelMap, label: LabelId) raises -> LabelPieces:
+def label_pieces(
+    map: LabelMap, label: LabelId, connectivity: Connectivity = FACES
+) raises -> LabelPieces:
     """Number the connected pieces of a label by size.
 
-    Two voxels connect when they share a face. Of two pieces of one size,
+    By default two voxels connect when they share a face. Of two pieces of
+    one size,
     the piece with the lowest voxel index comes first. Only the 255
     largest pieces get a label in the map, but `sizes` and `volumes` list
     every piece.
@@ -386,16 +435,19 @@ def label_pieces(map: LabelMap, label: LabelId) raises -> LabelPieces:
     Args:
         map: The label map.
         label: The label. Not the background.
+        connectivity: Which neighbors connect: `FACES`, the default,
+            `EDGES` or `CORNERS`.
 
     Returns:
         The map of the pieces, and the size and volume of each piece.
 
     Raises:
         Error: If the label is not valid, is the background, or has no
-            voxels.
+            voxels, or the connectivity is not valid.
     """
     _require_foreground(label)
-    var found = _pieces(map, UInt8(label.value))
+    require_connectivity(connectivity)
+    var found = _pieces(map, UInt8(label.value), connectivity)
     ref piece = found[0]
     ref sizes = found[1]
     if len(sizes) == 0:

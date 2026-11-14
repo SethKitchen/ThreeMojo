@@ -271,3 +271,53 @@ def require_slab_mode(mode: SlabMode) raises:
         Error: If `mode` is not valid.
     """
     require_valid(mode.is_valid(), "A slab mode must be from 0 to 2")
+
+
+@fieldwise_init
+struct Connectivity(Equatable, ImplicitlyCopyable, Writable):
+    """Which neighbors of a voxel connect to it.
+
+    `FACES` connects the 6 voxels that share a face. `EDGES` also connects
+    the 12 that share an edge, 18 in all. `CORNERS` also connects the 8
+    that share a corner, 26 in all. A thin vessel that runs at a slant
+    through the grid holds together only with `EDGES` or `CORNERS`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the three connectivities.
+
+        Returns:
+            Whether the value is from zero to two.
+        """
+        return ordinal_valid(self.value, 2)
+
+    def neighbors(self) -> Int:
+        """Return the number of neighbors of a voxel inside the grid.
+
+        Returns:
+            6, 18 or 26.
+        """
+        if self.value == 2:
+            return 26
+        if self.value == 1:
+            return 18
+        return 6
+
+
+comptime FACES = Connectivity(0)
+comptime EDGES = Connectivity(1)
+comptime CORNERS = Connectivity(2)
+
+
+def require_connectivity(connectivity: Connectivity) raises:
+    """Refuse a connectivity that is not one of the three.
+
+    Args:
+        connectivity: The connectivity to check.
+
+    Raises:
+        Error: If `connectivity` is not valid.
+    """
+    require_valid(connectivity.is_valid(), "A connectivity must be from 0 to 2")
