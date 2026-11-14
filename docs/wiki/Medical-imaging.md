@@ -24,7 +24,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest`, `label_pieces`, `LabelPieces` and `label_surface` |
 | `measure` | `label_statistics`, `voxel_distance`, `line_profile`, `LineProfile` and `full_width_half_maximum` |
 | `shape` | `label_shape`, `LabelShape` and `slice_areas` |
-| `compare` | `compare_labels`, `LabelComparison`, `surface_voxels` and `percentile` |
+| `compare` | `compare_labels`, `LabelComparison`, `label_overlaps`, `LabelOverlap`, `mean_dice`, `surface_voxels` and `percentile` |
 | `roi` | `circle_statistics` and `RegionStatistics` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
@@ -425,6 +425,17 @@ The percentile has linear interpolation between ranks, as numpy's default. These
 
 The two maps can be one map, to compare two of its labels. They must have the same grid and spacing.
 
+`label_overlaps(first, second)` compares two maps of many labels at once, such as two segmentations of several organs. It lists every label other than the background that either map holds, in label order. Each `LabelOverlap` holds the voxel counts of the label in each map, the shared voxels, the Dice coefficient and the Jaccard index. `mean_dice(table)` gives the mean Dice over the labels, each with one weight.
+
+```mojo
+var table = label_overlaps(reference, automatic)
+for entry in table:
+    print(entry.label.value, entry.dice)
+print("mean Dice", mean_dice(table))
+```
+
+A label that only one map holds has a Dice of 0. The table counts voxels only. Use `compare_labels` for the surface distances of a label.
+
 ## Measure thickness
 
 Bone research measures the thickness of cortical walls and of trabeculae. `local_thickness(map, label)` gives each voxel of a label the diameter of the largest sphere that holds the voxel and fits in the label. This is the method of Hildebrand and Rüegsegger.
@@ -556,6 +567,7 @@ The tests check these results:
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
 - A circle of 2 pixels holds the 13 lattice points of its disc. On a ramp, a disc gives the value at its center and the sample deviation of its pixels. With pixels 0.5 mm wide, a circle of 1 mm holds 7 pixels. A circle at a corner keeps the 6 pixels of the grid.
 - A box of 10 by 6 by 8 mm has voxels of 1 by 1 by 2 mm. Its semi-axes are `sqrt(5 / 12)` times its sides, to 1e-9, along the grid axes. Its axes follow the patient frame of the volume. An ellipsoid of 20, 12 and 8 mm turned 30 degrees gives its semi-axes within 2 percent, and its long axis within one degree. Each slice of the box has its area exactly.
+- A table of four labels gives each label's counts, Dice and Jaccard. The Dice is 1 for a match, 0.5 for half, and 0 for a label in one map only. Its overlap of a label agrees with `compare_labels`.
 - A label against itself has a Dice coefficient of 1 and no surface distance. Two boxes that overlap by half have a Dice of 0.5 and a Jaccard of 1/3. Their Hausdorff distance is their shift, and their HD95 and ASSD match a search of every pair. Two ellipsoids in voxels of 0.7, 0.9 and 1.5 mm match MedPy 0.5 to 1e-7 mm in every measure. That check is not part of the test suite.
 - A voxel dilated by 2 mm becomes the 33 lattice points of the ball, and 15 with slices 2 mm apart. A cube of 7 voxels eroded by 1 mm is a cube of 5. Opening removes a spike, and closing fills a hole.
 - The distance to the edge of an irregular label on an anisotropic grid matches a brute-force search. A slab six voxels thick is six voxels thick. With 2 mm slices and 0.5 mm pixels, a label is limited by its narrower side.
@@ -592,7 +604,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A path has fewer than two points or two equal points in a row, or a pass count or a spacing is out of range | `smooth_path`, `resample_path` |
 | A path has fewer than two points or two equal points in a row, `up` is zero or along a segment, or a size is out of range | `curved_reformat` |
 | A circle has a bad axis, slice, center or radius, or holds no pixel center | `circle_statistics` |
-| Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels` |
+| Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels`, `label_overlaps` |
+| A table of overlaps is empty | `mean_dice` |
 | A shape or a slice area needs the background, an empty label, another grid or a bad axis | `label_shape`, `slice_areas` |
 | A morphology label is the background, or its radius is negative or not finite | Morphology functions |
 | A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface`, `label_stl` |

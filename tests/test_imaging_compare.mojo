@@ -6,7 +6,10 @@
 """Overlap and surface distances of two segmentations."""
 
 from extensions.imaging.compare import (
+    LabelOverlap,
     compare_labels,
+    label_overlaps,
+    mean_dice,
     percentile,
     surface_voxels,
 )
@@ -186,6 +189,47 @@ def test_percentiles() raises:
         _ = percentile(values, 101)
     with assert_raises(contains="from 0 to 100"):
         _ = percentile(values, nan[DType.float64]())
+
+
+def test_a_table_of_many_labels() raises:
+    # Label 1 matches, label 2 overlaps by half, label 3 is only in the
+    # first map, and label 5 only in the second.
+    var first = _map(12, 8, 8, 1.0)
+    var second = _map(12, 8, 8, 1.0)
+    _fill(first, 1, 0, 2, 0, 2, 0, 2)
+    _fill(second, 1, 0, 2, 0, 2, 0, 2)
+    _fill(first, 2, 4, 8, 0, 2, 0, 2)
+    _fill(second, 2, 6, 10, 0, 2, 0, 2)
+    _fill(first, 3, 0, 1, 5, 6, 5, 6)
+    _fill(second, 5, 11, 12, 7, 8, 7, 8)
+    var table = label_overlaps(first, second)
+    assert_equal(len(table), 4)
+    assert_equal(table[0].label.value, 1)
+    assert_equal(table[0].dice, 1.0)
+    assert_equal(table[1].label.value, 2)
+    assert_equal(table[1].first_voxels, 16)
+    assert_equal(table[1].shared_voxels, 8)
+    assert_almost_equal(table[1].dice, 0.5)
+    assert_almost_equal(table[1].jaccard, 1.0 / 3.0)
+    assert_equal(table[2].label.value, 3)
+    assert_equal(table[2].second_voxels, 0)
+    assert_equal(table[2].dice, 0.0)
+    assert_equal(table[3].label.value, 5)
+    assert_equal(table[3].first_voxels, 0)
+    assert_almost_equal(mean_dice(table), 1.5 / 4.0)
+    # Each entry agrees with the comparison of its label alone.
+    var alone = compare_labels(first, LabelId(2), second, LabelId(2))
+    assert_almost_equal(table[1].dice, alone.dice)
+    # Two empty maps have no label to list.
+    assert_equal(len(label_overlaps(_map(4, 4, 4, 1.0), _map(4, 4, 4, 1.0))), 0)
+    with assert_raises(contains="at least one label"):
+        _ = mean_dice(List[LabelOverlap]())
+    with assert_raises(contains="different grids"):
+        _ = label_overlaps(first, _map(12, 8, 9, 1.0))
+    with assert_raises(contains="different grids"):
+        _ = label_overlaps(first, _map(11, 8, 8, 1.0))
+    with assert_raises(contains="different grids"):
+        _ = label_overlaps(first, _map(12, 9, 8, 1.0))
 
 
 def test_refusals() raises:

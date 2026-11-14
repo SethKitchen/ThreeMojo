@@ -23,6 +23,11 @@ ranks. The average symmetric surface distance (ASSD) is their mean.
 These are the definitions of the MedPy library. Some tools take the
 larger of the two directed 95th percentiles instead, which is never
 less.
+
+`label_overlaps` compares two maps of many labels at once, such as two
+segmentations of several organs. It gives the voxel counts, the Dice
+coefficient and the Jaccard index of every label that either map holds,
+in one pass over the grid.
 """
 
 from extensions.imaging.ids import BACKGROUND, LabelId, require_label
@@ -248,3 +253,94 @@ def compare_labels(
     out.hausdorff_95 = Length64(percentile(both, 95), METER)
     out.mean_surface_distance = Length64(sum / Float64(len(both)), METER)
     return out^
+
+
+@fieldwise_init
+struct LabelOverlap(Copyable, Movable):
+    """How one label agrees between two maps."""
+
+    var label: LabelId
+    """The label."""
+    var first_voxels: Int
+    """Its voxels in the first map."""
+    var second_voxels: Int
+    """Its voxels in the second map."""
+    var shared_voxels: Int
+    """The voxels that hold it in both."""
+    var dice: Float64
+    """`2 shared / (first + second)`, from 0 to 1."""
+    var jaccard: Float64
+    """`shared / (first + second - shared)`, from 0 to 1."""
+
+
+def label_overlaps(
+    first: LabelMap, second: LabelMap
+) raises -> List[LabelOverlap]:
+    """Return the overlap of every label of two maps on one grid.
+
+    Args:
+        first: The first map, such as the reference.
+        second: The second map, on the same grid.
+
+    Returns:
+        One entry for each label other than the background that either
+        map holds, in label order.
+
+    Raises:
+        Error: If the two grids differ.
+    """
+    var same = (
+        first.nx == second.nx
+        and first.ny == second.ny
+        and first.nz == second.nz
+    )
+    if not same:
+        raise Error("The two label maps have different grids")
+    var a = List[Int](length=256, fill=0)
+    var b = List[Int](length=256, fill=0)
+    var both = List[Int](length=256, fill=0)
+    # A grid has at least one voxel.
+    for index in range(first.count()):  # pragma: no branch
+        var x = Int(first.labels[index])
+        var y = Int(second.labels[index])
+        a[x] += 1
+        b[y] += 1
+        if x == y:
+            both[x] += 1
+    var out = List[LabelOverlap]()
+    for label in range(1, 256):
+        var total = a[label] + b[label]
+        if total == 0:
+            continue
+        var shared = Float64(both[label])
+        out.append(
+            LabelOverlap(
+                LabelId(label),
+                a[label],
+                b[label],
+                both[label],
+                2.0 * shared / Float64(total),
+                shared / (Float64(total) - shared),
+            )
+        )
+    return out^
+
+
+def mean_dice(overlaps: List[LabelOverlap]) raises -> Float64:
+    """Return the mean Dice coefficient of a table of overlaps.
+
+    Args:
+        overlaps: The table, such as `label_overlaps` gives.
+
+    Returns:
+        The mean over the labels, each with one weight.
+
+    Raises:
+        Error: If the table is empty.
+    """
+    if len(overlaps) == 0:
+        raise Error("A mean Dice needs at least one label")
+    var sum = 0.0
+    for entry in overlaps:  # pragma: no branch
+        sum += entry.dice
+    return sum / Float64(len(overlaps))
