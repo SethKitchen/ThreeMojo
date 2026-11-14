@@ -1150,6 +1150,30 @@ struct DicomTree(Movable):
             return _text(Span(self.bytes), element.value())
         return String("")
 
+    def data(self, node: DicomNode, tag: Int) raises -> List[UInt8]:
+        """Return the bytes of an element's value, as the file holds them.
+
+        Use it for a binary element, such as a `US` value or native pixel
+        data.
+
+        Args:
+            node: The node, such as `DATA_SET`.
+            tag: The tag.
+
+        Returns:
+            The bytes, little endian. None when the node has no such
+            element.
+
+        Raises:
+            Error: If the node is not in the tree.
+        """
+        self._require_node(node)
+        var element = self.elements[node.value].get(tag)
+        if element:
+            var e = element.value()
+            return List[UInt8](self.bytes[e.start : e.start + e.length])
+        return List[UInt8]()
+
     def numbers(self, node: DicomNode, tag: Int) raises -> List[Float64]:
         """Return every value of a decimal or integer string element.
 

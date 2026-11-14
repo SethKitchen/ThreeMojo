@@ -16,6 +16,8 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
 | `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL`, `MEGABECQUEREL`, and `parse_dicom_tree` and `read_dicom_tree`, which give a `DicomTree` |
 | `rtstruct` | `RtStructure`, `parse_rt_structures`, `read_rt_structures` and `structure_labels` |
+| `rtdose` | `RtDose`, `parse_rt_dose`, `read_rt_dose`, `AbsorbedDose64`, `GRAY` and `CENTIGRAY` |
+| `dvh` | `DoseVolumeHistogram`, `dose_volume_histogram` and `CUBIC_CENTIMETER64` |
 | `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
@@ -182,6 +184,50 @@ Each `RtStructure` has its ROI number, its name and its contours. Each point of 
 `structure_labels(structure, volume, label)` puts each contour on the slice nearest to the mean of its points. A pixel is in the region when its center is inside an odd number of the region's contours on its slice. Thus a contour inside another contour makes a hole, as most planning systems draw one. A contour of fewer than three points, or on a slice outside the volume, adds nothing.
 
 `parse_dicom_tree(bytes)` and `read_dicom_tree(path)` read the elements of any Part 10 file into a `DicomTree`. Use them for a file that is not an image. The node `DATA_SET` is the data set, and each item of a sequence is a `DicomNode` of its own. `text`, `numbers`, `has` and `items` read a node by tag, such as `0x30060020`.
+
+## Read an RT Dose
+
+A radiotherapy plan gives its dose as an RT Dose file. `read_rt_dose(path)` reads the file into an `RtDose`. Its `dose` is an `ImageVolume` whose values are grays.
+
+```mojo
+var plan = read_rt_dose("plan/rtdose.dcm")
+print(plan.dose_type, plan.summation, plan.dose.value_range()[1])
+```
+
+The reader multiplies each stored value by the Dose Grid Scaling. It takes 16-bit and 32-bit values, unsigned or signed. It refuses a dose in `RELATIVE` units and encapsulated pixel data.
+
+The frames are along the normal of the rows and columns, at the offsets of the Grid Frame Offset Vector. When the first offset is 0, each offset is the distance of its frame from the image position. Otherwise each offset is the z of its frame, and the frames must be axial. The frames must be evenly spaced. Frames that go down along the normal are turned over, so `k` rises along the normal, as in a stack.
+
+## Measure a dose-volume histogram
+
+A dose-volume histogram (DVH) gives, for each dose, the part of a region that gets that dose or more. `dose_volume_histogram(dose, map, label)` keeps the dose of each voxel of a label, so it has no bins.
+
+```mojo
+var regions = read_rt_structures("plan/rtstruct.dcm")
+var map = structure_labels(regions[0], plan.dose, LabelId(1))
+var dvh = dose_volume_histogram(plan.dose, map, LabelId(1))
+print(dvh.dose_at_fraction(0.95).to(GRAY))
+print(dvh.volume_at_dose(AbsorbedDose64(20, GRAY)).to(CUBIC_CENTIMETER64))
+print(dvh.equivalent_uniform_dose(-10.0).to(GRAY))
+```
+
+| Method | What it gives |
+|---|---|
+| `dose_at_fraction(f)` | D for a part, such as D95 at 0.95: the least dose of the hottest part `f` |
+| `dose_at_volume(v)` | D for a volume, such as 0.03 cm^3: the least dose of the hottest volume `v` |
+| `volume_at_dose(d)` | V for a dose, such as V20 at 20 Gy: the volume that gets `d` or more |
+| `fraction_at_dose(d)` | That volume as a part of the region |
+| `mean`, `minimum` and `maximum` | The mean, the least and the largest dose |
+| `equivalent_uniform_dose(a)` | The gEUD of Niemierko, `(mean(d^a))^(1/a)` |
+| `curve(step)` | The part that gets each step of dose or more, from 0 |
+
+A voxel counts whole, with the dose at its center. The hottest voxels that make up a part or a volume are counted up to whole voxels, to 1e-9 of a voxel. Thus D95 is the largest dose that 95 percent of the region gets.
+
+A negative `a` of the gEUD, such as -10, weighs the cold voxels, as for a tumor. A large `a`, such as 8, weighs the hot voxels, as for a serial organ. With `a` of 1, the gEUD is the mean dose.
+
+The doses and the labels must be on one grid. You can fill the structure on the dose grid with `structure_labels`. You can also fill it on the CT, and bring the dose onto the CT grid with `resample_onto`. The second way counts a small region in smaller voxels.
+
+Give a volume in cubic centimeters with `CUBIC_CENTIMETER64`. The `CUBIC_CENTIMETER` of `units.si` is 32-bit, and its scale is off by 3e-9.
 
 ## Read and write NIfTI files
 
@@ -792,6 +838,12 @@ The tests check these results:
 - The fixture grid has 24 by 20 by 4 voxels of 2 by 2.5 by 3 mm. On it, each region fills the voxels that scikit-image 0.26's `points_in_poly` puts inside. The contours of a slice join by exclusive or. The test compares each voxel. The tumor has 68 voxels, the ring with a square hole has 87, and the marker point has none.
 - A square from 0 to 10 mm fills the 20 pixel centers inside it. Contours past the grid, beside it and of two points fill nothing.
 - A tree reads nested sequences, sequences of defined length in implicit VR, and empty elements. It steps over encapsulated pixel data. Of two elements or two sequences with one tag, the first counts. A bad preamble, a bad syntax, a stray or unknown delimiter, an item without an end and nesting past 64 levels are refused.
+- Two RT Dose files that pydicom 3.0.1 wrote read with pydicom's dose at each voxel, as 32-bit floats. One is explicit VR with 32-bit values and offsets from 0. The other is implicit VR with 16-bit values and frames from z = 9 mm down to 0. `assets/dicom/make_rtdose.py` makes them.
+- The tumor and the ring of the structure fixtures, filled on each dose grid, have the DVH that numpy 2.1.3 gives. The test compares the least, mean and largest dose, D98, D95, D50, D2, V20 and V40. It also compares D for 0.03 and 0.1 cm^3, and the gEUD at a = -10 and 5. Each agrees to 1e-12.
+- Written files check signed and 32-bit values, one frame without offsets, frames that go down, offsets that are z, and sagittal frames. A malformed file is refused for each check of the reader.
+- On doses of 1 to 5 Gy, D20 is 5 Gy, D21 is 4 Gy and V3 is three voxels. The gEUD is the mean at a = 1, the root mean square at 2 and the harmonic mean at -1. A voxel of no dose makes the gEUD 0 at a = -10.
+- The gEUD refines each power by one Newton step on `log`. The Float64 `exp` of Mojo 1.2 is off by up to 1.2e-11 near x = -30, and by 2.8e-13 near 0. A fractional power is off as much, and `log` is exact to the last digit. Without the step, the gEUD of the tumor at a = -10 was off by 1.4e-12.
+- dicompyler-core 0.5.6 gives the tumor of the fixtures the same volume, mean, V20 and V40. Its D values are in bins of 1 cGy. Each is the low end of its step of the curve, rounded up to a bin. This module gives the high end of the step. dicompyler-core gave no volume to the ring, which has one plane. That check is not part of the test suite.
 - A 12-bit signed value masks and extends its sign: `0xF800` reads as -2048.
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
@@ -865,6 +917,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A file is not an RT Structure Set, a region has not one ROI number, a contour refers to no region, or a closed contour has fewer than three points | `parse_rt_structures`, `read_rt_structures` |
 | A sequence holds an element that is not an item, an item has no end, the sequences nest more than 64 deep, or a node is not in the tree | `parse_dicom_tree`, `read_dicom_tree`, `DicomTree` |
 | A structure label is not valid or is the background | `structure_labels` |
+| A file is not an RT Dose or not in `GY`, or has a missing or bad element, frames that are not evenly spaced, or pixel data that does not fill its grid | `parse_rt_dose`, `read_rt_dose` |
+| A DVH has no dose, a dose that is not finite, a bad voxel volume, a bad label or a map on another grid | `dose_volume_histogram`, `DoseVolumeHistogram` |
+| A DVH part, volume, dose, gEUD parameter or curve step is out of range, or a gEUD has a negative dose | `DoseVolumeHistogram` methods |
 | A file is not single-file NIfTI-1, or its datatype, unit or axes are not supported | `parse_nifti`, `read_nifti` |
 | Slices disagree, share a position or are not evenly spaced | `stack_slices` |
 | An index is outside the grid | `get`, `set`, `region_grow`, `render_slice` |
@@ -902,6 +957,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The reader does not read a file that has no preamble.
 - The writer does not write the PET elements. An SUV is by body weight only, not by lean body mass. The factor takes the series time as the start of the scan, and does not read the private scale factors of a vendor.
 - A structure set gives its closed planar contours only. A pixel is in a region by its center and the even-odd rule. A pixel that a contour cuts counts whole or not at all. A contour goes to its nearest slice. The reader does not check the CT series or the frame of reference that the structure set refers to.
+- An RT Dose must be native and in grays. The reader does not read a relative dose, compressed frames or the plan that the dose refers to.
+- A DVH counts each voxel whole, with the dose at its center. It does not split a voxel that the edge of a region cuts, and it does not interpolate the dose between planes.
+- The RT Structure Set, RT Dose and DVH tools are for research. They are not a treatment planning system. Do not use them to plan, check or give a treatment.
 - The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
@@ -919,6 +977,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Boellaard and others, "FDG PET/CT: EANM procedure guidelines for tumour imaging: version 2.0", 2015.
 - NEMA PS3.3, "Information Object Definitions", sections C.8.9.1 and C.8.9.2, the PET Series and PET Isotope modules.
 - NEMA PS3.3, "Information Object Definitions", sections C.8.8.5 and C.8.8.6, the Structure Set and ROI Contour modules.
+- NEMA PS3.3, "Information Object Definitions", section C.8.8.3, the RT Dose module.
+- Niemierko, "A generalized concept of equivalent uniform dose (EUD)", Medical Physics, 1999.
+- ICRU Report 83, "Prescribing, Recording, and Reporting Photon-Beam Intensity-Modulated Radiation Therapy (IMRT)", 2010.
 - Zwanenburg and others, "The Image Biomarker Standardization Initiative", Radiology, 2020.
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.
 - NEMA PS3.3, "Information Object Definitions", sections C.7.6.2 and C.11.2.1.
