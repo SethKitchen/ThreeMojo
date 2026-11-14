@@ -25,6 +25,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `ensemble` | `ensemble_fluctuation`, `Fluctuation` and `fluctuation_b_factors` |
 | `contacts` | `distance_map`, `DistanceMap` and `map_image` |
 | `shape` | `molecular_shape` and `MolecularShape` |
+| `accessibility` | `residue_accessibility`, `ResidueAccess` and `max_accessible_area` |
 | `pdb_write` | `encode_pdb` |
 | `cif_write` | `encode_mmcif` and `cif_value` |
 | `dihedral` | `backbone_angles`, `BackboneAngles`, `dihedral`, `ramachandran_image`, `ramachandran_color` and `plot_pixel` |
@@ -266,6 +267,21 @@ A probe of 1.4 angstroms is a water molecule. The radii are from Bondi:
 
 Any other element gets 1.8 angstroms.
 
+## Find buried residues
+
+`residue_accessibility(structure, model, areas)` adds the atom areas of each residue. It also gives the relative solvent accessibility (RSA): the area over the largest area that the residue can have.
+
+```mojo
+var areas = accessible_areas(structure, ModelId(0), Length64(1.4, ANGSTROM), 500)
+for entry in residue_accessibility(structure, ModelId(0), areas):
+    if entry.has_relative and entry.buried(0.25):
+        print(structure.residues[entry.residue.value].name, entry.relative)
+```
+
+The RSA is about 0 for a buried residue and about 1 for a residue in the open. A residue with an RSA below a cutoff, such as 0.2 or 0.25, is often called buried. `entry.buried(cutoff)` tells which side of the cutoff a residue is on.
+
+The largest areas are the theoretical values of Tien and others (2013), for a residue in an extended chain of three. `max_accessible_area(name)` gives the value of one of the twenty standard amino acids. Another residue, such as a water or a ligand, has its area but no RSA, and `has_relative` is false.
+
 ## Draw a surface
 
 `molecular_surface(structure, model, probe, spacing)` returns the solvent accessible surface as a mesh. It samples the distance to the nearest grown sphere on a grid of the given spacing. It meshes the zero set of that distance by marching tetrahedra. Each vertex takes the CPK color of the atom whose sphere it lies on.
@@ -398,6 +414,7 @@ The tests check these results:
 - Neighbor CA atoms of an ideal peptide are 3.8 angstroms apart. An alpha helix has its CA contacts within 8 angstroms at `i + 3` and `i + 4` only, and a strand has none.
 - A superposition recovers a known rotation and shift to 1e-12, with a proper rotation. It does not reach a mirror image. A small turn away from the fit gives a larger RMSD. On 40 noisy points, its RMSD matches numpy's SVD solution to 16 digits. That check is not part of the test suite.
 - Over three models as given, one CA moved by `+d` and `-d` has an RMSF of `d sqrt(2/3)`, and every other CA has none. Its residue gets the B-factor `16 pi^2 d^2 / 9`. Models that differ by rigid moves fit to an RMSF below 1e-9 angstroms. Five models with up to 0.5 angstroms of noise per coordinate match a numpy fit by SVD to 2e-15 angstroms. That check is not part of the test suite.
+- The largest areas are the 20 values of Tien and others. A residue's area is the sum of its atoms, and its RSA is that sum over the largest area. The middle of a built helix is more buried than its ends. On a peptide of 12 residues with 2000 points per sphere, the areas match Biopython 1.88's Shrake-Rupley to 0.1 percent. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
 ## Errors
@@ -407,6 +424,7 @@ Every function raises `Error` for input it cannot use.
 | Case | Functions |
 |---|---|
 | A quoted value or a text field has no end | `cif_tokens`, `parse_cif`, `parse_mmcif` |
+| The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
 | An ensemble has fewer than two models, too few shared atoms, or a bad fit or reference | `ensemble_fluctuation`, `Fluctuation` |
 | A structure has no model or no atom, its name holds a blank, or a value holds a line end or both kinds of closing quote | `encode_mmcif`, `cif_value` |
 | No data block, a stray value, or a loop that does not fill its rows | `parse_cif`, `parse_mmcif` |
@@ -437,6 +455,7 @@ Every function raises `Error` for input it cannot use.
 - Westbrook and others, "PDBx/mmCIF Ecosystem: Foundational Semantic Tools for Structural Biology", 2022.
 - Hall, Allen and Brown, "The Crystallographic Information File (CIF)", 1991.
 - wwPDB, "Atomic Coordinate Entry Format Description", version 3.3, 2012.
+- Tien, Meyer, Sydykova, Spielman and Wilke, "Maximum allowed solvent accessibilities of residues in proteins", 2013.
 - Engh and Huber, "Accurate bond and angle parameters for X-ray protein structure refinement", 1991.
 - Parsons and others, "Practical conversion from torsion space to Cartesian space for in silico protein synthesis", 2005.
 - Yang and others, "Improved protein structure prediction using predicted interresidue orientations", 2020.
