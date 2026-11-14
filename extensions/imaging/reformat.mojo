@@ -105,22 +105,34 @@ def oblique_slice(
     out.window_center = volume.window_center
     out.window_width = volume.window_width
     out.photometric = volume.photometric
-    var top = v3(
-        Float64(volume.nx - 1), Float64(volume.ny - 1), Float64(volume.nz - 1)
-    )
-    var reach = 1.0e-9
     for y in range(height):  # pragma: no branch
         for x in range(width):  # pragma: no branch
             var p = out.patient_point(Float64(x), Float64(y), 0)
-            var q = volume.voxel_point(p)
-            var below_box = min(q.x, min(q.y, q.z))
-            var past_box = max(q.x - top.x, max(q.y - top.y, q.z - top.z))
-            var inside = below_box >= -reach and past_box <= reach
-            var value = outside
-            if inside:
-                value = volume.trilinear(q.x, q.y, q.z)
-            out.values[x + width * y] = value
+            out.values[x + width * y] = sample_point(volume, p, outside)
     return out^
+
+
+def sample_point(volume: ImageVolume, p: V3, outside: Float32) -> Float32:
+    """Return the trilinear value of a volume at a point in patient space.
+
+    Args:
+        volume: The volume.
+        p: The point, in meters.
+        outside: The value of a point outside the box of voxel centers.
+
+    Returns:
+        The interpolated value, or `outside`.
+    """
+    var q = volume.voxel_point(p)
+    var reach = 1.0e-9
+    var below_box = min(q.x, min(q.y, q.z))
+    var past_box = max(
+        q.x - Float64(volume.nx - 1),
+        max(q.y - Float64(volume.ny - 1), q.z - Float64(volume.nz - 1)),
+    )
+    if below_box >= -reach and past_box <= reach:
+        return volume.trilinear(q.x, q.y, q.z)
+    return outside
 
 
 def slab_projection(

@@ -33,7 +33,8 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `printing` | `printable_stl` and `label_stl` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
-| `reformat` | `oblique_slice` and `slab_projection` |
+| `reformat` | `oblique_slice`, `slab_projection` and `sample_point` |
+| `curved` | `curved_reformat` |
 | `resample` | `resample_volume` and `resample_labels` |
 
 ## Read a DICOM series
@@ -460,7 +461,21 @@ var plane = oblique_slice(volume, center, v3(1, 1, 0), v3(0, 0, -1),
 var image = render_slice(plane, K_AXIS, 0)
 ```
 
-Each pixel is a trilinear sample of the volume. A point outside the box of voxel centers takes the `outside` value, such as -1000 for air in CT. The result is a volume of one slice, placed on the plane, with the source's window and photometric interpretation. `voxel_point(p)` gives the voxel units of a patient-space point. It is the inverse of `patient_point`.
+Each pixel is a trilinear sample of the volume. A point outside the box of voxel centers takes the `outside` value, such as -1000 for air in CT. The result is a volume of one slice, placed on the plane, with the source's window and photometric interpretation. `voxel_point(p)` gives the voxel units of a patient-space point. It is the inverse of `patient_point`. `sample_point(volume, p, outside)` gives the trilinear value at one point in patient space.
+
+## Straighten a curved structure
+
+A vessel, an airway or a spine bends through the volume, so no plane holds all of it. `curved_reformat(volume, path, up, half_height, spacing, outside)` follows a path of points in patient space, such as a centerline. It shows the whole structure in one straightened image.
+
+```mojo
+var image = curved_reformat(volume, centerline, v3(0, 0, 1), 40,
+    Length64(0.5, MILLIMETER64), -1000)
+var picture = render_slice(image, K_AXIS, 0)
+```
+
+Column `x` lies at the arc length `x * spacing` along the path. The path runs along the middle row, and `half_height` rows lie on each side. At each point, the lateral direction is `up` with its part along the path taken away. Row 0 is the farthest along it, so `up` points up in the image.
+
+The lateral direction changes at each corner of the path. A path of many short segments gives a smooth image. The result keeps the window of the source. It is not a plane in patient space, so its origin is zero and its axes are those of the grid.
 
 ## Project a thick slab
 
@@ -499,6 +514,7 @@ The tests check these results:
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
 - An oblique reformat of a linear field matches the field at every pixel.
+- A curved reformat along a straight path matches a linear field at every pixel. Along a bent path, the corner falls at its arc length, and an `up` that leans along the path keeps only its square part. A point past the volume takes the `outside` value.
 - A linear field resampled from 0.5 x 0.5 x 3 mm voxels to 1 mm cubes keeps its value at every new voxel. A label slice of 3 mm becomes the three 1 mm slices nearest to it.
 - A slab of four planes through a ramp gives its top plane as its maximum and its bottom plane as its minimum. Its mean is its center value.
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
@@ -544,6 +560,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A connectivity is not one of the three | `region_grow`, `keep_largest`, `label_pieces` |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
+| A path has fewer than two points or two equal points in a row, `up` is zero or along a segment, or a size is out of range | `curved_reformat` |
 | A circle has a bad axis, slice, center or radius, or holds no pixel center | `circle_statistics` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels` |
 | A shape or a slice area needs the background, an empty label, another grid or a bad axis | `label_shape`, `slice_areas` |
