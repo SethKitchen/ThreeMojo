@@ -22,7 +22,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `transfer` | `WindowLevel`, `TransferFunction` and `Rgba` |
 | `raycast` | `VolumeCamera`, `orbit_camera`, `ray_box` and `render_volume` |
 | `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest`, `label_pieces`, `LabelPieces` and `label_surface` |
-| `measure` | `label_statistics` and `voxel_distance` |
+| `measure` | `label_statistics`, `voxel_distance`, `line_profile`, `LineProfile` and `full_width_half_maximum` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
@@ -328,6 +328,15 @@ The volume of a label is a count of voxels. It is not the volume inside a smooth
 
 `voxel_distance(volume, a, b)` gives the length between two points in voxel units. It uses the spacing of each axis.
 
+`line_profile(volume, start, end, samples, outside)` samples a volume at evenly spaced points along a line in patient space. Each point has its distance from the start and its trilinear value. A point outside the box of voxel centers takes the `outside` value.
+
+```mojo
+var profile = line_profile(volume, across_start, across_end, 200, -1000)
+var diameter = full_width_half_maximum(profile, -1000)
+```
+
+`full_width_half_maximum(profile, baseline)` gives the width of the highest peak at half its height above the baseline. It is the usual measure of the diameter of a vessel with contrast, and of how sharp an image is. Each side runs to the first place where the profile falls to the half level, by linear interpolation between points. A profile that does not fall to the half level on both sides is refused.
+
 ## Measure thickness
 
 Bone research measures the thickness of cortical walls and of trabeculae. `local_thickness(map, label)` gives each voxel of a label the diameter of the largest sphere that holds the voxel and fits in the label. This is the method of Hildebrand and Rüegsegger.
@@ -413,6 +422,7 @@ The tests check these results:
 - A median removes a hot and a cold voxel and keeps the edge between two regions.
 - On two overlapping distributions, the Otsu edge is the edge with the least variance within the classes, found by brute force over the voxels.
 - Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
+- A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
 - A voxel dilated by 2 mm becomes the 33 lattice points of the ball, and 15 with slices 2 mm apart. A cube of 7 voxels eroded by 1 mm is a cube of 5. Opening removes a spike, and closing fills a hole.
 - The distance to the edge of an irregular label on an anisotropic grid matches a brute-force search. A slab six voxels thick is six voxels thick. With 2 mm slices and 0.5 mm pixels, a label is limited by its narrower side.
 - The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
