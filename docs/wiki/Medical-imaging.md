@@ -32,6 +32,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
 | `morphology` | `dilate_label`, `erode_label`, `open_label` and `close_label` |
+| `holes` | `fill_holes` and `fill_slice_holes` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `printing` | `printable_stl` and `label_stl` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
@@ -316,6 +317,21 @@ var clean = close_label(open_label(map, LabelId(1), Length64(1, MILLIMETER64)),
 The distances are exact and center to center, with the spacing of each axis. So a volume of thick slices gets a ball of the right shape. Dilation grows into the background only, and other labels do not change. Erosion counts the grid's edge as outside, so a label also shrinks from the edge. Closing does not, so a closed label keeps every voxel of the label before it.
 
 `seed_distances(map, seeds, border_is_seed)` gives the distance of each voxel to the nearest voxel of a mask, as a `Length64`. Both the morphology and the thickness map use it.
+
+## Fill the holes of a label
+
+`fill_holes` gives a label to each part of the background that the label closes off. Such a hole has no path to the grid's edge through voxels outside the label. A threshold of a bone or an organ often leaves holes, such as the marrow of a bone or a vessel in the liver.
+
+```mojo
+var solid = fill_holes(map, LabelId(1))
+var axial = fill_slice_holes(map, LabelId(1), K_AXIS)
+```
+
+`fill_slice_holes` fills the holes of each slice across one axis. Use it for a tube that is open at its two ends, such as an airway. The tube has no hole in three dimensions, but each slice across it has one.
+
+The connectivity is that of the voxels outside the label as they look for the edge. With `FACES`, the default, they move through faces only. So a wall of the label closes a hole where its voxels touch at an edge or a corner. With `CORNERS`, they also pass between two voxels of the label that share only a corner. In a slice, `FACES` gives four neighbors, and `EDGES` and `CORNERS` give eight.
+
+A voxel of another label in a hole keeps its label, and a path to the edge can pass through it. Unlike `close_label`, a fill has no radius. It fills a hole of any size, but not a gap that is open to the edge.
 
 ## Find a threshold
 
@@ -637,6 +653,9 @@ The tests check these results:
 - A box of 10 by 6 by 8 mm has voxels of 1 by 1 by 2 mm. Its semi-axes are `sqrt(5 / 12)` times its sides, to 1e-9, along the grid axes. Its axes follow the patient frame of the volume. An ellipsoid of 20, 12 and 8 mm turned 30 degrees gives its semi-axes within 2 percent, and its long axis within one degree. Each slice of the box has its area exactly.
 - A table of four labels gives each label's counts, Dice and Jaccard. The Dice is 1 for a match, 0.5 for half, and 0 for a label in one map only. Its overlap of a label agrees with `compare_labels`.
 - A label against itself has a Dice coefficient of 1 and no surface distance. Two boxes that overlap by half have a Dice of 0.5 and a Jaccard of 1/3. Their Hausdorff distance is their shift, and their HD95 and ASSD match a search of every pair. Two ellipsoids in voxels of 0.7, 0.9 and 1.5 mm match MedPy 0.5 to 1e-7 mm in every measure. That check is not part of the test suite.
+- A hollow cube fills its 27 voxels, and a voxel of another label in it keeps its label. A center walled by its 6 face neighbors fills with `FACES` only. A wall of its 18 neighbors fills it with `FACES` and `EDGES`, and not with `CORNERS`.
+- A label on the grid's edge closes off the inside, and one gap opens it. A tube open at its ends has no hole in three dimensions, and the slices across its axis fill its center.
+- On a random grid of 30 by 28 by 26 voxels, each fill matches scipy's `binary_fill_holes`. The check covers each connectivity, in three dimensions and in the slices of each axis. That check is not part of the test suite.
 - A voxel dilated by 2 mm becomes the 33 lattice points of the ball, and 15 with slices 2 mm apart. A cube of 7 voxels eroded by 1 mm is a cube of 5. Opening removes a spike, and closing fills a hole.
 - The distance to the edge of an irregular label on an anisotropic grid matches a brute-force search. A slab six voxels thick is six voxels thick. With 2 mm slices and 0.5 mm pixels, a label is limited by its narrower side.
 - The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
@@ -679,6 +698,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A crop box leaves the grid or holds no voxel, or a label box has a bad label or margin | `crop_volume`, `crop_labels`, `label_box` |
 | A shape or a slice area needs the background, an empty label, another grid or a bad axis | `label_shape`, `slice_areas` |
 | A morphology label is the background, or its radius is negative or not finite | Morphology functions |
+| A hole fill has a bad label, the background, a bad connectivity or a bad axis | `fill_holes`, `fill_slice_holes` |
 | A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface`, `label_stl` |
 | A mesh has no positions | `printable_stl` |
 | A histogram has fewer than 2 bins or a bad range, or Otsu's method finds one full bin only | `Histogram`, `otsu_threshold` |
