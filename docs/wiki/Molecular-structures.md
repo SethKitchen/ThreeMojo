@@ -18,6 +18,7 @@
 | `ribbon` | `ribbon_geometry` and `chain_color` |
 | `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius`, `sphere_points` and `AtomCells` |
 | `coloring` | `color_surface`, `atom_color` and `kyte_doolittle` |
+| `superpose` | `superpose`, `Superposition`, `rmsd` and `matched_atoms` |
 
 ## Read an mmCIF file
 
@@ -202,6 +203,27 @@ Elsewhere, an exact Euclidean distance transform of the grid gives the distance 
 
 `distance_transform(seeds, px, py, pz)` is the transform of Felzenszwalb and Huttenlocher, run along x, then y, then z. It gives the squared distance to the nearest seed in grid steps, and the index of that seed.
 
+## Superpose two models
+
+Superpose two models before you compare them, such as two models of an NMR ensemble, or a crystal structure and a prediction.
+
+```mojo
+var pairs = matched_atoms(crystal, ModelId(0), predicted, ModelId(0), "CA")
+var fixed = List[V3]()
+var moving = List[V3]()
+for pair in pairs:
+    fixed.append(crystal.atoms[pair[0]].position)
+    moving.append(predicted.atoms[pair[1]].position)
+var fit = superpose(fixed, moving)
+print(fit.rmsd.to(METER) / Length64(1.0, ANGSTROM).to(METER), "angstroms")
+```
+
+`superpose(fixed, moving)` gives the rotation and the translation that put the moving points on the fixed points with the least root mean square deviation (RMSD). This is the problem of Kabsch. The method is Horn's: the best rotation is the unit quaternion of the largest eigenvalue of a 4 by 4 matrix. A quaternion is always a proper rotation, so the fit never mirrors a set. The sets need three or more points.
+
+`fit.apply(p)` moves a point, and `fit.rmsd` is the deviation after the move. `rmsd(fixed, moving)` gives the deviation without a move.
+
+`matched_atoms(fixed, model, moving, model, name)` pairs the atoms of one name, such as `CA`. Two atoms pair when their chains have one label, and their residues one number and insertion code. Of alternate locations, the first in the file pairs.
+
 ## Color a surface
 
 A surface comes with CPK colors. `color_surface(geometry, structure, model, coloring)` colors it again by another property of the atom under each vertex:
@@ -239,6 +261,7 @@ The tests check these results:
 - Two carbons 3 angstroms apart have an excluded surface with a neck of 1.313 angstroms, the analytic radius, to within 0.03 angstroms.
 - The distance transform is exact on a grid with one seed.
 - A ribbon of `n` residues has `(n - 1) samples + 1` rings, and every normal is a unit vector.
+- A superposition recovers a known rotation and shift to 1e-12, with a proper rotation. It does not reach a mirror image. A small turn away from the fit gives a larger RMSD. On 40 noisy points, its RMSD matches numpy's SVD solution to 16 digits. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
 ## Errors
@@ -254,6 +277,7 @@ Every function raises `Error` for input it cannot use.
 | A code is not a standard amino acid | `build_peptide`, `three_letter` |
 | A count, a probe or a spacing is out of range | `ribbon_geometry`, `accessible_areas`, `molecular_surface` |
 | A surface coloring is not valid, or an atom is not in the model | `color_surface`, `atom_color` |
+| Two sets differ in size, hold fewer than three points, or are not finite | `superpose`, `rmsd` |
 
 ## Limits
 
@@ -281,3 +305,5 @@ Every function raises `Error` for input it cannot use.
 - Richardson, "The anatomy and taxonomy of protein structure", 1981.
 - Kabsch and Sander, "Dictionary of protein secondary structure: pattern recognition of hydrogen-bonded and geometrical features", 1983.
 - Kyte and Doolittle, "A simple method for displaying the hydropathic character of a protein", 1982.
+- Kabsch, "A solution for the best rotation to relate two sets of vectors", 1976.
+- Horn, "Closed-form solution of absolute orientation using unit quaternions", 1987.
