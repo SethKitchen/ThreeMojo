@@ -485,6 +485,7 @@ Every function raises `Error` for input it cannot use.
 - `assign_secondary` does not report 3-10 or pi helices, turns, bends, isolated bridges or beta bulges.
 - Ribbons need CA atoms. Nucleic acids have no ribbon.
 - An ensemble is fitted on one reference model. The fit is not iterated to the mean of the models.
+- A sequence holds the twenty standard amino acids only. A modified residue, such as selenomethionine `MSE`, is left out. An alignment is global: there is no local mode.
 - A Ramachandran plot shows the angles only. It does not draw the favored and allowed regions of a reference set, and it does not validate a model.
 - Where three or more spheres make a crevice, the excluded surface uses the grid bound. It can lie up to one grid step outside the true surface there.
 - A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
