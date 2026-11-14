@@ -42,6 +42,8 @@ from extensions.imaging.image_volume import MILLIMETER64
 
 # The SOP class of a CT image.
 comptime CT_IMAGE_STORAGE = "1.2.840.10008.5.1.4.1.1.2"
+# The SOP class of an enhanced CT image, which holds several frames.
+comptime ENHANCED_CT_IMAGE_STORAGE = "1.2.840.10008.5.1.4.1.1.2.1"
 
 
 def _push16(mut out: List[UInt8], value: Int):
@@ -125,11 +127,15 @@ struct DicomWriter(Movable):
     var meta_end: Int
     """The place in `bytes` where the data set starts."""
 
-    def __init__(out self, syntax: TransferSyntax) raises:
+    def __init__(
+        out self, syntax: TransferSyntax, sop_class: String = CT_IMAGE_STORAGE
+    ) raises:
         """Start a file with its preamble and its file meta group.
 
         Args:
             syntax: How the data set after the meta group is encoded.
+            sop_class: The SOP class UID of the meta group, CT image
+                storage by default.
 
         Raises:
             Error: If `syntax` is not valid.
@@ -141,7 +147,7 @@ struct DicomWriter(Movable):
         _element(meta, True, 0x0002, 0x0001, "OB", True, 2)
         meta.append(0)
         meta.append(1)
-        _meta_text(meta, 0x0002, CT_IMAGE_STORAGE)
+        _meta_text(meta, 0x0002, sop_class)
         _meta_text(meta, 0x0003, "1.2.826.0.1.3680043.2.1125.1")
         _meta_text(meta, 0x0010, uid)
         self.bytes = List[UInt8](length=128, fill=0)
@@ -257,17 +263,29 @@ struct DicomWriter(Movable):
         Args:
             frame: The bytes of the one frame.
         """
+        self.encapsulated_frames([frame.copy()])
+
+    def encapsulated_frames(mut self, frames: List[List[UInt8]]):
+        """Append pixel data of undefined length, one fragment per frame.
+
+        The pixel data holds an empty offset table, each frame padded to
+        an even length with a zero byte, and the sequence delimiter.
+
+        Args:
+            frames: The bytes of each frame.
+        """
         _element(self.bytes, True, 0x7FE0, 0x0010, "OB", True, UNDEFINED_LENGTH)
         _push16(self.bytes, ITEM_GROUP)
         _push16(self.bytes, ITEM)
         _push32(self.bytes, 0)
-        var size = len(frame) + len(frame) % 2
-        _push16(self.bytes, ITEM_GROUP)
-        _push16(self.bytes, ITEM)
-        _push32(self.bytes, size)
-        self.bytes.extend(frame.copy())
-        if size > len(frame):
-            self.bytes.append(0)
+        for frame in frames:
+            var size = len(frame) + len(frame) % 2
+            _push16(self.bytes, ITEM_GROUP)
+            _push16(self.bytes, ITEM)
+            _push32(self.bytes, size)
+            self.bytes.extend(frame.copy())
+            if size > len(frame):
+                self.bytes.append(0)
         self.close_sequence()
 
     def finish(deinit self) raises -> List[UInt8]:
@@ -328,6 +346,30 @@ def stored_value(image: DicomSlice, value: Float32) -> Int:
     return Int(min(max(stored, low), high))
 
 
+def _stored_bytes(image: DicomSlice) -> List[UInt8]:
+    """Return the stored values of an image, little endian."""
+    var data = List[UInt8]()
+    var mask = (1 << image.bits_stored) - 1
+    # An image holds at least one pixel.
+    for value in image.values:  # pragma: no branch
+        var stored = stored_value(image, value) & mask
+        if image.bits_allocated == 16:
+            _push16(data, stored)
+        else:
+            data.append(UInt8(stored))
+    return data^
+
+
+def _require_layout(image: DicomSlice) raises:
+    """Refuse a rescale or bits that a file cannot hold."""
+    if image.slope == 0:
+        raise Error("A DICOM rescale slope cannot be zero")
+    if image.bits_allocated != 8 and image.bits_allocated != 16:
+        raise Error("A DICOM image must have 8 or 16 bits allocated")
+    if image.bits_stored < 1 or image.bits_stored > image.bits_allocated:
+        raise Error("A DICOM image stores from 1 bit to the bits it allocates")
+
+
 def encode_dicom(image: DicomSlice) raises -> List[UInt8]:
     """Return the bytes of a Part 10 CT image file.
 
@@ -348,12 +390,7 @@ def encode_dicom(image: DicomSlice) raises -> List[UInt8]:
             zero, or its bits are not 8 or 16 allocated with 1 or more
             stored.
     """
-    if image.slope == 0:
-        raise Error("A DICOM rescale slope cannot be zero")
-    if image.bits_allocated != 8 and image.bits_allocated != 16:
-        raise Error("A DICOM image must have 8 or 16 bits allocated")
-    if image.bits_stored < 1 or image.bits_stored > image.bits_allocated:
-        raise Error("A DICOM image stores from 1 bit to the bits it allocates")
+    _require_layout(image)
     var writer = DicomWriter(image.syntax)
     var modality = image.modality
     if modality == "":
@@ -397,15 +434,7 @@ def encode_dicom(image: DicomSlice) raises -> List[UInt8]:
         writer.numbers(0x0028, 0x1051, [image.window_width])
     writer.numbers(0x0028, 0x1052, [image.intercept])
     writer.numbers(0x0028, 0x1053, [image.slope])
-    var data = List[UInt8]()
-    var mask = (1 << image.bits_stored) - 1
-    # An image holds at least one pixel.
-    for value in image.values:  # pragma: no branch
-        var stored = stored_value(image, value) & mask
-        if image.bits_allocated == 16:
-            _push16(data, stored)
-        else:
-            data.append(UInt8(stored))
+    var data = _stored_bytes(image)
     if image.syntax == RLE_LOSSLESS:
         var step = image.bits_allocated // 8
         writer.encapsulated(encode_rle_frame(data, step, image.columns))
@@ -417,6 +446,143 @@ def encode_dicom(image: DicomSlice) raises -> List[UInt8]:
         vr = "OW"
     writer.binary(0x7FE0, 0x0010, vr, data)
     return writer^.finish()
+
+
+def encode_dicom_frames(frames: List[DicomSlice]) raises -> List[UInt8]:
+    """Return the bytes of a multi-frame Part 10 file, an enhanced CT image.
+
+    The first frame gives the modality, the instance number, the layout,
+    the bits and the transfer syntax. Each frame has its own item of the
+    per-frame functional groups: its position, orientation, spacing and
+    thickness, rescale and window. The shared functional groups hold one
+    empty item. RLE Lossless puts each frame in a fragment of its own.
+
+    Args:
+        frames: The frames, at least one, in file order.
+
+    Returns:
+        The file.
+
+    Raises:
+        Error: If there is no frame, the frames differ in layout, bits,
+            pixel representation, photometric interpretation or transfer
+            syntax, or a frame cannot be written.
+    """
+    if len(frames) == 0:
+        raise Error("A multi-frame DICOM file needs a frame")
+    ref first = frames[0]
+    # The list holds a frame: the function checks it first.
+    for image in frames:  # pragma: no branch
+        _require_layout(image)
+        var same = (
+            image.rows == first.rows
+            and image.columns == first.columns
+            and image.bits_allocated == first.bits_allocated
+            and image.bits_stored == first.bits_stored
+            and image.representation == first.representation
+            and image.photometric == first.photometric
+            and image.syntax == first.syntax
+        )
+        if not same:
+            raise Error(
+                "The frames of one DICOM file must share their layout, bits"
+                " and syntax"
+            )
+    var writer = DicomWriter(first.syntax, ENHANCED_CT_IMAGE_STORAGE)
+    var modality = first.modality
+    if modality == "":
+        modality = "CT"
+    writer.text(0x0008, 0x0060, "CS", modality)
+    writer.text(0x0020, 0x0013, "IS", String(first.instance_number))
+    writer.short(0x0028, 0x0002, 1)
+    var photometric = String("MONOCHROME2")
+    if first.photometric == MONOCHROME1:
+        photometric = "MONOCHROME1"
+    writer.text(0x0028, 0x0004, "CS", photometric)
+    writer.text(0x0028, 0x0008, "IS", String(len(frames)))
+    writer.short(0x0028, 0x0010, first.rows)
+    writer.short(0x0028, 0x0011, first.columns)
+    writer.short(0x0028, 0x0100, first.bits_allocated)
+    writer.short(0x0028, 0x0101, first.bits_stored)
+    writer.short(0x0028, 0x0102, first.bits_stored - 1)
+    writer.short(0x0028, 0x0103, first.representation.value)
+    writer.open_sequence(0x5200, 0x9229)
+    writer.open_item()
+    writer.close_item()
+    writer.close_sequence()
+    writer.open_sequence(0x5200, 0x9230)
+    # The list holds a frame: the function checks it first.
+    for image in frames:  # pragma: no branch
+        writer.open_item()
+        if image.has_position:
+            var p = image.position
+            _group(writer, 0x0020, 0x9113)
+            writer.numbers(
+                0x0020, 0x0032, [p.x * 1000.0, p.y * 1000.0, p.z * 1000.0]
+            )
+            _end_group(writer)
+        if image.has_orientation:
+            var r = image.row_direction
+            var c = image.column_direction
+            _group(writer, 0x0020, 0x9116)
+            writer.numbers(0x0020, 0x0037, [r.x, r.y, r.z, c.x, c.y, c.z])
+            _end_group(writer)
+        _group(writer, 0x0028, 0x9110)
+        writer.numbers(0x0018, 0x0050, [image.thickness.to(MILLIMETER64)])
+        if image.has_spacing:
+            writer.numbers(
+                0x0028,
+                0x0030,
+                [
+                    image.row_spacing.to(MILLIMETER64),
+                    image.column_spacing.to(MILLIMETER64),
+                ],
+            )
+        _end_group(writer)
+        if image.has_window:
+            _group(writer, 0x0028, 0x9132)
+            writer.numbers(0x0028, 0x1050, [image.window_center])
+            writer.numbers(0x0028, 0x1051, [image.window_width])
+            _end_group(writer)
+        _group(writer, 0x0028, 0x9145)
+        writer.numbers(0x0028, 0x1052, [image.intercept])
+        writer.numbers(0x0028, 0x1053, [image.slope])
+        _end_group(writer)
+        writer.close_item()
+    writer.close_sequence()
+    var step = first.bits_allocated // 8
+    if first.syntax == RLE_LOSSLESS:
+        var encoded = List[List[UInt8]]()
+        # The list holds a frame: the function checks it first.
+        for image in frames:  # pragma: no branch
+            encoded.append(
+                encode_rle_frame(_stored_bytes(image), step, image.columns)
+            )
+        writer.encapsulated_frames(encoded)
+        return writer^.finish()
+    var data = List[UInt8]()
+    # The list holds a frame: the function checks it first.
+    for image in frames:  # pragma: no branch
+        data.extend(_stored_bytes(image))
+    if len(data) % 2 == 1:
+        data.append(0)
+    var vr = String("OB")
+    if step == 2:
+        vr = "OW"
+    writer.binary(0x7FE0, 0x0010, vr, data)
+    return writer^.finish()
+
+
+def _group(mut writer: DicomWriter, group: Int, element: Int):
+    """Open a functional group: a sequence of one item."""
+    writer.open_sequence(group, element)
+    writer.open_item()
+
+
+def _end_group(mut writer: DicomWriter):
+    """Close a functional group."""
+    writer.close_item()
+    writer.close_sequence()
 
 
 def pack_bits(data: Span[UInt8, _]) -> List[UInt8]:

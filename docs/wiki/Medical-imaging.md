@@ -14,8 +14,8 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 |---|---|
 | `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode` and `LabelId` |
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
-| `dicom` | `parse_dicom` and `read_dicom`, which give a `DicomSlice`, and `decode_rle_frame` |
-| `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_rle_frame`, `pack_bits` and `ds_text` |
+| `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, and `decode_rle_frame` |
+| `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
 | `nifti` | `parse_nifti`, `read_nifti`, `encode_nifti`, `encode_nifti_labels` and `labels_from_volume` |
 | `phantom` | `shepp_logan`, a head of ten ellipsoids |
@@ -42,6 +42,28 @@ print(volume.nx, volume.ny, volume.nz, volume.spacing_z.to(MILLIMETER64))
 ```
 
 `parse_dicom(bytes)` reads the bytes of a file that is already in memory.
+
+## Read a multi-frame file
+
+An enhanced CT or MR file holds every slice as a frame. Read all of its frames, and stack them:
+
+```mojo
+var volume = stack_slices(read_dicom_frames(path))
+```
+
+`read_dicom_frames(path)` and `parse_dicom_frames(bytes)` give one `DicomSlice` per frame, in file order. A file of one frame gives one slice, so these functions read every file that `read_dicom` reads. `read_dicom` refuses a file of more than one frame.
+
+A frame takes its placement from the functional groups. The reader looks for each element in the frame's item of the per-frame functional groups (5200,9230) first. Then it looks in the shared functional groups (5200,9229), and then in the data set itself. The elements that it finds so are the pixel spacing, the slice thickness, the image position and orientation, the rescale and the window. It opens these sequences in the groups:
+
+| Tag | Sequence | Elements |
+|---|---|---|
+| (0028,9110) | Pixel Measures | Pixel Spacing, Slice Thickness |
+| (0020,9113) | Plane Position (Patient) | Image Position (Patient) |
+| (0020,9116) | Plane Orientation (Patient) | Image Orientation (Patient) |
+| (0028,9145) | Pixel Value Transformation | Rescale Intercept, Rescale Slope |
+| (0028,9132) | Frame VOI LUT | Window Center, Window Width |
+
+Native frames follow each other in the pixel data. An RLE Lossless file holds one fragment per frame. `encode_dicom_frames(frames)` writes an enhanced CT image. Each frame gets its own item of the per-frame groups, and the frames must share their layout, bits and transfer syntax.
 
 ## What the reader takes
 
@@ -73,7 +95,7 @@ The reader keeps the elements in the table. It steps over every other element. I
 | (0020,0037) | Image Orientation (Patient) | `row_direction`, `column_direction`, `has_orientation` |
 | (0028,0002) | Samples per Pixel | Must be 1 |
 | (0028,0004) | Photometric Interpretation | `photometric` |
-| (0028,0008) | Number of Frames | Must be 1 |
+| (0028,0008) | Number of Frames | 1 for `read_dicom`, up to 65535 for `read_dicom_frames` |
 | (0028,0010) | Rows | `rows` |
 | (0028,0011) | Columns | `columns` |
 | (0028,0030) | Pixel Spacing | `row_spacing`, `column_spacing`, `has_spacing` |
@@ -302,6 +324,8 @@ Each pixel is a trilinear sample of the volume. A point outside the box of voxel
 The tests check these results:
 
 - A slice written by `encode_dicom` reads back with every element equal, in each of the four transfer syntaxes.
+- Two enhanced CT files of three frames that pydicom 3.0.1 wrote, native and RLE, read with pydicom's values. Each frame takes its position and window from its own groups, and its rescale, spacing and orientation from the shared groups.
+- A volume written as a multi-frame file in each of the four transfer syntaxes reads back the same. pydicom reads the native and the RLE files. That check is not part of the test suite.
 - Three files that pydicom 3.0.1 wrote read with pydicom's values. They are 16-bit signed RLE, 8-bit RLE and deflated. `assets/dicom/make_dicom.py` makes them.
 - `pack_bits` splits runs and literals at 128 bytes, and its code decodes to the same bytes.
 - A 12-bit signed value masks and extends its sign: `0xF800` reads as -2048.
@@ -332,7 +356,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A file is not Part 10, or ends inside an element | `parse_dicom`, `read_dicom` |
 | A transfer syntax is not one of the four | `parse_dicom`, `read_dicom` |
 | Encapsulated pixel data, an RLE frame or a deflated data set is malformed | `parse_dicom`, `read_dicom`, `decode_rle_frame` |
-| An image is not one frame of one grayscale sample | `parse_dicom`, `read_dicom` |
+| An image is not one grayscale sample, or `read_dicom` gets more than one frame | `parse_dicom`, `read_dicom`, `parse_dicom_frames` |
+| The frames of a file differ in layout, bits or syntax | `encode_dicom_frames` |
 | A grid is empty or holds more than 2^28 voxels | `ImageVolume`, `shepp_logan` |
 | A file is not single-file NIfTI-1, or its datatype, unit or axes are not supported | `parse_nifti`, `read_nifti` |
 | Slices disagree, share a position or are not evenly spaced | `stack_slices` |
@@ -345,7 +370,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 
 ## Limits
 
-- The reader takes little-endian grayscale images, uncompressed, deflated or RLE. It does not read color, multiframe, JPEG or JPEG 2000 files.
+- The reader takes little-endian grayscale images, uncompressed, deflated or RLE, of one frame or many. It does not read color, JPEG or JPEG 2000 files.
+- The multi-frame reader reads the placement of each frame. It does not read the dimension index or the temporal position of a frame.
 - The reader does not read a file that has no preamble.
 - The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
