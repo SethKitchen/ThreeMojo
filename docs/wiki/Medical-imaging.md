@@ -23,6 +23,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `raycast` | `VolumeCamera`, `orbit_camera`, `ray_box` and `render_volume` |
 | `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest` and `label_surface` |
 | `measure` | `label_statistics` and `voxel_distance` |
+| `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
 | `reformat` | `oblique_slice` |
 
@@ -204,6 +205,22 @@ Two voxels connect when they share a face. Of two pieces of one size, `keep_larg
 
 `label_surface(map, label)` returns the boundary of a label as a closed triangle mesh. The mesh is in the volume frame, in meters. The surface passes halfway between a voxel inside the label and a voxel outside it.
 
+## Smooth a label surface
+
+A label surface has steps of one voxel. Smooth it before you draw it or measure its area.
+
+```mojo
+var steps = label_surface(map, LabelId(1))
+var smooth = smooth_surface(steps, 20)
+print(surface_area(smooth).to(SQUARE_METER), enclosed_volume(smooth).to(CUBIC_METER))
+```
+
+`smooth_surface(geometry, passes, shrink, inflate)` first welds the mesh. Then it applies Taubin's lambda-mu filter. Each pass moves each vertex toward the mean of its neighbors by `shrink`, and then away from it by `inflate`. The defaults are 0.5 and -0.53. The filter removes the steps and keeps nearly all of the volume. A plain Laplacian filter shrinks the mesh at each pass.
+
+`weld_surface(geometry)` only welds. Corners at the same position become one vertex, and a triangle without area is dropped. Both functions give an indexed mesh with area-weighted normals.
+
+`surface_area(geometry)` gives an `Area64`. `enclosed_volume(geometry)` gives a `Volume64` from the divergence theorem. It is exact for a closed mesh whose faces turn outward. A label surface has outward faces.
+
 ## Measure
 
 `label_statistics(map, volume, label)` gives the size, place and values of one label:
@@ -262,6 +279,9 @@ The tests check these results:
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
 - An isosurface of a linear ramp has the full iso color along the gradient, and the ambient light across it.
 - An ellipsoid of 904.8 voxels labels 879 voxels, within four percent, with its centroid exact.
+- The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
+- Twenty Taubin passes on that ball cut the spread of the radius by more than a third. The volume stays within 2 percent.
+- A welded box of 2 m has 8 vertices, an area of 24 m^2 and a volume of 8 m^3.
 - One render with one, three and every core gives the same bytes.
 - Four NIfTI files that nibabel 5.3.2 wrote read with nibabel's world points and values. They cover both byte orders, the sform, the qform with a flip, voxel sizes in microns, and gzip. `assets/nifti/make_nifti.py` makes them.
 - A volume and a label map written as NIfTI, plain and in gzip, read back with the same values and placement.
@@ -284,6 +304,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | An index is outside the grid | `get`, `set`, `region_grow`, `render_slice` |
 | A label is not from 0 to 255, or is the background where a region is needed | Label functions |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
+| A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface` |
 
 ## Limits
 
@@ -306,3 +327,4 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Toft, "The Radon Transform: Theory and Implementation", 1996.
 - Levoy, "Display of surfaces from volume data", 1988.
 - Engel and others, "Real-Time Volume Graphics", 2006.
+- Taubin, "A signal processing approach to fair surface design", SIGGRAPH 1995.
