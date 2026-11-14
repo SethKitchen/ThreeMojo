@@ -3,14 +3,19 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Resampling volumes and label maps on a new spacing."""
+"""Resampling volumes and label maps on a new spacing or another grid."""
 
 from extensions.imaging.ids import LabelId
 from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
 from extensions.imaging.labels import LabelMap
-from extensions.imaging.resample import resample_labels, resample_volume
-from extensions.sdf.vector import v3
-from std.math import inf
+from extensions.imaging.resample import (
+    resample_labels,
+    resample_labels_onto,
+    resample_onto,
+    resample_volume,
+)
+from extensions.sdf.vector import V3, cross, dot, normalize, v3
+from std.math import floor, inf
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -101,6 +106,108 @@ def test_refusals() raises:
         _ = resample_labels(LabelMap(volume), _mm(1), _mm(1), _mm(-1))
     with assert_raises(contains="2^28 voxels"):
         _ = resample_volume(volume, _mm(1e-4), _mm(1e-4), _mm(1e-3))
+
+
+def _field(p: V3) -> Float64:
+    """A linear field of patient position, in mm: 2 x - y + 0.5 z + 7."""
+    return 1000 * (2 * p.x - p.y + 0.5 * p.z) + 7
+
+
+def _turned_source() raises -> ImageVolume:
+    """A volume turned in patient space, holding the linear field."""
+    var volume = ImageVolume(12, 10, 8, _mm(2), _mm(2.5), _mm(3))
+    volume.origin = v3(-0.004, 0.003, -0.002)
+    var a = normalize(v3(1, 0.3, 0))
+    var b = normalize(cross(v3(0, 0, 1), a))
+    volume.axis_x = a
+    volume.axis_y = b
+    volume.axis_z = cross(a, b)
+    for k in range(8):
+        for j in range(10):
+            for i in range(12):
+                var p = volume.patient_point(Float64(i), Float64(j), Float64(k))
+                volume.set(i, j, k, Float32(_field(p)))
+    volume.window_center = 50
+    volume.window_width = 300
+    return volume^
+
+
+def test_onto_another_grid() raises:
+    var source = _turned_source()
+    # A finer grid of other axes, partly outside the source.
+    var target = ImageVolume(30, 26, 12, _mm(0.9), _mm(1.1), _mm(2))
+    target.origin = v3(-0.006, 0.0, -0.001)
+    var inside = 0
+    var outside = 0
+    var out = resample_onto(source, target, -1000)
+    assert_equal(out.nx, 30)
+    assert_equal(out.window_width, 300.0)
+    assert_true(out.spacing_y.to(METER) == target.spacing_y.to(METER))
+    for k in range(12):
+        for j in range(26):
+            for i in range(30):
+                var p = target.patient_point(Float64(i), Float64(j), Float64(k))
+                var q = source.voxel_point(p)
+                var held = (
+                    q.x >= 0
+                    and q.y >= 0
+                    and q.z >= 0
+                    and q.x <= 11
+                    and q.y <= 9
+                    and q.z <= 7
+                )
+                var value = Float64(out.get(i, j, k))
+                if held:
+                    # A linear field is exact under trilinear blending.
+                    assert_almost_equal(value, _field(p), atol=1e-3)
+                    inside += 1
+                else:
+                    assert_equal(value, -1000.0)
+                    outside += 1
+    assert_true(inside > 1000 and outside > 1000)
+    # Onto its own grid, a volume is the same.
+    var same = resample_onto(source, source, 0)
+    for index in range(source.count()):
+        assert_almost_equal(
+            Float64(same.values[index]),
+            Float64(source.values[index]),
+            atol=1e-3,
+        )
+
+
+def test_labels_onto_another_grid() raises:
+    var source = _turned_source()
+    var map = LabelMap(source)
+    for k in range(2, 6):
+        for j in range(3, 7):
+            for i in range(4, 9):
+                map.set(i, j, k, LabelId(3))
+    # Onto its own grid, a map is the same.
+    var same = resample_labels_onto(map, source, source)
+    for index in range(map.count()):
+        assert_equal(same.labels[index], map.labels[index])
+    # Onto a finer grid: each voxel takes its nearest source voxel.
+    var target = ImageVolume(40, 36, 20, _mm(0.7), _mm(0.8), _mm(1.5))
+    target.origin = v3(-0.004, 0.001, -0.003)
+    var fine = resample_labels_onto(map, source, target)
+    var count = 0
+    for k in range(20):
+        for j in range(36):
+            for i in range(40):
+                var p = target.patient_point(Float64(i), Float64(j), Float64(k))
+                var q = source.voxel_point(p)
+                var x = Int(floor(q.x + 0.5))
+                var y = Int(floor(q.y + 0.5))
+                var z = Int(floor(q.z + 0.5))
+                var expected = UInt8(0)
+                if map.contains(x, y, z):
+                    expected = map.labels[map.index(x, y, z)]
+                assert_equal(fine.labels[fine.index(i, j, k)], expected)
+                if expected == 3:
+                    count += 1
+    assert_true(count > 100)
+    with assert_raises(contains="different grids"):
+        _ = resample_labels_onto(map, target, target)
 
 
 def main() raises:

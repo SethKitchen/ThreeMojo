@@ -39,10 +39,11 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `printing` | `printable_stl` and `label_stl` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement`, `draw_line`, `zoom_image`, `slice_size` and `label_color` |
 | `contour` | `slice_outlines`, `Outline` and `draw_outlines` |
+| `fusion` | `overlay_values` and `hot_color` |
 | `reformat` | `oblique_slice`, `slab_projection` and `sample_point` |
 | `curved` | `curved_reformat` |
 | `path` | `label_path`, `smooth_path` and `resample_path` |
-| `resample` | `resample_volume` and `resample_labels` |
+| `resample` | `resample_volume`, `resample_labels`, `resample_onto` and `resample_labels_onto` |
 | `crop` | `crop_volume`, `crop_labels`, `label_box` and `VoxelBox` |
 
 ## Read a DICOM series
@@ -212,6 +213,19 @@ var labels = resample_labels(map, mm, mm, mm)
 ```
 
 The new grid keeps the first voxel center, the axes, the window and the extent of the old grid. Along each axis it has `floor(extent / spacing) + 1` voxels, so a step that does not divide the extent stops at the last whole step. `resample_volume` takes the trilinear blend of the old voxels at each new voxel center. `resample_labels` takes the label of the nearest old voxel center, because labels cannot blend.
+
+## Resample onto another grid
+
+`resample_onto(volume, target, outside)` brings a volume onto the grid of another volume, in patient space. Use it to bring a PET volume onto the grid of a CT, so that the two can be drawn and measured together.
+
+```mojo
+var pet_on_ct = resample_onto(pet, ct, 0)
+var labels_on_ct = resample_labels_onto(pet_labels, pet, ct)
+```
+
+The result takes the size, spacing, origin and axes of `target`, and the window of `volume`. Each voxel takes the trilinear value of `volume` at its patient position. A voxel whose center falls outside the box of the voxel centers of `volume` gets `outside`. The two volumes need not share their spacing, their extent or the turn of their axes.
+
+`resample_labels_onto(map, placed, target)` does the same for a label map, which `placed` puts in patient space. Each voxel takes the label of the nearest voxel center of `map`, rounded half up along each axis. A voxel whose nearest center is outside `map` is background.
 
 ## Crop to a region
 
@@ -692,6 +706,22 @@ The outline crosses each side between a pixel of the label and a pixel outside i
 
 The area of an outer outline is positive, and the area of a hole is negative. So the sum over the outlines of a slice is the area inside the label's outlines. It is a little less than the area of the pixels, because the outline cuts each corner. Use `slice_areas` for the area of the pixels.
 
+## Fuse PET over CT
+
+`overlay_values(image, volume, axis, index, low, high, opacity, zoom)` blends the values of a second volume over a slice image. Use it to show a PET over the anatomy of a CT. The second volume must be on the grid of the slice, so bring it there with `resample_onto` first.
+
+```mojo
+var suv_on_ct = resample_onto(suv_volume(pet, suv_factor(first.pet)), ct, 0)
+var image = zoom_image(render_slice(ct, K_AXIS, 40), 3)
+overlay_values(image, suv_on_ct, K_AXIS, 40, 1.0, 8.0, 0.75, 3)
+```
+
+The color runs on the hot scale from `low` to `high`. It is dark at the bottom, red at a third, yellow at two thirds and white at the top. `hot_color(t)` gives it. A value below `low` leaves its pixel as it is. The color covers a pixel with the weight `opacity * min(1, 3 t)`, where `t` is the share of the range. So a value just past `low` fades in, and the edge of the threshold does not show as a dark rim.
+
+![A head phantom CT, a synthetic PET in SUV, and the two fused with a lesion outlined](out/fusion.png)
+
+`examples/fusion.mojo` makes this picture. The CT is the head phantom on voxels of 1.56 mm. The PET is synthetic, on 4 mm voxels placed apart from the CT's. The brain takes up a little tracer, and a lesion of 8 mm radius takes up five times more. A Gaussian of 3 mm blurs the PET, as the resolution of a scanner does. The example turns the PET into SUV, brings it onto the CT's grid, and labels the lesion at 40 percent of the largest SUV.
+
 ## Verification
 
 The tests check these results:
@@ -712,6 +742,8 @@ The tests check these results:
 - The centered path through a straight tube runs down its axis, and a start off the axis joins the axis. Through a bent tube, each step goes to a neighbor inside the label, and the path straightens into a curved reformat.
 - A curved reformat along a straight path matches a linear field at every pixel. Along a bent path, the corner falls at its arc length, and an `up` that leans along the path keeps only its square part. A point past the volume takes the `outside` value.
 - A crop keeps each value, and each voxel keeps its patient position on turned axes. A label box grows by its margin, and the grid's edge cuts it.
+- A linear field on a turned grid, resampled onto a finer grid of other axes, keeps its value at every voxel inside. Every voxel outside gets the `outside` value. A volume and a label map resampled onto their own grid are the same. A label map onto a finer grid matches a search for each nearest voxel.
+- A random volume and label map on a turned grid were resampled onto a finer grid that reaches past them. Inside the box of the voxel centers, the values match scipy's `map_coordinates` of order 1 to Float32 rounding. Two voxels on the face of the box, 1e-16 outside it, count as inside here and outside in scipy. Inside the box, the labels match scipy's order 0. In the half voxel past the box, the labels keep the nearest voxel, which still covers the point, where scipy gives the background. That check is not part of the test suite.
 - A linear field resampled from 0.5 x 0.5 x 3 mm voxels to 1 mm cubes keeps its value at every new voxel. A label slice of 3 mm becomes the three 1 mm slices nearest to it.
 - A slab of four planes through a ramp gives its top plane as its maximum and its bottom plane as its minimum. Its mean is its center value.
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
@@ -725,6 +757,7 @@ The tests check these results:
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
 - One pixel has a diamond outline of half its area. A rectangle of 3 by 2 pixels of 0.5 by 0.8 mm has its exact cut length and area. A ring gives its outer outline and a hole with a negative area. Pixels that touch at a corner have two outlines, and pixels that share a side have one.
 - On 9 slices of a random map across the three axes, all 429 outlines match scikit-image 0.26's `find_contours`. Their point counts are the same, their lengths match to 2e-12 mm and their areas to 1e-13 mm^2. That check is not part of the test suite.
+- The hot scale is dark at 0, red at a third, yellow at two thirds and white at 1. On a slice of six values, each pixel blends to the byte of its color and weight. A value below the range keeps its pixel. A value at a sixth of the range fades in at half the weight. Each axis and a zoom of 2 map the pixels to their voxels.
 - A circle of 2 pixels holds the 13 lattice points of its disc. On a ramp, a disc gives the value at its center and the sample deviation of its pixels. With pixels 0.5 mm wide, a circle of 1 mm holds 7 pixels. A circle at a corner keeps the 6 pixels of the grid.
 - The values 1, 2, 3, 4 and 10 have a mean of 4 and a deviation of `sqrt(10)`. Their 10th percentile is 1.4, and their 90th percentile is 7.6. Their histogram entropy matches numpy to the last digit. The entropy uses `log`, because the Float64 `log2` of Mojo 1.2 is off by about 1e-9.
 - On the 761 voxels of an ellipsoid, every first-order feature matches numpy 2.1.3 and scipy 1.18.1 to 1e-14, relative. That check is not part of the test suite.
@@ -772,6 +805,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A connectivity is not one of the three | `region_grow`, `keep_largest`, `label_pieces` |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | An outline has a bad label, the background, a bad axis or slice, or a zoom out of range | `slice_outlines`, `draw_outlines`, `zoom_image` |
+| An overlay has a bad axis or slice, a range that is not finite or does not rise, an opacity or a zoom out of range, or an image of another size | `overlay_values` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
 | An end of a centered path is outside the grid or the label, or no path joins the ends | `label_path` |
 | A path has fewer than two points or two equal points in a row, or a pass count or a spacing is out of range | `smooth_path`, `resample_path` |
@@ -780,6 +814,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A texture has a bad label, axis, slice, offset, level count or range, or no pair at its offset | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` |
 | A first-order feature has another grid, a bad or empty label, a bad bin count or a bad range | `intensity_features` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels`, `label_overlaps` |
+| A label map and the volume that places it differ in grid or spacing | `resample_labels_onto` |
 | A table of overlaps is empty | `mean_dice` |
 | A crop box leaves the grid or holds no voxel, or a label box has a bad label or margin | `crop_volume`, `crop_labels`, `label_box` |
 | A shape or a slice area needs the background, an empty label, another grid or a bad axis | `label_shape`, `slice_areas` |

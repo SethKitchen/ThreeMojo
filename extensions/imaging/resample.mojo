@@ -13,10 +13,18 @@ one: along each axis it has `floor(extent / spacing) + 1` voxels.
 `resample_volume` takes the trilinear blend of the old voxels at each
 new voxel center. `resample_labels` takes the label of the nearest old
 voxel center, because labels cannot blend.
+
+`resample_onto` and `resample_labels_onto` instead take the grid of
+another volume, in patient space: its size, spacing, origin and axes.
+Use them to bring a PET volume onto the grid of a CT, so the two can be
+drawn together. A voxel of the new grid whose center falls outside the
+box of the old voxel centers gets the `outside` value, or the
+background.
 """
 
 from extensions.imaging.image_volume import ImageVolume, require_spacing
-from extensions.imaging.labels import LabelMap
+from extensions.imaging.labels import LabelMap, require_same_grid
+from extensions.imaging.reformat import sample_point
 from std.math import floor
 from units.si import Length64, METER
 
@@ -133,4 +141,87 @@ def resample_labels(
                 out.labels[out.index(i, j, k)] = map.labels[
                     map.index(ii, jj, kk)
                 ]
+    return out^
+
+
+def resample_onto(
+    volume: ImageVolume, target: ImageVolume, outside: Float32
+) raises -> ImageVolume:
+    """Return a volume resampled onto the grid of another volume.
+
+    Each voxel of the result takes the trilinear value of `volume` at the
+    patient position of the same voxel of `target`.
+
+    Args:
+        volume: The volume to resample, such as a PET volume.
+        target: The volume whose size, spacing, origin and axes the result
+            takes, such as a CT volume. Its values do not count.
+        outside: The value of a voxel whose center is outside the box of
+            the voxel centers of `volume`.
+
+    Returns:
+        The resampled volume, with the window of `volume`.
+
+    Raises:
+        Error: If the target's grid cannot be made.
+    """
+    var out = ImageVolume(
+        target.nx,
+        target.ny,
+        target.nz,
+        target.spacing_x,
+        target.spacing_y,
+        target.spacing_z,
+    )
+    out.origin = target.origin
+    out.axis_x = target.axis_x
+    out.axis_y = target.axis_y
+    out.axis_z = target.axis_z
+    out.window_center = volume.window_center
+    out.window_width = volume.window_width
+    for k in range(out.nz):  # pragma: no branch
+        for j in range(out.ny):  # pragma: no branch
+            for i in range(out.nx):  # pragma: no branch
+                var p = out.patient_point(Float64(i), Float64(j), Float64(k))
+                out.values[out.index(i, j, k)] = sample_point(
+                    volume, p, outside
+                )
+    return out^
+
+
+def resample_labels_onto(
+    map: LabelMap, placed: ImageVolume, target: ImageVolume
+) raises -> LabelMap:
+    """Return a label map resampled onto the grid of another volume.
+
+    Each voxel of the result takes the label of the voxel of `map` whose
+    center is nearest its patient position, rounded half up along each
+    axis.
+
+    Args:
+        map: The label map.
+        placed: The volume of the map, which places it in patient space.
+        target: The volume whose grid the result takes.
+
+    Returns:
+        A label map on the grid of `target`. A voxel whose nearest center
+        is outside the grid of `map` is background.
+
+    Raises:
+        Error: If `map` and `placed` differ in grid or spacing.
+    """
+    require_same_grid(map, placed)
+    var out = LabelMap(target)
+    for k in range(target.nz):  # pragma: no branch
+        for j in range(target.ny):  # pragma: no branch
+            for i in range(target.nx):  # pragma: no branch
+                var p = target.patient_point(Float64(i), Float64(j), Float64(k))
+                var q = placed.voxel_point(p)
+                var x = Int(floor(q.x + 0.5))
+                var y = Int(floor(q.y + 0.5))
+                var z = Int(floor(q.z + 0.5))
+                if map.contains(x, y, z):
+                    out.labels[out.index(i, j, k)] = map.labels[
+                        map.index(x, y, z)
+                    ]
     return out^
