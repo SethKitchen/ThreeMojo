@@ -24,6 +24,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest` and `label_surface` |
 | `measure` | `label_statistics` and `voxel_distance` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
+| `reformat` | `oblique_slice` |
 
 ## Read a DICOM series
 
@@ -225,6 +226,20 @@ The volume of a label is a count of voxels. It is not the volume inside a smooth
 
 In an axial series, `K_AXIS` gives axial slices, `J_AXIS` coronal slices and `I_AXIS` sagittal slices.
 
+## Reformat on any plane
+
+`oblique_slice(volume, center, right, down, width, height, spacing, outside)` samples a volume on any plane through a point in patient space. Use it for a plane along a vessel or square to a bone. The directions `right` and `down` must be square to each other.
+
+```mojo
+var plane = oblique_slice(volume, center, v3(1, 1, 0), v3(0, 0, -1),
+    256, 256, Length64(0.5, MILLIMETER64), -1000)
+var image = render_slice(plane, K_AXIS, 0)
+```
+
+Each pixel is a trilinear sample of the volume. A point outside the box of voxel centers takes the `outside` value, such as -1000 for air in CT. The result is a volume of one slice, placed on the plane, with the source's window and photometric interpretation. `voxel_point(p)` gives the voxel units of a patient-space point. It is the inverse of `patient_point`.
+
+## Overlays
+
 `overlay_labels(image, map, axis, index, opacity)` blends a color over each labeled pixel. The labels cycle through eight colors from `label_color`. `draw_measurement(image, axis, a, b, color)` draws the line between two points, with a small cross at each end.
 
 ## Verification
@@ -235,6 +250,7 @@ The tests check these results:
 - A 12-bit signed value masks and extends its sign: `0xF800` reads as -2048.
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
+- An oblique reformat of a linear field matches the field at every pixel.
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
 - An isosurface of a linear ramp has the full iso color along the gradient, and the ambient light across it.
 - An ellipsoid of 904.8 voxels labels 879 voxels, within four percent, with its centroid exact.

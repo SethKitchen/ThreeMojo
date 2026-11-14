@@ -13,7 +13,7 @@ slices. The values are stored with `i` fastest, then `j`, then `k`.
 """
 
 from extensions.imaging.ids import MONOCHROME2, Photometric
-from extensions.sdf.vector import V3, v3
+from extensions.sdf.vector import V3, dot, v3
 from std.math import floor, isfinite, max, min
 from units.quantity import Unit
 from units.si import Length64, METER
@@ -290,6 +290,26 @@ struct ImageVolume(Copyable, Movable):
             + self.axis_x * (x * self.spacing_x.to(METER))
             + self.axis_y * (y * self.spacing_y.to(METER))
             + self.axis_z * (z * self.spacing_z.to(METER))
+        )
+
+    def voxel_point(self, p: V3) -> V3:
+        """Return the voxel units of a patient-space point.
+
+        This is the inverse of `patient_point` when the three axes are
+        square to each other, as the readers make them.
+
+        Args:
+            p: The point in patient space, in meters.
+
+        Returns:
+            The point in voxel units: `(1, 2, 3)` is the center of voxel
+            `(1, 2, 3)`.
+        """
+        var d = p - self.origin
+        return v3(
+            dot(d, self.axis_x) / self.spacing_x.to(METER),
+            dot(d, self.axis_y) / self.spacing_y.to(METER),
+            dot(d, self.axis_z) / self.spacing_z.to(METER),
         )
 
     def fit_window(mut self):
