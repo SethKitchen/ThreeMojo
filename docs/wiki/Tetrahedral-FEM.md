@@ -12,7 +12,7 @@
 |---|---|
 | `ids` | `NodeId`, `ElementId`, `MaterialId`, `DofAxis` and `ElementOrder` |
 | `mesh` | `TetMesh`, `box_mesh`, `voxel_mesh`, `voxel_mesh_labels`, `quadratic_mesh`, `boundary_faces`, `edge_pairs` and `signed_volume` |
-| `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of` and `von_mises` |
+| `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of`, `von_mises`, `principal_stresses` and `PrincipalStress` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
 | `post` | `stress_geometry` and `stress_color` |
 | `export` | `vtk_mesh` and `vtk_result` |
@@ -108,6 +108,18 @@ The supports must stop the mesh from moving as a rigid body. A mesh that can sti
 
 Check `status`. A solve that runs out of iterations returns its last iterate with `BUDGET_EXHAUSTED`.
 
+## Principal stresses
+
+`result.principal(element)` gives the principal stresses of one element, and `principal_stresses(stress)` gives them for any six stresses in Voigt order. Use them for a brittle material or for bone, which fail by the largest tension or compression.
+
+```mojo
+var principal = result.principal(ElementId(12))
+print(principal.values[0].to(MEGAPASCAL), principal.values[2].to(MEGAPASCAL))
+var along = principal.directions[0]
+```
+
+The three `values` run from the largest to the smallest. Each of the `directions` is a unit vector, and the three are square to each other. A direction has an arbitrary sign. When two principal stresses are equal, any two square directions in their plane are correct. The cyclic Jacobi method finds the values and the directions. It runs ten sweeps, and a 3 by 3 tensor reaches rounding within five.
+
 ## Draw the result
 
 `stress_geometry(mesh, result, scale, low, high)` returns the outer surface. It moves each node by its displacement times `scale`. Each face takes the color of the von Mises stress of its element. The scale runs through blue, cyan, green, yellow and red from `low` to `high`. Each face has its own vertices, so the colors and normals are flat.
@@ -141,10 +153,12 @@ The file is an ASCII `UNSTRUCTURED_GRID` in meters. A four-node element is cell 
 |---|---|---|
 | `material` | Cell scalar | The element's material index |
 | `von_mises` | Cell scalar | The von Mises stress, in pascals |
+| `principal` | Cell scalar of 3 | The principal stresses from the largest, in pascals |
+| `first_direction` | Cell vector | The direction of the largest principal stress |
 | `stress` | Cell tensor | The symmetric stress tensor, in pascals |
 | `displacement` | Point vector | The node's displacement, in meters |
 
-Each number is written in full, so it reads back exactly. meshio 5.3.5 read the linear and the quadratic files of a pressed bar, with the expected stress and stretch. That check is not part of the test suite.
+Each number is written in full, so it reads back exactly. meshio 5.3.5 read the linear and the quadratic files of a pressed bar, with the expected stress and stretch. It also read the principal fields of a bent beam, which match the eigenvalues that numpy 2.1.3 gives to a relative 1e-15. These checks are not part of the test suite.
 
 ## Verification
 
@@ -153,6 +167,7 @@ The tests check these results:
 - A bar of 96 elements on symmetry supports is pulled 1 mm along x. Every element has a stress of 100 MPa, to within 1 mPa. The bar narrows by Poisson's ratio, and its end reaction is 100 MN.
 - The same bar under a pressure of 9 MPa stretches 90 micrometers, as `sigma L / E` gives.
 - An element stiffness is symmetric. A translation and a small rotation cause no force.
+- Each principal stress and direction is an eigen-pair of its tensor, and the directions are square. The trace and the von Mises stress do not change. A pure shear `tau` gives `tau`, 0 and `-tau`, and a plane stress gives the center plus and minus the radius of Mohr's circle.
 - `von_mises` gives the stress for a uniaxial stress and `sqrt(3) tau` for a pure shear.
 - The six tetrahedra of each voxel fill its volume exactly.
 - A quadratic bar under a pull or a pressure has the exact uniform stress and stretch.

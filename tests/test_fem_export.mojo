@@ -7,7 +7,14 @@
 
 from extensions.fem.elasticity import IsotropicMaterial
 from extensions.fem.export import vtk_mesh, vtk_result
-from extensions.fem.ids import DOF_X, DOF_Y, DOF_Z, MaterialId, NodeId
+from extensions.fem.ids import (
+    DOF_X,
+    DOF_Y,
+    DOF_Z,
+    ElementId,
+    MaterialId,
+    NodeId,
+)
 from extensions.fem.mesh import TetMesh, box_mesh, quadratic_mesh
 from extensions.fem.static import StaticProblem, StaticResult, solve_static
 from extensions.sdf.vector import v3
@@ -81,6 +88,8 @@ def test_result_fields() raises:
     # 200 MPa along x and nothing else.
     assert_true("SCALARS von_mises double 1\nLOOKUP_TABLE default\n" in text)
     assert_true("TENSORS stress double\n" in text)
+    assert_true("SCALARS principal double 3\nLOOKUP_TABLE default\n" in text)
+    assert_true("VECTORS first_direction double\n" in text)
     assert_true("POINT_DATA 8\nVECTORS displacement double\n" in text)
     assert_true("\n0.002 0.0 0.0\n" in text)
     var lines = text.split("\n")
@@ -93,6 +102,18 @@ def test_result_fields() raises:
     assert_true(abs(atof(first[0]) - 200e6) < 1e-3)
     assert_true(abs(atof(first[4])) < 1e-3)
     assert_true(abs(result.von_mises[0].to(PASCAL) - 200e6) < 1e-3)
+    var principal = result.principal(ElementId(0))
+    assert_true(abs(principal.values[0].to(PASCAL) - 200e6) < 1e-3)
+    assert_true(abs(principal.values[2].to(PASCAL)) < 1e-3)
+    assert_true(abs(abs(principal.directions[0].x) - 1) < 1e-12)
+    var principal_line = 0
+    for index in range(len(lines)):
+        if lines[index] == "VECTORS first_direction double":
+            principal_line = index + 1
+    var direction = String(lines[principal_line]).split(" ")
+    assert_true(abs(abs(atof(direction[0])) - 1) < 1e-12)
+    with assert_raises(contains="element"):
+        _ = result.principal(ElementId(6))
 
 
 def test_empty_and_refusals() raises:

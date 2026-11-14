@@ -13,10 +13,13 @@ whose edge order is this extension's: 0-1, 1-2, 2-0, 0-3, 1-3 and 2-3.
 Each element has its material index as the cell scalar `material`.
 `vtk_result` adds the solved fields: the point vectors `displacement`, in
 meters, and the cell scalars `von_mises` and cell tensors `stress`, in
-pascals. Each number is written in full, so it reads back exactly.
+pascals. It adds the cell scalars `principal`, the three principal
+stresses from the largest, and the cell vectors `first_direction`, the
+direction of the largest. Each number is written in full, so it reads
+back exactly.
 """
 
-from extensions.fem.ids import LINEAR
+from extensions.fem.ids import ElementId, LINEAR
 from extensions.fem.mesh import TetMesh
 from extensions.fem.static import StaticResult
 from units.si import PASCAL
@@ -76,8 +79,9 @@ def vtk_result(mesh: TetMesh, result: StaticResult) raises -> String:
         result: Its result.
 
     Returns:
-        The text, with each element's material, von Mises stress and
-        stress tensor, and each node's displacement.
+        The text, with each element's material, von Mises stress,
+        principal stresses and stress tensor, and each node's
+        displacement.
 
     Raises:
         Error: If the result is not for this mesh.
@@ -91,6 +95,20 @@ def vtk_result(mesh: TetMesh, result: StaticResult) raises -> String:
     out += "SCALARS von_mises double 1\nLOOKUP_TABLE default\n"
     for e in range(cells):
         out += _number(result.von_mises[e].to(PASCAL)) + "\n"
+    out += "SCALARS principal double 3\nLOOKUP_TABLE default\n"
+    var firsts = List[String]()
+    for e in range(cells):
+        var principal = result.principal(ElementId(e))
+        out += _number(principal.values[0].to(PASCAL)) + " "
+        out += _number(principal.values[1].to(PASCAL)) + " "
+        out += _number(principal.values[2].to(PASCAL)) + "\n"
+        var d = principal.directions[0]
+        firsts.append(
+            _number(d.x) + " " + _number(d.y) + " " + _number(d.z) + "\n"
+        )
+    out += "VECTORS first_direction double\n"
+    for line in firsts:
+        out += line
     out += "TENSORS stress double\n"
     # Voigt order xx, yy, zz, yz, xz, xy as a full symmetric matrix.
     var order: List[Int] = [0, 5, 4, 5, 1, 3, 4, 3, 2]

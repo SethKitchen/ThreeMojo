@@ -18,9 +18,11 @@ that can still move has a singular stiffness, and the solve refuses it.
 
 from extensions.fem.elasticity import (
     IsotropicMaterial,
+    PrincipalStress,
     element_stiffness,
     element_strain,
     quadratic_gradients,
+    principal_stresses,
     quadratic_stiffness,
     shape_gradients,
     stress_of,
@@ -334,6 +336,33 @@ struct StaticResult(Movable):
             self.displacements[at + 1],
             self.displacements[at + 2],
         )
+
+    def principal(self, element: ElementId) raises -> PrincipalStress:
+        """Return the principal stresses of one element.
+
+        A ten-node element has the stress at its centroid.
+
+        Args:
+            element: The element.
+
+        Returns:
+            The three principal stresses from the largest, and their
+            directions.
+
+        Raises:
+            Error: If the element id names no element.
+        """
+        require_id(
+            element.is_valid(),
+            element.value,
+            len(self.von_mises),
+            "element",
+        )
+        var at = 6 * element.value
+        var stress = List[Float64]()
+        for part in range(6):  # pragma: no branch
+            stress.append(self.stresses[at + part])
+        return principal_stresses(stress)
 
 
 def _corners(mesh: TetMesh, element: Int) -> List[V3]:
