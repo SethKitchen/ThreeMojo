@@ -27,6 +27,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `compare` | `compare_labels`, `LabelComparison`, `label_overlaps`, `LabelOverlap`, `mean_dice`, `surface_voxels` and `percentile` |
 | `roi` | `circle_statistics` and `RegionStatistics` |
 | `texture` | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` and `TextureFeatures` |
+| `firstorder` | `intensity_features` and `IntensityFeatures` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
@@ -399,6 +400,27 @@ A pixel counts when its center is at most `radius` from the center of the circle
 
 A `RegionStatistics` holds the pixel count, the `area`, the `mean`, the `deviation`, the `minimum` and the `maximum`. The values are in the units of the volume, such as HU after the rescale. The deviation is the sample one, with `n - 1`, as ImageJ reports it.
 
+## Measure first-order features
+
+`intensity_features` gives the first-order features of the values inside one label. They describe the spread of the values, without regard to where the values are. Radiomics uses them together with the texture features.
+
+```mojo
+var f = intensity_features(volume, map, LabelId(1), 32, -100, 300)
+print(f.mean, f.deviation, f.skewness, f.median, f.entropy)
+```
+
+| Feature | Definition |
+|---|---|
+| `mean`, `deviation` | The mean and the standard deviation, with `n` and not `n - 1` |
+| `skewness`, `kurtosis` | The third and the fourth central moments, over the third and the fourth powers of the deviation. A normal law has a kurtosis of 3 |
+| `minimum`, `p10`, `median`, `p90`, `maximum` | The 0th, 10th, 50th, 90th and 100th percentiles |
+| `interquartile` | The 75th percentile less the 25th |
+| `energy` | The sum of the squared values |
+| `entropy` | `-sum(p log2 p)` over the shares `p` of a histogram, in bits |
+| `uniformity` | The sum of `p^2` over the same histogram |
+
+The percentiles interpolate linearly between ranks, as numpy does by default. The histogram has `bins` bins of equal width from `low` to `high`. A value below `low` goes into the first bin, and a value above `high` goes into the last bin. A region of one value has a skewness and a kurtosis of 0. The definitions are those of numpy's `std` and `percentile`, and of scipy's `skew` and `kurtosis` with `fisher=False`.
+
 ## Measure texture
 
 Radiomics describes the texture of a region, such as a lesion, by how often two gray levels sit side by side. `cooccurrence_matrix` counts the gray levels of each pair of pixels at an offset, in one slice and inside one label. `texture_features` gives the Haralick features of the matrix.
@@ -608,6 +630,8 @@ The tests check these results:
 - Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
 - A circle of 2 pixels holds the 13 lattice points of its disc. On a ramp, a disc gives the value at its center and the sample deviation of its pixels. With pixels 0.5 mm wide, a circle of 1 mm holds 7 pixels. A circle at a corner keeps the 6 pixels of the grid.
+- The values 1, 2, 3, 4 and 10 have a mean of 4 and a deviation of `sqrt(10)`. Their 10th percentile is 1.4, and their 90th percentile is 7.6. Their histogram entropy matches numpy to the last digit. The entropy uses `log`, because the Float64 `log2` of Mojo 1.2 is off by about 1e-9.
+- On the 761 voxels of an ellipsoid, every first-order feature matches numpy 2.1.3 and scipy 1.18.1 to 1e-14, relative. That check is not part of the test suite.
 - A board in three dimensions flips along k, with a contrast of 1, and not along `(1, 1, 0)`. With `dk` zero, its matrix is the matrices of the slices pooled, to 1e-15.
 - On a checkerboard, neighbors along x give a contrast of 1 and a correlation of -1. Diagonal neighbors give a contrast of 0 and a correlation of 1. The gray levels clamp at both ends, and only pairs in the label count. On a random image of 8 levels, the six features at 8 offsets match scikit-image 0.26 to 4e-15. That check is not part of the test suite.
 - A box of 10 by 6 by 8 mm has voxels of 1 by 1 by 2 mm. Its semi-axes are `sqrt(5 / 12)` times its sides, to 1e-9, along the grid axes. Its axes follow the patient frame of the volume. An ellipsoid of 20, 12 and 8 mm turned 30 degrees gives its semi-axes within 2 percent, and its long axis within one degree. Each slice of the box has its area exactly.
@@ -649,6 +673,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A path has fewer than two points or two equal points in a row, `up` is zero or along a segment, or a size is out of range | `curved_reformat` |
 | A circle has a bad axis, slice, center or radius, or holds no pixel center | `circle_statistics` |
 | A texture has a bad label, axis, slice, offset, level count or range, or no pair at its offset | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` |
+| A first-order feature has another grid, a bad or empty label, a bad bin count or a bad range | `intensity_features` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels`, `label_overlaps` |
 | A table of overlaps is empty | `mean_dice` |
 | A crop box leaves the grid or holds no voxel, or a label box has a bad label or margin | `crop_volume`, `crop_labels`, `label_box` |
@@ -677,6 +702,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 ## References
 
 - Haralick, Shanmugam and Dinstein, "Textural features for image classification", 1973.
+- Zwanenburg and others, "The Image Biomarker Standardization Initiative", Radiology, 2020.
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.
 - NEMA PS3.3, "Information Object Definitions", sections C.7.6.2 and C.11.2.1.
 - NEMA PS3.10, "Media Storage and File Format", section 7.
