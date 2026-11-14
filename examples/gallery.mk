@@ -269,6 +269,9 @@ $(call gallery,medical-imaging,medical_imaging)
 # An ideal peptide of a helix, a loop and a strand: its cartoon ribbon, and
 # its excluded surface colored by element and by hydropathy.
 $(call gallery,molecule,molecule)
+# A synthetic predicted model: its ribbon and excluded surface colored by
+# pLDDT in the four bands of the AlphaFold database.
+$(call gallery,predicted,predicted)
 # A steel cantilever of tetrahedra bent by a tip load, drawn 40 times its
 # deflection and colored by von Mises stress.
 $(call gallery,tetrahedral-fem,tetrahedral_fem)

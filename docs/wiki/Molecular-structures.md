@@ -503,6 +503,10 @@ var summary = confidence_summary(model, ModelId(0))
 print(summary.mean, summary.very_high, summary.very_low)
 ```
 
+![A synthetic predicted model: a dark blue helix, a light blue strand, a yellow loop and orange tails, as a ribbon and as a surface](out/predicted.png)
+
+`examples/predicted.mojo` makes this picture. Its model is synthetic: 38 residues of an ideal tail, helix, loop, strand and tail, with the pLDDT that a prediction often gives each part. The tails are very low, as a disordered end often is. The model has a mean pLDDT of 75.6, with 17 residues very high, 8 confident, 5 low and 8 very low.
+
 `confidence_summary(structure, model)` gives the mean pLDDT of the residues with a CA atom, and the number of residues in each band. The pLDDT of a residue is the B-factor of its CA, read in square angstroms as the file gives it. `confidence_color(plddt)` gives the sRGB color of one value. A value on the edge of two bands, such as 90, is in the lower band, to a rounding of 1e-9.
 
 A region of very low pLDDT is often disordered. Do not read its shape as a structure. A high pLDDT says that the local shape is likely right. It does not say that the domains are in the right place relative to each other.
