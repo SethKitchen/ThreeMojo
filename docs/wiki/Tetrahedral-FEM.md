@@ -167,6 +167,12 @@ Mode `i` solves `K phi = omega^2 M phi`, and its frequency is `omega / (2 pi)`. 
 
 The prescribed degrees of freedom are removed, and the subspace iteration of the [Numerics](Numerics) extension solves for the lowest modes. A Sturm check makes sure that no lower mode was missed. Each shape has `phi^T M phi = 1`, and is zero where a degree of freedom is prescribed. Use ten-node elements for bending modes. Four-node elements are too stiff in bending, as in a static problem.
 
+![The first three modes of a steel tuning fork, colored by motion from blue at rest to red](out/fem-modes.png)
+
+`examples/fem_modes.mojo` makes this picture. A steel tuning fork of 5 mm voxels has two tines 80 mm long, 15 mm apart. Ten-node elements fill it, and the bottom of its stem is clamped. The first two modes sway the tines together, at 254 Hz in the plane of the fork and at 256 Hz across it. The third mode, at 485 Hz, moves the tines toward each other. This is the mode that a tuning fork rings in.
+
+The dense fallback of the Sturm check takes at most 4096 free degrees of freedom. Keep a modal mesh below that size.
+
 `mode_geometry(mesh, shape, amplitude)` draws one mode. A mode shape has no size of its own, so the shape is scaled until the node that moves most moves by `amplitude`. Each vertex takes the color of how far its node moves, from blue at rest to red at `amplitude`. `vtk_modes(mesh, modes)` writes every shape for ParaView. See [Export to ParaView](#export-to-paraview).
 
 ## Draw the result

@@ -276,3 +276,6 @@ $(call gallery,tetrahedral-fem,tetrahedral_fem)
 # surfaces, and the two-material voxel mesh under a platen, colored by
 # von Mises stress.
 $(call gallery,ct-to-fem,ct_to_fem)
+# A steel tuning fork of ten-node tetrahedra: its first three natural
+# modes, colored by motion.
+$(call gallery,fem-modes,fem_modes)
