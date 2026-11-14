@@ -843,6 +843,17 @@ A library for the requirements that turn a material into a product. A checked bo
 - [x] [Materials and coatings](https://github.com/SethKitchen/ThreeMojo/wiki/Materials-and-coatings): expansion curves, melting points and eutectics with sources, Stoney's stress, buckling and thermal shock [#949](https://github.com/SethKitchen/ThreeMojo/issues/949)
 - [x] [Crystals and figures](https://github.com/SethKitchen/ThreeMojo/wiki/Crystals-and-figures): a CIF reader with symmetry expansion, densities and bonds, chart axes, and six gallery figures [#950](https://github.com/SethKitchen/ThreeMojo/issues/950)
 
+### Biomedical research tools
+
+Medical images, macromolecules and solid mechanics, for research and teaching. A checked box records implemented scope. It does not establish clinical or engineering validity. These tools are not medical devices.
+
+- [x] [DICOM volumes](https://github.com/SethKitchen/ThreeMojo/wiki/Medical-imaging#read-a-dicom-series): explicit and implicit VR little-endian Part 10 files, slice stacks with physical spacing, a writer and a head phantom [#987](https://github.com/SethKitchen/ThreeMojo/issues/987)
+- [x] [Volume ray casting](https://github.com/SethKitchen/ThreeMojo/wiki/Medical-imaging#draw-a-volume): transfer functions, DICOM windows, maximum intensity, crops and gradient shading on CPU tasks [#988](https://github.com/SethKitchen/ThreeMojo/issues/988)
+- [x] [Label maps and measurements](https://github.com/SethKitchen/ThreeMojo/wiki/Medical-imaging#label-a-volume): thresholds, region growing, the largest piece, label surfaces, statistics in units, slice overlays and measurement lines [#989](https://github.com/SethKitchen/ThreeMojo/issues/989)
+- [x] [mmCIF structures](https://github.com/SethKitchen/ThreeMojo/wiki/Molecular-structures#read-an-mmcif-file): models, chains, residues, alternate locations, B-factors and secondary structure [#990](https://github.com/SethKitchen/ThreeMojo/issues/990)
+- [x] [Ribbons, surfaces and accessible areas](https://github.com/SethKitchen/ThreeMojo/wiki/Molecular-structures#draw-a-ribbon): an ideal peptide builder, cartoon ribbons, molecular surfaces and Shrake-Rupley areas [#991](https://github.com/SethKitchen/ThreeMojo/issues/991)
+- [x] [Tetrahedral FEM](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM): static linear elasticity on box and voxel meshes, consistent pressure loads, von Mises stress and reactions [#992](https://github.com/SethKitchen/ThreeMojo/issues/992)
+
 ### Out of scope
 
 This port provides native CPU and MAX GPU rendering. It excludes the WebGL and WebGPU renderers, CSS renderers, WebXR, audio, and video and canvas textures.

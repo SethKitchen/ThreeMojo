@@ -24,6 +24,12 @@ The geotech subject analyzes earth-retaining walls: earth and water pressure, LR
 
 The chemistry subject is a library for the steps of a process. It models the thermodynamic, phase, kinetic, physical and engineering requirements that turn a material into a product. Each step has an operating window, and new constraints and data plug in. It also solves equilibria, draws process maps and solves flowsheets. See [Process chemistry](Process-chemistry) and [Why a process runs where it does](Why-a-process-runs-where-it-does).
 
+The imaging subject reads DICOM images and stacks them into volumes with physical spacing. It draws a volume by ray casting, and it labels, measures and overlays regions on slices. See [Medical imaging](Medical-imaging).
+
+The molecule subject reads mmCIF structures, builds ideal peptides, and draws ribbons and surfaces. See [Molecular structures](Molecular-structures).
+
+The fem subject solves static elasticity on tetrahedral meshes, from a box or from the voxels of a label. See [Tetrahedral FEM](Tetrahedral-FEM). These three subjects are for research and teaching. They are not medical devices.
+
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
 The gamepad subject ports the gamepad subsystem of SDL. It reads Xbox, PlayStation, Nintendo and other controllers on Linux and through a host's own gamepad API, and names their controls by position. It runs their rumble, lights, motion sensors and touchpads. See [Gamepads](Gamepads).
@@ -228,6 +234,31 @@ extensions/
     plot.mojo             chart axes for process figures
     production.mojo       the cost of a batch of grown crystals
     processes/            worked processes: titanium, diamond, lime, hpht, mpcvd
+  imaging/
+    ids.mojo              transfer syntaxes, slice axes, render modes, labels
+    image_volume.mojo     a scalar grid with spacing, origin and axes
+    dicom.mojo            the DICOM Part 10 reader
+    dicom_write.mojo      the DICOM writer
+    series.mojo           slice stacks, and volumes cut into slices
+    phantom.mojo          the Shepp-Logan head phantom
+    transfer.mojo         windows and transfer functions
+    raycast.mojo          the CPU volume ray caster
+    labels.mojo           label maps, thresholds, region growing, surfaces
+    measure.mojo          label statistics and distances
+    overlay.mojo          slices, label overlays and measurement lines
+  molecule/
+    ids.mojo              atom, residue, chain and model ids and kinds
+    cif.mojo              the CIF tokenizer and data blocks
+    structure.mojo        the mmCIF structure reader
+    peptide.mojo          ideal peptide backbones
+    ribbon.mojo           cartoon ribbons
+    surface.mojo          accessible areas and surface meshes
+  fem/
+    ids.mojo              node, element and material ids, and axes
+    mesh.mojo             tetrahedral meshes, box and voxel meshers
+    elasticity.mojo       isotropic linear elastic tetrahedra
+    static.mojo           supports, loads and the static solve
+    post.mojo             the deformed surface colored by stress
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.

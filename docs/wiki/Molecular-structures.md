@@ -1,0 +1,195 @@
+# Molecular structures
+
+`extensions/molecule/` reads macromolecular structures from mmCIF files and builds ideal peptide backbones. It draws a structure as a cartoon ribbon or as a surface, and it measures the solvent accessible area of each atom. It is a library for research and teaching. Its measurements are not validated for drug design or for any clinical use.
+
+![The cartoon ribbon of an ideal peptide, and its van der Waals surface colored by element](out/molecule.png)
+
+`examples/molecule.mojo` makes this picture. It builds 30 residues of ideal backbone: a helix, a loop and a strand. The top panel is the ribbon, colored by secondary structure. The bottom panel is the van der Waals surface, colored by element. The program also prints the solvent accessible area, 2434 square angstroms.
+
+## Modules
+
+| Module | What it gives |
+|---|---|
+| `ids` | `AtomId`, `ResidueId`, `ChainId`, `ModelId`, `AtomGroup`, `SecondaryKind`, `AltLocPolicy` and `RibbonColoring` |
+| `cif` | `parse_cif`, `read_cif`, `cif_tokens`, `CifBlock` and `is_null` |
+| `structure` | `Structure`, `parse_mmcif`, `read_mmcif` and `SQUARE_ANGSTROM` |
+| `peptide` | `build_peptide`, `place_atom` and `three_letter` |
+| `ribbon` | `ribbon_geometry` |
+| `surface` | `accessible_areas`, `molecular_surface`, `vdw_radius` and `sphere_points` |
+
+## Read an mmCIF file
+
+```mojo
+var structure = read_mmcif("1abc.cif", FIRST_LOCATION)
+for chain in structure.chains:
+    print(chain.author, chain.residue_count)
+```
+
+`parse_mmcif(text, policy)` reads text that is already in memory. The PDB distributes each entry as an mmCIF file. The older PDB format cannot hold more than 99,999 atoms, and `loaders/pdb.mojo` reads only atoms and bonds from it.
+
+## The structure
+
+A `Structure` holds four lists: `models`, `chains`, `residues` and `atoms`. A model holds a run of chains, a chain holds a run of residues, and a residue holds a run of atoms. Each run is a first index and a count. An id such as `ResidueId(3)` is an index into its list.
+
+| Type | Fields |
+|---|---|
+| `Model` | `number`, `first_chain`, `chain_count` |
+| `Chain` | `label`, `author`, `model`, `first_residue`, `residue_count` |
+| `Residue` | `name`, `seq_id`, `auth_seq_id`, `insertion`, `chain`, `first_atom`, `atom_count`, `secondary` |
+| `Atom` | `name`, `element`, `serial`, `group`, `alt`, `position`, `occupancy`, `b_factor`, `residue` |
+
+Positions are in meters, as the rest of the project keeps them. Read them in angstroms with `ANGSTROM` from `extensions/chemistry/quantities.mojo`. A B-factor is an `Area64`. Read it with `SQUARE_ANGSTROM`.
+
+`find_atom(residue, name)` gives the first atom of a residue with a name, or `AtomId(-1)`. `model_atoms(model)` gives the first atom and the atom count of a model. `bounds(model)` gives the corners of a model's atom centers.
+
+## What the reader takes
+
+The reader takes the first data block. It reads the `_atom_site` table. These columns must be present:
+
+| Column | Field |
+|---|---|
+| `group_PDB` | `group`: `ATOM` or `HETATM` |
+| `type_symbol` | `element` |
+| `label_atom_id` | `name` |
+| `label_comp_id` | The residue `name` |
+| `label_asym_id` | The chain `label` |
+| `label_seq_id` | The residue `seq_id`. A null gives zero. |
+| `Cartn_x`, `Cartn_y`, `Cartn_z` | `position` |
+
+These columns are optional:
+
+| Column | Field | Without it |
+|---|---|---|
+| `id` | `serial` | The row number |
+| `label_alt_id` | `alt` | `.` |
+| `auth_asym_id` | The chain `author` | The chain label |
+| `auth_seq_id` | The residue `auth_seq_id` | The `label_seq_id` |
+| `pdbx_PDB_ins_code` | The residue `insertion` | `?` |
+| `occupancy` | `occupancy` | 1 |
+| `B_iso_or_equiv` | `b_factor` | 0 |
+| `pdbx_PDB_model_num` | The model `number` | 1 |
+
+A new model starts where the model number changes. A new chain starts where `label_asym_id` changes. A new residue starts where `label_seq_id`, `auth_seq_id`, the insertion code or the residue name changes. Two waters with a null `label_seq_id` are two residues when their `auth_seq_id` differs.
+
+## Alternate locations
+
+An atom can have more than one position in a crystal. Each position has an alternate location, such as `A` or `B`, and an occupancy.
+
+| Policy | Atoms kept |
+|---|---|
+| `ALL_LOCATIONS` | Every atom |
+| `FIRST_LOCATION` | The atoms with no alternate location, and in each residue the atoms of the first alternate location in the file |
+
+## Secondary structure
+
+The reader marks helices from `_struct_conf`. A row is a helix when its `conf_type_id` starts with `HELX`. It marks strands from `_struct_sheet_range`. Each row names a chain by `beg_label_asym_id` and a run of residues by `beg_label_seq_id` and `end_label_seq_id`. The marks apply to every model. Other residues are `COIL`.
+
+## CIF text
+
+The tokens follow CIF 1.1. A `#` starts a comment. A value in single or double quotes ends at a matching quote that a blank follows, so `'O'Brien'` is one value. A line that starts with `;` opens a text field, and the next line that starts with `;` closes it.
+
+`parse_cif(text)` returns a `CifBlock`. A name is not case sensitive. `column(tag)` returns the values of a name, one for each row of its table. A single name and value is a table of one row. `column_or(tag, fallback, rows)` returns a fallback when the name is absent. `is_null(value)` is true for `.` and `?`.
+
+## Build a peptide
+
+`build_peptide(sequence, kinds)` places the backbone of a sequence. Each residue gets N, CA, C and O, and CB when it is not glycine. The bond lengths and angles are the ideal values of Engh and Huber. The secondary structure of each residue sets its torsions:
+
+| Kind | phi (degrees) | psi (degrees) |
+|---|---|---|
+| `HELIX` | -57 | -47 |
+| `STRAND` | -139 | 135 |
+| `COIL` | -75 | 145 |
+
+Every peptide bond is trans. `place_atom(a, b, c, bond, angle, torsion)` places each atom from the three before it by the natural extension reference frame. CB comes from the ideal formula that trRosetta uses, which gives an L-amino acid.
+
+These torsions make ideal shapes. They do not fold a chain: the strands of a built peptide do not pair. A real fold comes from an experiment or from a structure prediction.
+
+## Draw a ribbon
+
+`ribbon_geometry(structure, model, coloring, samples, sides)` returns the cartoon of every chain of a model. A ribbon follows a Catmull-Rom spline through the CA atoms. The O atom of each residue gives the direction across the ribbon. A direction that turns more than a right angle from the residue before is flipped, so the ribbon does not twist.
+
+| Kind | Half width (angstroms) | Half thickness (angstroms) |
+|---|---|---|
+| `HELIX` | 1.2 | 0.25 |
+| `STRAND` | 1.0 | 0.25 |
+| `COIL` | 0.3 | 0.3 |
+
+The last residue of a strand ends in an arrow. The arrow starts 1.7 angstroms wide and narrows to a point. A chain breaks where two CA atoms in a row are more than 4.2 angstroms apart, or where a residue has no CA.
+
+`BY_STRUCTURE` colors helices red, strands gold and coils gray. `BY_CHAIN` gives each chain one of eight colors. The colors are linear, as the renderer needs them.
+
+## Measure accessible areas
+
+`accessible_areas(structure, model, probe, points)` gives the solvent accessible area of each atom. It uses the method of Shrake and Rupley.
+
+1. Each atom is a sphere of its van der Waals radius plus the probe radius.
+2. `points` points spread over each sphere by the golden-section spiral.
+3. A point is accessible when no other sphere holds it.
+4. The area is the area of the sphere times the fraction of accessible points.
+
+A probe of 1.4 angstroms is a water molecule. The radii are from Bondi:
+
+| Element | Radius (angstroms) |
+|---|---|
+| H | 1.20 |
+| C | 1.70 |
+| N | 1.55 |
+| O | 1.52 |
+| F | 1.47 |
+| P, S | 1.80 |
+| Cl | 1.75 |
+| Se | 1.90 |
+| Br | 1.85 |
+| I | 1.98 |
+
+Any other element gets 1.8 angstroms.
+
+## Draw a surface
+
+`molecular_surface(structure, model, probe, spacing)` returns the solvent accessible surface as a mesh. It samples the distance to the nearest grown sphere on a grid of the given spacing. It meshes the zero set of that distance by marching tetrahedra. Each vertex takes the CPK color of the atom whose sphere it lies on.
+
+A probe of zero gives the van der Waals surface. The mesh is not the solvent excluded surface, which has smooth patches where the probe touches two or three atoms.
+
+## Verification
+
+The tests check these results:
+
+- A built helix has CA atoms 3.80 angstroms apart.
+- The hydrogen bond from O of residue `i` to N of residue `i + 4` is 2.8 to 3.3 angstroms.
+- CB is 1.527 angstroms from CA.
+- One atom with a probe has the whole area of its grown sphere.
+- Two carbons 3 angstroms apart each lose a cap of `2 pi R h`. The measured area matches to within one percent with 2000 points.
+- Every vertex of a van der Waals surface lies within 0.06 angstroms of an atom sphere, at a spacing of 0.3 angstroms.
+- A ribbon of `n` residues has `(n - 1) samples + 1` rings, and every normal is a unit vector.
+
+## Errors
+
+Every function raises `Error` for input it cannot use.
+
+| Case | Functions |
+|---|---|
+| A quoted value or a text field has no end | `cif_tokens`, `parse_cif`, `parse_mmcif` |
+| No data block, a stray value, or a loop that does not fill its rows | `parse_cif`, `parse_mmcif` |
+| A needed column is missing, or a value is not a number | `parse_mmcif` |
+| An id names no entry | `require_atom`, `find_atom`, `bounds`, `ribbon_geometry` |
+| A code is not a standard amino acid | `build_peptide`, `three_letter` |
+| A count, a probe or a spacing is out of range | `ribbon_geometry`, `accessible_areas`, `molecular_surface` |
+
+## Limits
+
+- The reader keeps the first data block only. It does not read anisotropic displacements, bonds or the chemical component dictionary.
+- The reader does not infer secondary structure. A file without `_struct_conf` and `_struct_sheet_range` gives coils only.
+- Ribbons need CA atoms. Nucleic acids have no ribbon.
+- The surface is the solvent accessible surface or the van der Waals surface. The solvent excluded surface is not implemented.
+- A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
+
+## References
+
+- Westbrook and others, "PDBx/mmCIF Ecosystem: Foundational Semantic Tools for Structural Biology", 2022.
+- Hall, Allen and Brown, "The Crystallographic Information File (CIF)", 1991.
+- Engh and Huber, "Accurate bond and angle parameters for X-ray protein structure refinement", 1991.
+- Parsons and others, "Practical conversion from torsion space to Cartesian space for in silico protein synthesis", 2005.
+- Yang and others, "Improved protein structure prediction using predicted interresidue orientations", 2020.
+- Shrake and Rupley, "Environment and exposure to solvent of protein atoms", 1973.
+- Bondi, "van der Waals volumes and radii", 1964.
+- Richardson, "The anatomy and taxonomy of protein structure", 1981.
