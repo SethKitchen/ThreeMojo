@@ -27,6 +27,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `shape` | `molecular_shape` and `MolecularShape` |
 | `accessibility` | `residue_accessibility`, `ResidueAccess` and `max_accessible_area` |
 | `interface` | `chain_interface` and `ChainInterface` |
+| `links` | `disulfide_bonds`, `salt_bridges` and `ResiduePair` |
 | `sequence` | `chain_sequence`, `encode_fasta`, `align_sequences`, `SequenceAlignment`, `aligned_atoms`, `blosum62` and `one_letter` |
 | `pdb_write` | `encode_pdb` |
 | `cif_write` | `encode_mmcif` and `cif_value` |
@@ -167,6 +168,23 @@ The energy of a bond from the N-H of one residue to the C=O of another is DSSP's
 A 4-turn at `i` is a bond from the C=O of `i` to the N-H of `i + 4`. A bridge pairs two residues three or more apart. It is antiparallel when they bond to each other, or when their outer neighbors do. It is parallel when the bonds run past each residue to the next. A helix wins over a strand. A residue without all of N, CA, C and O is coil.
 
 `secondary_from_bonds(bonds, count)` applies the patterns to a matrix of bonds, so a caller can supply bonds from another source.
+
+## Find disulfide bonds and salt bridges
+
+Two kinds of side-chain link hold a fold together beside the backbone. `disulfide_bonds(structure, model, cutoff)` and `salt_bridges(structure, model, cutoff)` list them.
+
+```mojo
+for bond in disulfide_bonds(structure, ModelId(0), Length64(2.5, ANGSTROM)):
+    print(bond.first.value, bond.second.value, bond.distance.to(ANGSTROM))
+var bridges = salt_bridges(structure, ModelId(0), Length64(4.0, ANGSTROM))
+```
+
+| Link | Atoms | Usual cutoff |
+|---|---|---|
+| Disulfide bond | SG of one cysteine and SG of another | 2.5 angstroms, for a bond of about 2.05 |
+| Salt bridge | OD1, OD2, OE1 or OE2 of an aspartate or a glutamate, and NZ of a lysine or NE, NH1 or NH2 of an arginine | 4.0 angstroms, after Barlow and Thornton |
+
+A `ResiduePair` holds the two residues and the least distance between their linking atoms. Each pair of residues is listed once, in the order of the first residue and then the second. A disulfide bond lists its lower cysteine first, and a salt bridge lists the acid first. A histidine is left out of the salt bridges, as its charge depends on the pH. An asparagine or a glutamine has an OD1 or an OE1 too, but no charge, so it is not an acid.
 
 ## Draw hydrogen bonds
 
@@ -458,6 +476,7 @@ The tests check these results:
 - An ideal peptide and a file of two models with alternate locations and hetero atoms read back the same after `encode_mmcif`. So does a structure with a chain id of two characters, an atom name of six and a residue number of 123456. gemmi 0.7.5 read the written files with their models, atoms, helices, strands and insertion codes. Biopython 1.88 read the same atoms. That check is not part of the test suite.
 - An ideal peptide reads back the same after `encode_pdb`, to the 0.001 angstrom of three decimals. So does a file of two models with alternate locations and hetero atoms.
 - Torsions of four points have the IUPAC sign: 0 for cis, 180 for trans, and +90 when the far bond turns clockwise. An ideal peptide gives the phi and psi of each of its kinds, and an omega of 180 degrees, to 1e-6 degrees. A residue without an N, a CA or a C has no entry. A chain break of 10 angstroms ends the angles at each side. A peptide of 20 residues got up to 0.3 angstroms of noise per coordinate and was written as a PDB file. Its angles match Biopython 1.88 to within 1e-4 degrees. That check is not part of the test suite.
+- Two cysteines with their SG atoms 2.05 angstroms apart make one disulfide bond, which a cutoff of 2.0 does not find. Salt bridges pair each acid with its bases at the least distance, and leave out a far pair, an asparagine and a backbone atom.
 - An ideal helix of 14 residues has 10 hydrogen bonds, each from residue `i + 4` to residue `i`. A strand has none.
 - A carbon and an oxygen 5 angstroms apart have their mass center at the share `m_O / (m_C + m_O)`. Their radius of gyration is `L sqrt(m1 m2) / (m1 + m2)`, along the bond.
 - Neighbor CA atoms of an ideal peptide are 3.8 angstroms apart. An alpha helix has its CA contacts within 8 angstroms at `i + 3` and `i + 4` only, and a strand has none.
@@ -476,6 +495,7 @@ Every function raises `Error` for input it cannot use.
 | Case | Functions |
 |---|---|
 | A quoted value or a text field has no end | `cif_tokens`, `parse_cif`, `parse_mmcif` |
+| A link cutoff is not positive and finite | `disulfide_bonds`, `salt_bridges` |
 | A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
@@ -510,6 +530,7 @@ Every function raises `Error` for input it cannot use.
 - Westbrook and others, "PDBx/mmCIF Ecosystem: Foundational Semantic Tools for Structural Biology", 2022.
 - Hall, Allen and Brown, "The Crystallographic Information File (CIF)", 1991.
 - wwPDB, "Atomic Coordinate Entry Format Description", version 3.3, 2012.
+- Barlow and Thornton, "Ion-pairs in proteins", 1983.
 - Needleman and Wunsch, "A general method applicable to the search for similarities in the amino acid sequence of two proteins", 1970.
 - Gotoh, "An improved algorithm for matching biological sequences", 1982.
 - Henikoff and Henikoff, "Amino acid substitution matrices from protein blocks", 1992.
