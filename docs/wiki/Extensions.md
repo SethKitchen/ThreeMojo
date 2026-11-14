@@ -252,6 +252,7 @@ extensions/
     histogram.mojo        histograms and Otsu thresholds
     filter.mojo           Gaussian and median filters
     thickness.mojo        distances to a label's edge and local thickness
+    morphology.mojo       dilation, erosion, opening and closing
   molecule/
     ids.mojo              atom, residue, chain and model ids and kinds
     cif.mojo              the CIF tokenizer and data blocks

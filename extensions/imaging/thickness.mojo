@@ -27,7 +27,7 @@ the mean and the largest thickness of a label as lengths.
 from extensions.imaging.ids import LabelId, require_label
 from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
 from extensions.imaging.labels import LabelMap, require_same_grid
-from std.math import ceil, floor, max, min, sqrt
+from std.math import ceil, floor, inf, max, min, sqrt
 from units.si import Length64, METER
 
 # A squared distance larger than any grid holds.
@@ -44,9 +44,9 @@ def _pass(
     """Replace one line of squared distances by its exact transform.
 
     The line holds `count` values from `first`, `stride` apart, `spacing`
-    meters apart, and at least one of them is below `FAR`. This is the
-    lower envelope of parabolas of Felzenszwalb and Huttenlocher. A value
-    of `FAR` is no site at all, so no arithmetic is done on it.
+    meters apart. This is the lower envelope of parabolas of Felzenszwalb
+    and Huttenlocher. A value of `FAR` is no site at all, so no arithmetic
+    is done on it. A line without a site stays as it is.
     """
     var f = List[Float64](capacity=count)
     for k in range(count):  # pragma: no branch
@@ -70,6 +70,8 @@ def _pass(
             start = -FAR
         hull.append(q)
         starts.append(start)
+    if len(hull) == 0:
+        return
     var at = 0
     for q in range(count):  # pragma: no branch
         var x = Float64(q) * spacing
@@ -79,19 +81,22 @@ def _pass(
         values[first + q * stride] = d * d + f[hull[at]]
 
 
-def _squared_distances(map: LabelMap, label: LabelId) -> List[Float64]:
-    """Return the squared distance of each voxel to the nearest voxel
-    outside the label, in square meters, on a grid padded by one voxel."""
+def _squared_distances(
+    map: LabelMap, seeds: List[Bool], border_is_seed: Bool
+) -> List[Float64]:
+    """Return the squared distance of each voxel to the nearest seed, in
+    square meters, on a grid padded by one voxel, or `FAR` without one."""
     var px = map.nx + 2
     var py = map.ny + 2
     var pz = map.nz + 2
-    var mark = UInt8(label.value)
-    var values = List[Float64](length=px * py * pz, fill=0)
+    var border = 0.0 if border_is_seed else FAR
+    var values = List[Float64](length=px * py * pz, fill=border)
     for k in range(map.nz):  # pragma: no branch
         for j in range(map.ny):  # pragma: no branch
             for i in range(map.nx):  # pragma: no branch
-                if map.labels[map.index(i, j, k)] == mark:
-                    values[(i + 1) + px * ((j + 1) + py * (k + 1))] = FAR
+                var seed = seeds[map.index(i, j, k)]
+                var at = (i + 1) + px * ((j + 1) + py * (k + 1))
+                values[at] = 0.0 if seed else FAR
     var sx = map.spacing_x.to(METER)
     var sy = map.spacing_y.to(METER)
     var sz = map.spacing_z.to(METER)
@@ -105,6 +110,42 @@ def _squared_distances(map: LabelMap, label: LabelId) -> List[Float64]:
         for i in range(px):  # pragma: no branch
             _pass(values, i + px * j, px * py, pz, sz)
     return values^
+
+
+def seed_distances(
+    map: LabelMap, seeds: List[Bool], border_is_seed: Bool
+) raises -> List[Length64]:
+    """Return the distance of each voxel to the nearest seed voxel.
+
+    The distance is center to center, with the spacing of each axis, and
+    exact. A seed is 0 from itself.
+
+    Args:
+        map: The label map whose grid and spacing count.
+        seeds: One flag per voxel of the grid, `i` fastest.
+        border_is_seed: Whether the voxels just past the grid count as
+            seeds, as the outside of a label does.
+
+    Returns:
+        One distance per voxel. A voxel with no seed anywhere has an
+        infinite distance.
+
+    Raises:
+        Error: If `seeds` does not hold one flag per voxel.
+    """
+    if len(seeds) != map.count():
+        raise Error("A seed mask needs one flag per voxel")
+    var squared = _squared_distances(map, seeds, border_is_seed)
+    var px = map.nx + 2
+    var py = map.ny + 2
+    var out = List[Length64](capacity=map.count())
+    for k in range(map.nz):  # pragma: no branch
+        for j in range(map.ny):  # pragma: no branch
+            for i in range(map.nx):  # pragma: no branch
+                var s = squared[(i + 1) + px * ((j + 1) + py * (k + 1))]
+                var d = sqrt(s) if s < FAR else inf[DType.float64]()
+                out.append(Length64(d, METER))
+    return out^
 
 
 def _volume_of(map: LabelMap) raises -> ImageVolume:
@@ -131,20 +172,17 @@ def label_distance(map: LabelMap, label: LabelId) raises -> ImageVolume:
     require_label(label)
     if map.voxels(label) == 0:
         raise Error("The label has no voxels")
-    var squared = _squared_distances(map, label)
-    var px = map.nx + 2
-    var py = map.ny + 2
     var mark = UInt8(label.value)
+    var outside = List[Bool](capacity=map.count())
+    for index in range(map.count()):  # pragma: no branch
+        outside.append(map.labels[index] != mark)
+    var distances = seed_distances(map, outside, True)
     var out = _volume_of(map)
-    for k in range(map.nz):  # pragma: no branch
-        for j in range(map.ny):  # pragma: no branch
-            for i in range(map.nx):  # pragma: no branch
-                var at = out.index(i, j, k)
-                # A voxel outside the label is its own nearest one.
-                if map.labels[at] != mark:
-                    continue
-                var s = squared[(i + 1) + px * ((j + 1) + py * (k + 1))]
-                out.values[at] = Float32(sqrt(s) * 1000.0)
+    for index in range(map.count()):  # pragma: no branch
+        # A voxel outside the label is its own nearest one.
+        if outside[index]:
+            continue
+        out.values[index] = Float32(distances[index].to(MILLIMETER64))
     out.fit_window()
     return out^
 

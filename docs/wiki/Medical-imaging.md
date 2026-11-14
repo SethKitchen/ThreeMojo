@@ -25,7 +25,8 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `measure` | `label_statistics` and `voxel_distance` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
-| `thickness` | `label_distance`, `local_thickness`, `thickness_statistics` and `ThicknessStatistics` |
+| `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
+| `morphology` | `dilate_label`, `erode_label`, `open_label` and `close_label` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
 | `reformat` | `oblique_slice` and `slab_projection` |
@@ -243,6 +244,26 @@ var smooth = gaussian_filter(quiet, Length64(0.8, MILLIMETER64))
 
 At the edge of the grid, both filters take the value of the nearest voxel inside it. Both give a volume on the same grid, with the same placement and window.
 
+## Clean a label
+
+A threshold leaves small faults in a label: specks, thin bridges and holes. Clean them with a ball whose radius is a length.
+
+```mojo
+var clean = close_label(open_label(map, LabelId(1), Length64(1, MILLIMETER64)),
+    LabelId(1), Length64(1, MILLIMETER64))
+```
+
+| Function | What it does |
+|---|---|
+| `dilate_label(map, label, radius)` | Gives the label to each background voxel within `radius` of the label |
+| `erode_label(map, label, radius)` | Takes the label from each of its voxels within `radius` of a voxel outside it |
+| `open_label(map, label, radius)` | Erodes, then dilates: removes specks and bridges narrower than the ball |
+| `close_label(map, label, radius)` | Dilates, then erodes: fills holes and gaps narrower than the ball |
+
+The distances are exact and center to center, with the spacing of each axis. So a volume of thick slices gets a ball of the right shape. Dilation grows into the background only, and other labels do not change. Erosion counts the grid's edge as outside, so a label also shrinks from the edge. Closing does not, so a closed label keeps every voxel of the label before it.
+
+`seed_distances(map, seeds, border_is_seed)` gives the distance of each voxel to the nearest voxel of a mask, as a `Length64`. Both the morphology and the thickness map use it.
+
 ## Find a threshold
 
 Use Otsu's method when the values have no fixed scale, as in MR. `otsu_threshold(histogram)` gives the bin edge that splits the voxels into two classes with the largest variance between them. This is the edge with the smallest variance within the classes.
@@ -375,6 +396,7 @@ The tests check these results:
 - A Gaussian keeps a linear ramp away from the edges. Its response to one voxel is the product of its three kernels, and sums to one.
 - A median removes a hot and a cold voxel and keeps the edge between two regions.
 - On two overlapping distributions, the Otsu edge is the edge with the least variance within the classes, found by brute force over the voxels.
+- A voxel dilated by 2 mm becomes the 33 lattice points of the ball, and 15 with slices 2 mm apart. A cube of 7 voxels eroded by 1 mm is a cube of 5. Opening removes a spike, and closing fills a hole.
 - The distance to the edge of an irregular label on an anisotropic grid matches a brute-force search. A slab six voxels thick is six voxels thick. With 2 mm slices and 0.5 mm pixels, a label is limited by its narrower side.
 - The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
 - Twenty Taubin passes on that ball cut the spread of the radius by more than a third. The volume stays within 2 percent.
@@ -403,6 +425,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A label is not from 0 to 255, or is the background where a region is needed | Label functions |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
+| A morphology label is the background, or its radius is negative or not finite | Morphology functions |
 | A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface` |
 | A histogram has fewer than 2 bins or a bad range, or Otsu's method finds one full bin only | `Histogram`, `otsu_threshold` |
 | A Gaussian width is not positive or reaches past 128 voxels, or a median radius is not from 1 to 3 | `gaussian_filter`, `median_filter` |
