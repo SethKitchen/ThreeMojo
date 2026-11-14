@@ -913,6 +913,7 @@ Medical images, macromolecules and solid mechanics, for research and teaching. A
 - [x] [Quadratic tetrahedra](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#quadratic-elements): ten-node elements with exact quadrature, six-node pressure loads, and bending within 2 percent of beam theory on a coarse mesh [#997](https://github.com/SethKitchen/ThreeMojo/issues/997)
 - [x] [Mesh quality](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#mesh-quality): the radius ratio and the dihedral angles of each tetrahedron, and the worst element of a mesh [#1046](https://github.com/SethKitchen/ThreeMojo/issues/1046)
 - [x] [Stress summary](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#summarize-the-stress-of-each-material): the peak and mean von Mises stress of each material, and its volume above a stress [#1050](https://github.com/SethKitchen/ThreeMojo/issues/1050)
+- [x] [Strain energy](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#summarize-the-stress-of-each-material): the energy stored in a solved model, exact for both element orders, and its apparent stiffness [#1054](https://github.com/SethKitchen/ThreeMojo/issues/1054)
 
 ### Out of scope
 

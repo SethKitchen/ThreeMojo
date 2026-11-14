@@ -18,13 +18,18 @@ each material of a mesh:
 The peak of a single element depends on the mesh, most near a corner or
 a stair step of a voxel mesh. The mean and the volume above a stress
 change less with the mesh.
+
+`strain_energy` gives the work stored in the deformed model,
+`U = u K u / 2`, from the assembled stiffness, so it is exact for both
+element orders. A model pressed by a prescribed displacement `d` has the
+apparent stiffness `2 U / d^2`, a common measure of a whole bone.
 """
 
 from extensions.fem.ids import MaterialId
 from extensions.fem.mesh import TetMesh, signed_volume
-from extensions.fem.static import StaticResult
+from extensions.fem.static import StaticProblem, StaticResult, assemble
 from std.math import isfinite, max
-from units.si import CUBIC_METER, PASCAL, Pressure64, Volume64
+from units.si import CUBIC_METER, Energy64, JOULE, PASCAL, Pressure64, Volume64
 
 
 @fieldwise_init
@@ -112,3 +117,29 @@ def stress_summary(
             )
         )
     return out^
+
+
+def strain_energy(
+    problem: StaticProblem, result: StaticResult
+) raises -> Energy64:
+    """Return the strain energy `u K u / 2` of a solved model.
+
+    Args:
+        problem: The problem that was solved.
+        result: Its static result.
+
+    Returns:
+        The energy stored in the deformation.
+
+    Raises:
+        Error: If the result is not for this problem.
+    """
+    var size = 3 * problem.mesh.node_count()
+    if len(result.displacements) != size:
+        raise Error("The result is not for this problem")
+    var stiffness = assemble(problem)
+    var force = stiffness.multiply(result.displacements)
+    var work = 0.0
+    for k in range(size):  # pragma: no branch
+        work += result.displacements[k] * force[k]
+    return Energy64(0.5 * work, JOULE)

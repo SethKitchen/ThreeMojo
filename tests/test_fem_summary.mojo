@@ -7,9 +7,9 @@
 
 from extensions.fem.elasticity import IsotropicMaterial
 from extensions.fem.ids import DOF_X, DOF_Y, DOF_Z
-from extensions.fem.mesh import TetMesh, box_mesh
+from extensions.fem.mesh import TetMesh, box_mesh, quadratic_mesh
 from extensions.fem.static import StaticProblem, StaticResult, solve_static
-from extensions.fem.summary import stress_summary
+from extensions.fem.summary import strain_energy, stress_summary
 from std.math import inf
 from std.testing import (
     TestSuite,
@@ -20,6 +20,7 @@ from std.testing import (
 from units.si import (
     CUBIC_METER,
     GIGAPASCAL,
+    JOULE,
     Length64,
     MEGAPASCAL,
     METER,
@@ -85,6 +86,28 @@ def test_a_pulled_bar() raises:
     assert_almost_equal(rows[0].peak.to(MEGAPASCAL), 200.0, rtol=1e-6)
     assert_almost_equal(rows[0].mean.to(MEGAPASCAL), 200.0, rtol=1e-6)
     assert_almost_equal(rows[0].over.to(CUBIC_METER), 2.0, rtol=1e-12)
+    # U = E e^2 V / 2 = 200 GPa * 1e-6 * 2 m^3 / 2 = 200 kJ, and the
+    # apparent stiffness 2 U / d^2 is E A / L = 100 GN/m.
+    var energy = strain_energy(problem, result).to(JOULE)
+    assert_almost_equal(energy, 2.0e5, rtol=1e-9)
+    assert_almost_equal(2 * energy / 0.002**2, 1.0e11, rtol=1e-9)
+    # Ten-node elements store the same energy, exactly for this field.
+    var fine = StaticProblem(
+        quadratic_mesh(problem.mesh),
+        [IsotropicMaterial(Pressure64(200, GIGAPASCAL), 0.0)],
+    )
+    for n in fine.mesh.nodes_on_plane(DOF_X, Length64(0, METER), near):
+        fine.fix(n, DOF_X, Length64(0, METER))
+        fine.fix(n, DOF_Y, Length64(0, METER))
+        fine.fix(n, DOF_Z, Length64(0, METER))
+    for n in fine.mesh.nodes_on_plane(DOF_X, Length64(2, METER), near):
+        fine.fix(n, DOF_X, Length64(0.002, METER))
+        fine.fix(n, DOF_Y, Length64(0, METER))
+        fine.fix(n, DOF_Z, Length64(0, METER))
+    var solved = solve_static(fine, 1e-12, 2000)
+    assert_almost_equal(strain_energy(fine, solved).to(JOULE), 2.0e5, rtol=1e-9)
+    with assert_raises(contains="not for this problem"):
+        _ = strain_energy(problem, StaticResult(2, 1))
 
 
 def test_refusals() raises:
