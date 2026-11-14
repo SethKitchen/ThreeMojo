@@ -15,6 +15,7 @@
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of`, `von_mises`, `principal_stresses` and `PrincipalStress` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
 | `post` | `stress_geometry`, `stress_color`, `mode_geometry` and `temperature_geometry` |
+| `summary` | `stress_summary` and `MaterialStress` |
 | `quality` | `element_quality`, `ElementQuality`, `mesh_quality` and `MeshQuality` |
 | `export` | `vtk_mesh`, `vtk_result`, `vtk_modes`, `vtk_temperatures`, `vtk_heat`, `vtk_record`, `vtk_series` and `series_names` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
@@ -160,6 +161,24 @@ The supports must stop the mesh from moving as a rigid body. A mesh that can sti
 | `iterations`, `relative_residual`, `status` | How the solve ended |
 
 Check `status`. A solve that runs out of iterations returns its last iterate with `BUDGET_EXHAUSTED`.
+
+### Summarize the stress of each material
+
+`stress_summary(mesh, result, threshold)` gives a few numbers for each material of a solved model. Use it to report a model of several materials, such as bone with cortical and trabecular labels.
+
+```mojo
+for row in stress_summary(problem.mesh, result, Pressure64(100, MEGAPASCAL)):
+    print(row.material.value, row.peak.to(MEGAPASCAL), row.mean.to(MEGAPASCAL), row.over.to(CUBIC_METER))
+```
+
+| Field | What it holds |
+|---|---|
+| `elements`, `volume` | The elements of the material, and their volume |
+| `peak` | The largest von Mises stress of one element |
+| `mean` | The mean von Mises stress, with each element weighted by its volume |
+| `over` | The volume of the elements at or above the threshold, such as a yield stress |
+
+A material without elements has no row. The peak of one element depends on the mesh, most at a corner or a stair step of a voxel mesh. The mean and the volume above a stress change less with the mesh.
 
 ## Principal stresses
 
@@ -363,6 +382,7 @@ The tests check these results:
 - A probe in perfused tissue gives the `cosh` profile of Pennes' equation within 1 percent. Without a fixed node, perfusion holds the tissue at `T_a + q / c`.
 - A column of four voxels with four CT numbers, under 1 MPa, shortens by `p * sum(h / E)`, as springs in series, to a relative 1e-9. One bin takes the mean modulus and the mean density.
 - The regular tetrahedron has a radius ratio of 1 and every dihedral angle `arccos(1/3)`. A path through a cube has the ratio `sqrt(3) / (1 + sqrt(2))` and angles from 45 to 90 degrees. So does every element of a box of cubes, for both orders. A sliver is the worst element of its mesh.
+- Given stresses on a box of two cubes give each material's count, volume, peak, mean and volume above a threshold exactly. A material without elements has no row. A pulled bar at 200 MPa has that stress as its peak and its mean, with its whole volume above 199 MPa.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 - A record of a history is the temperature file of its values, with its time in the title. A series file lists each name with its time, and names get a fifth digit past 10000 records.
 
@@ -400,6 +420,7 @@ Every function raises `Error` for input it cannot use.
 | A label has no voxels | `voxel_mesh` |
 | A mesh has a node that no element holds, or is free to move | `solve_static` |
 | A result is not for its mesh | `stress_geometry` |
+| A result is not for its mesh, or a stress threshold is negative or not finite | `stress_summary` |
 | A mesh has no element, or an element id names no element | `mesh_quality`, `element_quality` |
 | A result is not for its problem, or an element, a node or an axis is out of range | `held_heat`, `heat_flux`, `HeatRates`, `HeatFluxes` |
 | The capacities or the start do not fit the problem, a step or a count is out of range, or a capacity kind is not valid | `solve_transient`, `ThermalCapacity` |
