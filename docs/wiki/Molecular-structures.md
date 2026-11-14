@@ -26,6 +26,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `contacts` | `distance_map`, `DistanceMap` and `map_image` |
 | `shape` | `molecular_shape` and `MolecularShape` |
 | `accessibility` | `residue_accessibility`, `ResidueAccess` and `max_accessible_area` |
+| `interface` | `chain_interface` and `ChainInterface` |
 | `pdb_write` | `encode_pdb` |
 | `cif_write` | `encode_mmcif` and `cif_value` |
 | `dihedral` | `backbone_angles`, `BackboneAngles`, `dihedral`, `ramachandran_image`, `ramachandran_color` and `plot_pixel` |
@@ -282,6 +283,21 @@ The RSA is about 0 for a buried residue and about 1 for a residue in the open. A
 
 The largest areas are the theoretical values of Tien and others (2013), for a residue in an extended chain of three. `max_accessible_area(name)` gives the value of one of the twenty standard amino acids. Another residue, such as a water or a ligand, has its area but no RSA, and `has_relative` is false.
 
+## Measure a chain interface
+
+Two chains that bind cover part of each other's surface. `chain_interface(structure, model, first, second, probe, points)` gives the area that they bury, and the residues that bury it.
+
+```mojo
+var face = chain_interface(structure, ModelId(0), ChainId(0), ChainId(1), Length64(1.4, ANGSTROM), 500)
+print(face.total().to(SQUARE_ANGSTROM), "square angstroms buried")
+for row in range(len(face.residues)):
+    print(face.residues[row].value, face.buried(row).to(SQUARE_ANGSTROM))
+```
+
+The buried surface area is `ASA(A alone) + ASA(B alone) - ASA(A with B)`, over the atoms of the two chains. Other chains of the model do not count. Each accessible area uses the same points on each sphere alone and with the other chain. So no atom gains area, and each buried area is zero or more.
+
+A `ChainInterface` holds each atom of both chains with its buried area, and each residue that buries area with its sum. `face.total()` gives the buried area of the interface. Some studies report half of it, the area that each side loses on average.
+
 ## Draw a surface
 
 `molecular_surface(structure, model, probe, spacing)` returns the solvent accessible surface as a mesh. It samples the distance to the nearest grown sphere on a grid of the given spacing. It meshes the zero set of that distance by marching tetrahedra. Each vertex takes the CPK color of the atom whose sphere it lies on.
@@ -415,6 +431,7 @@ The tests check these results:
 - A superposition recovers a known rotation and shift to 1e-12, with a proper rotation. It does not reach a mirror image. A small turn away from the fit gives a larger RMSD. On 40 noisy points, its RMSD matches numpy's SVD solution to 16 digits. That check is not part of the test suite.
 - Over three models as given, one CA moved by `+d` and `-d` has an RMSF of `d sqrt(2/3)`, and every other CA has none. Its residue gets the B-factor `16 pi^2 d^2 / 9`. Models that differ by rigid moves fit to an RMSF below 1e-9 angstroms. Five models with up to 0.5 angstroms of noise per coordinate match a numpy fit by SVD to 2e-15 angstroms. That check is not part of the test suite.
 - The largest areas are the 20 values of Tien and others. A residue's area is the sum of its atoms, and its RSA is that sum over the largest area. The middle of a built helix is more buried than its ends. On a peptide of 12 residues with 2000 points per sphere, the areas match Biopython 1.88's Shrake-Rupley to 0.1 percent. That check is not part of the test suite.
+- Two carbons in two chains 3 angstroms apart each bury a cap of `2 pi R h`, within 1 percent with 2000 points. Chains 20 angstroms apart bury nothing, and a third chain does not change the interface of the other two. On two helices 9 angstroms apart, the buried area of each residue matches Biopython 1.88's Shrake-Rupley to 0.001 square angstroms. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
 ## Errors
@@ -424,6 +441,7 @@ Every function raises `Error` for input it cannot use.
 | Case | Functions |
 |---|---|
 | A quoted value or a text field has no end | `cif_tokens`, `parse_cif`, `parse_mmcif` |
+| Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
 | An ensemble has fewer than two models, too few shared atoms, or a bad fit or reference | `ensemble_fluctuation`, `Fluctuation` |
 | A structure has no model or no atom, its name holds a blank, or a value holds a line end or both kinds of closing quote | `encode_mmcif`, `cif_value` |
