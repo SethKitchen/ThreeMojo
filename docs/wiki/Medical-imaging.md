@@ -24,6 +24,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest`, `label_pieces`, `LabelPieces` and `label_surface` |
 | `measure` | `label_statistics`, `voxel_distance`, `line_profile`, `LineProfile` and `full_width_half_maximum` |
 | `shape` | `label_shape`, `LabelShape` and `slice_areas` |
+| `compare` | `compare_labels`, `LabelComparison`, `surface_voxels` and `percentile` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
@@ -368,6 +369,31 @@ A `LabelShape` holds the voxel count, the `volume`, the `center` in patient spac
 
 `slice_areas(map, label, axis)` gives the area of a label in each slice across a grid axis, as `Area64` values. Use it for the cross-section of a vessel or an airway from slice to slice. A slice without the label has zero.
 
+## Compare two segmentations
+
+A study that segments a structure two ways must say how well they agree. Examples are a reader and a threshold, or two readers. `compare_labels(first, first_label, second, second_label)` gives the measures that segmentation studies report.
+
+```mojo
+var c = compare_labels(manual, LabelId(1), automatic, LabelId(1))
+print(c.dice, c.jaccard, c.hausdorff_95.to(METER), c.mean_surface_distance.to(METER))
+```
+
+| Field | What it holds |
+|---|---|
+| `dice` | Twice the shared voxels over the sum of the two counts, from 0 for no overlap to 1 for the same voxels |
+| `jaccard` | The shared voxels over the voxels of either label |
+| `hausdorff` | The largest distance from a surface voxel of one label to the surface of the other |
+| `hausdorff_95` | The 95th percentile of the surface distances of both labels together |
+| `mean_surface_distance` | The mean of the surface distances of both labels, the ASSD |
+| `first_voxels`, `second_voxels`, `shared_voxels` | The voxel counts |
+| `first_volume`, `second_volume` | The volumes, as `Volume64` values |
+
+The surface of a label is each voxel with a face neighbor outside the label, or on the grid's edge. `surface_voxels(map, mask)` gives it. Each surface voxel has a distance to the nearest surface voxel of the other label. The distance is center to center, with the spacing of each axis, and exact.
+
+The percentile has linear interpolation between ranks, as numpy's default. These are the definitions of the MedPy library. Some tools take the larger of the two directed 95th percentiles instead, which is never less.
+
+The two maps can be one map, to compare two of its labels. They must have the same grid and spacing.
+
 ## Measure thickness
 
 Bone research measures the thickness of cortical walls and of trabeculae. `local_thickness(map, label)` gives each voxel of a label the diameter of the largest sphere that holds the voxel and fits in the label. This is the method of Hildebrand and Rüegsegger.
@@ -455,6 +481,7 @@ The tests check these results:
 - Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
 - A box of 10 by 6 by 8 mm has voxels of 1 by 1 by 2 mm. Its semi-axes are `sqrt(5 / 12)` times its sides, to 1e-9, along the grid axes. Its axes follow the patient frame of the volume. An ellipsoid of 20, 12 and 8 mm turned 30 degrees gives its semi-axes within 2 percent, and its long axis within one degree. Each slice of the box has its area exactly.
+- A label against itself has a Dice coefficient of 1 and no surface distance. Two boxes that overlap by half have a Dice of 0.5 and a Jaccard of 1/3. Their Hausdorff distance is their shift, and their HD95 and ASSD match a search of every pair. Two ellipsoids in voxels of 0.7, 0.9 and 1.5 mm match MedPy 0.5 to 1e-7 mm in every measure. That check is not part of the test suite.
 - A voxel dilated by 2 mm becomes the 33 lattice points of the ball, and 15 with slices 2 mm apart. A cube of 7 voxels eroded by 1 mm is a cube of 5. Opening removes a spike, and closing fills a hole.
 - The distance to the edge of an irregular label on an anisotropic grid matches a brute-force search. A slab six voxels thick is six voxels thick. With 2 mm slices and 0.5 mm pixels, a label is limited by its narrower side.
 - The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
@@ -485,6 +512,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A label is not from 0 to 255, or is the background where a region is needed | Label functions |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
+| Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels` |
 | A shape or a slice area needs the background, an empty label, another grid or a bad axis | `label_shape`, `slice_areas` |
 | A morphology label is the background, or its radius is negative or not finite | Morphology functions |
 | A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface`, `label_stl` |
