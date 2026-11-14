@@ -25,6 +25,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `contacts` | `distance_map`, `DistanceMap` and `map_image` |
 | `shape` | `molecular_shape` and `MolecularShape` |
 | `pdb_write` | `encode_pdb` |
+| `dihedral` | `backbone_angles`, `BackboneAngles`, `dihedral`, `ramachandran_image`, `ramachandran_color` and `plot_pixel` |
 
 ## Read an mmCIF file
 
@@ -155,6 +156,32 @@ var sticks = bond_geometry(structure, bonds, Length64(0.1, ANGSTROM), 8)
 A `HydrogenBond` holds its donor residue, the N-H, its acceptor residue, the C=O, and its energy as a `MolarEnergy64`. Only a bond below -0.5 kcal/mol is listed. The N-H right after a C=O shares its peptide plane, so DSSP does not pair them. In an alpha helix, the N-H of residue `i + 4` bonds to the C=O of residue `i`.
 
 `bond_geometry(structure, bonds, radius, sides)` draws each bond as a dashed tube from the N of its donor to the O of its acceptor, in light orange. Draw it over a ribbon: the bonds of a helix run along its axis.
+
+## Measure backbone angles
+
+Three torsions set the shape of the backbone at each residue. `backbone_angles(structure, model)` gives them, and `ramachandran_image` plots them.
+
+```mojo
+var angles = backbone_angles(structure, ModelId(0))
+for entry in angles:
+    if entry.has_phi and entry.has_psi:
+        print(entry.residue.value, entry.phi.to(DEGREE64), entry.psi.to(DEGREE64))
+var plot = ramachandran_image(structure, angles, 360)
+```
+
+| Angle | Atoms |
+|---|---|
+| phi | C of `i - 1`, N, CA, C |
+| psi | N, CA, C, N of `i + 1` |
+| omega | CA, C, N of `i + 1`, CA of `i + 1` |
+
+A `BackboneAngles` holds a residue and its three angles as `Angle64` values, from -180 to 180 degrees. A flag tells if the residue has each angle. A residue needs its N, CA and C, or it has no entry. A neighbor counts only in the same chain, and only when its C to N distance is 2.5 angstroms or less, as in DSSP. The first residue of a chain has no phi. The last has no psi and no omega.
+
+`dihedral(a, b, c, d)` gives the torsion of any four points, with the IUPAC sign. Seen along the bond from `b` to `c`, the angle is positive when the far bond turns clockwise from the near bond.
+
+`ramachandran_image(structure, angles, size)` plots psi against phi. Phi runs from -180 degrees at the left to 180 at the right. Psi runs from 180 at the top to -180 at the bottom. Each residue with both angles is a dot, red for a helix, gold for a strand and gray for a coil. Gray lines mark zero.
+
+Helices gather near (-60, -45), and strands near (-120, 130). A trans peptide bond has an omega near 180 degrees, and a cis bond has an omega near 0.
 
 ## CIF text
 
@@ -323,6 +350,7 @@ The tests check these results:
 - The distance transform is exact on a grid with one seed.
 - A ribbon of `n` residues has `(n - 1) samples + 1` rings, and every normal is a unit vector.
 - An ideal peptide reads back the same after `encode_pdb`, to the 0.001 angstrom of three decimals. So does a file of two models with alternate locations and hetero atoms.
+- Torsions of four points have the IUPAC sign: 0 for cis, 180 for trans, and +90 when the far bond turns clockwise. An ideal peptide gives the phi and psi of each of its kinds, and an omega of 180 degrees, to 1e-6 degrees. A residue without an N, a CA or a C has no entry. A chain break of 10 angstroms ends the angles at each side. A peptide of 20 residues got up to 0.3 angstroms of noise per coordinate and was written as a PDB file. Its angles match Biopython 1.88 to within 1e-4 degrees. That check is not part of the test suite.
 - An ideal helix of 14 residues has 10 hydrogen bonds, each from residue `i + 4` to residue `i`. A strand has none.
 - A carbon and an oxygen 5 angstroms apart have their mass center at the share `m_O / (m_C + m_O)`. Their radius of gyration is `L sqrt(m1 m2) / (m1 + m2)`, along the bond.
 - Neighbor CA atoms of an ideal peptide are 3.8 angstroms apart. An alpha helix has its CA contacts within 8 angstroms at `i + 3` and `i + 4` only, and a strand has none.
@@ -345,6 +373,7 @@ Every function raises `Error` for input it cannot use.
 | A bond radius or side count is out of range, or a bond's residue has no N or O | `bond_geometry` |
 | Two sets differ in size, hold fewer than three points, or are not finite | `superpose`, `rmsd` |
 | No residue has the atom, a row is outside the map, or a cutoff or separation is out of range | `distance_map`, `DistanceMap`, `map_image` |
+| Three points of a torsion are in a line, or a plot size is not from 64 to 2048 pixels | `dihedral`, `backbone_angles`, `ramachandran_image` |
 
 ## Limits
 
@@ -353,6 +382,7 @@ Every function raises `Error` for input it cannot use.
 - The readers do not infer secondary structure themselves. Call `assign_secondary` for a file without helix and strand records.
 - `assign_secondary` does not report 3-10 or pi helices, turns, bends, isolated bridges or beta bulges.
 - Ribbons need CA atoms. Nucleic acids have no ribbon.
+- A Ramachandran plot shows the angles only. It does not draw the favored and allowed regions of a reference set, and it does not validate a model.
 - Where three or more spheres make a crevice, the excluded surface uses the grid bound. It can lie up to one grid step outside the true surface there.
 - A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
 
