@@ -35,6 +35,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `gap` | `distance_from_label`, `label_gap`, `LabelGap` and `volume_within` |
 | `morphology` | `dilate_label`, `erode_label`, `open_label` and `close_label` |
 | `holes` | `fill_holes` and `fill_slice_holes` |
+| `grow` | `confidence_connected` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `printing` | `printable_stl` and `label_stl` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement`, `draw_line`, `zoom_image`, `slice_size` and `label_color` |
@@ -333,6 +334,18 @@ var grown = region_grow(volume, i, j, k, 150, 600, LabelId(2), CORNERS)
 ```
 
 `label_pieces(map, label)` numbers every connected piece of a label by size, to count the lesions or stones of a segmentation. Its `map` gives label 1 to the largest piece, 2 to the next, and on up to 255. Its `sizes` and `volumes` list every piece from the largest, also past the 255th.
+
+## Grow a region by its statistics
+
+`confidence_connected(volume, seeds, multiplier, iterations, radius, label)` grows a region from seeds without a range of values to give. It finds the range itself, as ITK's `ConfidenceConnectedImageFilter` does. Use it to segment a lesion or an organ with a smooth inside from one click.
+
+```mojo
+var lesion = confidence_connected(volume, [(80, 64, 40)], 2.5, 4, 1, LabelId(1))
+```
+
+A box of `radius` voxels each way around each seed gives a mean and a sample variance. A box that leaves the grid repeats the edge voxels. The mean of the means and the mean of the variances give the first range, `mean` plus or minus `multiplier` standard deviations. The region grows by faces from each seed whose value is in the range, through voxels whose values are in it, ends included.
+
+Each of the `iterations` takes the mean and the sample variance of the region, and grows the region again from the seeds. A region of one voxel, or of zero variance, stops the iterations. A seed outside its own range grows nothing. A value that is not a number never joins a region, and it spoils the range of a seed whose box holds it.
 
 ## Filter a volume
 
@@ -765,6 +778,8 @@ The tests check these results:
 - A Gaussian keeps a linear ramp away from the edges. Its response to one voxel is the product of its three kernels, and sums to one.
 - A median removes a hot and a cold voxel and keeps the edge between two regions.
 - On two overlapping distributions, the Otsu edge is the edge with the least variance within the classes, found by brute force over the voxels.
+- A textured box of 100 in a background of 0 grows to its edge. It does so from one seed, from two seeds, and from one seed given twice. A seed at the grid's corner grows the background. A spike or a dip outside its own range grows nothing. A box of radius 0 grows only the seed's own value, and a flat volume fills.
+- From five seeds with other multipliers, iterations and radii, the regions on a smooth random volume match SimpleITK 2.5.7's `ConfidenceConnected` voxel for voxel. They hold from 9,000 to 26,000 voxels. That check is not part of the test suite.
 - Two voxels that share an edge are one piece with `EDGES` and `CORNERS`, and two with `FACES`. Two that share a corner only are one piece with `CORNERS`. A diagonal line grows from its end with `CORNERS`, and not with `FACES`. On a random grid of 30 by 28 by 26 voxels, the pieces of each connectivity match scipy's `ndimage.label` in count and size. That check is not part of the test suite.
 - Cubes of 27 and 8 voxels and two single voxels number 1 to 4. A voxel that touches a cube at a corner only is a piece of its own.
 - A Gaussian blob of sigma 2 mm has a full width at half maximum of `2 sqrt(2 ln 2) sigma`, within 1 percent. A box 5 voxels wide is exactly 5 mm wide.
@@ -818,6 +833,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | An index is outside the grid | `get`, `set`, `region_grow`, `render_slice` |
 | A label is not from 0 to 255, or is the background where a region is needed | Label functions |
 | A connectivity is not one of the three | `region_grow`, `keep_largest`, `label_pieces` |
+| A grown region has no seed, a seed outside the grid, a bad label, or a multiplier, an iteration count or a radius out of range | `confidence_connected` |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | An outline or isoline has a bad label, the background, a bad axis or slice, a level or a value that is not finite, or a zoom out of range | `slice_outlines`, `slice_isolines`, `draw_outlines`, `zoom_image` |
 | An overlay has a bad axis or slice, a range that is not finite or does not rise, an opacity or a zoom out of range, or an image of another size | `overlay_values` |
@@ -869,6 +885,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - NEMA PS3.10, "Media Storage and File Format", section 7.
 - Cox and others, "A (sort of) new image data format standard: NIfTI-1", 2004, and the header `nifti1.h`.
 - Otsu, "A threshold selection method from gray-level histograms", 1979.
+- Johnson and others, "The ITK Software Guide, Book 2: Design and Functionality", 4th edition, 2015.
 - Hildebrand and Rüegsegger, "A new method for the model-independent assessment of thickness in three-dimensional images", 1997.
 - Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", 2012.
 - Shepp and Logan, "The Fourier reconstruction of a head section", 1974.
