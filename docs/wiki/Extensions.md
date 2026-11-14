@@ -253,6 +253,7 @@ extensions/
     filter.mojo           Gaussian and median filters
     thickness.mojo        distances to a label's edge and local thickness
     morphology.mojo       dilation, erosion, opening and closing
+    resample.mojo         volumes and labels on a new spacing
   molecule/
     ids.mojo              atom, residue, chain and model ids and kinds
     cif.mojo              the CIF tokenizer and data blocks

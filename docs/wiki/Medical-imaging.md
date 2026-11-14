@@ -30,6 +30,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
 | `reformat` | `oblique_slice` and `slab_projection` |
+| `resample` | `resample_volume` and `resample_labels` |
 
 ## Read a DICOM series
 
@@ -152,6 +153,18 @@ The slices must agree on these properties:
 The gap between the slices becomes `spacing_z`. A single slice uses its thickness, or the column spacing when it has no thickness. The window comes from the first sorted slice that has one. A stack without a window fits its window to its values.
 
 `volume_slices(volume, slope, intercept)` cuts a volume into one slice for each `k`. `encode_dicom(slice)` writes a slice as a Part 10 CT image in explicit or implicit VR little endian. A 16-bit file stores `round((value - intercept) / slope)`. A slope of 0.001 keeps three decimal places.
+
+## Resample to a new spacing
+
+CT slices are often thicker than their pixels are wide. A voxel mesh, a thickness map and a morphology ball work best on cubic voxels. Resample the volume and its labels first:
+
+```mojo
+var mm = Length64(0.5, MILLIMETER64)
+var cubic = resample_volume(volume, mm, mm, mm)
+var labels = resample_labels(map, mm, mm, mm)
+```
+
+The new grid keeps the first voxel center, the axes, the window and the extent of the old grid. Along each axis it has `floor(extent / spacing) + 1` voxels, so a step that does not divide the extent stops at the last whole step. `resample_volume` takes the trilinear blend of the old voxels at each new voxel center. `resample_labels` takes the label of the nearest old voxel center, because labels cannot blend.
 
 ## The volume grid
 
@@ -389,6 +402,7 @@ The tests check these results:
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
 - An oblique reformat of a linear field matches the field at every pixel.
+- A linear field resampled from 0.5 x 0.5 x 3 mm voxels to 1 mm cubes keeps its value at every new voxel. A label slice of 3 mm becomes the three 1 mm slices nearest to it.
 - A slab of four planes through a ramp gives its top plane as its maximum and its bottom plane as its minimum. Its mean is its center value.
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
 - An isosurface of a linear ramp has the full iso color along the gradient, and the ambient light across it.
