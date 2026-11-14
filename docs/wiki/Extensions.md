@@ -24,7 +24,7 @@ The geotech subject analyzes earth-retaining walls: earth and water pressure, LR
 
 The chemistry subject is a library for the steps of a process. It models the thermodynamic, phase, kinetic, physical and engineering requirements that turn a material into a product. Each step has an operating window, and new constraints and data plug in. It also solves equilibria, draws process maps and solves flowsheets. See [Process chemistry](Process-chemistry) and [Why a process runs where it does](Why-a-process-runs-where-it-does).
 
-The imaging subject reads DICOM images and stacks them into volumes with physical spacing. It draws a volume by ray casting, and it labels, measures and overlays regions on slices. See [Medical imaging](Medical-imaging).
+The imaging subject reads DICOM images and stacks them into volumes with physical spacing. It draws a volume by ray casting, and it labels, measures and overlays regions on slices. It writes labels as STL files for 3D printers. See [Medical imaging](Medical-imaging).
 
 The molecule subject reads mmCIF structures, builds ideal peptides, and draws ribbons and surfaces. See [Molecular structures](Molecular-structures).
 

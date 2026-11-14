@@ -28,6 +28,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
 | `morphology` | `dilate_label`, `erode_label`, `open_label` and `close_label` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
+| `printing` | `printable_stl` and `label_stl` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
 | `reformat` | `oblique_slice` and `slab_projection` |
 | `resample` | `resample_volume` and `resample_labels` |
@@ -312,6 +313,18 @@ print(surface_area(smooth).to(SQUARE_METER), enclosed_volume(smooth).to(CUBIC_ME
 
 `surface_area(geometry)` gives an `Area64`. `enclosed_volume(geometry)` gives a `Volume64` from the divergence theorem. It is exact for a closed mesh whose faces turn outward. A label surface has outward faces.
 
+## Print a label
+
+Write a label as an STL file to print a model of it. A printed model is for teaching and for planning research. It is not a medical device.
+
+```mojo
+Path("label.stl").write_bytes(label_stl(map, LabelId(1), 20))
+```
+
+`label_stl(map, label, passes)` makes the label surface and smooths it with `passes` Taubin passes. Then it writes a binary STL file. An STL file has no unit, and slicers read it in millimeters. The library keeps lengths in meters. `label_stl` scales the surface by 1000, so the model prints at its true size.
+
+`printable_stl(geometry)` writes any mesh in meters as a binary STL file in millimeters. Use it for a surface that you made or changed yourself.
+
 ## Measure
 
 `label_statistics(map, volume, label)` gives the size, place and values of one label:
@@ -428,6 +441,7 @@ The tests check these results:
 - The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
 - Twenty Taubin passes on that ball cut the spread of the radius by more than a third. The volume stays within 2 percent.
 - A welded box of 2 m has 8 vertices, an area of 24 m^2 and a volume of 8 m^3.
+- A box of 20 x 30 x 40 mm written as STL reads back with 12 triangles and its sides in millimeters. A smoothed label cube reads back with the bounds and the volume of its surface, scaled to millimeters.
 - One render with one, three and every core gives the same bytes.
 - Four NIfTI files that nibabel 5.3.2 wrote read with nibabel's world points and values. They cover both byte orders, the sform, the qform with a flip, voxel sizes in microns, and gzip. `assets/nifti/make_nifti.py` makes them.
 - A volume and a label map written as NIfTI, plain and in gzip, read back with the same values and placement.
@@ -453,7 +467,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
 | A morphology label is the background, or its radius is negative or not finite | Morphology functions |
-| A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface` |
+| A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface`, `label_stl` |
+| A mesh has no positions | `printable_stl` |
 | A histogram has fewer than 2 bins or a bad range, or Otsu's method finds one full bin only | `Histogram`, `otsu_threshold` |
 | A Gaussian width is not positive or reaches past 128 voxels, or a median radius is not from 1 to 3 | `gaussian_filter`, `median_filter` |
 
