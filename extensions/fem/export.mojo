@@ -11,7 +11,8 @@ an ASCII `UNSTRUCTURED_GRID`. A four-node element is cell type 10,
 whose edge order is this extension's: 0-1, 1-2, 2-0, 0-3, 1-3 and 2-3.
 
 Each element has its material index as the cell scalar `material`.
-`vtk_result` adds the solved fields: the point vectors `displacement`, in
+`vtk_modes` adds one point vector per mode shape, `mode_1` and on, with
+the frequencies in the title line. `vtk_result` adds the solved fields: the point vectors `displacement`, in
 meters, and the cell scalars `von_mises` and cell tensors `stress`, in
 pascals. It adds the cell scalars `principal`, the three principal
 stresses from the largest, and the cell vectors `first_direction`, the
@@ -21,8 +22,9 @@ back exactly.
 
 from extensions.fem.ids import ElementId, LINEAR
 from extensions.fem.mesh import TetMesh
+from extensions.fem.modal import ModalResult
 from extensions.fem.static import StaticResult
-from units.si import PASCAL
+from units.si import PASCAL, PER_SECOND
 
 
 def _number(value: Float64) -> String:
@@ -30,14 +32,16 @@ def _number(value: Float64) -> String:
     return String(value)
 
 
-def _geometry(mesh: TetMesh) -> String:
+def _geometry(
+    mesh: TetMesh, title: String = "ThreeMojo tetrahedral mesh, meters"
+) -> String:
     """Return the header, points, cells, cell types and materials."""
     var count = mesh.nodes_per_element()
     var kind = String("10")
     if mesh.order != LINEAR:
         kind = "24"
     var out = String("# vtk DataFile Version 3.0\n")
-    out += "ThreeMojo tetrahedral mesh, meters\nASCII\n"
+    out += title + "\nASCII\n"
     out += "DATASET UNSTRUCTURED_GRID\n"
     out += "POINTS " + String(mesh.node_count()) + " double\n"
     for p in mesh.nodes:
@@ -125,4 +129,38 @@ def vtk_result(mesh: TetMesh, result: StaticResult) raises -> String:
         out += _number(result.displacements[at]) + " "
         out += _number(result.displacements[at + 1]) + " "
         out += _number(result.displacements[at + 2]) + "\n"
+    return out^
+
+
+def vtk_modes(mesh: TetMesh, modes: ModalResult) raises -> String:
+    """Return a mesh and its mode shapes as the text of a legacy VTK file.
+
+    The title line gives the frequencies in cycles per second. ParaView
+    can animate each shape with its Warp By Vector filter.
+
+    Args:
+        mesh: The mesh whose modes were found.
+        modes: Its modes.
+
+    Returns:
+        The text, with each element's material and one point vector per
+        mode: `mode_1`, `mode_2` and on.
+
+    Raises:
+        Error: If a shape is not for this mesh.
+    """
+    var title = String("ThreeMojo natural modes, meters, Hz:")
+    for frequency in modes.frequencies:
+        title += " " + _number(frequency.to(PER_SECOND))
+    var out = _geometry(mesh, title)
+    out += "POINT_DATA " + String(mesh.node_count()) + "\n"
+    for m in range(len(modes.shapes)):
+        ref shape = modes.shapes[m]
+        if len(shape) != 3 * mesh.node_count():
+            raise Error("The mode shape is not for this mesh")
+        out += "VECTORS mode_" + String(m + 1) + " double\n"
+        for n in range(mesh.node_count()):
+            out += _number(shape[3 * n]) + " "
+            out += _number(shape[3 * n + 1]) + " "
+            out += _number(shape[3 * n + 2]) + "\n"
     return out^

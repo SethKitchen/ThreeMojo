@@ -5,14 +5,18 @@
 
 """Consistent mass matrices and the natural modes of a mesh."""
 
+from core.buffer_geometry import COLOR, POSITION
 from extensions.fem.elasticity import IsotropicMaterial
 from extensions.fem.ids import DOF_X, DOF_Y, DOF_Z
 from extensions.fem.mesh import TetMesh, box_mesh, quadratic_mesh
+from extensions.fem.export import vtk_modes
 from extensions.fem.modal import (
+    ModalResult,
     assemble_mass,
     mass_coefficients,
     natural_modes,
 )
+from extensions.fem.post import mode_geometry
 from extensions.fem.static import StaticProblem
 from std.math import inf, pi, sqrt
 from std.testing import (
@@ -170,6 +174,92 @@ def test_bending_of_a_cantilever() raises:
     # beam theory. The square section bends alike both ways.
     assert_almost_equal(first, beam, rtol=0.04)
     assert_almost_equal(second, first, rtol=0.01)
+
+
+def _rod_modes() raises -> Tuple[TetMesh, ModalResult]:
+    """The axial modes of a rod 1 m long along x, fixed at x = 0."""
+    var mesh = quadratic_mesh(
+        box_mesh(
+            Length64(1, METER),
+            Length64(0.1, METER),
+            Length64(0.1, METER),
+            4,
+            1,
+            1,
+        )
+    )
+    var problem = _bar(mesh^, 0.0)
+    for node in range(problem.mesh.node_count()):
+        problem.prescribed[3 * node + 1] = True
+        problem.prescribed[3 * node + 2] = True
+    var result = natural_modes(problem, _steel(), 2, 1e-12, 200)
+    return (problem.mesh.copy(), result^)
+
+
+def test_mode_geometry() raises:
+    var rod = _rod_modes()
+    ref mesh = rod[0]
+    ref modes = rod[1]
+    var amplitude = Length64(0.05, METER)
+    var drawn = mode_geometry(mesh, modes.shapes[0], amplitude)
+    ref points = drawn.attribute_view(POSITION)
+    ref colors = drawn.attribute_view(COLOR)
+    # The free end moves by the amplitude and is red. The clamp is blue.
+    # A shape has an arbitrary sign, so the end can move either way.
+    var reach = 0.0
+    var free_end = 0
+    for v in range(points.count()):
+        var x = Float64(points.vector3(v).x)
+        if x == 0:
+            assert_true(colors.component(v, 2) > colors.component(v, 0))
+        if x > 0.9 and abs(x - 1.0) > reach:
+            reach = abs(x - 1.0)
+            free_end = v
+    assert_almost_equal(reach, 0.05, rtol=1e-6)
+    assert_true(colors.component(free_end, 0) > 0.7)
+    with assert_raises(contains="not for this mesh"):
+        _ = mode_geometry(mesh, [0.0, 0.0, 0.0], amplitude)
+    with assert_raises(contains="positive and finite"):
+        _ = mode_geometry(mesh, modes.shapes[0], Length64(0, METER))
+    with assert_raises(contains="positive and finite"):
+        _ = mode_geometry(
+            mesh, modes.shapes[0], Length64(inf[DType.float64](), METER)
+        )
+    var still = List[Float64](length=len(modes.shapes[0]), fill=0)
+    with assert_raises(contains="node that moves"):
+        _ = mode_geometry(mesh, still, amplitude)
+    with assert_raises(contains="node that moves"):
+        _ = mode_geometry(TetMesh(), List[Float64](), amplitude)
+
+
+def test_vtk_modes() raises:
+    var rod = _rod_modes()
+    ref mesh = rod[0]
+    ref modes = rod[1]
+    var text = vtk_modes(mesh, modes)
+    var lines = text.split("\n")
+    assert_true(
+        String(lines[1]).startswith("ThreeMojo natural modes, meters, Hz: ")
+    )
+    var title = String(lines[1]).split(" ")
+    assert_almost_equal(
+        atof(title[len(title) - 2]), modes.frequencies[0].to(PER_SECOND)
+    )
+    assert_true("POINT_DATA " + String(mesh.node_count()) + "\n" in text)
+    assert_true("VECTORS mode_1 double\n" in text)
+    assert_true("VECTORS mode_2 double\n" in text)
+    # A result without modes has no vectors.
+    var empty = vtk_modes(TetMesh(), ModalResult())
+    assert_true("POINT_DATA 0\n" in empty)
+    var hollow = ModalResult()
+    hollow.shapes.append(List[Float64]())
+    assert_true(
+        String(vtk_modes(TetMesh(), hollow)).endswith("VECTORS mode_1 double\n")
+    )
+    var wrong = ModalResult()
+    wrong.shapes.append([1.0])
+    with assert_raises(contains="not for this mesh"):
+        _ = vtk_modes(mesh, wrong)
 
 
 def test_refusals() raises:

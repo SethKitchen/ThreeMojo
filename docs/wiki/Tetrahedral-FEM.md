@@ -14,8 +14,8 @@
 | `mesh` | `TetMesh`, `box_mesh`, `voxel_mesh`, `voxel_mesh_labels`, `quadratic_mesh`, `boundary_faces`, `edge_pairs` and `signed_volume` |
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of`, `von_mises`, `principal_stresses` and `PrincipalStress` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
-| `post` | `stress_geometry` and `stress_color` |
-| `export` | `vtk_mesh` and `vtk_result` |
+| `post` | `stress_geometry`, `stress_color` and `mode_geometry` |
+| `export` | `vtk_mesh`, `vtk_result` and `vtk_modes` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
 
@@ -167,6 +167,8 @@ Mode `i` solves `K phi = omega^2 M phi`, and its frequency is `omega / (2 pi)`. 
 
 The prescribed degrees of freedom are removed, and the subspace iteration of the [Numerics](Numerics) extension solves for the lowest modes. A Sturm check makes sure that no lower mode was missed. Each shape has `phi^T M phi = 1`, and is zero where a degree of freedom is prescribed. Use ten-node elements for bending modes. Four-node elements are too stiff in bending, as in a static problem.
 
+`mode_geometry(mesh, shape, amplitude)` draws one mode. A mode shape has no size of its own, so the shape is scaled until the node that moves most moves by `amplitude`. Each vertex takes the color of how far its node moves, from blue at rest to red at `amplitude`. `vtk_modes(mesh, modes)` writes every shape for ParaView. See [Export to ParaView](#export-to-paraview).
+
 ## Draw the result
 
 `stress_geometry(mesh, result, scale, low, high)` returns the outer surface. It moves each node by its displacement times `scale`. Each face takes the color of the von Mises stress of its element. The scale runs through blue, cyan, green, yellow and red from `low` to `high`. Each face has its own vertices, so the colors and normals are flat.
@@ -205,7 +207,9 @@ The file is an ASCII `UNSTRUCTURED_GRID` in meters. A four-node element is cell 
 | `stress` | Cell tensor | The symmetric stress tensor, in pascals |
 | `displacement` | Point vector | The node's displacement, in meters |
 
-Each number is written in full, so it reads back exactly. meshio 5.3.5 read the linear and the quadratic files of a pressed bar, with the expected stress and stretch. It also read the principal fields of a bent beam, which match the eigenvalues that numpy 2.1.3 gives to a relative 1e-15. These checks are not part of the test suite.
+`vtk_modes(mesh, modes)` writes the mesh with one point vector per mode shape, `mode_1`, `mode_2` and on. The title line gives the frequencies in hertz. Use the Warp By Vector filter of ParaView to animate a shape.
+
+Each number is written in full, so it reads back exactly. meshio 5.3.5 read the linear and the quadratic files of a pressed bar, with the expected stress and stretch. It also read the principal fields of a bent beam, which match the eigenvalues that numpy 2.1.3 gives to a relative 1e-15. It also read the mode shapes of a rod as `mode_1` and `mode_2` on 81 points. These checks are not part of the test suite.
 
 ## Verification
 
@@ -225,6 +229,7 @@ The tests check these results:
 - A rod that is fixed at one end moves along its axis only. It rings at `c / (4 L)` to a relative 1e-6, and at `3 c / (4 L)` to 1e-4.
 - A steel cantilever is 0.6 m long and 60 mm square. With ten-node elements it bends at 136.9 Hz with 10 cells and 136.2 Hz with 20. Euler-Bernoulli gives 135.9 Hz. The two bending modes of the square section agree to 1 percent.
 - The consistent mass coefficients sum to one, and a rigid move carries the whole mass.
+- A drawn rod mode moves its free end by the amplitude, in red, and leaves the clamp blue.
 - A column of four voxels with four CT numbers, under 1 MPa, shortens by `p * sum(h / E)`, as springs in series, to a relative 1e-9. One bin takes the mean modulus and the mean density.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 
