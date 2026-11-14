@@ -35,6 +35,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
 | `reformat` | `oblique_slice`, `slab_projection` and `sample_point` |
 | `curved` | `curved_reformat` |
+| `path` | `label_path` |
 | `resample` | `resample_volume` and `resample_labels` |
 
 ## Read a DICOM series
@@ -475,7 +476,18 @@ var picture = render_slice(image, K_AXIS, 0)
 
 Column `x` lies at the arc length `x * spacing` along the path. The path runs along the middle row, and `half_height` rows lie on each side. At each point, the lateral direction is `up` with its part along the path taken away. Row 0 is the farthest along it, so `up` points up in the image.
 
-The lateral direction changes at each corner of the path. A path of many short segments gives a smooth image. The result keeps the window of the source. It is not a plane in patient space, so its origin is zero and its axes are those of the grid.
+The lateral direction changes at each corner of the path. A path of many short segments gives a smooth image.
+
+`label_path(map, volume, label, start, end)` finds such a path through a label, between two of its voxels. It keeps to the middle of the label, as a centerline does.
+
+```mojo
+var centerline = label_path(map, volume, LabelId(1), (40, 52, 10), (61, 70, 88))
+var image = curved_reformat(volume, centerline, v3(0, 0, 1), 40, Length64(0.5, MILLIMETER64), -1000)
+```
+
+Each step of the path goes to one of the 26 neighbors of a voxel, inside the label. A step of length `s` between voxels at the distances `d1` and `d2` from the label's edge costs `s * (1 / d1^2 + 1 / d2^2) / 2`. A step near the edge costs much more than a step down the middle.
+
+Dijkstra's method finds the path of least total cost. The distances are exact, with the spacing of each axis, and the grid's edge counts as outside. The result keeps the window of the source. It is not a plane in patient space, so its origin is zero and its axes are those of the grid.
 
 ## Project a thick slab
 
@@ -514,6 +526,7 @@ The tests check these results:
 - A volume cut into slices, written, read and stacked gives the same values and spacing.
 - `trilinear` is exact for a linear field.
 - An oblique reformat of a linear field matches the field at every pixel.
+- The centered path through a straight tube runs down its axis, and a start off the axis joins the axis. Through a bent tube, each step goes to a neighbor inside the label, and the path straightens into a curved reformat.
 - A curved reformat along a straight path matches a linear field at every pixel. Along a bent path, the corner falls at its arc length, and an `up` that leans along the path keeps only its square part. A point past the volume takes the `outside` value.
 - A linear field resampled from 0.5 x 0.5 x 3 mm voxels to 1 mm cubes keeps its value at every new voxel. A label slice of 3 mm becomes the three 1 mm slices nearest to it.
 - A slab of four planes through a ramp gives its top plane as its maximum and its bottom plane as its minimum. Its mean is its center value.
@@ -560,6 +573,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A connectivity is not one of the three | `region_grow`, `keep_largest`, `label_pieces` |
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | A slab mode, thickness or plane count is out of range | `slab_projection` |
+| An end of a centered path is outside the grid or the label, or no path joins the ends | `label_path` |
 | A path has fewer than two points or two equal points in a row, `up` is zero or along a segment, or a size is out of range | `curved_reformat` |
 | A circle has a bad axis, slice, center or radius, or holds no pixel center | `circle_statistics` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels` |
@@ -580,7 +594,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
 - Rendering uses the volume frame. It does not apply the patient orientation.
 - A circle counts whole pixels by their centers. It does not weigh the pixels that its edge cuts.
-- A curved reformat follows a path that you give. It does not find a centerline.
+- A centered path is a chain of voxel centers, with steps of one voxel. It is not smoothed.
 - The connectivity of `label_surface`, the surfaces and the morphology is by faces. The `Connectivity` choice applies to the pieces and to region growing only.
 - The colors of a transfer function are display values. They are not linear light.
 
