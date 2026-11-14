@@ -24,6 +24,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest` and `label_surface` |
 | `measure` | `label_statistics` and `voxel_distance` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram` and `otsu_threshold` |
+| `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `overlay` | `render_slice`, `overlay_labels`, `draw_measurement` and `label_color` |
 | `reformat` | `oblique_slice` |
@@ -204,6 +205,21 @@ A `LabelMap` holds one label for each voxel of a volume. Label zero is the backg
 
 Two voxels connect when they share a face. Of two pieces of one size, `keep_largest` keeps the piece with the lowest voxel index.
 
+## Filter a volume
+
+Filter a noisy volume before you label it. A threshold of a noisy volume gives labels with holes and stray voxels.
+
+```mojo
+var quiet = median_filter(volume, 1)
+var smooth = gaussian_filter(quiet, Length64(0.8, MILLIMETER64))
+```
+
+`median_filter(volume, radius)` gives each voxel the median of the cube around it. The cube reaches `radius` voxels on each side, from 1 to 3. A median removes single noisy voxels and keeps the edges between regions.
+
+`gaussian_filter(volume, sigma)` blurs with a Gaussian whose standard deviation is a length. The spacing of each axis turns it into voxels, so a volume with thick slices gets a narrower kernel along `k`. The filter runs one pass along each axis. Each kernel stops at three standard deviations, and its weights sum to one. `gaussian_kernel(sigma_voxels)` gives the weights.
+
+At the edge of the grid, both filters take the value of the nearest voxel inside it. Both give a volume on the same grid, with the same placement and window.
+
 ## Find a threshold
 
 Use Otsu's method when the values have no fixed scale, as in MR. `otsu_threshold(histogram)` gives the bin edge that splits the voxels into two classes with the largest variance between them. This is the edge with the smallest variance within the classes.
@@ -295,6 +311,8 @@ The tests check these results:
 - A uniform volume of opacity 0.25 per voxel, four voxels deep, passes `0.75^4` of the background.
 - An isosurface of a linear ramp has the full iso color along the gradient, and the ambient light across it.
 - An ellipsoid of 904.8 voxels labels 879 voxels, within four percent, with its centroid exact.
+- A Gaussian keeps a linear ramp away from the edges. Its response to one voxel is the product of its three kernels, and sums to one.
+- A median removes a hot and a cold voxel and keeps the edge between two regions.
 - On two overlapping distributions, the Otsu edge is the edge with the least variance within the classes, found by brute force over the voxels.
 - The welded surface of a voxel ball is closed and of genus zero: `V - E + F = 2`.
 - Twenty Taubin passes on that ball cut the spread of the radius by more than a third. The volume stays within 2 percent.
@@ -323,6 +341,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A window, step, ambient light or crop is out of range | `render_volume`, `render_slice` |
 | A mesh has no triangle with area, or a smoothing factor is out of range | `weld_surface`, `smooth_surface` |
 | A histogram has fewer than 2 bins or a bad range, or Otsu's method finds one full bin only | `Histogram`, `otsu_threshold` |
+| A Gaussian width is not positive or reaches past 128 voxels, or a median radius is not from 1 to 3 | `gaussian_filter`, `median_filter` |
 
 ## Limits
 

@@ -250,6 +250,7 @@ extensions/
     reformat.mojo         oblique slices on any plane
     smooth.mojo           welded and smoothed surfaces, areas and volumes
     histogram.mojo        histograms and Otsu thresholds
+    filter.mojo           Gaussian and median filters
   molecule/
     ids.mojo              atom, residue, chain and model ids and kinds
     cif.mojo              the CIF tokenizer and data blocks
