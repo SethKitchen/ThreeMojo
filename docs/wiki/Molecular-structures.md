@@ -23,6 +23,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `coloring` | `color_surface`, `atom_color` and `kyte_doolittle` |
 | `superpose` | `superpose`, `Superposition`, `rmsd` and `matched_atoms` |
 | `contacts` | `distance_map`, `DistanceMap` and `map_image` |
+| `shape` | `molecular_shape` and `MolecularShape` |
 
 ## Read an mmCIF file
 
@@ -243,6 +244,20 @@ print(fit.rmsd.to(METER) / Length64(1.0, ANGSTROM).to(METER), "angstroms")
 
 `matched_atoms(fixed, model, moving, model, name)` pairs the atoms of one name, such as `CA`. Two atoms pair when their chains have one label, and their residues one number and insertion code. Of alternate locations, the first in the file pairs.
 
+## Measure size and shape
+
+`molecular_shape(structure, model)` gives the size and shape of a model:
+
+| Field | What it holds |
+|---|---|
+| `mass` | The sum of the standard atomic weights, a `MolarMass64` |
+| `center` | The mass center, in meters |
+| `radius_of_gyration` | The root mean square distance of the mass from its center, as small-angle scattering measures it |
+| `axes` | The three principal axes, unit and square, the longest first |
+| `extents` | The root mean square distance of the mass along each axis |
+
+Each atom weighs its element's standard atomic weight. The axes are the eigenvectors of the gyration tensor, the weighted mean of `(r - c)(r - c)^T`. A globular protein has three similar extents. A helix or a fiber has one large extent and two small ones. An element without a standard weight, such as an unknown `X`, is refused.
+
 ## Map distances and contacts
 
 A distance map shows a fold at a glance. A helix is a band along the diagonal, two strands that pair make a line across it, and two domains make blocks. A contact map does not change when a model turns, so structure prediction compares contact maps.
@@ -295,6 +310,7 @@ The tests check these results:
 - The distance transform is exact on a grid with one seed.
 - A ribbon of `n` residues has `(n - 1) samples + 1` rings, and every normal is a unit vector.
 - An ideal helix of 14 residues has 10 hydrogen bonds, each from residue `i + 4` to residue `i`. A strand has none.
+- A carbon and an oxygen 5 angstroms apart have their mass center at the share `m_O / (m_C + m_O)`. Their radius of gyration is `L sqrt(m1 m2) / (m1 + m2)`, along the bond.
 - Neighbor CA atoms of an ideal peptide are 3.8 angstroms apart. An alpha helix has its CA contacts within 8 angstroms at `i + 3` and `i + 4` only, and a strand has none.
 - A superposition recovers a known rotation and shift to 1e-12, with a proper rotation. It does not reach a mirror image. A small turn away from the fit gives a larger RMSD. On 40 noisy points, its RMSD matches numpy's SVD solution to 16 digits. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
