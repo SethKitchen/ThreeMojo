@@ -42,6 +42,8 @@ from extensions.imaging.image_volume import MILLIMETER64
 
 # The SOP class of a CT image.
 comptime CT_IMAGE_STORAGE = "1.2.840.10008.5.1.4.1.1.2"
+# The SOP instance UID of a meta group when the caller gives none.
+comptime DEFAULT_INSTANCE_UID = "1.2.826.0.1.3680043.2.1125.1"
 # The SOP class of an enhanced CT image, which holds several frames.
 comptime ENHANCED_CT_IMAGE_STORAGE = "1.2.840.10008.5.1.4.1.1.2.1"
 
@@ -128,7 +130,10 @@ struct DicomWriter(Movable):
     """The place in `bytes` where the data set starts."""
 
     def __init__(
-        out self, syntax: TransferSyntax, sop_class: String = CT_IMAGE_STORAGE
+        out self,
+        syntax: TransferSyntax,
+        sop_class: String = CT_IMAGE_STORAGE,
+        instance: String = DEFAULT_INSTANCE_UID,
     ) raises:
         """Start a file with its preamble and its file meta group.
 
@@ -136,6 +141,8 @@ struct DicomWriter(Movable):
             syntax: How the data set after the meta group is encoded.
             sop_class: The SOP class UID of the meta group, CT image
                 storage by default.
+            instance: The SOP instance UID of the meta group. Give the
+                SOP Instance UID of the data set, when it has one.
 
         Raises:
             Error: If `syntax` is not valid.
@@ -148,7 +155,7 @@ struct DicomWriter(Movable):
         meta.append(0)
         meta.append(1)
         _meta_text(meta, 0x0002, sop_class)
-        _meta_text(meta, 0x0003, "1.2.826.0.1.3680043.2.1125.1")
+        _meta_text(meta, 0x0003, instance)
         _meta_text(meta, 0x0010, uid)
         self.bytes = List[UInt8](length=128, fill=0)
         _push_text(self.bytes, "DICM")
@@ -179,6 +186,21 @@ struct DicomWriter(Movable):
             len(data.as_bytes()),
         )
         _push_text(self.bytes, data)
+
+    def uid(mut self, group: Int, element: Int, value: String):
+        """Append a UI element, padded to an even length with a zero byte.
+
+        Args:
+            group: The group of the tag.
+            element: The element of the tag.
+            value: The UID, such as `1.2.840.10008.5.1.4.1.1.481.3`.
+        """
+        var size = len(value.as_bytes())
+        var padded = size + size % 2
+        _element(self.bytes, self.explicit, group, element, "UI", False, padded)
+        _push_text(self.bytes, value)
+        if padded > size:
+            self.bytes.append(0)
 
     def numbers(
         mut self, group: Int, element: Int, values: List[Float64]

@@ -16,6 +16,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
 | `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL`, `MEGABECQUEREL`, and `parse_dicom_tree` and `read_dicom_tree`, which give a `DicomTree` |
 | `rtstruct` | `RtStructure`, `parse_rt_structures`, `read_rt_structures` and `structure_labels` |
+| `rtstruct_write` | `label_structure`, `encode_rt_structures` and `RT_STRUCTURE_SET_STORAGE` |
 | `rtdose` | `RtDose`, `parse_rt_dose`, `read_rt_dose`, `AbsorbedDose64`, `GRAY` and `CENTIGRAY` |
 | `dvh` | `DoseVolumeHistogram`, `dose_volume_histogram`, `dvh_image` and `CUBIC_CENTIMETER64` |
 | `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
@@ -184,6 +185,22 @@ Each `RtStructure` has its ROI number, its name and its contours. Each point of 
 `structure_labels(structure, volume, label)` puts each contour on the slice nearest to the mean of its points. A pixel is in the region when its center is inside an odd number of the region's contours on its slice. Thus a contour inside another contour makes a hole, as most planning systems draw one. A contour of fewer than three points, or on a slice outside the volume, adds nothing.
 
 `parse_dicom_tree(bytes)` and `read_dicom_tree(path)` read the elements of any Part 10 file into a `DicomTree`. Use them for a file that is not an image. The node `DATA_SET` is the data set, and each item of a sequence is a `DicomNode` of its own. `text`, `numbers`, `has` and `items` read a node by tag, such as `0x30060020`.
+
+## Write an RT Structure Set
+
+`label_structure(map, volume, label, number, name)` turns a label into a region of closed planar contours. The contours are the outlines of the label on each slice of `k`, as `slice_outlines` traces them, in patient space. A point on a straight run between its two neighbors is left out. `encode_rt_structures(structures, root, frame_of_reference, label)` writes the regions as a Part 10 file.
+
+```mojo
+var regions = List[RtStructure]()
+regions.append(label_structure(map, ct, LabelId(1), 1, "GTV"))
+var frame = read_dicom_tree("ct/slice001.dcm").text(DATA_SET, 0x00200052)
+var bytes = encode_rt_structures(regions, "2.25.1234", frame, "Research")
+Path("out/rtstruct.dcm").write_bytes(bytes)
+```
+
+The study, the series and the instance UIDs are `root.1`, `root.2` and `root.3`. Give the Frame of Reference UID of the CT, so that other tools place the regions on it. The file is implicit VR by default. Explicit VR holds at most 65534 bytes of text in one contour, about 1300 points.
+
+`structure_labels` fills each written region back on the grid of its volume, voxel for voxel. The outlines run between the pixel centers inside and outside the label, so no pixel center is on a contour.
 
 ## Read an RT Dose
 
@@ -846,6 +863,9 @@ The tests check these results:
 - The fixture grid has 24 by 20 by 4 voxels of 2 by 2.5 by 3 mm. On it, each region fills the voxels that scikit-image 0.26's `points_in_poly` puts inside. The contours of a slice join by exclusive or. The test compares each voxel. The tumor has 68 voxels, the ring with a square hole has 87, and the marker point has none.
 - A square from 0 to 10 mm fills the 20 pixel centers inside it. Contours past the grid, beside it and of two points fill nothing.
 - A tree reads nested sequences, sequences of defined length in implicit VR, and empty elements. It steps over encapsulated pixel data. Of two elements or two sequences with one tag, the first counts. A bad preamble, a bad syntax, a stray or unknown delimiter, an item without an end and nesting past 64 levels are refused.
+- Four labels on a grid turned 20 degrees about (1, 1, 1) are written as an RT Structure Set and read back. A ball, a ring with a hole, pixels that touch at corners and pixels on the edges of the grid fill back voxel for voxel. This holds in implicit and in explicit VR.
+- One pixel gives a diamond of four points, and a bar of three pixels keeps six corners. A contour of 4000 points reads back in implicit VR, and explicit VR refuses it.
+- pydicom 3.0.1 reads a written file with its UIDs, regions and observations. The contours of two dose regions, filled by scikit-image's `points_in_poly`, match the label maps voxel for voxel. dicompyler-core 0.5.6 gives them the same volume and V20 on the RT Dose fixture, and the mean to its bins of 1 cGy. That check is not part of the test suite.
 - Two RT Dose files that pydicom 3.0.1 wrote read with pydicom's dose at each voxel, as 32-bit floats. One is explicit VR with 32-bit values and offsets from 0. The other is implicit VR with 16-bit values and frames from z = 9 mm down to 0. `assets/dicom/make_rtdose.py` makes them.
 - The tumor and the ring of the structure fixtures, filled on each dose grid, have the DVH that numpy 2.1.3 gives. The test compares the least, mean and largest dose, D98, D95, D50, D2, V20 and V40. It also compares D for 0.03 and 0.1 cm^3, and the gEUD at a = -10 and 5. Each agrees to 1e-12.
 - Written files check signed and 32-bit values, one frame without offsets, frames that go down, offsets that are z, and sagittal frames. A malformed file is refused for each check of the reader.
@@ -926,6 +946,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A file is not an RT Structure Set, a region has not one ROI number, a contour refers to no region, or a closed contour has fewer than three points | `parse_rt_structures`, `read_rt_structures` |
 | A sequence holds an element that is not an item, an item has no end, the sequences nest more than 64 deep, or a node is not in the tree | `parse_dicom_tree`, `read_dicom_tree`, `DicomTree` |
 | A structure label is not valid or is the background | `structure_labels` |
+| An RT Structure Set has no region, two regions with one number, a bad UID, label, name or syntax, a contour of fewer than three points, or a contour too long for explicit VR | `encode_rt_structures` |
+| A label is on another grid than its volume, or `slice_outlines` refuses it | `label_structure` |
 | A file is not an RT Dose or not in `GY`, or has a missing or bad element, frames that are not evenly spaced, or pixel data that does not fill its grid | `parse_rt_dose`, `read_rt_dose` |
 | A DVH has no dose, a dose that is not finite, a bad voxel volume, a bad label or a map on another grid | `dose_volume_histogram`, `DoseVolumeHistogram` |
 | A DVH part, volume, dose, gEUD parameter or curve step is out of range, or a gEUD has a negative dose | `DoseVolumeHistogram` methods |
@@ -967,6 +989,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The reader does not read a file that has no preamble.
 - The writer does not write the PET elements. An SUV is by body weight only, not by lean body mass. The factor takes the series time as the start of the scan, and does not read the private scale factors of a vendor.
 - A structure set gives its closed planar contours only. A pixel is in a region by its center and the even-odd rule. A pixel that a contour cuts counts whole or not at all. A contour goes to its nearest slice. The reader does not check the CT series or the frame of reference that the structure set refers to.
+- A written region has contours on the slices of `k` only. Its contours follow the pixel edges in steps of half a pixel, so a smooth organ has a stepped outline. The patient's name and ID, the date and the time of a written file are empty.
 - An RT Dose must be native and in grays. The reader does not read a relative dose, compressed frames or the plan that the dose refers to.
 - A DVH counts each voxel whole, with the dose at its center. It does not split a voxel that the edge of a region cuts, and it does not interpolate the dose between planes.
 - The RT Structure Set, RT Dose and DVH tools are for research. They are not a treatment planning system. Do not use them to plan, check or give a treatment.
