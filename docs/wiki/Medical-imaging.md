@@ -12,7 +12,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 
 | Module | What it gives |
 |---|---|
-| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity`, `LabelId` and `DicomNode` |
+| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity`, `LabelId`, `DicomNode` and `RegistrationMetric` |
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
 | `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL`, `MEGABECQUEREL`, and `parse_dicom_tree` and `read_dicom_tree`, which give a `DicomTree` |
 | `rtstruct` | `RtStructure`, `parse_rt_structures`, `read_rt_structures` and `structure_labels` |
@@ -49,6 +49,8 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `curved` | `curved_reformat` |
 | `path` | `label_path`, `smooth_path` and `resample_path` |
 | `resample` | `resample_volume`, `resample_labels`, `resample_onto` and `resample_labels_onto` |
+| `register` | `RigidTransform`, `register_rigid`, `Registration`, `resample_transformed`, `resample_labels_transformed` and `largest_difference` |
+| `simplex` | `minimize_simplex`, `SimplexCost` and `SimplexResult` |
 | `crop` | `crop_volume`, `crop_labels`, `label_box` and `VoxelBox` |
 
 ## Read a DICOM series
@@ -317,6 +319,32 @@ var labels_on_ct = resample_labels_onto(pet_labels, pet, ct)
 The result takes the size, spacing, origin and axes of `target`, and the window of `volume`. Each voxel takes the trilinear value of `volume` at its patient position. A voxel whose center falls outside the box of the voxel centers of `volume` gets `outside`. The two volumes need not share their spacing, their extent or the turn of their axes.
 
 `resample_labels_onto(map, placed, target)` does the same for a label map, which `placed` puts in patient space. Each voxel takes the label of the nearest voxel center of `map`, rounded half up along each axis. A voxel whose nearest center is outside `map` is background.
+
+## Register two volumes
+
+Two scans of one patient seldom line up. The patient moves between them, and two scanners place their volumes apart. `register_rigid(fixed, moving, metric, start, levels, stride)` finds the rigid transform `T` that takes each point of the fixed volume to the same tissue in the moving volume.
+
+```mojo
+var start = RigidTransform(ct.patient_point(63.5, 63.5, 40.0))
+var found = register_rigid(ct, mr, MUTUAL_INFORMATION, start, 3, 1)
+var aligned = resample_transformed(mr, ct, found.transform, 0)
+print(found.transform.angle.to(DEGREE64), found.transform.shift)
+```
+
+The transform is `T(p) = R (p - c) + c + t`. `R` turns by an angle about an axis through the center `c` of `start`, and `t` is a shift. Give the middle of the fixed volume as the center.
+
+The metric compares the fixed values at a lattice of voxels with the moving values at `T(p)`, by trilinear interpolation. A point that `T` takes outside the moving volume does not count.
+
+| Metric | What it takes | Use |
+|---|---|---|
+| `MEAN_SQUARES` | The mean of the squared differences | Two scans of one kind, such as two CTs |
+| `MUTUAL_INFORMATION` | Minus the mutual information of a joint histogram of 32 by 32 bins | Two kinds of scans, such as CT and MR |
+
+Each value of the joint histogram spreads over its two nearest bins, so the cost changes smoothly.
+
+The search is the simplex of Nelder and Mead, `minimize_simplex`, on six parameters: the rotation vector of `R`, and `t`. It runs on `levels` lattices, from coarse to fine. The last lattice takes one voxel in `stride` along each axis, and each level before it takes one in twice as many. A Gaussian of half the lattice blurs both volumes at a level whose lattice is more than one voxel. The first steps are 0.05 rad and 4 mm, and they halve at each level.
+
+`resample_transformed` and `resample_labels_transformed` bring the moving volume and its labels onto the fixed grid through `T`. `largest_difference(a, b, volume)` gives how far apart two transforms take the corners of a volume.
 
 ## Crop to a region
 
@@ -866,6 +894,10 @@ The tests check these results:
 - Four labels on a grid turned 20 degrees about (1, 1, 1) are written as an RT Structure Set and read back. A ball, a ring with a hole, pixels that touch at corners and pixels on the edges of the grid fill back voxel for voxel. This holds in implicit and in explicit VR.
 - One pixel gives a diamond of four points, and a bar of three pixels keeps six corners. A contour of 4000 points reads back in implicit VR, and explicit VR refuses it.
 - pydicom 3.0.1 reads a written file with its UIDs, regions and observations. The contours of two dose regions, filled by scikit-image's `points_in_poly`, match the label maps voxel for voxel. dicompyler-core 0.5.6 gives them the same volume and V20 on the RT Dose fixture, and the mean to its bins of 1 cGy. That check is not part of the test suite.
+- The middle of a blurred phantom is turned 6 degrees and shifted 7 mm, onto a grid of other voxels turned 10 degrees. Mean squares finds the transform to 0.12 mm at the corners of the fixed grid, 16 voxels of 4.5 mm. The values go through a curve that rises and falls. Then mutual information finds the transform to 0.52 mm, and mean squares misses it by more than 10 mm.
+- A volume registered on itself stays in place, to 1e-6 mm. Through the transform that moves nothing, a resampled volume and its labels are the same as from `resample_onto` and `resample_labels_onto`.
+- The simplex finds the least point of a bowl to 1e-8 and of the valley of Rosenbrock to 1e-6. On a cost that no move improves, it shrinks onto its start in ten iterations.
+- On a larger pair of 40 and 36 voxels, mean squares here finds the transform to 0.27 mm, and mutual information to 0.44 mm. SimpleITK 2.5.7 registers that pair with a regular-step gradient descent on the same two levels. It finds the transform to 0.19 mm by mean squares and to 0.21 mm by Mattes mutual information. At its transforms, the metrics here are higher than at their own, so the difference is in the metrics and not in the search. That check is not part of the test suite.
 - Two RT Dose files that pydicom 3.0.1 wrote read with pydicom's dose at each voxel, as 32-bit floats. One is explicit VR with 32-bit values and offsets from 0. The other is implicit VR with 16-bit values and frames from z = 9 mm down to 0. `assets/dicom/make_rtdose.py` makes them.
 - The tumor and the ring of the structure fixtures, filled on each dose grid, have the DVH that numpy 2.1.3 gives. The test compares the least, mean and largest dose, D98, D95, D50, D2, V20 and V40. It also compares D for 0.03 and 0.1 cm^3, and the gEUD at a = -10 and 5. Each agrees to 1e-12.
 - Written files check signed and 32-bit values, one frame without offsets, frames that go down, offsets that are z, and sagittal frames. A malformed file is refused for each check of the reader.
@@ -969,7 +1001,10 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A texture has a bad label, axis, slice, offset, level count or range, or no pair at its offset | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` |
 | A first-order feature has another grid, a bad or empty label, a bad bin count or a bad range | `intensity_features` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels`, `label_overlaps` |
-| A label map and the volume that places it differ in grid or spacing | `resample_labels_onto` |
+| A label map and the volume that places it differ in grid or spacing | `resample_labels_onto`, `resample_labels_transformed` |
+| A rotation axis is zero or not finite, or an angle is not finite | `RigidTransform` |
+| A registration has a bad metric, levels out of 1 to 4, a lattice out of 1 to 8 voxels, no overlap at the start of a level, or mutual information of a volume whose values do not vary | `register_rigid` |
+| A simplex search has no parameter, not one step for each, a step that is not positive and finite, a tolerance that is not positive, or no iteration | `minimize_simplex` |
 | A table of overlaps is empty | `mean_dice` |
 | A crop box leaves the grid or holds no voxel, or a label box has a bad label or margin | `crop_volume`, `crop_labels`, `label_box` |
 | A shape or a slice area needs the background, an empty label, another grid or a bad axis | `label_shape`, `slice_areas` |
@@ -993,6 +1028,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - An RT Dose must be native and in grays. The reader does not read a relative dose, compressed frames or the plan that the dose refers to.
 - A DVH counts each voxel whole, with the dose at its center. It does not split a voxel that the edge of a region cuts, and it does not interpolate the dose between planes.
 - The RT Structure Set, RT Dose and DVH tools are for research. They are not a treatment planning system. Do not use them to plan, check or give a treatment.
+- Registration is rigid, with six parameters. It does not scale, shear or bend, so it does not follow breathing or soft tissue that changes shape. The simplex finds a nearby least point, so a start far from the answer can end at another one.
 - The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
@@ -1020,6 +1056,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Cox and others, "A (sort of) new image data format standard: NIfTI-1", 2004, and the header `nifti1.h`.
 - Otsu, "A threshold selection method from gray-level histograms", 1979.
 - Johnson and others, "The ITK Software Guide, Book 2: Design and Functionality", 4th edition, 2015.
+- Nelder and Mead, "A simplex method for function minimization", The Computer Journal, 1965.
+- Maes and others, "Multimodality image registration by maximization of mutual information", IEEE Transactions on Medical Imaging, 1997.
 - Hildebrand and Rüegsegger, "A new method for the model-independent assessment of thickness in three-dimensional images", 1997.
 - Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", 2012.
 - Shepp and Logan, "The Fourier reconstruction of a head section", 1974.

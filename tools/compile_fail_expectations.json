@@ -3600,6 +3600,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_registration_metric_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 20,
+        "message": "invalid call to 'require_metric': value passed to 'metric' cannot be converted from 'IntLiteral[1]' to 'RegistrationMetric'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_render_detail_is_not_a_bare_int.mojo": {
     "errors": [
       {

@@ -340,3 +340,39 @@ def require_connectivity(connectivity: Connectivity) raises:
         Error: If `connectivity` is not valid.
     """
     require_valid(connectivity.is_valid(), "A connectivity must be from 0 to 2")
+
+
+@fieldwise_init
+struct RegistrationMetric(Equatable, ImplicitlyCopyable, Writable):
+    """How a registration compares two volumes.
+
+    `MEAN_SQUARES` takes the mean squared difference, for two scans of
+    one kind. `MUTUAL_INFORMATION` takes the mutual information of their
+    joint histogram, for two kinds of scans.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the two metrics.
+
+        Returns:
+            Whether the value is zero or one.
+        """
+        return ordinal_valid(self.value, 1)
+
+
+comptime MEAN_SQUARES = RegistrationMetric(0)
+comptime MUTUAL_INFORMATION = RegistrationMetric(1)
+
+
+def require_metric(metric: RegistrationMetric) raises:
+    """Refuse a metric that is not one of the two.
+
+    Args:
+        metric: The metric to check.
+
+    Raises:
+        Error: If `metric` is not valid.
+    """
+    require_valid(metric.is_valid(), "A registration metric must be 0 or 1")
