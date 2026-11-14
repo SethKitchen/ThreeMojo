@@ -489,6 +489,12 @@ Each step of the path goes to one of the 26 neighbors of a voxel, inside the lab
 
 Dijkstra's method finds the path of least total cost. The distances are exact, with the spacing of each axis, and the grid's edge counts as outside. The result keeps the window of the source. It is not a plane in patient space, so its origin is zero and its axes are those of the grid.
 
+![A winding vessel: its projection with the centered path in yellow, one axial slice, and the vessel straightened with a narrowing](out/vessel.png)
+
+`examples/vessel.mojo` makes this picture. A synthetic vessel of 300 HU winds through soft tissue of about 40 HU, in all three axes. Its radius is 2.4 mm, and it narrows to half of that partway along. A threshold labels it, and `keep_largest` keeps it whole with `CORNERS`. `label_path` finds its centered path, and `curved_reformat` straightens it.
+
+The top left panel is the maximum intensity projection along z, with the path in yellow. The top right panel is one axial slice, which cuts the vessel once. The band below is the straightened vessel, where the narrowing is plain to see. Along the path of 54.7 mm, the distance to the edge is least at 34.9 mm: 1.12 mm, against the narrowest radius of 1.2 mm. The distance runs to the centers of the voxels outside, so it is less than the radius.
+
 ## Project a thick slab
 
 A thin reformat cuts a vessel or an airway into short pieces. A thick slab projects several planes onto one, so a long structure shows whole.
