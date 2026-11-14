@@ -15,6 +15,7 @@
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of` and `von_mises` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
 | `post` | `stress_geometry` and `stress_color` |
+| `export` | `vtk_mesh` and `vtk_result` |
 
 ## Solve a problem
 
@@ -101,6 +102,25 @@ Check `status`. A solve that runs out of iterations returns its last iterate wit
 
 `stress_geometry(mesh, result, scale, low, high)` returns the outer surface. It moves each node by its displacement times `scale`. Each face takes the color of the von Mises stress of its element. The scale runs through blue, cyan, green, yellow and red from `low` to `high`. Each face has its own vertices, so the colors and normals are flat.
 
+## Export to ParaView
+
+`vtk_result(mesh, result)` returns a legacy VTK file that ParaView and other analysis tools read. `vtk_mesh(mesh)` returns the mesh alone.
+
+```mojo
+Path("bar.vtk").write_text(vtk_result(problem.mesh, result))
+```
+
+The file is an ASCII `UNSTRUCTURED_GRID` in meters. A four-node element is cell type 10. A ten-node element is cell type 24, in VTK's edge order: 0-1, 1-2, 2-0, 0-3, 1-3 and 2-3.
+
+| Field | Kind | What it holds |
+|---|---|---|
+| `material` | Cell scalar | The element's material index |
+| `von_mises` | Cell scalar | The von Mises stress, in pascals |
+| `stress` | Cell tensor | The symmetric stress tensor, in pascals |
+| `displacement` | Point vector | The node's displacement, in meters |
+
+Each number is written in full, so it reads back exactly. meshio 5.3.5 read the linear and the quadratic files of a pressed bar, with the expected stress and stretch. That check is not part of the test suite.
+
 ## Verification
 
 The tests check these results:
@@ -113,6 +133,7 @@ The tests check these results:
 - A quadratic bar under a pull or a pressure has the exact uniform stress and stretch.
 - A quadratic cantilever of 60 elements bends to 98 percent of beam theory.
 - A quadratic element stiffness is symmetric, and its ten shape gradients sum to zero.
+- The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 
 ## Bending accuracy
 
