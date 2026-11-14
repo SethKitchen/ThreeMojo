@@ -6,6 +6,8 @@
 """Chain sequences, FASTA files and global alignments."""
 
 from extensions.molecule.ids import (
+    AlignmentMode,
+    LOCAL_ALIGNMENT,
     ResidueId,
     ALL_LOCATIONS,
     COIL,
@@ -249,6 +251,35 @@ def test_atoms_paired_through_the_alignment() raises:
     assert_equal(two[1][0], 2)
     with assert_raises(contains="chain"):
         _ = aligned_atoms(wet, ChainId(4), wet, ChainId(0), "CA", -10, -0.5)
+
+
+def test_local_alignments() raises:
+    # Three tryptophans inside other residues: the local alignment is
+    # them alone, at 11 each.
+    var local = align_sequences(
+        "AAAWWWAAA", "CCWWWCC", -10, -0.5, LOCAL_ALIGNMENT
+    )
+    assert_almost_equal(local.score, 33.0)
+    assert_equal(local.first, "WWW")
+    assert_equal(local.second, "WWW")
+    assert_equal(local.first_start, 3)
+    assert_equal(local.second_start, 2)
+    assert_equal(local.identity(), 1.0)
+    # A gap inside a local alignment, when the pairs around it pay for it.
+    var gapped = align_sequences(
+        "WWWWAWWWW", "WWWWWWWW", -10, -0.5, LOCAL_ALIGNMENT
+    )
+    assert_almost_equal(gapped.score, 8 * 11.0 - 10.0)
+    assert_equal(gapped.first, "WWWWAWWWW")
+    assert_equal(gapped.second, "WWWW-WWWW")
+    # The best pair can be the first cell.
+    var first = align_sequences("WA", "WC", -10, -0.5, LOCAL_ALIGNMENT)
+    assert_equal(first.first, "W")
+    assert_equal(first.first_start, 0)
+    # A global alignment starts at 0.
+    assert_equal(align_sequences("AW", "W", -10, -0.5).second_start, 0)
+    with assert_raises(contains="alignment mode"):
+        _ = align_sequences("A", "A", -10, -0.5, AlignmentMode(2))
 
 
 def test_refusals() raises:

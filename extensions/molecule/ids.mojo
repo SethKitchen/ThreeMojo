@@ -311,3 +311,40 @@ def require_ensemble_fit(fit: EnsembleFit) raises:
         Error: If `fit` is not valid.
     """
     require_valid(fit.is_valid(), "An ensemble fit must be 0 or 1")
+
+
+@fieldwise_init
+struct AlignmentMode(Equatable, ImplicitlyCopyable, Writable):
+    """Whether a sequence alignment spans the whole of both sequences.
+
+    `GLOBAL_ALIGNMENT` aligns the sequences end to end, by the method of
+    Needleman and Wunsch. `LOCAL_ALIGNMENT` finds the best scoring
+    stretch of each, by the method of Smith and Waterman, such as a
+    domain inside a longer chain.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the two modes.
+
+        Returns:
+            Whether the value is zero or one.
+        """
+        return ordinal_valid(self.value, 1)
+
+
+comptime GLOBAL_ALIGNMENT = AlignmentMode(0)
+comptime LOCAL_ALIGNMENT = AlignmentMode(1)
+
+
+def require_alignment_mode(mode: AlignmentMode) raises:
+    """Refuse an alignment mode that is not one of the two.
+
+    Args:
+        mode: The mode to check.
+
+    Raises:
+        Error: If `mode` is not valid.
+    """
+    require_valid(mode.is_valid(), "An alignment mode must be 0 or 1")

@@ -11,7 +11,10 @@ such as a water or a ligand, is left out. `encode_fasta` writes the
 sequence of each chain of a model as a FASTA file.
 
 `align_sequences` aligns two sequences end to end by the method of
-Needleman and Wunsch, with the affine gaps of Gotoh. A pair of residues
+Needleman and Wunsch, with the affine gaps of Gotoh. With
+`LOCAL_ALIGNMENT`, it finds the best scoring stretch of each by the
+method of Smith and Waterman instead, such as a domain inside a longer
+chain. A pair of residues
 scores its BLOSUM62 value. A gap of length `L` scores
 `open + (L - 1) * extend`, at the ends too. The identity of an alignment
 is the share of its paired columns that hold the same residue. Use it to
@@ -23,7 +26,15 @@ through the alignment of their sequences. It pairs residues where
 another way, or when one has a residue that the other lacks.
 """
 
-from extensions.molecule.ids import ChainId, ModelId, ResidueId
+from extensions.molecule.ids import (
+    AlignmentMode,
+    ChainId,
+    GLOBAL_ALIGNMENT,
+    LOCAL_ALIGNMENT,
+    ModelId,
+    ResidueId,
+    require_alignment_mode,
+)
 from extensions.molecule.structure import Structure
 from std.math import inf, isfinite
 
@@ -201,6 +212,11 @@ struct SequenceAlignment(Copyable, Movable):
     """The paired columns that hold the same residue."""
     var paired: Int
     """The columns that hold a residue of each sequence."""
+    var first_start: Int
+    """The first residue of the first sequence in the alignment, from 0.
+    It is 0 for a global alignment."""
+    var second_start: Int
+    """The first residue of the second sequence in the alignment."""
 
     def __init__(out self):
         """Create an empty alignment."""
@@ -209,6 +225,8 @@ struct SequenceAlignment(Copyable, Movable):
         self.score = 0
         self.identical = 0
         self.paired = 0
+        self.first_start = 0
+        self.second_start = 0
 
     def identity(self) raises -> Float64:
         """Return the share of paired columns with the same residue.
@@ -225,7 +243,11 @@ struct SequenceAlignment(Copyable, Movable):
 
 
 def align_sequences(
-    first: String, second: String, open: Float64, extend: Float64
+    first: String,
+    second: String,
+    open: Float64,
+    extend: Float64,
+    mode: AlignmentMode = GLOBAL_ALIGNMENT,
 ) raises -> SequenceAlignment:
     """Align two sequences end to end, with BLOSUM62 and affine gaps.
 
@@ -236,6 +258,9 @@ def align_sequences(
             Zero or less, and finite.
         extend: The score of each further position, such as -0.5. Zero
             or less, and finite.
+        mode: `GLOBAL_ALIGNMENT`, the default, or `LOCAL_ALIGNMENT`. A
+            local alignment starts and ends with a pair, and holds at
+            least one pair.
 
     Returns:
         The best alignment. Where two paths tie, the trace takes a pair
@@ -244,9 +269,11 @@ def align_sequences(
 
     Raises:
         Error: If a sequence is empty or holds a code that is not one of
-            the twenty standard codes, or a gap score is positive or not
-            finite.
+            the twenty standard codes, a gap score is positive or not
+            finite, or the mode is not valid.
     """
+    require_alignment_mode(mode)
+    var local = mode == LOCAL_ALIGNMENT
     if not (open <= 0) or not isfinite(open):
         raise Error("A gap opening score must be zero or less, and finite")
     if not (extend <= 0) or not isfinite(extend):
@@ -272,10 +299,12 @@ def align_sequences(
     var down = List[Float64](length=(n + 1) * width, fill=low)
     var across = List[Float64](length=(n + 1) * width, fill=low)
     match_[0] = 0
-    for i in range(1, n + 1):  # pragma: no branch
-        down[i * width] = open + Float64(i - 1) * extend
-    for j in range(1, m + 1):  # pragma: no branch
-        across[j] = open + Float64(j - 1) * extend
+    # A local alignment cannot start with a gap.
+    if not local:
+        for i in range(1, n + 1):  # pragma: no branch
+            down[i * width] = open + Float64(i - 1) * extend
+        for j in range(1, m + 1):  # pragma: no branch
+            across[j] = open + Float64(j - 1) * extend
     for i in range(1, n + 1):  # pragma: no branch
         for j in range(1, m + 1):  # pragma: no branch
             var at = i * width + j
@@ -283,6 +312,9 @@ def align_sequences(
             var best = max(
                 match_[diagonal], max(down[diagonal], across[diagonal])
             )
+            # A local alignment can start afresh at any pair.
+            if local:
+                best = max(best, 0.0)
             match_[at] = best + Float64(table[20 * ra[i - 1] + rb[j - 1]])
             var up = (i - 1) * width + j
             down[at] = max(
@@ -293,17 +325,31 @@ def align_sequences(
                 max(match_[left], down[left]) + open, across[left] + extend
             )
     var out = SequenceAlignment()
-    var end = n * width + m
-    out.score = max(match_[end], max(down[end], across[end]))
-    # Trace back from the end, in the state of the best score.
-    var state = 0
-    if match_[end] < out.score:
-        state = 1 if down[end] == out.score else 2
     var i = n
     var j = m
+    var state = 0
+    if local:
+        # A local alignment ends at its best pair, the first in row order.
+        i = 1
+        j = 1
+        var top_score = match_[width + 1]
+        for row in range(1, n + 1):  # pragma: no branch
+            for column in range(1, m + 1):  # pragma: no branch
+                if match_[row * width + column] > top_score:
+                    top_score = match_[row * width + column]
+                    i = row
+                    j = column
+        out.score = top_score
+    else:
+        var end = n * width + m
+        out.score = max(match_[end], max(down[end], across[end]))
+        # Trace back from the end, in the state of the best score.
+        if match_[end] < out.score:
+            state = 1 if down[end] == out.score else 2
     var top = List[UInt8]()
     var bottom = List[UInt8]()
-    while i > 0 or j > 0:
+    var done = False
+    while not done and (i > 0 or j > 0):
         var at = i * width + j
         if state == 0:
             var diagonal = (i - 1) * width + j - 1
@@ -316,7 +362,10 @@ def align_sequences(
             i -= 1
             j -= 1
             # The sums repeat the forward pass, so they compare exactly.
-            if match_[diagonal] + pair == match_[at]:
+            if local and pair == match_[at]:
+                # The local alignment starts at this pair.
+                done = True
+            elif match_[diagonal] + pair == match_[at]:
                 state = 0
             elif down[diagonal] + pair == match_[at]:
                 state = 1
@@ -344,6 +393,8 @@ def align_sequences(
                 state = 1
     top.reverse()
     bottom.reverse()
+    out.first_start = i
+    out.second_start = j
     out.first = String(from_utf8_lossy=top)
     out.second = String(from_utf8_lossy=bottom)
     return out^

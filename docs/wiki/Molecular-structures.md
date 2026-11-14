@@ -12,7 +12,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 
 | Module | What it gives |
 |---|---|
-| `ids` | `AtomId`, `ResidueId`, `ChainId`, `ModelId`, `AtomGroup`, `SecondaryKind`, `AltLocPolicy`, `RibbonColoring`, `SurfaceColoring` and `EnsembleFit` |
+| `ids` | `AtomId`, `ResidueId`, `ChainId`, `ModelId`, `AtomGroup`, `SecondaryKind`, `AltLocPolicy`, `RibbonColoring`, `SurfaceColoring`, `EnsembleFit` and `AlignmentMode` |
 | `cif` | `parse_cif`, `read_cif`, `cif_tokens`, `CifBlock` and `is_null` |
 | `structure` | `Structure`, `parse_mmcif`, `read_mmcif`, `parse_pdb_structure`, `read_pdb_structure` and `SQUARE_ANGSTROM` |
 | `peptide` | `build_peptide`, `place_atom` and `three_letter` |
@@ -353,7 +353,14 @@ A residue that is not one of the twenty standard amino acids, such as a water or
 
 The alignment is the global method of Needleman and Wunsch, with the affine gaps of Gotoh. A pair of residues scores its BLOSUM62 value, and `blosum62(a, b)` gives that value. A gap of length `L` scores `open + (L - 1) * extend`, at the ends too. The scores -10 and -0.5 are a common choice. Where two paths tie, the trace takes a pair first, then a gap in the second sequence, then a gap in the first.
 
-A `SequenceAlignment` holds the two sequences with `-` for each gap, the score, and the counts of `identical` and `paired` columns. `identity()` is the share of paired columns that hold the same residue. Check it before you superpose two models, to be sure that they are of one protein.
+A last argument of `LOCAL_ALIGNMENT` finds the best scoring stretch of each sequence instead, by the method of Smith and Waterman. Use it for a domain inside a longer chain, or a fragment against a whole protein. A local alignment starts and ends with a pair, and its score is never below the best single pair.
+
+```mojo
+var domain = align_sequences(fragment, whole, -10, -0.5, LOCAL_ALIGNMENT)
+print(domain.first_start, domain.second_start, domain.first, domain.second)
+```
+
+A `SequenceAlignment` holds the two sequences with `-` for each gap, the score, and the counts of `identical` and `paired` columns. `first_start` and `second_start` give the first residue of each sequence in the alignment, from 0. They are 0 for a global alignment. `identity()` is the share of paired columns that hold the same residue. Check it before you superpose two models, to be sure that they are of one protein.
 
 `aligned_atoms(first, first_chain, second, second_chain, name, open, extend)` pairs the atoms of one name through the alignment. Use it in place of `matched_atoms` when two chains number their residues another way, as a prediction often does. Use it also when one chain has a residue that the other lacks.
 
@@ -485,6 +492,7 @@ The tests check these results:
 - The largest areas are the 20 values of Tien and others. A residue's area is the sum of its atoms, and its RSA is that sum over the largest area. The middle of a built helix is more buried than its ends. On a peptide of 12 residues with 2000 points per sphere, the areas match Biopython 1.88's Shrake-Rupley to 0.1 percent. That check is not part of the test suite.
 - Two carbons in two chains 3 angstroms apart each bury a cap of `2 pi R h`, within 1 percent with 2000 points. Chains 20 angstroms apart bury nothing, and a third chain does not change the interface of the other two. On two helices 9 angstroms apart, the buried area of each residue matches Biopython 1.88's Shrake-Rupley to 0.001 square angstroms. That check is not part of the test suite.
 - A peptide numbered from 101, turned and moved, pairs no atom by number. Through the alignment, all 11 CA atoms pair, and the fit has an RMSD below 1e-15 m. A residue that only one chain has, or a residue without the atom, pairs nothing.
+- A local alignment of three tryptophans inside other residues is the three alone, with their start in each sequence. It takes a gap inside when the pairs around it pay for it. On the 40 random pairs, every local score matches Biopython's local `PairwiseAligner`, and each alignment holds the stretch of each sequence from its start. That check is not part of the test suite.
 - BLOSUM62 is symmetric, with its diagonal from 4 to 11. Small alignments give their gaps at the ends, inside and in either sequence, with the scores of each gap. A sequence against itself has no gap and an identity of 1. All 400 BLOSUM62 values match Biopython 1.88. On 40 random pairs with changes, insertions and deletions, every score matches Biopython's `PairwiseAligner`. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 
@@ -496,7 +504,7 @@ Every function raises `Error` for input it cannot use.
 |---|---|
 | A quoted value or a text field has no end | `cif_tokens`, `parse_cif`, `parse_mmcif` |
 | A link cutoff is not positive and finite | `disulfide_bonds`, `salt_bridges` |
-| A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
+| A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, an alignment mode is not valid, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
 | An ensemble has fewer than two models, too few shared atoms, or a bad fit or reference | `ensemble_fluctuation`, `Fluctuation` |
@@ -521,7 +529,7 @@ Every function raises `Error` for input it cannot use.
 - `assign_secondary` does not report 3-10 or pi helices, turns, bends, isolated bridges or beta bulges.
 - Ribbons need CA atoms. Nucleic acids have no ribbon.
 - An ensemble is fitted on one reference model. The fit is not iterated to the mean of the models.
-- A sequence holds the twenty standard amino acids only. A modified residue, such as selenomethionine `MSE`, is left out. An alignment is global: there is no local mode.
+- A sequence holds the twenty standard amino acids only. A modified residue, such as selenomethionine `MSE`, is left out. `aligned_atoms` pairs atoms through a global alignment only.
 - A Ramachandran plot shows the angles only. It does not draw the favored and allowed regions of a reference set, and it does not validate a model.
 - Where three or more spheres make a crevice, the excluded surface uses the grid bound. It can lie up to one grid step outside the true surface there.
 - A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
@@ -533,6 +541,7 @@ Every function raises `Error` for input it cannot use.
 - wwPDB, "Atomic Coordinate Entry Format Description", version 3.3, 2012.
 - Barlow and Thornton, "Ion-pairs in proteins", 1983.
 - Needleman and Wunsch, "A general method applicable to the search for similarities in the amino acid sequence of two proteins", 1970.
+- Smith and Waterman, "Identification of common molecular subsequences", 1981.
 - Gotoh, "An improved algorithm for matching biological sequences", 1982.
 - Henikoff and Henikoff, "Amino acid substitution matrices from protein blocks", 1992.
 - Tien, Meyer, Sydykova, Spielman and Wilke, "Maximum allowed solvent accessibilities of residues in proteins", 2013.
