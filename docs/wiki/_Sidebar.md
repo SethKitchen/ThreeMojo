@@ -173,6 +173,9 @@
 - [Materials and coatings](Materials-and-coatings)
 - [Crystals and figures](Crystals-and-figures)
 - [Diamond growth](Diamond-growth)
+- [Medical imaging](Medical-imaging)
+- [Molecular structures](Molecular-structures)
+- [Tetrahedral FEM](Tetrahedral-FEM)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)

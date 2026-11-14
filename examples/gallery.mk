@@ -263,3 +263,19 @@ $(call gallery,wijnendale-simulation,wijnendale_simulation,assets/pebbles.jpg)
 $(call gallery,wijnendale-landscape,wijnendale_landscape,assets/pebbles.jpg)
 # The castle scanned by 24 virtual cameras, drawn as its splats.
 $(call gallery,wijnendale-scan,wijnendale_scan)
+# A head phantom through DICOM files, ray cast with a cutaway, and one axial
+# slice with labels and a measurement.
+$(call gallery,medical-imaging,medical_imaging)
+# An ideal peptide of a helix, a loop and a strand: its cartoon ribbon, and
+# its van der Waals surface colored by element.
+$(call gallery,molecule,molecule)
+# A steel cantilever of tetrahedra bent by a tip load, drawn 40 times its
+# deflection and colored by von Mises stress.
+$(call gallery,tetrahedral-fem,tetrahedral_fem)
+# A bone segment from CT: RLE DICOM slices, two labels with smoothed
+# surfaces, and the two-material voxel mesh under a platen, colored by
+# von Mises stress.
+$(call gallery,ct-to-fem,ct_to_fem)
+# A steel tuning fork of ten-node tetrahedra: its first three natural
+# modes, colored by motion.
+$(call gallery,fem-modes,fem_modes)
