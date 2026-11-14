@@ -14,13 +14,20 @@ a mouse, once asked to report, sends xterm's SGR sequences:
     ESC [ < button ; column ; row m     a release
 
 `InputDecoder` turns those bytes into `InputEvent`s, five of the kinds the
-browser has and a resize. The sixth browser kind, `KEY_UP`, is one a
-terminal never sends. A terminal asked `ESC [ 18 t` answers
+browser has and a resize. The other two browser kinds, `KEY_UP` and
+`POINTER_CANCEL`, are ones a terminal never sends. A terminal asked `ESC [ 18 t` answers
 `ESC [ 8 ; rows ; columns t`, which is the resize. A sequence split across two reads is kept until the rest
 arrives. A sequence this decoder does not know is consumed and dropped.
 
 A position is a terminal cell: its column and its row, from zero. The
 window that reads the bytes converts a cell to the pixels it shows.
+
+A finger on a touch screen is a pointer too, as in the browser. Its
+events are `POINTER_DOWN`, `POINTER_MOVE` and `POINTER_UP` with a
+`pointer_type` of `TOUCH_POINTER` and a `pointer_id` that names the
+finger: three.js's `event.pointerType` and `event.pointerId`. A window
+that takes a finger away without a release sends `POINTER_CANCEL`. A
+terminal sends no touch. `touch_event` builds one.
 """
 from core.extent import require_positive_extent
 from loaders.bytes import ascii_digit
@@ -67,12 +74,12 @@ struct InputKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the seven kinds there are.
+        """Return True if this is one of the eight kinds there are.
 
         Returns:
             Whether the value names a kind.
         """
-        return ordinal_valid(self.value, 6)
+        return ordinal_valid(self.value, 7)
 
 
 # A key went down. three.js: `keydown`.
@@ -94,6 +101,10 @@ comptime RESIZE = InputKind(5)
 # The controls that move while a key is held also let it go by itself a
 # while after its last repeat. See `controls.held_keys`.
 comptime KEY_UP = InputKind(6)
+# The window took a pointer away without a release: a touch the system
+# claimed for a gesture of its own. three.js: `pointercancel`. A terminal
+# never sends it.
+comptime POINTER_CANCEL = InputKind(7)
 
 
 @fieldwise_init
@@ -144,6 +155,54 @@ def button_choice[
     if button == SECONDARY:
         return secondary
     return none
+
+
+@fieldwise_init
+struct PointerType(Equatable, ImplicitlyCopyable, Writable):
+    """What made a pointer event, as a type rather than a bare int.
+    three.js: `event.pointerType`."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is a mouse or a touch.
+
+        Returns:
+            Whether the value names a pointer type.
+        """
+        return ordinal_valid(self.value, 1)
+
+
+# A mouse, or a pen: three.js treats every type but a touch as a mouse.
+comptime MOUSE_POINTER = PointerType(0)
+# A finger on a touch screen. three.js: a `pointerType` of `'touch'`.
+comptime TOUCH_POINTER = PointerType(1)
+
+
+@fieldwise_init
+struct PointerId(Equatable, ImplicitlyCopyable, Writable):
+    """Which pointer an event is about, as a type rather than a bare int.
+    three.js: `event.pointerId`.
+
+    A window gives each finger that is down a number of its own, from
+    zero, and can give the number to another finger after the first one
+    lifts. The mouse is pointer zero. A touch and the mouse are told apart
+    by their `PointerType`, so they can share a number.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is zero or more.
+
+        Returns:
+            Whether the value names a pointer.
+        """
+        return self.value >= 0
+
+
+# The mouse, and the first finger down.
+comptime FIRST_POINTER = PointerId(0)
 
 
 @fieldwise_init
@@ -210,6 +269,10 @@ struct InputEvent(ImplicitlyCopyable):
     var shift: Bool
     var alt: Bool
     var ctrl: Bool
+    # What made a pointer event, and which pointer: `MOUSE_POINTER` and
+    # `FIRST_POINTER` unless a finger made it.
+    var pointer_type: PointerType
+    var pointer_id: PointerId
 
     def __init__(
         out self,
@@ -223,6 +286,8 @@ struct InputEvent(ImplicitlyCopyable):
         shift: Bool = False,
         alt: Bool = False,
         ctrl: Bool = False,
+        pointer_type: PointerType = MOUSE_POINTER,
+        pointer_id: PointerId = FIRST_POINTER,
     ):
         """Create an event.
 
@@ -236,6 +301,8 @@ struct InputEvent(ImplicitlyCopyable):
             shift: Whether Shift is held.
             alt: Whether Alt is held.
             ctrl: Whether Ctrl is held.
+            pointer_type: What made a pointer event: a mouse or a finger.
+            pointer_id: Which pointer made it.
         """
         self.kind = kind
         self.key = key
@@ -246,6 +313,58 @@ struct InputEvent(ImplicitlyCopyable):
         self.shift = shift
         self.alt = alt
         self.ctrl = ctrl
+        self.pointer_type = pointer_type
+        self.pointer_id = pointer_id
+
+    def is_touch(self) -> Bool:
+        """Return True if a finger made this event. three.js:
+        `event.pointerType === 'touch'`.
+
+        Returns:
+            Whether the pointer type is `TOUCH_POINTER`.
+        """
+        return self.pointer_type == TOUCH_POINTER
+
+
+def touch_event(
+    kind: InputKind,
+    pointer_id: PointerId,
+    x: Int,
+    y: Int,
+    *,
+    shift: Bool = False,
+    alt: Bool = False,
+    ctrl: Bool = False,
+) -> InputEvent:
+    """Return the event of one finger on a touch screen.
+
+    The button is `PRIMARY`, as the browser gives a touch. So a control
+    that has no touch gestures of its own takes a finger as a left drag.
+
+    Args:
+        kind: `POINTER_DOWN`, `POINTER_MOVE`, `POINTER_UP` or
+            `POINTER_CANCEL`.
+        pointer_id: Which finger.
+        x: The finger's column, or pixel.
+        y: The finger's row, or pixel.
+        shift: Whether Shift is held.
+        alt: Whether Alt is held.
+        ctrl: Whether Ctrl is held.
+
+    Returns:
+        The event.
+    """
+    return InputEvent(
+        kind,
+        button=PRIMARY,
+        x=x,
+        y=y,
+        shift=shift,
+        alt=alt,
+        ctrl=ctrl,
+        pointer_type=TOUCH_POINTER,
+        pointer_id=pointer_id,
+    )
 
 
 def require_viewport_size(width: Int, height: Int) raises:
@@ -332,7 +451,8 @@ def require_named(valid: Bool, what: String, value: Int) raises:
 
 
 def require_input(event: InputEvent) raises:
-    """Refuse an event whose kind, button or key is not a named value.
+    """Refuse an event whose kind, button, key or pointer is not a named
+    value.
 
     Nothing. The call returns when the event is valid.
 
@@ -340,11 +460,18 @@ def require_input(event: InputEvent) raises:
         event: The event.
 
     Raises:
-        Error: If the kind, button or key is invalid.
+        Error: If the kind, button, key, pointer type or pointer id is
+            invalid.
     """
     require_named(event.kind.is_valid(), "input kind", event.kind.value)
     require_named(event.button.is_valid(), "pointer button", event.button.value)
     require_named(event.key.is_valid(), "key", event.key.value)
+    require_named(
+        event.pointer_type.is_valid(), "pointer type", event.pointer_type.value
+    )
+    require_named(
+        event.pointer_id.is_valid(), "pointer id", event.pointer_id.value
+    )
 
 
 def _is_final(byte: UInt8) -> Bool:

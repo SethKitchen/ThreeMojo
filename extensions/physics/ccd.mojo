@@ -872,3 +872,292 @@ def _sweep_convex_triangle(
     if not _approaches(travel, normal):
         return miss
     return _SweepHit(max(entry, Float64(0)), normal)
+
+
+def _clear_time(room: Float64, rate: Float64, curvature: Float64) -> Float64:
+    """Return when a point's distance bound to a plane reaches zero.
+
+    The bound is room + rate t - curvature t^2 / 2: a straight path less
+    the most that a turn can bend it.
+
+    Args:
+        room: The distance now. It must be more than zero.
+        rate: How fast the straight path leaves the plane.
+        curvature: The bend of the true path, zero or more.
+
+    Returns:
+        The first time the bound is zero, or 1e300 when it never is.
+    """
+    if curvature > 0:
+        var root = sqrt(rate * rate + 2 * curvature * room)
+        # Rationalize the closing root, as _turning_step does.
+        if rate < 0:
+            return 2 * room / (root - rate)
+        return (rate + root) / curvature
+    if rate < 0:
+        return room / -rate
+    return 1e300
+
+
+def _solid_axis(
+    points: List[SIMD[DType.float64, 4]],
+    faces: List[SIMD[DType.float64, 4]],
+    edges: List[SIMD[DType.float64, 4]],
+    triangle: Triangle,
+) -> Tuple[Float64, SIMD[DType.float64, 4], Float64]:
+    """Return the axis that parts a convex solid from a triangle the most.
+
+    The candidate axes are those of the separating-axis test: the
+    triangle's normal, the solid's face normals, and each cross product
+    of a solid edge with a triangle edge. The triangle's own normal is
+    tried toward its front only, so the mesh stays one-sided. Equal
+    separations keep that order.
+
+    Args:
+        points: The solid's corners now, in the world.
+        faces: The solid's unit face normals now.
+        edges: The solid's edge directions now.
+        triangle: The triangle, with a nonzero normal.
+
+    Returns:
+        The separation, the unit axis from the triangle toward the solid,
+        and the triangle's greatest extent along that axis. A negative
+        separation is an overlap of at least that depth along every axis.
+        The separation is -1e300 when the solid is wholly behind the
+        triangle's face.
+    """
+    var a = widen_vector(triangle.a)
+    var b = widen_vector(triangle.b)
+    var c = widen_vector(triangle.c)
+    var face = wide_cross(b - a, c - a)
+    face /= sqrt(wide_dot(face, face))
+    var front = _project(points, face)
+    var level = wide_dot(a, face)
+    if front[1] < level:
+        return (Float64(-1e300), face, level)
+    var corners = List[SIMD[DType.float64, 4]]()
+    corners.append(a)
+    corners.append(b)
+    corners.append(c)
+    var units = faces.copy()
+    for edge in edges:  # pragma: no branch
+        for k in range(3):  # pragma: no branch
+            var axis = wide_cross(edge, corners[(k + 1) % 3] - corners[k])
+            var square = wide_dot(axis, axis)
+            # Parallel edges give no axis.
+            if square > 0:
+                units.append(axis / sqrt(square))
+    var best = front[0] - level
+    var chosen = face
+    var offset = level
+    for unit in units:  # pragma: no branch
+        var solid = _project(points, unit)
+        var flat = _project(corners, unit)
+        if solid[0] - flat[1] > best:
+            best = solid[0] - flat[1]
+            chosen = unit
+            offset = flat[1]
+        if flat[0] - solid[1] > best:
+            best = flat[0] - solid[1]
+            chosen = -unit
+            offset = -flat[0]
+    return (best, chosen, offset)
+
+
+def _solid_step(
+    points: List[SIMD[DType.float64, 4]],
+    speeds: List[SIMD[DType.float64, 4]],
+    tolerance: Float64,
+    curvature: Float64,
+    separation: Float64,
+    axis: SIMD[DType.float64, 4],
+    offset: Float64,
+) -> Float64:
+    """Return how long a turning convex solid stays clear of a triangle.
+
+    Every corner's true path stays within curvature * t^2 / 2 of its
+    straight path, and a convex solid is clear of a plane while its
+    corners are. So the solid stays on its side of the separating plane
+    until one corner's bound reaches it. A solid that already overlaps
+    keeps its present depth.
+
+    A corner farther than the tolerance from the plane is taken to the
+    plane and no farther. A corner within the tolerance touches: the
+    caller stops it with an impulse when it closes. Its bound can add
+    the tolerance, so a touching corner that does not close cannot hold
+    the step at zero.
+
+    Args:
+        points: The solid's corners now.
+        speeds: The corners' velocities now.
+        tolerance: The gap that touches, and the overlap that the bound
+            of a touching corner can add.
+        curvature: |omega|^2 times the farthest corner from the spin axis.
+        separation: The solid's separation along the axis, from
+            `_solid_axis`.
+        axis: The unit separating axis, from the triangle to the solid.
+        offset: The triangle's greatest extent along the axis.
+
+    Returns:
+        The time, or 1e300 for no limit.
+    """
+    var depth = max(-separation, Float64(0))
+    var limit = Float64(1e300)
+    for k in range(len(points)):  # pragma: no branch
+        var room = wide_dot(points[k], axis) - offset + depth
+        if room <= tolerance:
+            room += tolerance
+        limit = min(
+            limit, _clear_time(room, wide_dot(speeds[k], axis), curvature)
+        )
+    return limit
+
+
+@fieldwise_init
+struct _SolidContact(ImplicitlyCopyable):
+    """One point where a convex solid touches a triangle."""
+
+    # The point, in the world.
+    var point: SIMD[DType.float64, 4]
+    # The unit normal from the triangle toward the solid.
+    var normal: SIMD[DType.float64, 4]
+    # The gap along the normal. Negative for an overlap.
+    var gap: Float64
+    # The triangle's index.
+    var triangle: Int
+
+
+def _add_contact(
+    mut out: List[_SolidContact],
+    point: SIMD[DType.float64, 4],
+    normal: SIMD[DType.float64, 4],
+    gap: Float64,
+    triangle: Int,
+    tolerance: Float64,
+):
+    # Two triangles that share an edge or a corner give the same contact
+    # twice. Keep the first, which has the lower triangle.
+    for other in out:
+        var apart = other.point - point
+        if (
+            wide_dot(apart, apart) <= tolerance * tolerance
+            and wide_dot(other.normal, normal) > 0.999999
+        ):
+            return
+    out.append(_SolidContact(point, normal, gap, triangle))
+
+
+def _solid_contacts(
+    points: List[SIMD[DType.float64, 4]],
+    faces: List[SIMD[DType.float64, 4]],
+    edge_a: List[Int],
+    edge_b: List[Int],
+    triangle: Triangle,
+    index: Int,
+    tolerance: Float64,
+    depth: Float64,
+    mut out: List[_SolidContact],
+):
+    """Add each point where a convex solid touches a triangle.
+
+    Three kinds of feature pairs can touch. A corner of the solid
+    touches the triangle. A corner of the triangle touches the solid. An
+    edge of the solid crosses an edge of the triangle. A pair
+    touches when its gap is at most the tolerance, and it is not deeper
+    than the solid's present overlap plus the tolerance.
+
+    Args:
+        points: The solid's corners now, in the world.
+        faces: The solid's unit face normals now.
+        edge_a: The first corner of each solid edge.
+        edge_b: The second corner of each solid edge.
+        triangle: The triangle, with a nonzero normal.
+        index: The triangle's index.
+        tolerance: The widest gap that touches.
+        depth: The solid's present overlap along its separating axis,
+            zero or more.
+        out: The contacts. New ones are appended.
+    """
+    var corners = List[SIMD[DType.float64, 4]]()
+    corners.append(widen_vector(triangle.a))
+    corners.append(widen_vector(triangle.b))
+    corners.append(widen_vector(triangle.c))
+    var face = wide_cross(corners[1] - corners[0], corners[2] - corners[0])
+    face /= sqrt(wide_dot(face, face))
+    var deepest = -(depth + tolerance)
+    var middle = SIMD[DType.float64, 4](0)
+    for p in points:  # pragma: no branch
+        middle += p
+    middle /= Float64(len(points))
+    # A corner of the solid on the triangle.
+    for p in points:  # pragma: no branch
+        var height = wide_dot(p - corners[0], face)
+        var gap = p - _triangle_closest(p, corners[0], corners[1], corners[2])
+        var beside = gap - face * height
+        if wide_dot(beside, beside) <= 1e-24 * wide_dot(gap, gap):
+            # Over the triangle: the gap is along its normal.
+            if height >= deepest and height <= tolerance:
+                _add_contact(out, p, face, height, index, tolerance)
+            continue
+        var distance = sqrt(wide_dot(gap, gap))
+        if height >= 0 and distance <= tolerance:
+            _add_contact(out, p, gap / distance, distance, index, tolerance)
+    # A corner of the triangle on the solid. Inside the solid, the push
+    # is along the nearest face. Outside, it is along the line from the
+    # corner to the solid: the corner less its height over each face that
+    # it is outside of.
+    for corner in corners:  # pragma: no branch
+        var most = Float64(-1e300)
+        var normal = SIMD[DType.float64, 4](0)
+        var back = SIMD[DType.float64, 4](0)
+        for f in range(len(faces)):  # pragma: no branch
+            var over = (
+                wide_dot(corner, faces[f]) - _project(points, faces[f])[1]
+            )
+            if over > most:
+                most = over
+                normal = -faces[f]
+            if over > 0:
+                back -= faces[f] * over
+        if most > 0:
+            normal = back / sqrt(wide_dot(back, back))
+        if (
+            most >= deepest
+            and most <= tolerance
+            and wide_dot(normal, face) >= -1e-9
+        ):
+            _add_contact(out, corner, normal, most, index, tolerance)
+    # An edge of the solid across an edge of the triangle.
+    for e in range(len(edge_a)):  # pragma: no branch
+        var start = points[edge_a[e]]
+        var along = points[edge_b[e]] - start
+        for k in range(3):  # pragma: no branch
+            var side = corners[(k + 1) % 3] - corners[k]
+            var normal = wide_cross(along, side)
+            var square = wide_dot(normal, normal)
+            if square == 0:
+                continue
+            normal /= sqrt(square)
+            if wide_dot(middle - corners[k], normal) < 0:
+                normal = -normal
+            var from_side = start - corners[k]
+            var gap = wide_dot(from_side, normal)
+            if (
+                gap < deepest
+                or gap > tolerance
+                or wide_dot(normal, face) < -1e-9
+            ):
+                continue
+            # Where the two lines are nearest: s along the solid's edge
+            # and t along the triangle's.
+            var aa = wide_dot(along, along)
+            var bb = wide_dot(side, side)
+            var ab = wide_dot(along, side)
+            var ar = wide_dot(along, from_side)
+            var br = wide_dot(side, from_side)
+            var s = (ab * br - ar * bb) / (aa * bb - ab * ab)
+            var t = (aa * br - ab * ar) / (aa * bb - ab * ab)
+            if s > 0 and s < 1 and t > 0 and t < 1:
+                _add_contact(
+                    out, start + along * s, normal, gap, index, tolerance
+                )

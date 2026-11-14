@@ -463,7 +463,7 @@ def test_the_defaults_are_three_js() raises:
 
 def test_each_type_knows_its_values() raises:
     assert_true(STATE_ANIMATION_ROTATE.is_valid())
-    assert_false(ArcballState(8).is_valid())
+    assert_false(ArcballState(9).is_valid())
     assert_false(ArcballState(-1).is_valid())
     assert_true(FOV_OPERATION.is_valid() and NO_OPERATION.is_valid())
     assert_false(ArcballOperation(5).is_valid())

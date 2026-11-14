@@ -69,7 +69,7 @@ def test_the_types_know_their_values() raises:
     assert_true(KEY_DOWN.is_valid())
     assert_true(WHEEL.is_valid())
     assert_false(InputKind(-1).is_valid())
-    assert_false(InputKind(7).is_valid())
+    assert_false(InputKind(8).is_valid())
     assert_true(NO_BUTTON.is_valid())
     assert_true(SECONDARY.is_valid())
     assert_false(PointerButton(-2).is_valid())

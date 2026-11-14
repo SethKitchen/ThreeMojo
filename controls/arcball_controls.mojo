@@ -40,11 +40,27 @@ shows during a pan with `enable_grid`. `copy_state` returns the state as
 an `ArcballSnapshot` value, and `paste_state` takes one: three.js writes
 the same fields to the clipboard as JSON.
 
-Differences from three.js: touch input is not ported, and so there is no
-turn about the view axis. `enable_gizmos` hides the gizmo; three.js has
+A finger is a pointer of type `TOUCH_POINTER`. One finger turns the
+camera, as the primary button does. Two fingers pan by the point midway
+between them, zoom by their distance apart, and turn the camera about the
+view axis by the angle of the line between them. Three fingers or more
+change a perspective camera's field of view by how far their mean moves
+up or down. Two taps of a finger are a double click.
+
+`take_starts` and `take_ends` count the `start` and `end` events three.js
+sends.
+
+Differences from three.js: `enable_gizmos` hides the gizmo; three.js has
 the member but does not read it. The grid has 60 cells each way, the
 number three.js works out in floating point. A pointer is read at the
-center of its pixel.
+center of its pixel. The axis of a two-finger turn is read at each move:
+three.js reads it when the second finger goes down, and has none when
+rotation was off then. Three fingers do nothing to an orthographic
+camera, and a pinch that starts with both fingers on one pixel does not
+zoom: three.js's arithmetic gives a zoom that no finger asked for in the
+first case and divides by zero in the second. A release or a move with no
+press to measure it from counts no click, where three.js raises a
+`TypeError`.
 
 ## Numerical range correction
 
@@ -65,11 +81,13 @@ from controls.input import (
     require_named,
     require_viewport_size,
     require_input,
+    POINTER_CANCEL,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
     PRIMARY,
     PointerButton,
+    PointerId,
     RESIZE,
     WHEEL,
 )
@@ -128,6 +146,12 @@ comptime MAX_INTERVAL = Float64(300)
 # and `_posThreshold`.
 comptime MOVEMENT_THRESHOLD = Float32(24)
 comptime POSITION_THRESHOLD = Float32(24)
+# The finger left of two must move this far, in pixels, before it turns
+# the camera again. three.js: `_switchSensibility`.
+comptime SWITCH_SENSIBILITY = Float32(32)
+# Two fingers nearer than this, in pixels, pinch as if they were this far
+# apart. three.js: `minDistance` in `onPinchMove`.
+comptime MIN_PINCH = Float32(12)
 # A turn let go later than this after the pointer last moved, in
 # milliseconds, stops at once.
 comptime INERTIA_WINDOW = Float64(120)
@@ -154,12 +178,12 @@ struct ArcballState(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the eight states.
+        """Return True if this is one of the nine states.
 
         Returns:
             Whether the value names a state.
         """
-        return ordinal_valid(self.value, 7)
+        return ordinal_valid(self.value, 8)
 
 
 comptime STATE_IDLE = ArcballState(0)
@@ -171,6 +195,36 @@ comptime STATE_FOV = ArcballState(4)
 comptime STATE_FOCUS = ArcballState(5)
 comptime STATE_ANIMATION_FOCUS = ArcballState(6)
 comptime STATE_ANIMATION_ROTATE = ArcballState(7)
+# A turn about the view axis, which two fingers make. three.js: `ZROTATE`.
+comptime STATE_ZROTATE = ArcballState(8)
+
+
+@fieldwise_init
+struct ArcballInput(Equatable, ImplicitlyCopyable, Writable):
+    """What holds the controls: the mouse, or a number of fingers, as a
+    type rather than a bare int. three.js: `INPUT`."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the six inputs.
+
+        Returns:
+            Whether the value names an input.
+        """
+        return ordinal_valid(self.value, 5)
+
+
+comptime INPUT_NONE = ArcballInput(0)
+comptime INPUT_ONE_FINGER = ArcballInput(1)
+# One finger left of two. It turns the camera again after it moves
+# `SWITCH_SENSIBILITY` pixels.
+comptime INPUT_ONE_FINGER_SWITCHED = ArcballInput(2)
+comptime INPUT_TWO_FINGER = ArcballInput(3)
+# Three fingers or more.
+comptime INPUT_MULT_FINGER = ArcballInput(4)
+# A mouse button.
+comptime INPUT_CURSOR = ArcballInput(5)
 
 
 @fieldwise_init
@@ -280,6 +334,16 @@ struct _Down(ImplicitlyCopyable):
 
 
 @fieldwise_init
+struct _Finger(ImplicitlyCopyable):
+    """A finger that is down: which one, and the center of its pixel.
+    three.js: a pointer event in `_touchStart` or `_touchCurrent`."""
+
+    var id: PointerId
+    var x: Float64
+    var y: Float64
+
+
+@fieldwise_init
 struct _Transformation(ImplicitlyCopyable):
     """What an operation does to the camera and, if `has_gizmos`, to the
     gizmo. three.js: `_transformation`."""
@@ -301,6 +365,37 @@ def _position(matrix: Matrix4) -> Vector3:
     return Vector3(
         matrix.elements[12], matrix.elements[13], matrix.elements[14]
     )
+
+
+def _ahead(matrix: Matrix4) -> Vector3:
+    """Return the direction a camera with this transform looks along.
+    three.js: `getWorldDirection`.
+
+    Args:
+        matrix: The camera's world transform.
+
+    Returns:
+        The unit direction.
+    """
+    var e = matrix.elements.copy()
+    var ahead = Vector3(-e[8], -e[9], -e[10])
+    ahead.normalize()
+    return ahead
+
+
+def _finger_angle(a: _Finger, b: _Finger) -> Float32:
+    """Return the angle of the line from one finger to another on the
+    view. three.js: `getAngle`, in radians here.
+
+    Args:
+        a: The finger the line starts at.
+        b: The finger it ends at.
+
+    Returns:
+        The angle from the view's x axis toward its y axis, which goes
+        down the view.
+    """
+    return Float32(atan2(b.y - a.y, b.x - a.x))
 
 
 def _moved(offset: Vector3) -> Matrix4:
@@ -604,10 +699,31 @@ struct ArcballControls(Copyable, Movable):
     var _far_pos0: Float32
     var _far_pos: Float32
     var _target0: Vector3
-    # The button held, and whether a press started an operation. three.js:
-    # `_button` and `_input == INPUT.CURSOR`.
+    # The button held, and what holds the controls. three.js: `_button`
+    # and `_input`. three.js hears moves and releases while the input is
+    # not `INPUT_NONE`.
     var _button: PointerButton
-    var _listening: Bool
+    var _input: ArcballInput
+    # The fingers the controls follow, where each went down and where each
+    # is. three.js: `_touchStart` and `_touchCurrent`.
+    var _touch_start: List[_Finger]
+    var _touch_current: List[_Finger]
+    # Every finger that is down, followed or not, and the first of them:
+    # the browser's `isPrimary`. -1 when the first one lifted.
+    var _fingers_down: List[Int]
+    var _primary_finger: Int
+    # The distance between two fingers when a pinch began and now, in
+    # pixels, and the sum of two angles of the line between them, in
+    # radians. three.js: `_startFingerDistance`, `_currentFingerDistance`,
+    # `_startFingerRotation` and `_currentFingerRotation`.
+    var _start_finger_distance: Float32
+    var _current_finger_distance: Float32
+    var _start_finger_rotation: Float32
+    var _current_finger_rotation: Float32
+    # How many `start` and `end` events three.js would have sent since
+    # they were last taken.
+    var _starts: Int
+    var _ends: Int
     # The clicks toward a double click.
     var _down_valid: Bool
     var _clicks: Int
@@ -752,7 +868,17 @@ struct ArcballControls(Copyable, Movable):
         self._far_pos = 0
         self._target0 = Vector3(0, 0, 0)
         self._button = NO_BUTTON
-        self._listening = False
+        self._input = INPUT_NONE
+        self._touch_start = List[_Finger]()
+        self._touch_current = List[_Finger]()
+        self._fingers_down = List[Int]()
+        self._primary_finger = -1
+        self._start_finger_distance = 0
+        self._current_finger_distance = 0
+        self._start_finger_rotation = 0
+        self._current_finger_rotation = 0
+        self._starts = 0
+        self._ends = 0
         self._down_valid = True
         self._clicks = 0
         self._downs = List[_Down]()
@@ -877,6 +1003,40 @@ struct ArcballControls(Copyable, Movable):
             The state.
         """
         return self._state
+
+    def input(self) -> ArcballInput:
+        """Return what holds the controls: a mouse button, a number of
+        fingers, or nothing. three.js: `_input`.
+
+        Returns:
+            The input.
+        """
+        return self._input
+
+    def take_starts(mut self) -> Int:
+        """Return how many `start` events three.js would have sent since
+        the last call, and forget them.
+
+        three.js sends `start` when an operation begins: a press, a wheel
+        notch, a double click, or a change of operation during a drag.
+
+        Returns:
+            The number of events.
+        """
+        var count = self._starts
+        self._starts = 0
+        return count
+
+    def take_ends(mut self) -> Int:
+        """Return how many `end` events three.js would have sent since the
+        last call, and forget them.
+
+        Returns:
+            The number of events.
+        """
+        var count = self._ends
+        self._ends = 0
+        return count
 
     # --- mouse actions -------------------------------------------------------
 
@@ -1044,17 +1204,21 @@ struct ArcballControls(Copyable, Movable):
             height: The view's height, in pixels.
 
         Raises:
-            Error: If the event's kind, button or key is invalid, a setting
-                is refused by `check`, a size is not positive, the camera
-                rides a node, or the scene cannot be read.
+            Error: If the event's kind, button, key or pointer is invalid,
+                a setting is refused by `check`, a size is not positive,
+                the camera rides a node, or the scene cannot be read.
         """
         var lens = _Lens(camera)
         var tap = self._handle(event, lens, width, height)
         lens.put(camera, self.center())
-        if tap and self._can_focus():
-            var hit = self._pick(camera, scene, assets)
-            self._on_double_tap(lens, hit)
-            lens.put(camera, self.center())
+        if tap:
+            if self._can_focus():
+                self._starts += 1
+                var hit = self._pick(camera, scene, assets)
+                self._on_double_tap(lens, hit)
+                lens.put(camera, self.center())
+            # three.js's `onDoubleTap` sends `end` whatever it did.
+            self._ends += 1
 
     def handle(
         mut self,
@@ -1076,17 +1240,21 @@ struct ArcballControls(Copyable, Movable):
             height: The view's height, in pixels.
 
         Raises:
-            Error: If the event's kind, button or key is invalid, a setting
-                is refused by `check`, a size is not positive, the camera
-                rides a node, or the scene cannot be read.
+            Error: If the event's kind, button, key or pointer is invalid,
+                a setting is refused by `check`, a size is not positive,
+                the camera rides a node, or the scene cannot be read.
         """
         var lens = _Lens(camera)
         var tap = self._handle(event, lens, width, height)
         lens.put(camera, self.center())
-        if tap and self._can_focus():
-            var hit = self._pick(camera, scene, assets)
-            self._on_double_tap(lens, hit)
-            lens.put(camera, self.center())
+        if tap:
+            if self._can_focus():
+                self._starts += 1
+                var hit = self._pick(camera, scene, assets)
+                self._on_double_tap(lens, hit)
+                lens.put(camera, self.center())
+            # three.js's `onDoubleTap` sends `end` whatever it did.
+            self._ends += 1
 
     def _can_focus(self) -> Bool:
         """Return whether a double click moves to what it hits.
@@ -1141,8 +1309,8 @@ struct ArcballControls(Copyable, Movable):
             True if the event ends a double click.
 
         Raises:
-            Error: If the event's kind, button or key is invalid, a setting
-                is refused, or a size is not positive.
+            Error: If the event's kind, button, key or pointer is invalid,
+                a setting is refused, or a size is not positive.
         """
         require_input(event)
         require_viewport_size(width, height)
@@ -1154,18 +1322,73 @@ struct ArcballControls(Copyable, Movable):
         var x = Float64(event.x) + 0.5
         var y = Float64(event.y) + 0.5
         if event.kind == POINTER_DOWN:
-            self._pointer_down(event, lens, x, y)
+            self._pointer_down(event, lens, x, y, self._finger_down(event))
         elif event.kind == POINTER_MOVE:
-            if self._listening:
+            if self._input != INPUT_NONE:
                 self._pointer_move(event, lens, x, y)
         elif event.kind == POINTER_UP:
-            if self._listening:
-                return self._pointer_up(lens, x, y)
+            var primary = self._finger_up(event)
+            if self._input != INPUT_NONE:
+                return self._pointer_up(event, lens, x, y, primary)
+        elif event.kind == POINTER_CANCEL:
+            _ = self._finger_up(event)
+            self._pointer_cancel()
         elif event.kind == WHEEL:
             self._wheel(event, lens, x, y)
         elif event.kind == RESIZE:
             self._resize(lens)
         return False
+
+    def _finger_down(mut self, event: InputEvent) -> Bool:
+        """Count a finger that went down, and say whether the press is the
+        browser's primary one: `event.isPrimary`.
+
+        The mouse is always primary. A finger is primary when no other
+        finger is down.
+
+        Args:
+            event: The press.
+
+        Returns:
+            Whether the pointer is primary.
+        """
+        if not event.is_touch():
+            return True
+        var primary = len(self._fingers_down) == 0
+        self._fingers_down.append(event.pointer_id.value)
+        if primary:
+            self._primary_finger = event.pointer_id.value
+        return primary
+
+    def _finger_up(mut self, event: InputEvent) -> Bool:
+        """Count a finger that lifted or was canceled, and say whether it
+        was the primary one.
+
+        Args:
+            event: The release, or the cancel.
+
+        Returns:
+            Whether the pointer is primary. The mouse always is.
+        """
+        if not event.is_touch():
+            return True
+        var id = event.pointer_id.value
+        var primary = id == self._primary_finger
+        if primary:
+            self._primary_finger = -1
+        for index in range(len(self._fingers_down)):
+            if self._fingers_down[index] == id:
+                _ = self._fingers_down.pop(index)
+                break
+        return primary
+
+    def _pointer_cancel(mut self):
+        """Let every finger go, with no operation ended. three.js:
+        `onPointerCancel`.
+        """
+        self._touch_start.clear()
+        self._touch_current.clear()
+        self._input = INPUT_NONE
 
     def _modifier(self, event: InputEvent) -> ArcballModifier:
         """Return the key an event holds, as three.js reads it: Ctrl before
@@ -1184,33 +1407,70 @@ struct ArcballControls(Copyable, Movable):
         return NO_MODIFIER
 
     def _pointer_down(
-        mut self, event: InputEvent, mut lens: _Lens, x: Float64, y: Float64
+        mut self,
+        event: InputEvent,
+        mut lens: _Lens,
+        x: Float64,
+        y: Float64,
+        primary: Bool,
     ):
-        """Start the operation of the button pressed. three.js:
-        `onPointerDown`.
+        """Start the operation of the button pressed, or of the fingers
+        down. three.js: `onPointerDown`.
 
         Args:
             event: The press.
             lens: The camera.
             x: The pointer's x, in pixels.
             y: The pointer's y, in pixels.
+            primary: Whether the pointer is the browser's primary one.
         """
-        if event.button == PRIMARY:
+        var touch = event.is_touch()
+        # A finger has the browser's button zero.
+        if (touch or event.button == PRIMARY) and primary:
             self._down_valid = True
             self._downs.append(_Down(x, y, self._now))
         else:
             self._down_valid = False
-        if self._listening:
+        if touch:
+            if self._input != INPUT_CURSOR:
+                self._touch_down(_Finger(event.pointer_id, x, y), lens)
+            return
+        if self._input != INPUT_NONE:
             return
         self._mouse_op = self._operation_of(
             ArcballMouse(event.button.value), self._modifier(event)
         )
         if self._mouse_op == NO_OPERATION:
             return
-        self._listening = True
+        self._input = INPUT_CURSOR
         self._button = event.button
         var operation = self._mouse_op
         self._single_pan_start(lens, x, y, operation)
+
+    def _touch_down(mut self, finger: _Finger, mut lens: _Lens):
+        """Follow a new finger, and start what that many fingers do.
+        three.js: the touch half of `onPointerDown`.
+
+        Args:
+            finger: The finger, at its pixel's center.
+            lens: The camera.
+        """
+        self._touch_start.append(finger)
+        self._touch_current.append(finger)
+        if self._input == INPUT_NONE:
+            self._input = INPUT_ONE_FINGER
+            self._single_pan_start(lens, finger.x, finger.y, ROTATE_OPERATION)
+        elif (
+            self._input == INPUT_ONE_FINGER
+            or self._input == INPUT_ONE_FINGER_SWITCHED
+        ):
+            self._input = INPUT_TWO_FINGER
+            self._rotate_start(lens)
+            self._pinch_start(lens)
+            self._double_pan_start(lens)
+        elif self._input == INPUT_TWO_FINGER:
+            self._input = INPUT_MULT_FINGER
+            self._triple_pan_start(lens)
 
     def _pointer_move(
         mut self, event: InputEvent, mut lens: _Lens, x: Float64, y: Float64
@@ -1224,31 +1484,97 @@ struct ArcballControls(Copyable, Movable):
             x: The pointer's x, in pixels.
             y: The pointer's y, in pixels.
         """
-        var operation = self._operation_of(
-            ArcballMouse(self._button.value), self._modifier(event)
-        )
-        if operation != NO_OPERATION:
-            self._single_pan_move(lens, x, y, _state_of(operation))
-        if self._down_valid:
+        var touch = event.is_touch()
+        if touch and self._input != INPUT_CURSOR:
+            self._touch_move(event.pointer_id, lens, x, y)
+        elif not touch and self._input == INPUT_CURSOR:
+            var operation = self._operation_of(
+                ArcballMouse(self._button.value), self._modifier(event)
+            )
+            if operation != NO_OPERATION:
+                self._single_pan_move(lens, x, y, _state_of(operation))
+        # three.js reads its last press here, and raises when it has none.
+        if self._down_valid and len(self._downs) > 0:
             var last = self._downs[len(self._downs) - 1]
             if _apart(last.x, last.y, x, y) > MOVEMENT_THRESHOLD:
                 self._down_valid = False
 
-    def _pointer_up(mut self, mut lens: _Lens, x: Float64, y: Float64) -> Bool:
+    def _update_touch(mut self, id: PointerId, x: Float64, y: Float64):
+        """Record where a followed finger is. three.js: `updateTouchEvent`.
+
+        Args:
+            id: The finger.
+            x: Its x, a pixel center.
+            y: Its y, a pixel center.
+        """
+        # Each finger input follows a finger, so the list is never empty
+        # here.
+        for index in range(len(self._touch_current)):  # pragma: no branch
+            if self._touch_current[index].id == id:
+                self._touch_current[index] = _Finger(id, x, y)
+                break
+
+    def _touch_move(
+        mut self, id: PointerId, mut lens: _Lens, x: Float64, y: Float64
+    ):
+        """Go on with what the fingers down do. three.js: the touch half of
+        `onPointerMove`.
+
+        Args:
+            id: The finger that moved.
+            lens: The camera.
+            x: Its x, a pixel center.
+            y: Its y, a pixel center.
+        """
+        if self._input == INPUT_ONE_FINGER:
+            self._update_touch(id, x, y)
+            self._single_pan_move(lens, x, y, STATE_ROTATE)
+        elif self._input == INPUT_ONE_FINGER_SWITCHED:
+            var left = self._touch_current[0]
+            if _apart(left.x, left.y, x, y) >= SWITCH_SENSIBILITY:
+                self._input = INPUT_ONE_FINGER
+                self._update_touch(id, x, y)
+                self._single_pan_start(lens, x, y, ROTATE_OPERATION)
+        elif self._input == INPUT_TWO_FINGER:
+            self._update_touch(id, x, y)
+            self._rotate_move(lens)
+            self._pinch_move(lens)
+            self._double_pan_move(lens)
+        else:
+            self._update_touch(id, x, y)
+            self._triple_pan_move(lens)
+
+    def _pointer_up(
+        mut self,
+        event: InputEvent,
+        mut lens: _Lens,
+        x: Float64,
+        y: Float64,
+        primary: Bool,
+    ) -> Bool:
         """End the operation, and count the click. three.js: `onPointerUp`.
 
         Args:
+            event: The release.
             lens: The camera.
             x: The pointer's x, in pixels.
             y: The pointer's y, in pixels.
+            primary: Whether the pointer is the browser's primary one.
 
         Returns:
             True if the release ends a double click.
         """
-        self._listening = False
-        self._single_pan_end(lens)
-        self._button = NO_BUTTON
-        if not self._down_valid:
+        var touch = event.is_touch()
+        if touch and self._input != INPUT_CURSOR:
+            self._touch_up(event.pointer_id, lens)
+        elif not touch and self._input == INPUT_CURSOR:
+            self._input = INPUT_NONE
+            self._single_pan_end(lens)
+            self._button = NO_BUTTON
+        if not primary:
+            return False
+        # three.js reads its last press here, and raises when it has none.
+        if not self._down_valid or len(self._downs) == 0:
             self._clicks = 0
             self._downs.clear()
             return False
@@ -1258,7 +1584,9 @@ struct ArcballControls(Copyable, Movable):
             self._clicks = 0
             self._downs.clear()
             return False
-        if self._clicks == 0:
+        # three.js reads two presses for a second click, and raises when
+        # it has one. One press is a first click here.
+        if self._clicks == 0 or len(self._downs) < 2:
             self._clicks = 1
             self._click_start = self._now
             return False
@@ -1276,6 +1604,282 @@ struct ArcballControls(Copyable, Movable):
         _ = self._downs.pop(0)
         self._click_start = self._now
         return False
+
+    def _touch_up(mut self, id: PointerId, mut lens: _Lens):
+        """Stop following a finger, and end what that many fingers did.
+        three.js: the touch half of `onPointerUp`.
+
+        Args:
+            id: The finger that lifted.
+            lens: The camera.
+        """
+        # Each finger input follows a finger, so the list is never empty
+        # here.
+        for index in range(len(self._touch_current)):  # pragma: no branch
+            if self._touch_current[index].id == id:
+                _ = self._touch_current.pop(index)
+                _ = self._touch_start.pop(index)
+                break
+        if (
+            self._input == INPUT_ONE_FINGER
+            or self._input == INPUT_ONE_FINGER_SWITCHED
+        ):
+            self._input = INPUT_NONE
+            self._single_pan_end(lens)
+        elif self._input == INPUT_TWO_FINGER:
+            self._double_pan_end(lens)
+            self._pinch_end(lens)
+            self._rotate_end(lens)
+            self._input = INPUT_ONE_FINGER_SWITCHED
+        elif len(self._touch_current) == 0:
+            self._input = INPUT_NONE
+            self._triple_pan_end(lens)
+
+    # --- two fingers and more ------------------------------------------------
+
+    def _between(mut self):
+        """Put the center midway between the first two fingers. three.js:
+        `setCenter` in the two-finger operations.
+        """
+        var a = self._touch_current[0]
+        var b = self._touch_current[1]
+        self._center_x = (a.x + b.x) / 2
+        self._center_y = (a.y + b.y) / 2
+
+    def _among(mut self):
+        """Put the center at the mean of every finger followed. three.js:
+        `setCenter` in the three-finger operation.
+        """
+        var x = Float64(0)
+        var y = Float64(0)
+        # Three fingers or more are followed here: the list is not empty.
+        for finger in self._touch_current:  # pragma: no branch
+            x += finger.x
+            y += finger.y
+        var count = Float64(len(self._touch_current))
+        self._center_x = x / count
+        self._center_y = y / count
+
+    def _double_pan_start(mut self, mut lens: _Lens):
+        """Start a pan by the point between two fingers. three.js:
+        `onDoublePanStart`.
+
+        Args:
+            lens: The camera.
+        """
+        if not (self.enabled and self.enable_pan):
+            return
+        self._starts += 1
+        self._update_tb_state(lens, STATE_PAN, True)
+        self._between()
+        self._start_cursor = self._on_tb_plane(
+            lens, self._center_x, self._center_y, True
+        )
+        self._current_cursor = self._start_cursor
+        self.activate_gizmos(False)
+
+    def _double_pan_move(mut self, mut lens: _Lens):
+        """Pan by how far the point between two fingers moved. three.js:
+        `onDoublePanMove`.
+
+        Args:
+            lens: The camera.
+        """
+        if not (self.enabled and self.enable_pan):
+            return
+        self._between()
+        if self._state != STATE_PAN:
+            self._update_tb_state(lens, STATE_PAN, True)
+            self._start_cursor = self._current_cursor
+        self._current_cursor = self._on_tb_plane(
+            lens, self._center_x, self._center_y, True
+        )
+        self._apply(
+            lens,
+            self._pan(lens, self._start_cursor, self._current_cursor, True),
+        )
+        self._changed = True
+
+    def _double_pan_end(mut self, mut lens: _Lens):
+        """End a two-finger pan. three.js: `onDoublePanEnd`.
+
+        Args:
+            lens: The camera.
+        """
+        self._update_tb_state(lens, STATE_IDLE, False)
+        self._ends += 1
+
+    def _finger_rotation(self) -> Float32:
+        """Return the angle three.js keeps for a two-finger turn: the
+        angle of the line between the fingers now, plus its angle when
+        they went down.
+
+        Returns:
+            The sum, in radians.
+        """
+        return _finger_angle(
+            self._touch_current[1], self._touch_current[0]
+        ) + _finger_angle(self._touch_start[1], self._touch_start[0])
+
+    def _rotate_start(mut self, mut lens: _Lens):
+        """Start a turn about the view axis. three.js: `onRotateStart`.
+
+        Args:
+            lens: The camera.
+        """
+        if not (self.enabled and self.enable_rotate):
+            return
+        self._starts += 1
+        self._update_tb_state(lens, STATE_ZROTATE, True)
+        self._start_finger_rotation = self._finger_rotation()
+        self._current_finger_rotation = self._start_finger_rotation
+        if not self.enable_pan and not self.enable_zoom:
+            self.activate_gizmos(True)
+
+    def _rotate_move(mut self, mut lens: _Lens):
+        """Turn the camera about the view axis by how far the line between
+        two fingers turned. three.js: `onRotateMove`.
+
+        With panning on, the axis goes through the point between the
+        fingers. Else it goes through the center.
+
+        Args:
+            lens: The camera.
+        """
+        if not (self.enabled and self.enable_rotate):
+            return
+        self._between()
+        if self._state != STATE_ZROTATE:
+            self._update_tb_state(lens, STATE_ZROTATE, True)
+            self._start_finger_rotation = self._current_finger_rotation
+        self._current_finger_rotation = self._finger_rotation()
+        var point = _position(self._gizmo_state)
+        if self.enable_pan:
+            var at = lens.quaternion().rotate(
+                self._on_tb_plane(lens, self._center_x, self._center_y)
+            )
+            point = at * (1 / lens.zoom) + point
+        var amount = self._start_finger_rotation - self._current_finger_rotation
+        self._apply(lens, self._z_rotate(point, amount))
+        self._changed = True
+
+    def _rotate_end(mut self, mut lens: _Lens):
+        """End a two-finger turn. three.js: `onRotateEnd`.
+
+        Args:
+            lens: The camera.
+        """
+        self._update_tb_state(lens, STATE_IDLE, False)
+        self.activate_gizmos(False)
+        self._ends += 1
+
+    def _fingers_apart(self) -> Float32:
+        """Return the distance between the first two fingers.
+
+        Returns:
+            The distance, in pixels.
+        """
+        var a = self._touch_current[0]
+        var b = self._touch_current[1]
+        return _apart(a.x, a.y, b.x, b.y)
+
+    def _pinch_start(mut self, mut lens: _Lens):
+        """Start a zoom by the distance between two fingers. three.js:
+        `onPinchStart`.
+
+        Args:
+            lens: The camera.
+        """
+        if not (self.enabled and self.enable_zoom):
+            return
+        self._starts += 1
+        self._update_tb_state(lens, STATE_SCALE, True)
+        self._start_finger_distance = self._fingers_apart()
+        self._current_finger_distance = self._start_finger_distance
+        self.activate_gizmos(False)
+
+    def _pinch_move(mut self, mut lens: _Lens):
+        """Zoom by how the distance between two fingers changed. three.js:
+        `onPinchMove`.
+
+        With panning on, the zoom goes toward the point between the
+        fingers. Else it goes toward the center. A pinch that began with
+        both fingers on one pixel does not zoom: three.js divides by that
+        distance.
+
+        Args:
+            lens: The camera.
+        """
+        if not (self.enabled and self.enable_zoom):
+            return
+        self._between()
+        if self._state != STATE_SCALE:
+            self._start_finger_distance = self._current_finger_distance
+            self._update_tb_state(lens, STATE_SCALE, True)
+        self._current_finger_distance = max(self._fingers_apart(), MIN_PINCH)
+        if not (self._start_finger_distance > 0):
+            return
+        var amount = self._current_finger_distance / self._start_finger_distance
+        var point = self.center()
+        if self.enable_pan:
+            var at = lens.quaternion().rotate(
+                self._on_tb_plane(lens, self._center_x, self._center_y)
+            )
+            point = at * (1 / lens.zoom) + point
+        self._apply(lens, self._scale(lens, amount, point))
+        self._changed = True
+
+    def _pinch_end(mut self, mut lens: _Lens):
+        """End a pinch. three.js: `onPinchEnd`.
+
+        Args:
+            lens: The camera.
+        """
+        self._update_tb_state(lens, STATE_IDLE, False)
+        self._ends += 1
+
+    def _triple_pan_start(mut self, mut lens: _Lens):
+        """Start a change of the field of view by three fingers or more.
+        three.js: `onTriplePanStart`.
+
+        Args:
+            lens: The camera.
+        """
+        if not (self.enabled and self.enable_zoom):
+            return
+        self._starts += 1
+        self._update_tb_state(lens, STATE_SCALE, True)
+        self._among()
+        self._start_cursor.y = self._ndc(self._center_x, self._center_y).y * 0.5
+        self._current_cursor = self._start_cursor
+
+    def _triple_pan_move(mut self, mut lens: _Lens):
+        """Change a perspective camera's field of view by how far the mean
+        of the fingers moved up or down, and move the camera so that the
+        center keeps its size. three.js: `onTriplePanMove`.
+
+        An orthographic camera has no field of view, and does not change.
+
+        Args:
+            lens: The camera.
+        """
+        if not (self.enabled and self.enable_zoom and lens.perspective):
+            return
+        self._among()
+        self._current_cursor.y = (
+            self._ndc(self._center_x, self._center_y).y * 0.5
+        )
+        self._vertigo(lens, self._drag_size(), self._fov_state)
+        self._changed = True
+
+    def _triple_pan_end(mut self, mut lens: _Lens):
+        """End a three-finger operation. three.js: `onTriplePanEnd`.
+
+        Args:
+            lens: The camera.
+        """
+        self._update_tb_state(lens, STATE_IDLE, False)
+        self._ends += 1
 
     def _single_pan_start(
         mut self,
@@ -1295,6 +1899,7 @@ struct ArcballControls(Copyable, Movable):
         """
         if not self.enabled:
             return
+        self._starts += 1
         self._center_x = x
         self._center_y = y
         if operation == PAN_OPERATION:
@@ -1376,6 +1981,8 @@ struct ArcballControls(Copyable, Movable):
         if op_state == STATE_PAN:
             if self.enable_pan:
                 if restart:
+                    self._ends += 1
+                    self._starts += 1
                     self._update_tb_state(lens, op_state, True)
                     self._start_cursor = self._on_tb_plane(lens, x, y)
                     if self.enable_grid:
@@ -1392,6 +1999,8 @@ struct ArcballControls(Copyable, Movable):
         elif op_state == STATE_ROTATE:
             if self.enable_rotate:
                 if restart:
+                    self._ends += 1
+                    self._starts += 1
                     self._update_tb_state(lens, op_state, True)
                     self._start_cursor = self._on_tb_surface(lens, x, y)
                     self._grid_on = False
@@ -1466,6 +2075,8 @@ struct ArcballControls(Copyable, Movable):
             x: The pointer's x, in pixels.
             y: The pointer's y, in pixels.
         """
+        self._ends += 1
+        self._starts += 1
         self._update_tb_state(lens, state, True)
         self._start_cursor.y = self._ndc(x, y).y * 0.5
         self._current_cursor = self._start_cursor
@@ -1526,8 +2137,10 @@ struct ArcballControls(Copyable, Movable):
             lens: The camera.
         """
         if self._state == STATE_ROTATE:
+            # three.js returns here before it sends `end`.
             if not self.enable_rotate:
                 return
+            self._ends += 1
             if (
                 self.enable_animations
                 and self._now - self._time_current < INERTIA_WINDOW
@@ -1539,7 +2152,9 @@ struct ArcballControls(Copyable, Movable):
             self._update_tb_state(lens, STATE_IDLE, False)
             self.activate_gizmos(False)
             self._changed = True
-        elif self._state == STATE_PAN or self._state == STATE_IDLE:
+            return
+        self._ends += 1
+        if self._state == STATE_PAN or self._state == STATE_IDLE:
             self._update_tb_state(lens, STATE_IDLE, False)
             self._grid_on = False
             self.activate_gizmos(False)
@@ -1596,6 +2211,7 @@ struct ArcballControls(Copyable, Movable):
         var operation = self._operation_of(MOUSE_WHEEL, self._modifier(event))
         if operation == NO_OPERATION:
             return
+        self._starts += 1
         var sign = Float32(event.wheel) * WHEEL_PIXELS / NOTCH_PIXELS
         if operation == ZOOM_OPERATION:
             self._update_tb_state(lens, STATE_SCALE, True)
@@ -1622,6 +2238,7 @@ struct ArcballControls(Copyable, Movable):
             self._draw_grid(lens)
         self._update_tb_state(lens, STATE_IDLE, False)
         self._changed = True
+        self._ends += 1
 
     def _resize(mut self, lens: _Lens):
         """Fit the gizmo to a view of a new size. three.js: `onWindowResize`.
@@ -1739,7 +2356,13 @@ struct ArcballControls(Copyable, Movable):
         var py = m * px + q
         return _along(ray, px, py, reach)
 
-    def _on_tb_plane(self, lens: _Lens, x: Float64, y: Float64) -> Vector3:
+    def _on_tb_plane(
+        self,
+        lens: _Lens,
+        x: Float64,
+        y: Float64,
+        initial_distance: Bool = False,
+    ) -> Vector3:
         """Return where the pointer meets the plane through the center that
         faces the camera, in the camera's axes from the center. three.js:
         `unprojectOnTbPlane`.
@@ -1748,6 +2371,9 @@ struct ArcballControls(Copyable, Movable):
             lens: The camera.
             x: Across, in pixels.
             y: Down, in pixels.
+            initial_distance: Whether a perspective camera is read as far
+                from the center as it was when the controls began, which a
+                two-finger pan asks for.
 
         Returns:
             The point, with z zero.
@@ -1762,9 +2388,22 @@ struct ArcballControls(Copyable, Movable):
         if l == 0:
             return Vector3(0, 0, 0)
         var q = _distance(lens.position(), self.center())
+        if initial_distance:
+            q = self._initial_reach()
         var across = -q / (near.z / l)
         var length = length2(q, across)
         return Vector3(ray.x * length, ray.y * length, 0)
+
+    def _initial_reach(self) -> Float32:
+        """Return how far the camera was from the center when the controls
+        began.
+
+        Returns:
+            The distance.
+        """
+        return _distance(
+            _position(self._camera_state0), _position(self._gizmo_state0)
+        )
 
     def _calculate_tb_radius(self, lens: _Lens) -> Float32:
         """Return the trackball's radius: `radius_factor` of the smaller
@@ -1843,7 +2482,11 @@ struct ArcballControls(Copyable, Movable):
         var camera = transformation.camera
         camera.multiply(self._camera_state)
         lens.matrix = camera
-        if self._state == STATE_ROTATE or self._state == STATE_ANIMATION_ROTATE:
+        if (
+            self._state == STATE_ROTATE
+            or self._state == STATE_ZROTATE
+            or self._state == STATE_ANIMATION_ROTATE
+        ):
             # three.js turns the first up; see the module's notes.
             self._up = lens.quaternion().rotate(Vector3(0, 1, 0))
         if transformation.has_gizmos:
@@ -1882,7 +2525,7 @@ struct ArcballControls(Copyable, Movable):
         lens.far = reach - min(adjusted_far, regular_far)
 
     def _pan(
-        self, lens: _Lens, start: Vector3, end: Vector3
+        self, lens: _Lens, start: Vector3, end: Vector3, adjust: Bool = False
     ) -> _Transformation:
         """Return the move of a pan from one point of the plane to another.
         three.js: `pan`.
@@ -1891,11 +2534,19 @@ struct ArcballControls(Copyable, Movable):
             lens: The camera.
             start: Where the pan started, in the camera's axes.
             end: Where it is.
+            adjust: Whether the points were read at the distance the
+                controls began at, and the move of a perspective camera is
+                scaled to the distance now. A two-finger pan asks for it.
 
         Returns:
             The same move for the camera and the gizmo.
         """
         var movement = (start - end) * (1 / lens.zoom)
+        if adjust and lens.perspective:
+            var factor = self._initial_reach() / _distance(
+                lens.position(), self.center()
+            )
+            movement = movement * (1 / factor)
         var offset = lens.quaternion().rotate(
             Vector3(movement.x, movement.y, 0)
         )
@@ -1919,6 +2570,28 @@ struct ArcballControls(Copyable, Movable):
         )
         turn.multiply(_moved(-point))
         return _Transformation(turn, Matrix4(), False)
+
+    def _z_rotate(self, point: Vector3, angle: Float32) -> _Transformation:
+        """Return a turn of the camera about its view axis through a point.
+        three.js: `zRotate`.
+
+        Args:
+            point: The point the axis goes through.
+            angle: The angle, in radians.
+
+        Returns:
+            The turn of the camera, and the move it gives the gizmo.
+        """
+        var rotation = Quaternion.from_axis_angle(
+            _ahead(self._camera_state), Angle(angle, RADIAN)
+        )
+        var turn = _moved(point)
+        turn.multiply(rotation.to_matrix())
+        turn.multiply(_moved(-point))
+        var from_point = _position(self._gizmo_state) - point
+        return _Transformation(
+            turn, _moved(rotation.rotate(from_point) - from_point), True
+        )
 
     def _scale(
         self,

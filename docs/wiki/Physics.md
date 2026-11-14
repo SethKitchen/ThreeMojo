@@ -9,10 +9,11 @@
 | `shape` | Shapes, materials and mass properties |
 | `body` | Rigid bodies, body ids, forces and impulses |
 | `collide` | Contact points and narrow-phase collision tests |
-| `world` | Contact solving, integration and ray casts |
+| `world` | Contact solving, joint solving, integration and ray casts |
+| `joint` | Ball joints and hinge joints between two bodies |
 | `quantities` | Torque, energy, momentum, stiffness and unit constants |
 
-The `extensions/carla/physics/` paths for these five modules remain supported compatibility imports. They re-export the shared definitions, with no separate solver or wrapper types. A body made through either path can enter the same world.
+The `extensions/carla/physics/` paths for `shape`, `body`, `collide`, `world` and `quantities` remain supported compatibility imports. They re-export the shared definitions, with no separate solver or wrapper types. A body made through either path can enter the same world.
 
 Use `extensions.physics` for new consumers of the shared mechanics. The CARLA compatibility imports have no planned removal.
 
@@ -32,7 +33,7 @@ Keep frame conversion at the domain boundary. For an orthogonal basis R, a cente
 
 Create the collision shape separately. Set the body's mass, center of mass and inertia from the physical model. Transform the center and the full tensor into the body's frame first. If the reference point changes, apply the parallel-axis theorem. Display mesh thickness must not set physical mass.
 
-`tests/test_shared_physics.mojo` checks this handoff with an authored segment tensor. It does not claim a whole-body physical rig. The current anatomy code supplies no joint solver or muscle-force controller.
+`tests/test_shared_physics.mojo` checks this handoff with an authored segment tensor. It does not claim a whole-body physical rig. The world has [joints](#joints), and `segment_chain` joins an animal's segments with them. The anatomy code supplies no muscle-force controller.
 
 ## Change a body's motion mode
 
@@ -75,7 +76,84 @@ Tests compare cubes, cuboids, spheres, capsules and tetrahedra with independent 
 
 A caller can use `RigidBody.add_force` and `apply_impulse` without a CARLA actor. `PhysicsWorld.step` consumes forces for one step. A controller must apply its force before each step. `CarlaPhysics.tick` retains external forces across its substeps and rebuilds vehicle forces per substep.
 
-Gravity, buoyancy, wind, muscles or game forces can use this boundary. This extraction adds no force-dispatch framework. Joint constraints remain separate work. The opt-in [continuous collision mode](Continuous-collision) has an explicit support and precision boundary. Moving-ground tire coupling is described in [CARLA physics](CARLA-physics#moving-supports).
+Gravity, buoyancy, wind, muscles or game forces can use this boundary. This extraction adds no force-dispatch framework. [Joints](#joints) hold bodies together. The opt-in [continuous collision mode](Continuous-collision) has an explicit support and precision boundary. Moving-ground tire coupling is described in [CARLA physics](CARLA-physics#moving-supports).
+
+## Joints
+
+A joint holds two bodies together. The world has a ball joint and a hinge joint, and it solves them with its contacts.
+
+```mojo
+from extensions.physics.world import PhysicsWorld
+from math.vector3 import Vector3
+from units.si import Angle, DEGREE
+
+var hip = world.add_ball_joint(pelvis, thigh, Vector3(0, 0.1, 0.9))
+var knee = world.add_hinge_joint(
+    thigh, shin, Vector3(0, 0.1, 0.5), Vector3(0, 1, 0)
+)
+world.set_hinge_limits(knee, Angle(0, DEGREE), Angle(150, DEGREE))
+```
+
+Give the anchor and the axis in the world frame. The world keeps them in the frame of each body. The two bodies keep the relative place that they have when you add the joint.
+
+- A ball joint keeps one point of each body at the same place. The bodies can turn in each direction about that point.
+- A hinge joint also keeps one axis of each body on the same line. The bodies can turn only about that axis.
+- `set_hinge_limits` stops a hinge at a least angle and at a greatest angle. The limits must be in order, from -180° through 180°.
+- `hinge_angle` gives the turn of the second body from the first body about the axis. The angle is zero in the pose in which you add the joint.
+
+A `JointId` names a joint, and a `JointKind` is `BALL` or `HINGE`. A bare integer is not a joint id or a joint kind. A hinge limit is an `Angle`.
+
+`world.joints` holds the joints in the order in which you add them. Each joint has these fields:
+
+| Field | Default | What it does |
+|---|---|---|
+| `collide_connected` | `False` | When it is `False`, the two bodies make no contacts with each other. A static mesh body is included. |
+| `enabled` | `True` | A joint that is not enabled does nothing. Its id stays valid. Set it to `False` to break a joint. |
+| `impulse` | Zero | The impulse that the joint gave the second body at the anchor in the last step, in N s. Divide it by the step to get the mean force. |
+
+A joint does nothing while neither of its bodies is dynamic.
+
+### How the solver holds a joint
+
+Each velocity pass solves the joints first and the contacts second. For one joint, a pass has three parts:
+
+1. The point takes one impulse that stops the relative velocity of the two anchors. The solver inverts the 3 by 3 effective mass at the anchor in Float64.
+2. A hinge takes one angular impulse in each of the two directions at right angles to its axis.
+3. A hinge with limits takes one angular impulse for each limit. A limit lets the angle close its gap and no more, as a contact with a gap does.
+
+An angular impulse alone moves the two anchors apart. So each angular impulse includes the point impulse that keeps the anchors together. The effective mass of the two impulses is the Schur complement of the point block. A door on a fixed frame then stops at its limit in one pass.
+
+After the contacts, a centripetal pass solves the joints again for the end of the step. The end of a turning arm leaves its straight path during a step. This pass adds the impulse that cancels that part of the motion. Without it, each step loses a part of the energy and of the angular momentum.
+
+Split impulses then remove the position error that a step starts with. They change the pose and not the stored velocities. `joint_push_factor` is the part of the error that one step removes. The default is 1.
+
+### What the tests measure
+
+`tests/test_physics_joints.mojo` gives these results at 240 steps a second, with the default 10 velocity passes:
+
+| Case | Result |
+|---|---|
+| A 1 m pendulum that starts level | The bob stays 1 m from the pivot within 1 µm for two seconds. |
+| The energy of that pendulum | The error stays below 1 % of the 19.6 J that the swing trades. Half the step gives half the error. |
+| Two free spheres on a ball joint | Linear momentum, angular momentum and kinetic energy stay constant within 0.01 % for two seconds. |
+| A door that turns into a hinge limit | The angle stops at the limit within 0.00001 rad, in one step. |
+| A chain of five links | Each joint holds within 1 mm while the chain swings down. |
+| Two boxes that tumble on a hinge | The two axes stay on one line. The kinetic energy decreases by less than 0.5 % in two seconds. |
+
+These results are numerical controls for the solver. They do not show that a model of a real mechanism is correct.
+
+### Refusals and limits
+
+A step examines each joint before it changes a body. It refuses a joint with a kind that is not valid, a body id that names no body, or two equal bodies. It also refuses a vector that is not finite, a hinge direction that is not a unit vector, and limits that are not in order. The world also refuses a `joint_push_factor` that is negative or not finite. A refused step changes nothing and uses no force.
+
+A custom inverse inertia can be negative. The step refuses a joint when the effective mass at its anchor is then not positive definite.
+
+- There are no motors, springs, sliders or fixed joints. A ball joint has no cone limit.
+- [Continuous collision](Continuous-collision) refuses a world that has an enabled joint between bodies of which one is dynamic.
+- The centripetal pass acts in full while each body turns 0.25 rad or less in one step. It decreases to zero at 0.5 rad. A faster turn uses only the velocity passes, which are stable at each speed and lose energy.
+- A body with unequal principal inertias precesses during a step. The centripetal pass does not include that motion, so the pose correction loses a small quantity of energy.
+- Many joints with a large mass ratio converge slowly. A rat has 40 joints and segments from 0.1 g to 70 g. At 240 steps a second its joints hold within 1 cm. Use a smaller step or more velocity passes for such a body.
+- A limit uses the angle at the start of the step. Do not set limits outside -180° through 180°, where the angle wraps.
 
 ## Free rotational integration
 
@@ -127,4 +205,4 @@ The production sweep and existing world ray path stay unchanged. [Owned query sn
 
 ## Continuous collision
 
-The opt-in [continuous collision mode](Continuous-collision) handles fast dynamic spheres, capsules, and boxes and hulls that cannot turn, against one-sided static triangles. It also sweeps moving spheres and rotation-locked capsules against each other. It supports multiple impacts and transactional failure. Turning boxes and hulls, moving meshes and other unsupported cases are refused. The default discrete mode keeps its previous behavior. Read the support, precision and performance limits before use.
+The opt-in [continuous collision mode](Continuous-collision) handles fast dynamic spheres, capsules, boxes and hulls, turning or not, against one-sided static triangles. It also sweeps moving spheres and rotation-locked capsules against each other. It supports multiple impacts and transactional failure. Turning boxes and hulls, moving meshes and other unsupported cases are refused. The default discrete mode keeps its previous behavior. Read the support, precision and performance limits before use.

@@ -4,7 +4,7 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """Tests for `render.texture_copy`: texture to texture, texture to volume,
-volume to volume, and framebuffer to texture."""
+volume to volume, volume to texture, and framebuffer to texture."""
 
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rect import Rect
@@ -23,6 +23,7 @@ from render.texture_copy import (
     copy_framebuffer_to_texture,
     copy_texture_to_texture,
     copy_texture_to_volume,
+    copy_volume_to_texture,
     copy_volume_to_volume,
     framebuffer_texture,
 )
@@ -249,6 +250,99 @@ def test_a_block_is_copied_between_volumes() raises:
         copy_volume_to_volume(bad, destination)
     with assert_raises(contains="does not match"):
         copy_volume_to_volume(source, bad)
+
+
+def test_a_layer_of_a_volume_is_copied_into_a_texture() raises:
+    var source = a_volume(2, 2, 3)
+    # A flipped texture: WebGL row zero is the last stored row.
+    var flipped = counting(3, 3)
+    copy_volume_to_texture(
+        source, flipped, TexelBox(1, 0, 1, 1, 2, 1), TexelPoint(2, 1, 0)
+    )
+    # Volume texels (1, 0, 1) = 5 and (1, 1, 1) = 7, whose reds are at
+    # bytes 20 and 28. Rows one and two are stored rows one and zero.
+    assert_equal(red_at(flipped, 2, 1), Int(source.pixels[20]))
+    assert_equal(red_at(flipped, 2, 0), Int(source.pixels[28]))
+    assert_equal(red_at(flipped, 1, 1), 4)
+    assert_equal(red_at(flipped, 2, 2), 8)
+    # A texture that is not flipped stores row zero first.
+    var upright = counting(3, 3, flip_y=False)
+    copy_volume_to_texture(
+        source, upright, TexelBox(0, 1, 0, 2, 1, 1), TexelPoint(1, 2, 0)
+    )
+    assert_equal(red_at(upright, 1, 2), Int(source.pixels[8]))
+    assert_equal(red_at(upright, 2, 2), Int(source.pixels[12]))
+    assert_equal(red_at(upright, 0, 2), 6)
+
+
+def test_the_last_layer_of_a_block_is_the_one_that_stays() raises:
+    var source = a_volume(2, 2, 3)
+    # The whole volume: three layers land on the same texels, and the
+    # third one stays, as three.js's loop over the layers leaves it.
+    var whole = counting(2, 2, flip_y=False)
+    copy_volume_to_texture(source, whole)
+    for texel in range(4):
+        var at = (2 * 4 + texel) * 4
+        assert_equal(Int(whole.pixels[texel * 4]), Int(source.pixels[at]))
+        assert_equal(
+            Int(whole.pixels[texel * 4 + 3]), Int(source.pixels[at + 3])
+        )
+    # A block of the first two layers leaves the second.
+    var two = counting(2, 2, flip_y=False)
+    copy_volume_to_texture(source, two, TexelBox(0, 0, 0, 2, 2, 2))
+    assert_equal(red_at(two, 0, 0), Int(source.pixels[16]))
+    assert_equal(red_at(two, 1, 1), Int(source.pixels[28]))
+    # Floats are copied as floats.
+    var floats = VolumeImage.of_floats(1, 1, 2, [Float32(1), 2.5], 1)
+    var into = float_texture(1, 1, [Float32(0), 0, 0, 0])
+    copy_volume_to_texture(floats, into)
+    assert_almost_equal(into.data[0], 2.5)
+
+
+def test_a_volume_copy_into_the_first_level_rebuilds_the_chain() raises:
+    var source = VolumeImage.of_bytes(2, 2, 1, [UInt8(0), 4, 8, 12], 1)
+    var pixels = List[UInt8](length=2 * 2 * 4, fill=0)
+    var chained = Texture(2, 2, pixels^, color_space=LINEAR)
+    assert_equal(chained.levels, 2)
+    copy_volume_to_texture(source, chained)
+    # The second level is the mean of the four reds: 0, 4, 8 and 12.
+    assert_equal(Int(chained.pixels[chained.offsets[1]]), 6)
+    # A copy into the second level leaves the first alone.
+    var one = VolumeImage.of_bytes(1, 1, 1, [UInt8(200)], 1)
+    copy_volume_to_texture(one, chained, None, TexelPoint(0, 0, 0), 1)
+    assert_equal(Int(chained.pixels[chained.offsets[1]]), 200)
+    assert_equal(Int(chained.pixels[0]), Int(source.pixels[8]))
+
+
+def test_a_volume_copy_that_cannot_be_made_is_refused() raises:
+    var source = a_volume(2, 2, 2)
+    var destination = counting(3, 3)
+    var floats = float_texture(2, 2, List[Float32](length=16, fill=0))
+    with assert_raises(contains="one texel type"):
+        copy_volume_to_texture(source, floats)
+    with assert_raises(contains="no layers"):
+        copy_volume_to_texture(source, destination, None, TexelPoint(0, 0, 1))
+    with assert_raises(contains="inside both images"):
+        copy_volume_to_texture(source, destination, TexelBox(0, 0, 0, 0, 1, 1))
+    with assert_raises(contains="inside both images"):
+        copy_volume_to_texture(source, destination, TexelBox(0, 0, -1, 1, 1, 1))
+    with assert_raises(contains="inside both images"):
+        copy_volume_to_texture(source, destination, TexelBox(0, 0, 1, 1, 1, 2))
+    with assert_raises(contains="inside both images"):
+        copy_volume_to_texture(source, destination, TexelBox(1, 0, 0, 2, 1, 1))
+    with assert_raises(contains="inside both images"):
+        copy_volume_to_texture(source, destination, None, TexelPoint(2, 0, 0))
+    with assert_raises(contains="does not hold"):
+        copy_volume_to_texture(
+            source, destination, None, TexelPoint(0, 0, 0), 1
+        )
+    var blank = Texture()
+    with assert_raises(contains="holds texels"):
+        copy_volume_to_texture(source, blank)
+    var bad = a_volume(2, 2, 1)
+    bad.height = 5
+    with assert_raises(contains="does not match"):
+        copy_volume_to_texture(bad, destination)
 
 
 def test_a_framebuffer_texture_starts_empty() raises:

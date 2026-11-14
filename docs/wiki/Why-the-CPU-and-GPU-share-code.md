@@ -10,7 +10,8 @@ The CPU rasterizer and the GPU kernel call the same functions for the fill rule,
 | `render/linerule.mojo` | Which pixel a one-pixel [line](Lines) lights in each column, and the dash fold. |
 | `render/pointrule.mojo` | Whether a [point](Points-and-sprites) covers a pixel, its coordinate there, its size with distance and its mip level. |
 | `render/texture.mojo` | `wrap_index`, `blend_texels`, `mix_color`. |
-| `lights/lighting.mojo` | `falloff`. |
+| `lights/lighting.mojo` | `falloff`, and `toon_edge` with its two widths. |
+| `render/derivatives.mojo` | `fwidth`, the alpha test's ramp and a wide line's edge ramp. See [Screen-space derivatives](Rasterization#screen-space-derivatives). |
 
 Each allocates nothing, prints nothing and raises nothing. That is what lets it compile for a device.
 

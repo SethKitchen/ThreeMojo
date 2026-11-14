@@ -38,6 +38,8 @@ alike.
 `dithering`, `toneMapped`, `alphaHash`, `alphaToCoverage` and
 `premultipliedAlpha` ride five more bits of `ops_word`. The opt-in
 strand hash uses bit 26; it does not change the ordinary alpha hash.
+The edge ramp of a wide line under `alphaToCoverage` uses bits 27 and 28;
+see `render.derivatives.EdgeRamp`.
 The constant color its `blendColor` and `blendAlpha` set rides four float
 lanes, as the log factor does. The renderer sets each flag only where
 three.js's shader for that primitive reads it; see
@@ -52,6 +54,7 @@ from core.ordinal import ordinal_valid, require_valid
 from math.finite import positive_finite
 from math.vector3 import Vector3
 from render.blend import Rgba
+from render.derivatives import NO_EDGE_RAMP, EdgeRamp
 from std.math import inf, isfinite, log2, max, min
 from std.memory import bitcast
 from std.utils.numerics import max_finite
@@ -468,6 +471,11 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
     var blend_green: Float32
     var blend_blue: Float32
     var blend_alpha: Float32
+    # Which antialiased edge the fragment's alpha takes from its texture
+    # coordinates: three.js's `LineMaterial` under `alphaToCoverage`. The
+    # renderer sets it on a wide line and on nothing else. See
+    # `render.derivatives.edge_ramp_alpha`.
+    var edge_ramp: EdgeRamp
 
     def __init__(
         out self,
@@ -495,6 +503,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
         blend_blue: Float32 = 0,
         blend_alpha: Float32 = 0,
         strand_hash: Bool = False,
+        edge_ramp: EdgeRamp = NO_EDGE_RAMP,
     ):
         """Create a state. Every default is three.js's.
 
@@ -527,6 +536,8 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             blend_alpha: The constant alpha, zero to one.
             strand_hash: Whether that threshold uses the opt-in integer
                 strand hash instead of the ordinary three.js sine hash.
+            edge_ramp: Which antialiased edge the alpha takes from the
+                texture coordinates. `NO_EDGE_RAMP`.
         """
         self.depth_test = depth_test
         self.depth_write = depth_write
@@ -552,6 +563,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
         self.blend_green = blend_green
         self.blend_blue = blend_blue
         self.blend_alpha = blend_alpha
+        self.edge_ramp = edge_ramp
 
     def blend_constant(self) -> Rgba:
         """Return the constant color the constant blend factors read.
@@ -566,8 +578,8 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if every function, operation and mode is one there
         is, every stencil value fits eight bits, a logarithmic depth has a
-        finite, positive factor, and every channel of the blend constant
-        is from zero to one.
+        finite, positive factor, every channel of the blend constant is
+        from zero to one, and the edge ramp is one there is.
 
         Returns:
             Whether both backends can draw under this state.
@@ -590,6 +602,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             and is_unit_fraction(self.blend_green)
             and is_unit_fraction(self.blend_blue)
             and is_unit_fraction(self.blend_alpha)
+            and self.edge_ramp.is_valid()
         )
 
     def check(self) raises:
@@ -599,16 +612,18 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             Error: If a function or an operation is none of the eight, the
                 reference or a mask is outside 0 to 255, the depth mode is
                 none of the three, a logarithmic depth has a factor that
-                is not finite and positive, or a channel of the blend
-                constant is not from zero to one.
+                is not finite and positive, a channel of the blend
+                constant is not from zero to one, or the edge ramp is none
+                of the three.
         """
         require_valid(
             self.is_valid(),
             (
                 "A depth or stencil state names a function, an operation or"
                 " a depth mode there is not, a stencil value outside 0 to"
-                " 255, a logarithmic depth without a positive factor, or a"
-                " blend color or alpha outside 0 to 1"
+                " 255, a logarithmic depth without a positive factor, a"
+                " blend color or alpha outside 0 to 1, or an edge ramp"
+                " there is not"
             ),
         )
 
@@ -636,8 +651,8 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             then two bits for the depth mode, then one bit each for
             `dithering`, `tone_mapped`, `alpha_hash`, `alpha_to_coverage`
             and `premultiplied_alpha`, bits 21 to 25. Bit 26 selects
-            `strand_hash`. The log factor and
-            the blend constant are not in it.
+            `strand_hash`. Bits 27 and 28 hold `edge_ramp`. The log
+            factor and the blend constant are not in it.
         """
         return (
             Int(self.depth_test)
@@ -656,6 +671,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             | (Int(self.alpha_to_coverage) << 24)
             | (Int(self.premultiplied_alpha) << 25)
             | (Int(self.strand_hash) << 26)
+            | (self.edge_ramp.value << 27)
         )
 
     def stencil_word(self) -> Int:
@@ -705,6 +721,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             alpha_to_coverage=(ops & (1 << 24)) != 0,
             premultiplied_alpha=(ops & (1 << 25)) != 0,
             strand_hash=(ops & (1 << 26)) != 0,
+            edge_ramp=EdgeRamp((ops >> 27) & 3),
         )
 
 

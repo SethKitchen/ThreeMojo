@@ -5,12 +5,15 @@
 
 """Tests for three.js's `ImportanceSampledEnvironment` and the specular
 helpers it reads: the map's half floats and distributions, the
-equirectangular mapping, and the three samples."""
+equirectangular mapping, the three samples, and the GGX reflection sample
+against `assets/ssr_denoise/reference.py`, a transcription of three.js
+r186's `SpecularHelpers.js`."""
 
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.importance_sampled_environment import (
+    ENV_RAY_LENGTH,
     EquirectEnvironment,
     closest_index,
     conditional_at,
@@ -20,12 +23,16 @@ from postprocessing.importance_sampled_environment import (
     equirect_uv_to_dir,
     f_schlick,
     geometry_term,
+    ggx_reflection_sample,
+    ggx_vndf_pdf,
     half,
     mis_power_heuristic,
     sample_environment_brdf,
     sample_environment_mis,
+    sample_ggx_vndf,
     sample_reflect,
     smith_g,
+    specular_dominant_factor,
 )
 from render.framebuffer import FloatColor
 from std.math import isfinite, pi
@@ -146,6 +153,79 @@ def test_the_samples_read_the_map() raises:
     )
     assert_true(isfinite(along.x) and along.x > 0)
     assert_true(along.x > across.x)
+
+
+def unit(x: Float32, y: Float32, z: Float32) -> Vector3:
+    """Return a direction at unit length."""
+    var out = Vector3(x, y, z)
+    out.normalize()
+    return out
+
+
+def test_the_dominant_factor_is_three_js_s() raises:
+    assert_equal(ENV_RAY_LENGTH, Float32(1e4))
+    assert_almost_equal(
+        specular_dominant_factor(0.5, 0.3), 0.9914836, atol=1e-5
+    )
+    # A rough surface seen straight on keeps none of the ray's length.
+    assert_almost_equal(specular_dominant_factor(1, 1), 0, atol=1e-5)
+    # A mirror seen edge on keeps all of it.
+    assert_almost_equal(specular_dominant_factor(0, 0), 1, atol=1e-5)
+    # A cosine a rounding above one reads as one.
+    assert_almost_equal(
+        specular_dominant_factor(1.0000001, 1),
+        specular_dominant_factor(1, 1),
+        atol=1e-6,
+    )
+
+
+def test_the_visible_normal_is_three_js_s() raises:
+    var facet = sample_ggx_vndf(unit(0.3, 0.2, 0.9), 0.25, 0.25, 0.3, 0.6)
+    assert_almost_equal(facet.x, -0.0627204, atol=1e-5)
+    assert_almost_equal(facet.y, 0.2804075, atol=1e-5)
+    assert_almost_equal(facet.z, 0.9578297, atol=1e-5)
+    assert_almost_equal(facet.length(), 1, atol=1e-5)
+    assert_almost_equal(ggx_vndf_pdf(0.9, 0.7, 0.25), 0.1252274, atol=1e-5)
+
+
+def test_the_reflection_sample_is_three_js_s() raises:
+    var normal = unit(0.1, 0.3, 0.9)
+    var view = unit(-0.2, 0.4, 0.8)
+    var tilted = ggx_reflection_sample(
+        normal, view, 0.5, 0.7, Vector3(0.9, 0.5, 0.2), 0.3, 0.6
+    )
+    assert_almost_equal(tilted.reflect_dir.x, 0.3575501, atol=1e-5)
+    assert_almost_equal(tilted.reflect_dir.y, -0.3524485, atol=1e-5)
+    assert_almost_equal(tilted.reflect_dir.z, 0.8648341, atol=1e-5)
+    assert_almost_equal(tilted.sample_weight.x, 0.6055572, atol=1e-5)
+    assert_almost_equal(tilted.sample_weight.y, 0.3414651, atol=1e-5)
+    assert_almost_equal(tilted.sample_weight.z, 0.1433959, atol=1e-5)
+    assert_almost_equal(tilted.pdf, 0.3235509, atol=1e-5)
+    assert_almost_equal(tilted.n_dot_v, 0.9378935, atol=1e-5)
+    assert_almost_equal(tilted.alpha, 0.25, atol=1e-6)
+    assert_almost_equal(tilted.f0.x, 0.642, atol=1e-6)
+    assert_almost_equal(tilted.f0.y, 0.362, atol=1e-6)
+    assert_almost_equal(tilted.f0.z, 0.152, atol=1e-6)
+    # A normal along the view's z takes the second tangent.
+    var facing = ggx_reflection_sample(
+        Vector3(0, 0, 1), view, 0.5, 0, Vector3(1, 1, 1), 0.3, 0.6
+    )
+    assert_almost_equal(facing.reflect_dir.x, 0.0157584, atol=1e-5)
+    assert_almost_equal(facing.reflect_dir.y, 0.1499344, atol=1e-5)
+    assert_almost_equal(facing.reflect_dir.z, 0.9885704, atol=1e-5)
+    assert_almost_equal(facing.sample_weight.x, 0.0383492, atol=1e-5)
+    assert_almost_equal(facing.pdf, 0.2422898, atol=1e-5)
+    assert_almost_equal(facing.f0.x, 0.04, atol=1e-6)
+    # A mirror's alpha is a thousandth, and its weight is its reflectance.
+    var mirror = ggx_reflection_sample(
+        normal, view, 0, 1, Vector3(1, 1, 1), 0.8, 0.1
+    )
+    assert_almost_equal(mirror.alpha, 0.001, atol=1e-7)
+    assert_almost_equal(mirror.reflect_dir.x, 0.4148574, atol=1e-4)
+    assert_almost_equal(mirror.reflect_dir.y, 0.1540950, atol=1e-4)
+    assert_almost_equal(mirror.reflect_dir.z, 0.8967430, atol=1e-4)
+    assert_almost_equal(mirror.sample_weight.x, 1, atol=1e-4)
+    assert_true(mirror.pdf > 6e4 and mirror.pdf < 8e4)
 
 
 def main() raises:

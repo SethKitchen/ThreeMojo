@@ -1,10 +1,21 @@
 # The Mojo compiler hang
 
-A `Bool` variable that is set to `True` inside a nested `for` loop and read after the loop hangs `mojo build`. The coverage instrumenter emits an `Int` counter instead. Two reproducers are in `docs/mojo-compiler-issue/`.
+A `Bool` variable that is set to `True` inside a nested `for` loop and read after the loop hangs `mojo build`. Mojo 1.0.0 and Mojo 1.1.0 hang, and Mojo 1.2.0 builds the file. The coverage instrumenter emits an `Int` counter instead. Two reproducers are in `docs/mojo-compiler-issue/`.
 
 ## Affects
 
-Mojo 1.0.0 (`ed45d567`), installed with `uv pip install mojo`, on macOS 25.6 with an Apple M4 Max. Not yet checked on other platforms, and not re-checked on Mojo 1.1.0.
+Mojo 1.0.0 and Mojo 1.1.0 hang. Mojo 1.2.0, the pinned toolchain, does not. Each toolchain was installed with `uv pip install mojo`. Each build of `repro_bool.mojo` had a limit of 60 seconds.
+
+| Toolchain | Platform | `repro_bool.mojo` | `repro_int.mojo` |
+|---|---|---|---|
+| 1.0.0 (`ed45d567`) | macOS 25.6, Apple M4 Max | Hangs | 1 s |
+| 1.0.0 (`ed45d567`) | Linux, x86-64 | Hangs | 2 s |
+| 1.1.0 (`8189361e`) | Linux, x86-64 | Hangs | 2 s |
+| 1.2.0 (`2016d0cd`) | Linux, x86-64 | 2 s | 2 s |
+
+The macOS row is the first report. The Linux rows are a later check of all three toolchains on one machine. Mojo 1.1.0 and Mojo 1.2.0 are not checked on macOS.
+
+The `Int` counter stays in the coverage instrumenter and in the library. It is correct on every toolchain, and it costs nothing.
 
 The two reproducers keep the spelling they were written in, `@no_inline` included. They are evidence of what one toolchain did, so modernizing them would make them evidence of something else. `coverage/runtime.mojo`, which is live code, uses the current `@inline(.never)`.
 
@@ -59,9 +70,11 @@ A struct value that is built again in two nested loops, and read after them, als
 
 Four nested loops in one function hang codegen too, as `render/target.mojo` notes. Keep at most two loops in a function, and call a function for the inner two.
 
+These two patterns have no reproducer file. A short file for each one was built on Linux x86-64 with Mojo 1.1.0 and Mojo 1.2.0. The first file sums a four-float struct in two nested loops. The second file has four nested loops in one function. Each build took about 2 seconds. So the short files do not show the hang, and the two workarounds stay in the library.
+
 ## Reproduce it
 
-Two files, identical except for the flag type. Do not add `repro_bool.mojo` to any build target. Time-box it:
+Two files, identical except for the flag type. Use Mojo 1.0.0 or Mojo 1.1.0: Mojo 1.2.0 builds both files. Do not add `repro_bool.mojo` to any build target. Time-box it:
 
 ```bash
 perl -e 'alarm 25; exec @ARGV' .venv/bin/mojo build -o /tmp/b docs/mojo-compiler-issue/repro_bool.mojo

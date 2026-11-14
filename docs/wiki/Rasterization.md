@@ -61,6 +61,7 @@ A `NORMALS` corner carries its normal in view space, not world space. The normal
 | `gradient_ramp(texture)` | A gradient map's top row as tones, left to right. |
 | `matcap_uv(toward_eye, up, normal)` | Where a `MATCAP` surface is looked up in its image. |
 | `matcap_fallback(v)` | three.js's gray gradient, for a matcap surface with no image. |
+| `matcap_steps(steps, eye, up)` | How far a matcap lookup moves one pixel right and one pixel up. |
 | `interpolate_alpha(a, b, c, share_b, share_c)` | An alpha across a triangle, in difference form. |
 
 ## Coverage
@@ -154,6 +155,10 @@ The alpha map's green channel multiplies the fragment's alpha, three.js's `alpha
 
 A fragment whose alpha then falls below `alpha_test` is thrown away, three.js's `alphatest_fragment`. The comparison is strict. A test of zero throws nothing away. `SHADE_LIT` ignores the map and keeps the test. `SHADE_UV` ignores both.
 
+Under `alpha_to_coverage` the test is a ramp, as in three.js: `smoothstep(alphaTest, alphaTest + fwidth(alpha), alpha)`. A fragment whose result is zero is thrown away. Each other fragment keeps the result as its alpha, and the coverage reads it. So an edge that the test cuts is about one pixel wide, and the surface inside it is opaque. A triangle and a point both take the ramp.
+
+The width is `fwidth` of the corner alpha times the alpha of the map and the green of the alpha map. Each is sampled again at the pixel to the right and at the pixel above. An alpha that an opacity node sets has no width. Where the width is zero, the ramp is the hard step: a fragment at or below the test is thrown away. See [Screen-space derivatives](#screen-space-derivatives).
+
 `interpolate_alpha` reaches that comparison. The three barycentric weights are rounded floats, so they sum to one only up to rounding. `a * sa + b * sb + c * sc` for three alphas of one can give 0.99999994. A test of one then throws away a surface that is opaque everywhere.
 
 The difference form, `a + sb * (b - a) + sc * (c - a)`, returns a constant exactly. Alpha alone uses it: alpha reaches a strict threshold, and red, green and blue reach a quantization that a last bit cannot move. Both backends call this one function.
@@ -170,7 +175,31 @@ Both backends then read the same bytes. The host reads texel (x, 0), and the ker
 
 A `MATCAP` triangle is unlit. Its light comes from an image, looked up by which way the surface is turned in the camera's frame. That light multiplies the surface color exactly as arriving light does. `matcap_uv` builds that frame and both backends call it.
 
-The direction toward the camera is measured from where the camera stands, under either projection. The image is read at its full-size level and never down a mip chain. See [Materials](Materials#matcap).
+The direction toward the camera is measured from where the camera stands, under either projection. An image with a mip chain is read at the level that the lookup's own footprint chooses. `matcap_steps` measures that footprint. See [Materials](Materials#matcap).
+
+## Screen-space derivatives
+
+`render/derivatives.mojo` gives a fragment GLSL's `fwidth` of a value that it computes. A GPU subtracts the values of two fragments in one block of two by two pixels. This port shades each fragment alone. It computes the value again at the pixel to the right and at the pixel above, from the triangle's own plane, and subtracts. `mip_level` measures a texture footprint in the same way.
+
+| Function | Meaning |
+|---|---|
+| `fwidth(here, right, up)` | `abs(dFdx(v)) + abs(dFdy(v))` of one value. |
+| `surface_steps(source)` | The normal before any map, and the world position, at the three pixels. The function is in `render.fragment_flags`. |
+| `toon_width_along(steps, direction)`, `toon_width_toward(steps, light, coord)` | Half of `fwidth` of a toon coordinate. The functions are in `lights.lighting`. |
+| `matcap_steps(steps, eye, up)` | How far a matcap lookup moves across one pixel. |
+| `alpha_test_ramp(alpha, threshold, width)` | three.js's alpha test under alpha to coverage. |
+| `edge_ramp_alpha(ramp, here, right, up)` | The alpha of a wide line's antialiased edge. |
+
+Four things read a width:
+
+- The fallback ramp of a `TOON` triangle antialiases its edge. See [Materials](Materials#how-the-ramp-is-read).
+- A `MATCAP` texture with a mip chain picks its level. See [Materials](Materials#what-a-matcap-material-does-not-have).
+- An alpha test under alpha to coverage is a ramp. See [Alpha](#alpha).
+- A wide line under alpha to coverage antialiases its edge. See [Lines](Lines#alpha-to-coverage).
+
+Both backends call the same functions with their own `NodeSource`, so the two agree. A width is measured on the triangle's plane: the normal before any map, the position, the texture coordinates and the corner colors. A normal map, a bump map and a node program do not change a width.
+
+`EdgeRamp` says which edge a wide line's fragments read: `NO_EDGE_RAMP`, `DISC_EDGE_RAMP` or `CAPSULE_EDGE_RAMP`. It is a field of `RasterState`, and it uses bits 27 and 28 of `ops_word`. A bare integer does not compile, and `RasterState.check` refuses a value that is none of the three.
 
 ## Threads
 

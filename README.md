@@ -77,12 +77,12 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Physics safety
 
-- [ ] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): turning capsules, offset shapes, translating boxes and hulls, moving pairs and kinematic spheres work; turning boxes and hulls remain refused [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
-
 - [x] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): generated canonical SI parts and whole-body properties, versioned visual maps that refuse unsupported paths, and sealed bakes [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
 <details>
-<summary>Implemented: 8</summary>
+<summary>Implemented: 9</summary>
+
+- [x] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): turning capsules, boxes and hulls, offset shapes, moving pairs and kinematic spheres [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
 
 - [x] [CCD walker benchmark](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#performance-and-verification): 1 and 64 walkers or spinning spheres on 2,048 and 8,192 triangles, with per-body checks [#728](https://github.com/SethKitchen/ThreeMojo/issues/728)
 
@@ -405,8 +405,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 
 <details>
-<summary>Ported: 15</summary>
+<summary>Ported: 16</summary>
 
+- [x] [CSMShadowNode](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#a-cascaded-shadow-for-one-light): cascades for one directional light, the four split modes, fade, the light margin and updateFrustums, on both rasterizers [#981](https://github.com/SethKitchen/ThreeMojo/issues/981)
 - [x] [Lighting addons: SunLight, LightProbeGrid, IESSpotLight, ProjectorLight and ColorEnvironment](https://github.com/SethKitchen/ThreeMojo/wiki/Lighting-addons): a fitted sun, IES and projector beams, a probe grid and a one-color environment [#249](https://github.com/SethKitchen/ThreeMojo/issues/249)
 - [x] [Shadows from skinned, instanced, batched, LOD, line, point and translucent objects](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#what-casts-and-what-receives): every kind casts and receives, and translucent surfaces write depth [#187](https://github.com/SethKitchen/ThreeMojo/issues/187)
 - [x] [Shadow camera frustum, light power, CSM and room environments](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#cascaded-shadow-maps): shadow camera edges and intensity, light power, cascades, and PMREM from a scene [#173](https://github.com/SethKitchen/ThreeMojo/issues/173)
@@ -456,8 +457,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Loaders and exporters
 
 <details>
-<summary>Ported: 24</summary>
+<summary>Ported: 25</summary>
 
+- [x] [glTF skinned and instanced nodes](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#instancing): an instanced node drops its skin; points and lines draw unskinned and once, as in three.js [#982](https://github.com/SethKitchen/ThreeMojo/issues/982)
 - [x] [TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#materialx) [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
 - [x] [USD import: USDZLoader with the USDA and USDC parsers](https://github.com/SethKitchen/ThreeMojo/wiki/More-model-files#usd): USDA text, USDC crates and USDZ archives composed as three.js r186 reads them [#248](https://github.com/SethKitchen/ThreeMojo/issues/248)
 - [x] [three.js's node JSON: NodeLoader, NodeMaterialLoader and NodeObjectLoader](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#threejss-node-json): node materials saved by three.js read into a node graph and compiled [#257](https://github.com/SethKitchen/ThreeMojo/issues/257)
@@ -489,8 +491,11 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 
 <details>
-<summary>Ported: 35</summary>
+<summary>Ported: 38</summary>
 
+- [x] [Stochastic SSR and the specular denoiser](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#stochastic-ssr): SSRNode's stochastic rays, and the specular modes of TemporalReprojectNode and RecurrentDenoiseNode, from three.js r186 [#980](https://github.com/SethKitchen/ThreeMojo/issues/980)
+- [x] [Screen-space derivatives](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#screen-space-derivatives): fwidth ramps on the toon edge, the alpha test and LineMaterial under alpha to coverage, and a matcap's mip level [#984](https://github.com/SethKitchen/ThreeMojo/issues/984)
+- [x] [Volume to 2D texture copies](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#texture-copies): copy_volume_to_texture, three.js's copyTextureToTexture from a 3D or an array texture [#983](https://github.com/SethKitchen/ThreeMojo/issues/983)
 - [x] [Voxel global illumination (VXGI)](https://github.com/SethKitchen/ThreeMojo/wiki/Voxel-global-illumination): a lit voxel volume, and occlusion and indirect light by cone tracing, on both backends [#250](https://github.com/SethKitchen/ThreeMojo/issues/250)
 - [x] [More display nodes: FSR1, TAAU, SSGI, SSS, OIT, retro and filters](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#more-display-nodes): upscaling, screen-space light and shadow, unsorted transparency and filters [#251](https://github.com/SethKitchen/ThreeMojo/issues/251)
 - [x] [Compute nodes, storage buffers, atomics and GPU sorts](https://github.com/SethKitchen/ThreeMojo/wiki/Compute-nodes): node programs on storage buffers, run on the host or a kernel [#253](https://github.com/SethKitchen/ThreeMojo/issues/253)
@@ -532,8 +537,10 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Windowing and controls
 
 <details>
-<summary>Ported: 8</summary>
+<summary>Ported: 10</summary>
 
+- [x] [Touch input for the controls](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#touch): fingers as pointers with a type and an id; OrbitControls, MapControls, TrackballControls, ArcballControls, DragControls and TransformControls [#978](https://github.com/SethKitchen/ThreeMojo/issues/978)
+- [x] [A native Wayland window](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#waylandwindow): the wire protocol on the compositor's socket, wl_shm frames, keys, the pointer, touch, resizes and the close button [#979](https://github.com/SethKitchen/ThreeMojo/issues/979)
 - [x] [SelectionBox, OrbitControls state and key speed, TransformControls limits and CSMHelper](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#selectionbox): drag selection, saved orbit state, move limits and cascade helpers [#199](https://github.com/SethKitchen/ThreeMojo/issues/199)
 - [x] [Windowing and interactive controls](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls): a `TerminalWindow` that shows frames and reads the mouse, and `OrbitControls` that orbit a camera [#87](https://github.com/SethKitchen/ThreeMojo/issues/87)
 - [x] [TerminalWindow: the terminal's size, and resize](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#terminalwindow): the terminal asked its size, the answer a resize event [#109](https://github.com/SethKitchen/ThreeMojo/issues/109)
@@ -599,8 +606,10 @@ Content that is not a three.js port lives under `extensions/`. These features ha
 A checked box records implemented scope. It does not establish engineering or clinical validity.
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
+- [ ] [Meadow on the GPU rasterizer](https://github.com/SethKitchen/ThreeMojo/wiki/Vegetation#draw-a-frame-on-a-gpu): MeadowDevice draws the prepared frame; compiled for sm_80, but its device parity suite has not run [#985](https://github.com/SethKitchen/ThreeMojo/issues/985)
+
 <details>
-<summary>Implemented: 62</summary>
+<summary>Implemented: 146</summary>
 
 - [x] [Mixamo animations](https://github.com/SethKitchen/ThreeMojo/wiki/Mixamo-animations): download every Mixamo animation from your own Adobe account, retarget it onto the game humanoid, and bake one `.glb`. Run live against Mixamo [#849](https://github.com/SethKitchen/ThreeMojo/issues/849)
 - [x] [Audio-aligned game faces](https://github.com/SethKitchen/ThreeMojo/wiki/Audio-aligned-game-faces): caller-provided phonemes or visemes, audio-clock transport, preserved facial LOD and validated glTF bakes [#299](https://github.com/SethKitchen/ThreeMojo/issues/299)
@@ -738,6 +747,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [CARLA search queues](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-agents#search-queues): deterministic heap selection for route and pedestrian paths [#307](https://github.com/SethKitchen/ThreeMojo/issues/307)
 - [x] [Minimum-cost CARLA routes](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-agents#the-route-planner): exact sample-count search with zero-cost lane changes [#533](https://github.com/SethKitchen/ThreeMojo/issues/533)
 - [x] [Shared physics](https://github.com/SethKitchen/ThreeMojo/wiki/Physics): reusable bodies, contacts, integration and quantities; CARLA imports; mass-preserving mode transitions; finite atomic mass properties; momentum-preserving free rotation [#294](https://github.com/SethKitchen/ThreeMojo/issues/294) [#482](https://github.com/SethKitchen/ThreeMojo/issues/482) [#430](https://github.com/SethKitchen/ThreeMojo/issues/430)
+- [x] [Physics joints](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#joints): ball joints and limited hinge joints, solved with the contacts; a centripetal pass keeps energy and momentum; animal segment chains [#977](https://github.com/SethKitchen/ThreeMojo/issues/977)
 - [x] [Physics numerical contacts](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#numerical-contact-boundaries): preserve translated support points and finite friction means [#428](https://github.com/SethKitchen/ThreeMojo/issues/428), [#429](https://github.com/SethKitchen/ThreeMojo/issues/429)
 - [x] [Shared decoded texture payloads](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#decoded-texture-ownership): copy-on-write texels and mipmaps, independent material sampling state, and explicit decoded-cache release [#336](https://github.com/SethKitchen/ThreeMojo/issues/336)
 

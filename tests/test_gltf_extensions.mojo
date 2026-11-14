@@ -1246,6 +1246,70 @@ def test_an_instanced_node_with_only_translations_or_none() raises:
     assert_equal(nothing.instanced_mesh_count, 0)
 
 
+def skinned_instances(mut bin: Bin, attributes: String, skin: Int) -> String:
+    """Return a document of one skinned triangle on node 0, which names
+    `skin` and whose `EXT_mesh_gpu_instancing` names `attributes`. Node 1
+    is the one joint of skin 0. Call it on a `Bin` that holds the
+    triangle's positions as accessor 0."""
+    var joints = bin.ints([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], UBYTE, "VEC4")
+    var weights = bin.floats([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], "VEC4")
+    return bin.document(
+        ',"meshes":[{"primitives":[{"attributes":{"POSITION":0,"JOINTS_0":'
+        + String(joints)
+        + ',"WEIGHTS_0":'
+        + String(weights)
+        + "}}]}]"
+        + ',"nodes":[{"mesh":0,"skin":'
+        + String(skin)
+        + ',"extensions":{"EXT_mesh_gpu_instancing":'
+        + attributes
+        + "}},{}]"
+        + ',"skins":[{"joints":[1]}],"scenes":[{"nodes":[0,1]}]'
+    )
+
+
+def test_an_instanced_node_drops_its_skin() raises:
+    # three.js makes each `InstancedMesh` from the node's mesh and binds
+    # a skeleton to a `SkinnedMesh` alone, so the skin is dropped.
+    var bin = Bin()
+    _ = bin.floats(big_triangle(), "VEC3")
+    var moves = bin.floats([1, 2, 3, -1, 0, 0], "VEC3")
+    var placed = '{"attributes":{"TRANSLATION":' + String(moves) + "}}"
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(skinned_instances(bin, placed, 0), scene, assets)
+    assert_equal(model.instanced_mesh_count, 1)
+    assert_equal(model.skinned_mesh_count, 0)
+    assert_equal(model.mesh_count, 0)
+    assert_equal(len(scene.skinned_meshes), 0)
+    ref crowd = scene.instanced_meshes[0]
+    assert_equal(crowd.count(), 2)
+    assert_equal(crowd.node, model.nodes[0])
+    # Each instance stands in the bind pose, moved by its own matrix.
+    var second = crowd.matrix_at(1).transform_point(Vector3(0, 0, 0))
+    assert_almost_equal(second.x, Float32(-1), atol=TOLERANCE)
+    assert_almost_equal(second.y, Float32(0), atol=TOLERANCE)
+    # With no attribute the extension draws nothing, as in three.js, and
+    # the node keeps its skin.
+    var kept = Scene()
+    var more = Assets()
+    var bound = loaded(
+        skinned_instances(bin, '{"attributes":{}}', 0), kept, more
+    )
+    assert_equal(bound.skinned_mesh_count, 1)
+    assert_equal(bound.instanced_mesh_count, 0)
+    assert_equal(kept.skinned_meshes[0].node, bound.nodes[0])
+    # A skin the file does not hold fails the load, as it does in
+    # three.js, whether the skin is dropped or bound.
+    refuses(skinned_instances(bin, placed, 4), "no skins entry at index 4")
+    refuses(
+        skinned_instances(bin, '{"attributes":{}}', 4),
+        "no skins entry at index 4",
+    )
+    # An extension with no attributes object is still refused.
+    refuses(skinned_instances(bin, "{}", 0), "needs attributes")
+
+
 def test_a_malformed_instancing_is_refused() raises:
     var bin = Bin()
     _ = bin.floats(big_triangle(), "VEC3")
@@ -1273,11 +1337,6 @@ def test_a_malformed_instancing_is_refused() raises:
     refuses(
         instanced(bin, '{"attributes":{"_COLOR_0":' + String(four) + "}}"),
         "_COLOR_0 must be a VEC3",
-    )
-    # A skinned node cannot be instanced.
-    refuses(
-        instanced(bin, '{"attributes":{}}', ',"skin":0'),
-        "a skinned node cannot be instanced",
     )
     # An instanced node that names a mesh the file does not have.
     refuses(

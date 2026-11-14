@@ -253,6 +253,21 @@ A dashed segment is cut into one quad per dash. A dashed line has no caps, becau
 
 The distance along the line is worked out by the renderer, as for a [dashed line](#dashed-lines). three.js calls this `LineSegments2.computeLineDistances`. The pattern runs on from one segment to the next.
 
+### Alpha to coverage
+
+Set `alpha_to_coverage` on the material to antialias a wide line's edge, as three.js's `LineMaterial` does. The alpha falls from one to zero across the edge, over the width that `fwidth` measures. The coverage then keeps each sample by that alpha. With [anti-aliasing](Renderer#anti-aliasing) on, the average of the samples follows the alpha.
+
+```mojo
+var material = line_material(Color(255, 0, 0), LineWidth(pixels=8))
+material.alpha_to_coverage = True
+```
+
+A line in pixels has the ramp on its round caps, and its sides stay hard. Each cap is then the square past its end, as three.js draws it, and not a fan. Each corner of the square carries its place about the end, in half widths. The alpha is `1 - smoothstep(1 - w, 1 + w, len2)`. `len2` is the squared distance from the end, and `w` is `fwidth(len2)`.
+
+A line in the world has the ramp on its whole outline. The alpha is `1 - smoothstep(0.5 - w, 0.5 + w, norm)`. `norm` is half the distance from the segment, in half widths, and `w` is `fwidth(norm)`. The ribbon is as wide as the line, as three.js's is, so its sides end at the middle of the ramp.
+
+A dashed line has no ramp, because three.js gives it none. `EdgeRamp` in `render/derivatives.mojo` names the ramp, and the renderer puts it in the draw's `RasterState`. See [Rasterization](Rasterization#screen-space-derivatives).
+
 ### Picking
 
 `Raycaster.intersect_wide_line` is three.js's `LineSegments2.raycast`. It takes the camera and the image size, which three.js reads from `raycaster.camera` and `material.resolution`. See [Raycasting](Raycasting).
@@ -261,12 +276,14 @@ A width in the world is measured in the world. A width in pixels is measured on 
 
 ### What is not ported, and what differs
 
-- **The caps are fans, not discs.** three.js cuts a half disc out of a square for each fragment. Here the cap is a fan of triangles within an eighth of a pixel of the circle. `cap_steps` sets the count.
+- **The caps are fans, not discs.** three.js cuts a half disc out of a square for each fragment. Here the cap is a fan of triangles within an eighth of a pixel of the circle. `cap_steps` sets the count. Under [alpha to coverage](#alpha-to-coverage) the cap is the square, and each fragment reads its alpha.
 - **The dashes are cut, not discarded.** three.js discards each fragment in a gap. Here the segment is cut at the dash boundaries, so both rasterizers need no rule of their own. A segment cut into more than 4096 dashes raises. A distance that does not fit in an integer raises the same way. A distance that is not finite is refused.
 - **A width in the world is a flat ribbon.** three.js traces a capsule for each fragment. Here the ribbon faces the camera, and its outline matches the capsule's outline. Where the ribbon passes through another surface, the two cross along a different curve.
 - **A segment with no length is a round dot.** three.js normalizes a zero vector there, and GLSL leaves the result undefined.
 - **A hit outside `near` and `far` is dropped.** three.js's `LineSegments2.raycast` keeps it. A mesh hit is dropped in both.
-- **Not ported:** the `fwidth` ramp of `LineMaterial`'s `alphaToCoverage`, the raycaster's `params.Line2.threshold` and `LineMaterial.resolution`. A `Line2` casts no shadow and receives none.
+- **The ramp under alpha to coverage keeps the opacity.** three.js r180 assigns the ramp to the alpha, in `alpha = 1.0 - smoothstep(...)`. So an `opacity` of one half is lost on each cap of a line in pixels, and on all of a line in the world. Here the ramp multiplies the alpha, and a cap is as opaque as its segment.
+- **The uv view shows the whole square of a cap under alpha to coverage.** The uv view reads no alpha, so it shows no ramp.
+- **Not ported:** the raycaster's `params.Line2.threshold` and `LineMaterial.resolution`. A `Line2` casts no shadow and receives none.
 - **`intersect_scene` does not pick a wide line.** It has no camera for a width in pixels.
 
 ### What raises

@@ -454,7 +454,9 @@ A point or a line gets a `BASIC` material of its own, as three.js makes a `Point
 
 An index here holds triangles. Thus the loader copies the vertices of an indexed point or line primitive out in index order, as three.js's `toNonIndexed` does. The morph targets are copied with them.
 
-A point or a line on a skinned node or an instanced node is refused. A skinned or instanced line is not ported.
+A point or a line on a skinned node is drawn at the node, without the skin. three.js binds a skeleton only to a `SkinnedMesh`, and it has no skinned line. The triangles of the same node are still skinned.
+
+An instanced node whose mesh has a primitive of points or lines draws that mesh one time, without instances. three.js's `GLTFMeshGpuInstancing` instances a mesh only when each primitive is triangles. The loader does not read the extension in that case.
 
 ### Normal maps
 
@@ -566,7 +568,9 @@ The color is linear in the file and sRGB in the `Light`. The intensity is one wh
 
 #### Instancing
 
-Each instance matrix is `TRANSLATION`, `ROTATION` and `SCALE` composed. An attribute that is not there is the identity's part. `_COLOR_0` colors the instances, as three.js reads it into `instanceColor`. The loader counts every other attribute but does not read it, because it is for a custom shader. A node with an empty `attributes` object draws plain meshes, as in three.js.
+Each instance matrix is `TRANSLATION`, `ROTATION` and `SCALE` composed. An attribute that is not there is the identity's part. `_COLOR_0` colors the instances, as three.js reads it into `instanceColor`. The loader counts every other attribute but does not read it, because it is for a custom shader. A node with an empty `attributes` object is drawn as a node with no instancing, as in three.js.
+
+An instanced node drops its skin, as in three.js. three.js makes each `InstancedMesh` from the node's mesh, and it binds a skeleton only to a `SkinnedMesh`. So the instances are drawn in the bind pose, and the node adds no `SkinnedMesh`. The skin must still be one that the file has. A skinned node with an empty `attributes` object keeps its skin.
 
 #### Accessor storage limits
 
@@ -676,7 +680,6 @@ The loader refuses a variant with no name, a mapping with no material, and a map
 - A clear coat texture with a `clearcoatFactor` of zero is left out, with the normal texture's `scale`. three.js keeps them, but draws none.
 - An `iridescenceTexture` or `iridescenceThicknessTexture` with an `iridescenceFactor` of zero is left out. So is an `anisotropyTexture` with an `anisotropyStrength` of zero. three.js keeps them, but draws neither.
 - A `sheenColorFactor` outside zero to one is refused, as a `specularColorFactor` is.
-- A skinned node with `EXT_mesh_gpu_instancing` is refused. An instanced skinned mesh is not ported. three.js drops the skin.
 - A KTX 2.0 byte image takes the color space that the map needs. three.js keeps the image's own color space for a data map.
 - A KTX 2.0 image builds its own mip chain from its first level. three.js uploads the chain that the file holds.
 
@@ -693,7 +696,7 @@ The loader raises for:
 - A compressed buffer view that is malformed. See [Compressed buffer views](#compressed-buffer-views).
 - An unknown accessor type or component type. An attribute of the wrong width. Indices that are not unsigned integers.
 - An image that is not PNG, JPEG, WebP, TGA or KTX 2.0. A texture or material that names something the file does not have. A texture with no image.
-- A primitive mode that is not points, lines or triangles. A point or a line on a skinned or instanced node.
+- A primitive mode that is not points, lines or triangles.
 - `targetNames` that do not hold one name per morph target.
 - An unknown wrap mode or alpha mode.
 - A node reached twice. A node matrix that flattens an axis.
@@ -708,7 +711,7 @@ The loader raises for:
 - An `extensions` value, or an extension, that is not an object.
 - A texture reference or a texture transform on a third set of coordinates or past it. A `specularColorFactor` outside zero to one.
 - A node that names a light the file does not have. A light of an unknown type, a `range` that is not above zero, or a spot light without `spot`. A light that `Light` refuses.
-- Instancing without an `attributes` object. Instancing attributes of different counts, or of the wrong width. A skinned node that is instanced.
+- Instancing of a mesh of triangles without an `attributes` object. Instancing attributes of different counts, or of the wrong width. An instanced node that names a skin the file does not have.
 
 ## Collada
 

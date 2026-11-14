@@ -113,6 +113,7 @@ from lights.shadow import (
     VSM_SHADOW_MAP,
 )
 from lights.csm import CSM
+from lights.csm_shadow_node import CSMShadowNode
 from geometries.box import cube, box
 from geometries.sphere import sphere
 from math.matrix4 import translation, scaling, Matrix4, rotation_x
@@ -8596,6 +8597,75 @@ def test_both_backends_agree_under_every_shadow_map_type() raises:
             )
 
 
+def test_both_backends_agree_on_a_shadow_nodes_cascades() raises:
+    # A `CSMShadowNode`'s three cascade lights over the bulb and slide
+    # scene, with and without fade. Both rasterizers take the camera's
+    # near plane from the depth and weigh the cascades by the host's own
+    # `csm_node_reach`.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree on a shadow node's cascades"
+    ):
+        return
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(14.0, METER),
+    )
+    camera.place(Vector3(1, 5, 5), Vector3(0, 0, 0))
+    for fade in [False, True]:
+        for kind in [PCF_SHADOW_MAP, BASIC_SHADOW_MAP]:
+            var assets = Assets()
+            var scene = a_bulb_and_slide_scene(assets)
+            scene.lights[0].shadow.intensity = 0.6
+            scene.lights[1].shadow.intensity = 0.3
+            var high = Object3D()
+            high.set_position(-4, 8, -3)
+            var sun = directional_light(
+                Color(255, 240, 220), scene.add(high^), 1.5
+            )
+            sun.cast_shadow = True
+            sun.shadow.map_size = 24
+            sun.shadow.near = Length(0.5, METER)
+            sun.shadow.far = Length(40.0, METER)
+            sun.shadow.intensity = 0.8
+            var csm = CSMShadowNode(
+                scene, camera, sun, light_margin=Length(10.0, METER)
+            )
+            csm.fade = fade
+            csm.update_frustums(scene, camera)
+            csm.update(scene, camera)
+            var renderer = Renderer(48, 36)
+            renderer.set_background(BACKGROUND)
+            renderer.shadow_map_type = kind
+            var corners = renderer.prepare(scene, assets, camera)
+            var lighting = Lighting(
+                scene,
+                camera.visible_layers(),
+                camera_position(scene, camera),
+                toward_camera(scene, camera),
+                camera_up(scene, camera),
+                back=camera_back(scene, camera),
+                shadows=renderer.shadow_maps(scene, assets),
+                spot_maps=renderer.spot_light_maps(scene, assets),
+            )
+            var cpu = renderer.render(scene, assets, camera)
+            var gpu = render_triangles(
+                corners,
+                48,
+                36,
+                BACKGROUND,
+                SHADE_TEXTURE,
+                assets.textures,
+                lighting,
+            )
+            assert_true(
+                count_background(cpu, BACKGROUND) < 48 * 36,
+                "the scene drew nothing",
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_agree_on_cascades_and_shadow_intensity() raises:
     # A CSM's three lights over the bulb and slide scene, with and without
     # fade, every map at a partial intensity: the phong, standard, toon
@@ -15020,6 +15090,176 @@ def test_both_backends_keep_subpixel_wide_line_caps() raises:
         frame.whole_corners(), 32, 32, BACKGROUND, draws=frame.draws
     )
     assert_true(count_background(host, BACKGROUND) < 32 * 32)
+    assert_equal(count_mismatches(host, device, tolerance=1), 0)
+
+
+# --- screen-space widths: a matcap's chain, the alpha test's ramp and a
+# wide line's edge. The toon fallback's edge is held by
+# `test_both_backends_agree_on_the_fallback_toon_ramp` and by the
+# prepared toon scene, under a sun, a bulb and a cone.
+
+
+def _a_checker_matcap(mipmapped: Bool) raises -> Texture:
+    """Return a 64 by 64 matcap of four-texel red and blue squares, with
+    a chain or with one level."""
+    var pixels = List[UInt8]()
+    for y in range(64):
+        for x in range(64):
+            var red = (x // 4 + y // 4) % 2 == 0
+            pixels.append(UInt8(255) if red else UInt8(30))
+            pixels.append(40)
+            pixels.append(UInt8(30) if red else UInt8(255))
+            pixels.append(255)
+    return Texture(64, 64, pixels^, CLAMP, BILINEAR, SRGB, mipmapped, IGNORED)
+
+
+def test_both_backends_read_a_matcap_down_its_chain_alike() raises:
+    # The lookup's own footprint picks the level, from the function both
+    # backends call, so the two must read the same level at every pixel.
+    if skipped_for_lack_of_a_gpu("both backends read a matcap's chain alike"):
+        return
+    var lighting = watching()
+    var images = List[Framebuffer]()
+    for mipmapped in [True, False]:
+        var textures = TextureStore()
+        var ball = textures.add(_a_checker_matcap(mipmapped))
+        var corners = matcap_pair(ball)
+        var target = RenderTarget(24, 18, BACKGROUND)
+        rasterize_all(corners, target, SHADE_LIT, textures, lighting)
+        var cpu = target.resolve()
+        var renderer = GpuRenderer(24, 18)
+        renderer.set_textures(textures)
+        renderer.draw(corners, BACKGROUND, SHADE_LIT, lighting)
+        var gpu = renderer.read_back()
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+        images.append(gpu^)
+    # And the chain was really read: one level gives a different image.
+    assert_true(
+        count_mismatches(images[0], images[1]) > 20, "the chain changed nothing"
+    )
+
+
+def _a_fading_map() raises -> Texture:
+    """Return a four-texel map whose alpha rises from left to right, read
+    as coverage and filtered."""
+    var pixels: List[UInt8] = [
+        255,
+        200,
+        120,
+        0,
+        255,
+        200,
+        120,
+        80,
+        255,
+        200,
+        120,
+        170,
+        255,
+        200,
+        120,
+        255,
+    ]
+    return Texture(4, 1, pixels^, CLAMP, BILINEAR, SRGB, False, COVERAGE)
+
+
+def test_both_backends_ramp_an_alpha_test_under_alpha_to_coverage() raises:
+    # three.js's `smoothstep(alphaTest, alphaTest + fwidth(alpha), alpha)`.
+    # Each backend measures the width on its own samples of the map at
+    # the pixel and the two beside it, and the two must agree.
+    if skipped_for_lack_of_a_gpu("both backends ramp an alpha test alike"):
+        return
+    var textures = TextureStore()
+    var fade = textures.add(_a_fading_map())
+    var state = RasterState(alpha_to_coverage=True)
+    var corners = List[RasterVertex]()
+    var base = overlapping_pair()
+    var across: List[Float32] = [0, 1, 0, 0.1, 0.9, 0.5]
+    var up: List[Float32] = [0, 0, 1, 0.2, 0.3, 0.9]
+    for index in range(len(base)):
+        var here = base[index]
+        here.u = across[index]
+        here.v = up[index]
+        here.texture = fade
+        here.alpha_test = 0.4
+        here.state = state
+        here.color.a = 0.6 + 0.08 * Float32(index % 3)
+        corners.append(here)
+    var points = List[RasterVertex]()
+    for index in range(3):
+        var dot = corner(
+            6 + 10 * Float32(index), 24, 0.1, 1, Color(255, 255, 255)
+        )
+        dot.point_size = 5 + 2 * Float32(index)
+        dot.kind = BASIC
+        dot.texture = fade
+        dot.alpha_test = 0.3 + 0.2 * Float32(index)
+        dot.state = state
+        points.append(dot)
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(corners, target, SHADE_TEXTURE, textures)
+    rasterize_points_all(points, target, SHADE_TEXTURE, textures)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 36, 30, BACKGROUND, SHADE_TEXTURE, textures, points=points
+    )
+    assert_true(count_background(cpu, BACKGROUND) < 36 * 30 - 100)
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # The ramp was really taken: the same primitives without the
+    # coverage keep a hard edge and their own alpha, and differ.
+    var plain = List[RasterVertex]()
+    for index in range(len(corners)):
+        var here = corners[index]
+        here.state = RasterState()
+        plain.append(here)
+    var hard = render_triangles(
+        plain, 36, 30, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    assert_true(count_mismatches(gpu, hard) > 20, "the ramp changed nothing")
+
+
+def test_both_backends_ramp_a_covered_wide_line_alike() raises:
+    # three.js's `LineMaterial` under alpha to coverage: the disc's ramp
+    # on the square caps of a line in pixels, and the capsule's ramp on a
+    # line in the world. Both backends read the ramp from one function
+    # and the coverage from another.
+    if skipped_for_lack_of_a_gpu("covered wide lines"):
+        return
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    for index in range(4):
+        var y = Float32(index) * 0.45 - 0.7
+        var shape = assets.geometries.add(
+            line_segments_geometry(
+                [Vector3(-0.7, y, 0), Vector3(0.7, y + 0.2, -0.5)]
+            )
+        )
+        var width = LineWidth(pixels=3 + 2 * Float32(index))
+        if index % 2 == 1:
+            width = LineWidth(world=Length(0.08 * Float32(index + 1), METER))
+        var paint = line_material(
+            Color(240, 160, 90), width, opacity=1.0 - 0.1 * Float32(index)
+        )
+        paint.alpha_to_coverage = True
+        scene.add_wide_line(
+            LineSegments2(shape, assets.materials.add(paint), node)
+        )
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(60, DEGREE), 1, Length(0.1, METER), Length(20, METER)
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    var renderer = Renderer(32, 32, workers=3)
+    renderer.background = BACKGROUND
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    # Each segment is a body and two square caps: eighteen corners.
+    assert_equal(len(frame.corners), 4 * 18)
+    var host = renderer.render(scene, assets, camera)
+    var device = render_triangles(
+        frame.whole_corners(), 32, 32, BACKGROUND, draws=frame.draws
+    )
+    assert_true(count_background(host, BACKGROUND) < 32 * 32 - 60)
     assert_equal(count_mismatches(host, device, tolerance=1), 0)
 
 

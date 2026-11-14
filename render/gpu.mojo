@@ -73,8 +73,10 @@ from lights.lighting import (
     physical_outgoing,
     physical_surface,
     toon_coord,
+    toon_edge,
     toon_index,
-    toon_step,
+    toon_width_along,
+    toon_width_toward,
     toward_eye_at,
     view_direction,
 )
@@ -89,7 +91,19 @@ from render.color_spaces import (
 from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.blend import NORMAL_MODE, Rgba, blend_fragment
-from render.fragment_flags import alpha_covers, dither, hashed_threshold
+from render.derivatives import (
+    NO_EDGE_RAMP,
+    SurfaceSteps,
+    alpha_test_ramp,
+    fwidth,
+)
+from render.fragment_flags import (
+    alpha_covers,
+    dither,
+    edge_ramp_at,
+    hashed_threshold,
+    surface_steps,
+)
 from render.raster_state import (
     REVERSED_DEPTH,
     STANDARD_DEPTH,
@@ -159,8 +173,10 @@ from lights.shadow import (
     biased_position,
     bilinear,
     bilinear_texel,
+    NODE_BLEND,
     SUN_BLEND,
     cascade_reach,
+    csm_node_reach,
     sun_reach,
     cube_tap,
     cube_texel,
@@ -250,6 +266,7 @@ from render.rasterizer import (
     object_space_normal,
     TextureFrames,
     matcap_fallback,
+    matcap_steps,
     matcap_uv,
     tangent_frame,
 )
@@ -967,7 +984,8 @@ comptime PLANE_FLOATS = PLANE_METAL_ROUGH + 2
 # directional light's last eight are its `ShadowCascade`: its start, its
 # end, its span in meters, zero for no cascade, whether it is the last
 # and whether it fades, as one or zero, its `CascadeBlend`, and under
-# `SUN_BLEND` its fade start and where the cascade before it ends. The maps
+# `SUN_BLEND` its fade start and where the cascade before it ends. Under
+# `NODE_BLEND` the first of those two is its near plane over its span. The maps
 # ride after the lights, each `SHADOW_HEADER` floats and then its depths,
 # rather than in a buffer of their own, because Metal binds at most
 # thirty-one arguments to a kernel and this one has thirty-one. A spot
@@ -1701,7 +1719,12 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(Float32(1) if band.last else Float32(0))
         flat.append(Float32(1) if band.fade else Float32(0))
         flat.append(Float32(band.blend.value))
-        flat.append(band.fade_start)
+        # `fade_start` is a sun's alone and `near` a shadow node's alone,
+        # so the two share a float.
+        if band.blend == NODE_BLEND:
+            flat.append(band.near)
+        else:
+            flat.append(band.fade_start)
         flat.append(band.ramp_end)
     for index in range(lighting.point_count()):
         ref position = lighting.positions[index]
@@ -2302,6 +2325,16 @@ def _light_through[
                 lights[unsafe_offset=at + CASCADE_AT + 6],
                 lights[unsafe_offset=at + CASCADE_AT + 1],
                 lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
+            )
+        if lights[unsafe_offset=at + CASCADE_AT + 5] == Float32(
+            NODE_BLEND.value
+        ):
+            reach = csm_node_reach(
+                depth - lights[unsafe_offset=at + CASCADE_AT + 6],
+                lights[unsafe_offset=at + CASCADE_AT],
+                lights[unsafe_offset=at + CASCADE_AT + 1],
+                lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
+                lights[unsafe_offset=at + CASCADE_AT + 4] != 0,
             )
         if reach[0] == 0:
             return Vector3(0, 0, 0)
@@ -2965,6 +2998,7 @@ def _toon_tone(
     start: Int,
     tones: Int,
     dot_nl: Float32,
+    half_width: Float32,
 ) -> Float32:
     """Return how lit a `TOON` surface looks at this cosine.
 
@@ -2979,13 +3013,16 @@ def _toon_tone(
         start: Where this triangle's ramp begins in them.
         tones: How many texels across the ramp is, or zero for none.
         dot_nl: The cosine between the normal and the way to the light.
+        half_width: Half of `fwidth` of the coordinate, which the
+            fallback's edge is antialiased over; see
+            `lights.lighting.toon_edge`. A ramp does not read it.
 
     Returns:
         How lit the surface looks, from zero to one.
     """
     var coord = toon_coord(dot_nl)
     if tones <= 0:
-        return toon_step(coord)
+        return toon_edge(coord, half_width)
     return (
         Float32(texels[unsafe_offset=start + toon_index(coord, tones) * 4])
         / 255
@@ -3013,6 +3050,7 @@ def _toon_arriving[
     pz: Float32,
     receives: Bool = True,
     shape: R = Unshaped(),
+    steps: SurfaceSteps = SurfaceSteps(),
 ) -> Vector3:
     """Return the light reaching a `TOON` surface at (px, py, pz).
 
@@ -3021,7 +3059,9 @@ def _toon_arriving[
     ramp instead of used directly, and never clamped at zero, so a lamp
     behind the surface still lights it to the ramp's left end. The ambient
     term and the hemisphere lights are not stepped, because three.js
-    reflects those through `RE_IndirectDiffuse`.
+    reflects those through `RE_IndirectDiffuse`. `steps` is the surface at
+    the fragment's pixel and the two beside it, which the fallback ramp's
+    edge is antialiased over, by the host's own two width functions.
     """
     var base = _ambient_at(lights, nx, ny, nz, px, py, pz)
     var red = base.x
@@ -3073,6 +3113,14 @@ def _toon_arriving[
                 nx * lights[unsafe_offset=at]
                 + ny * lights[unsafe_offset=at + 1]
                 + nz * lights[unsafe_offset=at + 2],
+                toon_width_along(
+                    steps,
+                    Vector3(
+                        lights[unsafe_offset=at],
+                        lights[unsafe_offset=at + 1],
+                        lights[unsafe_offset=at + 2],
+                    ),
+                ),
             )
             weight = lambert
         else:
@@ -3112,11 +3160,21 @@ def _toon_arriving[
                 )
                 if rim <= 0:
                     continue
+            var cosine = (nx * dx + ny * dy + nz * dz) / direction_length
             var lambert = _toon_tone(
                 texels,
                 start,
                 tones,
-                (nx * dx + ny * dy + nz * dz) / direction_length,
+                cosine,
+                toon_width_toward(
+                    steps,
+                    Vector3(
+                        lights[unsafe_offset=at],
+                        lights[unsafe_offset=at + 1],
+                        lights[unsafe_offset=at + 2],
+                    ),
+                    toon_coord(cosine),
+                ),
             )
             if kind == _POINT:
                 weight = lambert * falloff(
@@ -5248,6 +5306,230 @@ def _sample_placed_slot(
     )
 
 
+def _mapped_alpha(
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
+    slot: Int,
+    mask_slot: Int,
+    corners: DevicePointer[Float32],
+    base: Int,
+    ax: Int,
+    ay: Int,
+    bx: Int,
+    by: Int,
+    cx: Int,
+    cy: Int,
+    span_inv: Float32,
+    swapped: Bool,
+    px: Int,
+    py: Int,
+    sampled: Bool,
+) -> Float32:
+    """Return the alpha a triangle's corners and maps give at a sample
+    point, covered or not: the device counterpart of
+    `render.rasterizer._mapped_alpha`. `slot` is the color map and
+    `mask_slot` the alpha map, each `NO_TEXTURE` for none, and `sampled`
+    is whether the mode opens them."""
+    var b_base = base + FLOATS_PER_VERTEX
+    var c_base = base + 2 * FLOATS_PER_VERTEX
+    var e_ab = edge_at(ax, ay, bx, by, px, py)
+    var e_bc = edge_at(bx, by, cx, cy, px, py)
+    var e_ca = edge_at(cx, cy, ax, ay, px, py)
+    var wa = Float32(e_bc) * span_inv
+    var wb = Float32(e_ca) * span_inv
+    var wc = Float32(e_ab) * span_inv
+    if swapped:
+        var held = wb
+        wb = wc
+        wc = held
+    var shares = perspective_shares(
+        wa,
+        wb,
+        wc,
+        corners[unsafe_offset=base + LANE_INV_W],
+        corners[unsafe_offset=b_base + LANE_INV_W],
+        corners[unsafe_offset=c_base + LANE_INV_W],
+    )
+    var alpha = interpolate_alpha(
+        corners[unsafe_offset=base + LANE_A],
+        corners[unsafe_offset=b_base + LANE_A],
+        corners[unsafe_offset=c_base + LANE_A],
+        shares[1],
+        shares[2],
+    )
+    if not sampled:
+        return alpha
+    var uv = _uv_at(
+        corners, base, ax, ay, bx, by, cx, cy, span_inv, swapped, px, py, LANE_U
+    )
+    var uv1 = _uv_at(
+        corners,
+        base,
+        ax,
+        ay,
+        bx,
+        by,
+        cx,
+        cy,
+        span_inv,
+        swapped,
+        px,
+        py,
+        LANE_U1,
+    )
+    if slot != NO_TEXTURE.value:
+        alpha *= _sample_placed_slot(
+            texels,
+            ramp,
+            table,
+            slot,
+            corners,
+            base,
+            ax,
+            ay,
+            bx,
+            by,
+            cx,
+            cy,
+            span_inv,
+            swapped,
+            px,
+            py,
+            uv,
+            uv1,
+        ).a
+    if mask_slot != NO_TEXTURE.value:
+        alpha *= _sample_placed_slot(
+            texels,
+            ramp,
+            table,
+            mask_slot,
+            corners,
+            base,
+            ax,
+            ay,
+            bx,
+            by,
+            cx,
+            cy,
+            span_inv,
+            swapped,
+            px,
+            py,
+            uv,
+            uv1,
+        ).g
+    return alpha
+
+
+def _alpha_width(
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
+    slot: Int,
+    mask_slot: Int,
+    corners: DevicePointer[Float32],
+    base: Int,
+    ax: Int,
+    ay: Int,
+    bx: Int,
+    by: Int,
+    cx: Int,
+    cy: Int,
+    span_inv: Float32,
+    swapped: Bool,
+    px: Int,
+    py: Int,
+    sampled: Bool,
+) -> Float32:
+    """Return GLSL's `fwidth` of a fragment's alpha: the device
+    counterpart of `render.rasterizer._alpha_width`. `_mapped_alpha` at
+    the sample, at the pixel to its right and at the pixel above it,
+    through one call in a loop, so the kernel holds one copy of the
+    samplers it reads."""
+    var alphas = SIMD[DType.float32, 4](0)
+    for step in range(3):
+        var sx = px
+        var sy = py
+        if step == 1:
+            sx = px + SUBPIXEL
+        if step == 2:
+            sy = py - SUBPIXEL
+        alphas[step] = _mapped_alpha(
+            texels,
+            ramp,
+            table,
+            slot,
+            mask_slot,
+            corners,
+            base,
+            ax,
+            ay,
+            bx,
+            by,
+            cx,
+            cy,
+            span_inv,
+            swapped,
+            sx,
+            sy,
+            sampled,
+        )
+    return fwidth(alphas[0], alphas[1], alphas[2])
+
+
+def _point_alpha_width(
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
+    slot: Int,
+    mask_slot: Int,
+    own: Float32,
+    center: Vector2,
+    size: Float32,
+    x: Int,
+    y: Int,
+    sampled: Bool,
+) -> Float32:
+    """Return GLSL's `fwidth` of a point's alpha at one pixel: the device
+    counterpart of `render.rasterizer._point_alpha_width`. The point's
+    own alpha `own`, times its maps at the pixel's place in the square,
+    at the pixel, at the pixel to its right and at the pixel above it."""
+    var alphas = SIMD[DType.float32, 4](own)
+    if not sampled:
+        return fwidth(alphas[0], alphas[1], alphas[2])
+    for step in range(3):
+        var sx = x
+        var sy = y
+        if step == 1:
+            sx = x + 1
+        if step == 2:
+            sy = y - 1
+        var place = point_coord(center, size, sx, sy)
+        if slot != NO_TEXTURE.value:
+            var image = _describe(table, slot)
+            alphas[step] *= _sample_level(
+                texels,
+                ramp,
+                image,
+                place.x,
+                place.y,
+                mip_level_of(size, image.width, image.height),
+            ).a
+        if mask_slot != NO_TEXTURE.value:
+            var mask = _describe(table, mask_slot)
+            alphas[step] *= _sample_level(
+                texels,
+                ramp,
+                mask,
+                place.x,
+                place.y,
+                mip_level_of(size, mask.width, mask.height),
+            ).g
+    return fwidth(alphas[0], alphas[1], alphas[2])
+
+
 struct _DeviceSource[origin: Origin[mut=True]](TransmissionSource):
     """The kernel's `TransmissionSource`: the transmission target's chain
     in the backdrop buffer, read by `_sample_at` as the host's texture is
@@ -6567,6 +6849,9 @@ def rasterize_kernel(
                     mode == Int32(SHADE_TEXTURE.value),
                     point_nodes.corner(CORNER_A).custom,
                 )
+                # Whether the program set the alpha, which then has no
+                # width for the alpha test's ramp, as on the host.
+                var point_graph_alpha = False
                 if point_noded:
                     if has_output(point_nodes, COLOR_NODE):
                         var diffuse = run_nodes(
@@ -6579,13 +6864,45 @@ def rasterize_kernel(
                         alpha = run_nodes(
                             point_nodes, OPACITY_NODE, point_given
                         )[0]
+                        point_graph_alpha = True
                     if (
                         point_masked
                         and run_nodes(point_nodes, MASK_NODE, point_given)[0]
                         == 0
                     ):
                         continue
-                if tested and alpha < threshold:
+                # The alpha test, a ramp under alpha to coverage, as
+                # `rasterize_point` asks it.
+                if tested and point_covered:
+                    var point_width = Float32(0)
+                    if not point_graph_alpha:
+                        point_width = _point_alpha_width(
+                            texels,
+                            ramp,
+                            table,
+                            Int(
+                                point_maps[
+                                    unsafe_offset=index * STATE_PER_POINT
+                                    + POINT_STATE_TEXTURE
+                                ]
+                            ),
+                            Int(
+                                point_maps[
+                                    unsafe_offset=index * STATE_PER_POINT
+                                    + POINT_STATE_ALPHA_MAP
+                                ]
+                            ),
+                            points[unsafe_offset=base + LANE_A],
+                            center,
+                            size,
+                            x,
+                            y,
+                            mode == Int32(SHADE_TEXTURE.value),
+                        )
+                    alpha = alpha_test_ramp(alpha, threshold, point_width)
+                    if alpha == 0:
+                        continue
+                elif tested and alpha < threshold:
                     continue
                 if point_covered and not alpha_covers(alpha, x, y):
                     continue
@@ -7573,17 +7890,45 @@ def rasterize_kernel(
                         unsafe_offset=index * STATE_PER_TRIANGLE + STATE_MATCAP
                     ]
                     if ball >= 0:
-                        # The full-size level, never a mip, as the host reads
-                        # it: the coordinate comes from the normal rather than
-                        # from the surface.
-                        var looked = _sample_at(
-                            texels,
-                            ramp,
-                            _describe(table, Int(ball)),
-                            place.x,
-                            place.y,
-                            0,
-                        )
+                        # The level the lookup's own footprint chooses, as
+                        # the host reads it: the coordinate comes from the
+                        # normal rather than from the surface, so the
+                        # footprint is measured on the lookup itself; see
+                        # `render.rasterizer.matcap_steps`.
+                        var image = _describe(table, Int(ball))
+                        var looked: FloatColor
+                        if image.levels == 1 and image.anisotropy == 1:
+                            looked = _sample_at(
+                                texels, ramp, image, place.x, place.y, 0
+                            )
+                        else:
+                            var moved = matcap_steps(
+                                surface_steps(nodes),
+                                Vector3(
+                                    lights[unsafe_offset=LIGHTS_EYE],
+                                    lights[unsafe_offset=LIGHTS_EYE + 1],
+                                    lights[unsafe_offset=LIGHTS_EYE + 2],
+                                ),
+                                Vector3(
+                                    lights[unsafe_offset=LIGHTS_UP],
+                                    lights[unsafe_offset=LIGHTS_UP + 1],
+                                    lights[unsafe_offset=LIGHTS_UP + 2],
+                                ),
+                            )
+                            looked = _sample_footprint(
+                                texels,
+                                ramp,
+                                image,
+                                place.x,
+                                place.y,
+                                anisotropic_footprint(
+                                    moved[0],
+                                    moved[1],
+                                    image.width,
+                                    image.height,
+                                    image.anisotropy,
+                                ),
+                            )
                         arriving = Vector3(looked.r, looked.g, looked.b)
                     else:
                         var gray = matcap_fallback(place.y)
@@ -7602,6 +7947,11 @@ def rasterize_kernel(
                         var shades = _describe(table, Int(ramp_slot))
                         start = shades.start
                         tones = shades.width
+                    # The fallback's edge is as wide as the coordinate
+                    # changes across this pixel, as the host measures it.
+                    var beside = SurfaceSteps()
+                    if tones <= 0:
+                        beside = surface_steps(nodes)
                     arriving = _toon_arriving(
                         lights,
                         Int(light_count),
@@ -7621,6 +7971,7 @@ def rasterize_kernel(
                         wz,
                         receives,
                         shape,
+                        beside,
                     )
                 elif kind == Int32(GOURAUD.value):
                     # Lit at the corners, and the direct light darkened
@@ -8520,6 +8871,9 @@ def rasterize_kernel(
                             uv,
                             uv1,
                         ).g
+                # Whether the graph set the alpha, which then has no
+                # width for the alpha test's ramp, as on the host.
+                var graph_alpha = False
                 # The node graph's color, opacity and emissive, once the
                 # maps have had their say, exactly as `rasterize_shaded`
                 # replaces them.
@@ -8565,6 +8919,7 @@ def rasterize_kernel(
                         blue = ran[0][2] * arriving.z
                     if set[1]:
                         alpha = ran[1][0]
+                        graph_alpha = True
                     if set[2]:
                         glow_r = ran[2][0]
                         glow_g = ran[2][1]
@@ -8586,11 +8941,54 @@ def rasterize_kernel(
                         blue = mix_delta(blue, ran[5][2], share)
                     if set[7] and ran[7][0] == 0:
                         continue
+                # The antialiased edge of a wide line under alpha to
+                # coverage, by the function the host calls; see
+                # `render.fragment_flags.edge_ramp_at`.
+                if state.edge_ramp != NO_EDGE_RAMP:
+                    alpha *= edge_ramp_at(nodes, state.edge_ramp)
                 # Thrown away for being too transparent, three.js's
                 # `alphatest_fragment`. Leaving `nearest` alone is the late
                 # depth write the host makes with `claim_depth`: the hole
-                # shows whatever is behind it.
-                if tested and alpha < threshold:
+                # shows whatever is behind it. Under alpha to coverage the
+                # test is a ramp as wide as the alpha changes across the
+                # pixel, as `rasterize_shaded` asks it.
+                if tested and covered:
+                    var alpha_span = Float32(0)
+                    if not graph_alpha:
+                        alpha_span = _alpha_width(
+                            texels,
+                            ramp,
+                            table,
+                            Int(
+                                maps[
+                                    unsafe_offset=index * STATE_PER_TRIANGLE
+                                    + STATE_TEXTURE
+                                ]
+                            ),
+                            Int(
+                                maps[
+                                    unsafe_offset=index * STATE_PER_TRIANGLE
+                                    + STATE_ALPHA_MAP
+                                ]
+                            ),
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            mode == Int32(SHADE_TEXTURE.value),
+                        )
+                    alpha = alpha_test_ramp(alpha, threshold, alpha_span)
+                    if alpha == 0:
+                        continue
+                elif tested and alpha < threshold:
                     continue
                 # Below the hashed threshold, or not covering this sample,
                 # from the functions the host calls; see

@@ -2,6 +2,8 @@
 
 `window/terminal.mojo` and `controls/`. A `TerminalWindow` shows frames in the terminal and reads the keys and the mouse. The controls turn that input into a camera that moves. All of them use the standard library only.
 
+[X11Window](#x11window) and [WaylandWindow](#waylandwindow) open a native window with the same members. A Wayland window also reads a touch screen.
+
 ![A transform gizmo rides a cube while the camera orbits](out/controls.png)
 
 `examples/gizmo.mojo` draws the gizmo. `examples/viewer.mojo` opens the window.
@@ -123,9 +125,76 @@ The window manager's close button does not close the window. It sets `close_requ
 
 `tests/test_x11.mojo` starts an `Xvfb` server for each test. You must install it first. On Linux, use `apt-get install xvfb`. On macOS, use `brew install xorg-server`.
 
+## WaylandWindow
+
+`window/wayland.mojo` opens a native window on a Wayland compositor. It speaks the Wayland protocol on the compositor's socket, with the socket calls of the C library. It loads no library, and nothing else in the project needs Wayland.
+
+| Member | Meaning |
+|---|---|
+| `WaylandWindow(width, height, title="ThreeMojo", display="")` | Open the window. An empty `display` uses the `WAYLAND_DISPLAY` variable, and then `wayland-0`. |
+| `WaylandWindow(width, height, title, socket, timeout)` | Open the window on a connected `WaylandSocket`. The compositor has `timeout` to answer, 5 seconds by default. |
+| `present(frame)` | Draw a `Framebuffer` of the window's size. |
+| `poll(timeout) -> List[InputEvent]` | Wait up to a `Duration` for input, and return the events. |
+| `resize(width, height)` | Take frames of a new size. |
+| `close()` | Close the window. A second call does nothing. |
+| `close_requested` | True after the compositor asks the window to close. |
+
+The window gives the same `InputEvent` values as `X11Window`, and the same loop drives both. A change of size is a `RESIZE` event. The program must call `resize` to follow it. The close button sets `close_requested`, and the program must end its loop on it.
+
+A finger on a touch screen is a `POINTER_DOWN`, a `POINTER_MOVE` or a `POINTER_UP` with a `pointer_type` of `TOUCH_POINTER`. A finger lifts where it last was. When the compositor takes the fingers away, each one is a `POINTER_CANCEL`. See [Touch](#touch).
+
+`connect_display(display)` returns the `WaylandSocket` of a display. A name that starts with `/` is the socket's path. Any other name is a socket in the folder that `XDG_RUNTIME_DIR` names. A `WaylandSocket` is a type, not a bare integer.
+
+### What the window asks the compositor for
+
+The window needs three globals: `wl_compositor`, `wl_shm` and `xdg_wm_base`. It refuses a compositor that lacks one of them.
+
+The window uses two more globals when the compositor has them:
+
+- `wl_seat` gives the pointer, the keyboard and the touch screen. The window speaks version 4 of it. Without a seat, the window gets no input.
+- `zxdg_decoration_manager_v1` lets the window ask for a title bar that the compositor draws. A compositor without it, such as GNOME's, shows the window with no title bar.
+
+### Frames
+
+A frame is a `wl_shm` buffer of 32 bits a pixel in the `XRGB8888` format, which every compositor takes. The alpha channel is not shown. The buffer is a file with no name, which the compositor maps. The window makes the file in the folder that `XDG_RUNTIME_DIR` names, or in `/tmp`.
+
+The window keeps a buffer until the compositor releases it. So two or three buffers take turns. `resize` destroys them, and the next `present` makes new ones.
+
+### Keys
+
+A key arrives as the code of its place on the keyboard. The window names the key as a US keyboard labels that place. It does not read the keymap that the compositor sends. Ctrl with a letter is its control code, as a terminal sends it.
+
+A compositor sends a key one time. The window repeats a held key in `poll`, at the rate and after the delay that the compositor gives. Until the compositor gives them, the rate is 25 a second and the delay is 600 milliseconds. A `poll` returns when the held key repeats, although its timeout is longer.
+
+### What is refused
+
+- A size that is not positive.
+- A size that does not fit in a native integer.
+- A size whose four bytes a pixel do not fit in a signed 32-bit integer.
+- A display that no compositor listens on, or whose socket path is longer than 103 bytes.
+- A compositor that lacks `wl_compositor`, `wl_shm` or `xdg_wm_base`.
+- A compositor that does not answer in time, closes the connection, reports an error or sends a malformed message.
+- A frame of another size.
+- A `present`, a `poll` or a `resize` after `close`.
+
+### Limits
+
+- Wayland runs on Linux, and the window is checked there. The module also has the BSD layout of the socket structures, which macOS uses. Only the socket-pair tests check that layout, when they run on a Mac.
+- The window ignores the `SIGPIPE` signal for the whole program. A compositor that left is then an error from `present` or `poll`, and not the end of the program.
+- One pixel of a frame is one logical pixel. On a scaled output, the compositor enlarges the frame.
+- The window sets no pointer image. The pointer keeps the image it had when it entered the window.
+- The window does not read `WAYLAND_SOCKET`. Give `connect_display` a name, or give the window a `WaylandSocket`.
+- `X11Window` does not send touch events. Touch on X11 needs the XInput extension, which this port does not load.
+
+### Tests
+
+`tests/test_wayland.mojo` needs no compositor. Each test gives the window one end of a socket pair, and plays the compositor on the other end. The test writes the events of a compositor, and reads the requests that the window sent.
+
+One test opens a window on a headless `weston`, takes a screenshot with `weston-screenshooter`, and reads the frame back. It runs only when both programs are installed. On Linux, use `apt-get install weston`.
+
 ## Input events
 
-`controls/input.mojo`. An `InputEvent` is one of the six kinds the browser has, or a resize.
+`controls/input.mojo`. An `InputEvent` is one of the seven kinds the browser has, or a resize.
 
 | Kind | three.js event | Fields it sets |
 |---|---|---|
@@ -134,12 +203,33 @@ The window manager's close button does not close the window. It sets `close_requ
 | `POINTER_DOWN` | `pointerdown` | `button`, `x`, `y` |
 | `POINTER_MOVE` | `pointermove` | `button` held or `NO_BUTTON`, `x`, `y` |
 | `POINTER_UP` | `pointerup` | `button`, `x`, `y` |
+| `POINTER_CANCEL` | `pointercancel` | `x`, `y`. The window took the pointer away. A terminal never sends it. |
 | `WHEEL` | `wheel` | `wheel`: 1 a notch toward the user, -1 away |
 | `RESIZE` | the window's `resize` | `x` and `y`: the size of the largest frame that fits |
 
 Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y` in the frame's pixels. The decoder gives a cell's column and row, from zero. `pixel_center_ndc` reads a pixel's center. A side above 8388608 pixels is measured in `Float64`.
 
 `InputKind`, `PointerButton` and `Key` are types, not bare integers. A `Key` is an ASCII code from 0 to 127, one of `ARROW_UP`, `ARROW_DOWN`, `ARROW_LEFT` and `ARROW_RIGHT`, or `NO_KEY`. The buttons are `PRIMARY`, `MIDDLE` and `SECONDARY`, with the browser's numbers.
+
+### Touch
+
+A finger on a touch screen is a pointer, as in the browser. Its events are `POINTER_DOWN`, `POINTER_MOVE`, `POINTER_UP` and `POINTER_CANCEL`. Each one has a `pointer_type` of `TOUCH_POINTER` and a `pointer_id` that names the finger. These are three.js's `event.pointerType` and `event.pointerId`.
+
+`touch_event(kind, pointer_id, x, y)` builds the event of one finger. Its button is `PRIMARY`, as the browser gives a touch. So a control with no touch gestures takes a finger as a left drag.
+
+`PointerType` and `PointerId` are types, not bare integers. A `PointerType` is `MOUSE_POINTER` or `TOUCH_POINTER`. A `PointerId` is zero or more. Every other event has `MOUSE_POINTER` and `FIRST_POINTER`.
+
+[WaylandWindow](#waylandwindow) sends touch events. A terminal and an `X11Window` send none. Each control refuses an event with an invalid pointer type or pointer id.
+
+| Controls | One finger | Two fingers | Three fingers |
+|---|---|---|---|
+| `OrbitControls` | `touch_one`: rotate | `touch_two`: dolly and pan | Nothing |
+| `MapControls` | Pan | Dolly and rotate | Nothing |
+| `TrackballControls` | Rotate | Zoom and pan | As two |
+| `ArcballControls` | Turn | Pan, zoom and turn about the view axis | Change the field of view |
+| `DragControls` | `touch_action`: translate | The last finger pressed drags | The last finger pressed drags |
+| `TransformControls` | Pick a handle and drag it | The same | The same |
+| The other controls | A left drag | A left drag for each finger | A left drag for each finger |
 
 ### The decoder
 
@@ -166,6 +256,8 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 | Arrow | Pan by `key_pan_speed` pixels. |
 | Shift or Ctrl with an arrow | Rotate, at `key_rotate_speed`. |
 | Shift or Ctrl with a left or right drag | The drag's rotate and pan swap. |
+| One finger | Rotate, as a left drag does. |
+| Two fingers | Dolly by their distance apart, and pan by the point midway between them. |
 
 | Member | Default | Meaning |
 |---|---|---|
@@ -184,6 +276,7 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 | `cursor`, `min_target_radius`, `max_target_radius` | the origin, 0, infinity | A pan keeps the target within these distances of `cursor`, as a `Length`. |
 | `auto_rotate`, `auto_rotate_speed` | `False`, 2 | Turns a minute while no button is held. |
 | `primary_action`, `middle_action`, `secondary_action` | `ROTATE`, `DOLLY`, `PAN` | What each button does. three.js: `mouseButtons`. |
+| `touch_one`, `touch_two` | `TOUCH_ROTATE`, `TOUCH_DOLLY_PAN` | What one finger and two fingers do. three.js: `touches`. |
 | `min_zoom`, `max_zoom` | 0, infinity | How far an orthographic camera can zoom. |
 | `zoom_to_cursor` | `False` | Dolly or zoom toward the point under the pointer. |
 
@@ -213,6 +306,20 @@ With damping, `damping_factor` of each pending rotation and pan applies each fra
 
 With `zoom_to_cursor` set, a wheel notch or a dolly drag goes toward the point under the pointer. A perspective camera moves down the ray through the pointer by what the dolly takes off the distance. An orthographic camera moves so that the point under the pointer stays under it as the zoom changes. The target then sits straight ahead of the camera at the new distance, as in three.js. A pixel center on a side above 8388608 pixels is measured in `Float64`.
 
+### Touch
+
+`touch_one` is `TOUCH_ROTATE` or `TOUCH_PAN`. `touch_two` is `TOUCH_DOLLY_PAN` or `TOUCH_DOLLY_ROTATE`. Any other `TouchAction` does nothing, and `NO_TOUCH_ACTION` turns the fingers off. A `TouchAction` is a type, not a bare integer.
+
+Two fingers act at the point midway between them. Fingers that move apart bring the camera nearer. The dolly is the distance apart now over the distance before, to the power of `zoom_speed`. With `zoom_to_cursor`, the dolly goes toward the midpoint.
+
+The arithmetic and the states are three.js's:
+
+- A finger that lifts leaves the other finger with the one-finger action, from where that finger is.
+- Three fingers do nothing. Two of three that stay down do nothing too.
+- A two-finger action that is turned off leaves the one-finger action. That action then reads the midpoint.
+- A press while `enabled` is `False` is not followed. A release or a `POINTER_CANCEL` lets a finger go at any time.
+- The wheel and the automatic rotation wait while a finger acts.
+
 ### The camera's up
 
 The offset is turned into a frame whose y is the camera's `up` before it is read as angles, as three.js turns it. So the polar angle is measured from the camera's up, and a camera with +z up orbits about z.
@@ -223,13 +330,15 @@ The offset is turned into a frame whose y is the camera's `up` before it is read
 
 ### Differences from three.js
 
-- Touch input is not ported.
 - The controls get no camera when you make them, so they save no state then. three.js saves one. `reset` raises until you call `save_state`.
 - `get_distance` takes the camera position, because the controls do not keep the camera.
+- A mouse button and a finger do not count together. three.js counts both as pointers, and then reads a position that the mouse does not have.
+- A two-finger move with one finger left does nothing. three.js reads the position of a second finger that is not there. This occurs when the one-finger action is turned off.
+- A dolly between two fingers on one pixel is no dolly. three.js divides by the distance between them.
 
 ## MapControls
 
-`controls/map_controls.mojo`. `MapControls(target)` returns an `OrbitControls` with three.js's map settings. Every member and method is `OrbitControls`'s.
+`controls/map_controls.mojo`. `MapControls(target)` returns an `OrbitControls` with three.js's map settings. Every member and method is `OrbitControls`'s. One finger pans, and two fingers dolly and rotate.
 
 | Setting | Value |
 |---|---|
@@ -354,6 +463,8 @@ A camera that looks exactly straight down is drawn through `look_at`. That view 
 | Middle drag, or the wheel | Zoom. |
 | Right drag | Pan. |
 | Hold `A`, `S` or `D` | Any button rotates, zooms or pans. A move with no button held does nothing, as in three.js. |
+| One finger | Rotate, as a left drag does. |
+| Two fingers | Zoom by their distance apart, and pan by the point midway between them. |
 
 | Member | Default | Meaning |
 |---|---|---|
@@ -372,7 +483,18 @@ The arithmetic is three.js's. A position is read on a circle as wide as the view
 
 Unless `static_moving` is set, each frame keeps `1 - dynamic_damping_factor` of a pan or a zoom. A turn keeps the square root of it. `reset(camera)` puts the camera and the target back. A turn that is dying away goes on after a reset, as in three.js.
 
-`update` takes no time, as in three.js. It takes an optional `delta` that only ages the held keys, a sixtieth of a second by default. An orthographic camera's pan measures both directions by the view's width, as three.js's does. Touch input is not ported.
+`update` takes no time, as in three.js. It takes an optional `delta` that only ages the held keys, a sixtieth of a second by default. An orthographic camera's pan measures both directions by the view's width, as three.js's does.
+
+### Touch
+
+Two fingers zoom by the distance they were apart over the distance they are apart now. That zoom does not die away. The pan dies away as a drag's pan does. The states are three.js's:
+
+- The zoom and the pan start from where the first two fingers went down.
+- A third finger is read with the first finger.
+- One of two fingers that lifts leaves the other finger to rotate. The zoom state stays until that finger lifts too, so the wheel waits.
+- A release while `enabled` is `False` is not heard, as for the mouse. A `POINTER_CANCEL` lets a finger go at any time.
+
+Two differences from three.js apply. A mouse button and a finger do not count together: three.js reads a position that the mouse does not have. Two fingers on one pixel do not zoom: three.js divides by the distance between them.
 
 ## DragControls
 
@@ -392,6 +514,7 @@ Unless `static_moving` is set, each frame keeps `1 - dynamic_damping_factor` of 
 |---|---|
 | Left or middle drag | Translate. The point under the pointer stays under it. |
 | Right drag | Rotate about the camera's up and right. |
+| One finger | Translate, or what `touch_action` says. |
 
 | Member | Default | Meaning |
 |---|---|---|
@@ -402,10 +525,13 @@ Unless `static_moving` is set, each frame keeps `1 - dynamic_damping_factor` of 
 | `rotate_speed` | 1 | Radians a turn, per unit of pointer movement in normalized device coordinates. |
 | `raycaster` | | Its `layers` select the nodes that can be picked. |
 | `primary_action`, `middle_action`, `secondary_action` | `DRAG_TRANSLATE`, `DRAG_TRANSLATE`, `DRAG_ROTATE` | three.js: `mouseButtons`. `NO_DRAG` picks and moves nothing. |
+| `touch_action` | `DRAG_TRANSLATE` | What a finger does. three.js: `touches.ONE`. |
 
 A translation keeps the object on the plane through its origin that faces the camera. The object's new position is in its parent's frame, as in three.js. A rotation turns the object about the camera's up and right, in the frame of the object's parent.
 
 `handle` updates the scene first, so the next event sees the object where the drag put it. `selected()` and `hovered()` return the node dragged and the node under the pointer.
+
+A finger that moves with nothing picked up hovers over nothing, as in three.js. A `POINTER_CANCEL` lets the object go, as a release does. A browser sends `pointerleave` after `pointercancel`, and three.js lets go on that event.
 
 ### Differences from three.js
 
@@ -473,10 +599,9 @@ The arithmetic of each mode, snapping included, is three.js's. `SCALE_MODE` alwa
 
 three.js draws solid arrows and boxes with materials that ignore depth. Here each shape is drawn by its edges, and the depth test applies. The rings of `ROTATE_MODE` are drawn as half circles that face the eye, as in three.js.
 
-These parts are not ported:
+A finger is the primary button. Its press picks the handle under it and starts the drag. A finger that moves picks no handle, because three.js hovers for a mouse and a pen only.
 
-- Touch input.
-- The `change` event, which three.js sends to ask for a render.
+The `change` event, which three.js sends to ask for a render, is not ported.
 
 A scale whose start point has no length along an axis keeps that axis's scale. three.js divides by zero there. The `E` picker is a flat ring, the shape of three.js's torus with two segments around its tube. The pickers are tested from both sides, which gives the same hits for closed shapes. The plane and the handles are found again at each event. In three.js a render between two events finds them.
 
@@ -493,6 +618,10 @@ A scale whose start point has no length along an axis keeps that axis's scale. t
 | Middle drag, or the wheel | Zoom toward the center. |
 | Shift and a middle drag, or Shift and the wheel | Change the field of view, and keep the center the same size. |
 | Double click on a mesh | Move the center to the point, and zoom in by `scale_factor`. |
+| One finger | Turn about the center. |
+| Two fingers | Pan by the point between them, zoom by their distance apart, and turn about the view axis. |
+| Three fingers or more | Change the field of view by how far their mean moves up or down. |
+| Two taps of a finger on a mesh | The same as a double click. |
 
 `set_mouse_action(operation, mouse, key)` changes the table. The operations are `PAN_OPERATION`, `ROTATE_OPERATION`, `ZOOM_OPERATION` and `FOV_OPERATION`. The inputs are `MOUSE_PRIMARY`, `MOUSE_MIDDLE`, `MOUSE_SECONDARY` and `MOUSE_WHEEL`. The keys are `NO_MODIFIER`, `CTRL_MODIFIER` and `SHIFT_MODIFIER`. The wheel can only zoom or change the field of view. `unset_mouse_action(mouse, key)` removes an action, and `operation_of(mouse, key)` reads one.
 
@@ -533,6 +662,29 @@ A focus moves the center to the point that a double click hits on a mesh. A line
 
 `save_state(camera)` records the camera and the trackball. `reset(camera)` puts them back. Before a `save_state`, `reset` goes to where the controls began.
 
+### Touch and the start and end events
+
+`input()` returns what holds the controls, as an `ArcballInput`: `INPUT_NONE`, `INPUT_CURSOR` for a mouse button, `INPUT_ONE_FINGER`, `INPUT_ONE_FINGER_SWITCHED`, `INPUT_TWO_FINGER` or `INPUT_MULT_FINGER`. A mouse button and fingers do not act together. The first to press holds the controls until it lets go.
+
+Two fingers do three operations on each move, in three.js's order: the turn, the zoom, then the pan.
+
+- The turn is about the view axis, by how far the line between the fingers turned. `state()` is `STATE_ZROTATE` during it. With `enable_pan`, the axis goes through the point between the fingers. Else it goes through the center.
+- The zoom is the distance apart now over the distance when the pinch began. Fingers nearer than 12 pixels count as 12 pixels apart. With `enable_pan`, the zoom goes toward the point between the fingers.
+- The pan keeps its speed after a zoom. three.js reads it at the distance the controls began at, and scales it to the distance now.
+
+One of two fingers that lifts leaves `INPUT_ONE_FINGER_SWITCHED`. The finger left turns the camera again after it moves 32 pixels. Three fingers or more change the field of view as Shift and a middle drag do. That operation ends when the last finger lifts. A `POINTER_CANCEL` lets every finger go and ends no operation, as in three.js.
+
+Two taps count as a double click when the first finger down makes them. That is the browser's primary pointer.
+
+`take_starts()` and `take_ends()` return how many `start` and `end` events three.js would have sent since the last call. three.js sends `start` when an operation begins: a press, a wheel notch, a double click, or a change of operation in a drag. Two fingers send one `start` and one `end` for each of their three operations.
+
+These differences from three.js apply:
+
+- The axis of a two-finger turn is read at each move. three.js reads it when the second finger goes down. It has no axis when `enable_rotate` was `False` then.
+- Three fingers do nothing to an orthographic camera. three.js's arithmetic reads a field of view that the camera does not have, and zooms by the result.
+- A pinch that begins with both fingers on one pixel does not zoom. three.js divides by that distance.
+- A move or a release with no press to measure it from counts no click. three.js raises a `TypeError` there. This occurs only when a mouse button and a finger are down together.
+
 ### Drawing the gizmo and the grid
 
 `gizmo()` returns the trackball as three circles in world space: red about x, green about y and blue about z. Draw them with a `Line` in `SEGMENTS` mode on a node at the origin. Use `helper_material(controls.gizmo_opacity(), transparent=True)`. The opacity is 1 during a turn and 0.6 at other times. `set_gizmos_visible(False)` hides the gizmo.
@@ -549,7 +701,7 @@ A pointer is read at the center of its pixel. On a side above 8388608 pixels tha
 
 `enable_gizmos` hides the gizmo, as three.js documents. three.js has the member but does not read it. three.js works out the grid's cells in floating point, and here they are 60.
 
-Touch input is not ported. So there is no turn about the view axis, which only touch starts in three.js. The `start` and `end` events are not ported either.
+The touch differences are in [Touch and the start and end events](#touch-and-the-start-and-end-events).
 
 ## SelectionBox
 
@@ -580,6 +732,8 @@ A `Selection` has one list for each kind of object: `meshes`, `skinned_meshes`, 
 ## How the ports were checked
 
 The tests hold each control to three.js r180's own numbers, `DragControls`, `TransformControls`, `ArcballControls` and `SelectionBox` included. The three.js controls ran headless in Node, with the same camera, view and input as each test.
+
+The touch tests did not run three.js. Where three.js gives a finger the arithmetic of a mouse button, a test holds the finger to that mouse drag. That covers one finger, a two-finger pan and three fingers in `ArcballControls`, and `DragControls` and `TransformControls`. The other touch numbers are worked out by hand from the r180 source. Each difference in the lists above comes from a reading of that source.
 
 ## Limits
 

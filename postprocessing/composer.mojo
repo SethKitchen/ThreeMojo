@@ -78,16 +78,21 @@ from postprocessing.display_nodes import (
     hash_blur_light,
     lensflare_light,
     motion_blur_light,
+    scaled_size,
 )
 from postprocessing.denoise import (
     DenoiseSettings,
     check_denoise,
     denoise_light,
 )
+from postprocessing.importance_sampled_environment import EquirectEnvironment
 from postprocessing.ssr_node import (
     SsrNodeSettings,
     check_ssr_node,
+    next_noise_index,
+    ssr_node_add,
     ssr_node_light,
+    ssr_node_signal,
 )
 from postprocessing.traa import TraaSettings, check_traa, traa_render
 from postprocessing.upscaling import (
@@ -123,6 +128,8 @@ from postprocessing.ssgi import (
     sss_light_direction,
 )
 from postprocessing.temporal_denoise import (
+    RAY_LENGTH_ALPHA,
+    SPECULAR_DENOISE,
     TemporalDenoiseSettings,
     check_temporal_denoise,
     temporal_denoise,
@@ -615,10 +622,14 @@ struct Pass(Copyable, Movable):
     var traa: TraaSettings
     # What a denoise pass reads; see `postprocessing.denoise`.
     var denoise: DenoiseSettings
-    # What an SSR node pass reads; see `postprocessing.ssr_node`.
+    # What an SSR node pass reads; see `postprocessing.ssr_node`. The
+    # environment is the map its stochastic rays read where they hit
+    # nothing, three.js's `environmentNode`, or none.
     var ssr_node: SsrNodeSettings
+    var ssr_environment: Optional[EquirectEnvironment]
     # What a sharpen, an FSR1, a TAAU, a filter, an SSGI, an SSS and a
-    # retro pass read, and what the TAAU and the SSGI's denoiser keep; see
+    # retro pass read, and what the TAAU and the SSGI's denoiser keep. An
+    # SSR node pass that denoises keeps its denoiser's state there too. See
     # `postprocessing.upscaling`, `postprocessing.taau`,
     # `postprocessing.filter_nodes`, `postprocessing.ssgi`,
     # `postprocessing.temporal_denoise` and `postprocessing.retro`.
@@ -690,6 +701,7 @@ struct Pass(Copyable, Movable):
         self.traa = TraaSettings()
         self.denoise = DenoiseSettings()
         self.ssr_node = SsrNodeSettings()
+        self.ssr_environment = None
         self.upscale = UpscaleSettings()
         self.taau = TaauSettings()
         self.filters = FilterSettings()
@@ -2110,10 +2122,21 @@ def ssr_node_pass(
     quality: Float32 = 0.5,
     blur_quality: Int = 2,
     use_roughness: Bool = True,
+    stochastic: Bool = False,
+    denoise: Bool = False,
+    environment: Optional[EquirectEnvironment] = None,
 ) raises -> Pass:
     """Return a pass of three.js's `ssr`, added over the frame as the SSR
-    example adds it. The composer's frame gets a normal attachment and a
-    metalness attachment while the pass is enabled.
+    examples add it. The composer's frame gets a normal attachment and a
+    metalness attachment while the pass is enabled, and a velocity
+    attachment too when it denoises.
+
+    A pass that denoises runs the SSR denoise example's loop. The raw
+    reflections go through `TemporalReprojectNode` and then
+    `RecurrentDenoiseNode`, in their specular mode, with the ray length
+    in alpha. The denoised result is the next frame's history, and the
+    reflections read it for a second bounce. The pass keeps the
+    denoiser's settings in `temporal_denoise`.
 
     Args:
         max_distance: How far a ray reaches, `maxDistance`.
@@ -2122,7 +2145,14 @@ def ssr_node_pass(
         quality: The share of a pixel's steps the march takes, `quality`.
         blur_quality: The roughness blur's reach, `blurQuality`.
         use_roughness: Whether the roughness blurs the reflections, as the
-            example's `roughnessNode` does.
+            example's `roughnessNode` does. A stochastic pass does not
+            blur.
+        stochastic: Whether each ray is drawn from the GGX lobe,
+            `stochastic`.
+        denoise: Whether the stochastic reflections run through the two
+            denoise nodes first.
+        environment: The map a stochastic ray reads where it hits
+            nothing, `environmentNode`, or none.
 
     Returns:
         The pass.
@@ -2137,6 +2167,13 @@ def ssr_node_pass(
     step.ssr_node.quality = quality
     step.ssr_node.blur_quality = blur_quality
     step.ssr_node.use_roughness = use_roughness
+    step.ssr_node.stochastic = stochastic
+    step.ssr_node.denoise = denoise
+    step.ssr_environment = environment.copy()
+    # The SSR denoise example's nodes: specular, with the ray length in
+    # alpha. Only a pass that denoises reads them.
+    step.temporal_denoise.mode = SPECULAR_DENOISE
+    step.temporal_denoise.alpha_source = RAY_LENGTH_ALPHA
     check_pass(step)
     return step^
 
@@ -3216,11 +3253,7 @@ struct EffectComposer(Movable):
         elif step.kind == MOTION_BLUR:
             motion_blur_light(frame, step.display)
         elif step.kind == SSR_NODE:
-            var world = camera.view_matrix_in(scene)
-            world.invert()
-            ssr_node_light(
-                frame, _depth_view(frame, camera), world, step.ssr_node
-            )
+            _ssr_node(frame, self.passes[index], scene, camera)
         elif step.kind == DOF:
             dof_light(frame, _depth_view(frame, camera), step.display)
         elif step.kind == DENOISE:
@@ -3570,8 +3603,9 @@ def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
     """Return the outputs a composer's frame is drawn with: the color; a
     normal attachment when an enabled SSAO, SAO, SSR, GTAO, denoise or SSR
     node pass reads normals; a velocity attachment when an enabled motion
-    blur pass reads velocities; and a metalness attachment when an enabled
-    SSR node pass reads it.
+    blur pass, or an SSGI or SSR node pass that denoises, reads
+    velocities; and a metalness attachment when an enabled SSR node pass
+    reads it.
 
     Args:
         passes: The composer's passes.
@@ -3599,6 +3633,8 @@ def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
             velocities = True
         if step.enabled and step.kind == SSR_NODE:
             surfaces = True
+        if step.enabled and step.kind == SSR_NODE and step.ssr_node.denoise:
+            velocities = True
         if step.enabled and step.kind == MOTION_BLUR:
             velocities = True
     var outputs = color_only()
@@ -3609,6 +3645,58 @@ def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
     if surfaces:
         outputs.append(OUTPUT_METAL_ROUGH)
     return outputs^
+
+
+def _ssr_node[
+    C: Camera
+](mut frame: RenderTarget, mut step: Pass, scene: Scene, camera: C) raises:
+    """Run an SSR node pass: the reflections, through the denoiser when
+    the pass asks, added to the frame."""
+    var camera_view = camera.view_matrix_in(scene)
+    var world = camera_view
+    world.invert()
+    # three.js moves the noise on before it draws.
+    step.ssr_node.noise_index = next_noise_index(step.ssr_node.noise_index)
+    if not step.ssr_node.denoise:
+        ssr_node_light(
+            frame,
+            _depth_view(frame, camera),
+            world,
+            step.ssr_node,
+            step.ssr_environment,
+        )
+        return
+    # The frame has velocities while the pass denoises; see
+    # `frame_outputs`. The last denoised result is the reflections'
+    # history, as the example's `setHistory( denoiseNode )` makes it. A
+    # frame of another size has no history yet.
+    var history = List[FloatColor]()
+    ref kept = step.temporal_denoise
+    if (
+        kept.history_width == frame.width
+        and kept.history_height == frame.height
+    ):
+        history = kept.history.copy()
+    var raw = ssr_node_signal(
+        frame,
+        _depth_view(frame, camera),
+        world,
+        step.ssr_node,
+        step.ssr_environment,
+        history,
+    )
+    var denoised = temporal_denoise(
+        raw,
+        _depth_view(frame, camera),
+        frame.normals,
+        frame.velocities,
+        camera_view,
+        step.temporal_denoise,
+        frame.metal_roughs,
+        scaled_size(frame.width, step.ssr_node.resolution_scale),
+        scaled_size(frame.height, step.ssr_node.resolution_scale),
+    )
+    ssr_node_add(frame, denoised, frame.width, frame.height)
 
 
 def _ssgi[

@@ -45,7 +45,7 @@ The cascades blend as three.js's `SunShadowNode` blends them. The last tenth of 
 
 three.js draws both cascades into one atlas, each tile inset by `ceil( radius ) + 1` texels. Here each cascade has a map of its own, the size of the tile less its inset: 1020 texels for a map of 1024.
 
-`CascadeBlend` is a type, so a bare integer does not compile. `CSM_BLEND` is the blend of a `CSM`, and `SUN_BLEND` is the blend of a sun.
+`CascadeBlend` is a type, so a bare integer does not compile. `CSM_BLEND` is the blend of a `CSM`, and `SUN_BLEND` is the blend of a sun. `NODE_BLEND` is the blend of a [`CSMShadowNode`](Lights#a-cascaded-shadow-for-one-light).
 
 A rejected `SunLight.update` leaves the scene's cascade lights and node transforms unchanged. The update validates both candidate lights and their node mappings before it writes to the scene. `fit_sun` checks its shadow settings before it fits the cameras.
 
@@ -173,7 +173,9 @@ A spot light takes sixteen floats in the light buffer. The sixteenth is where it
 
 The kernel reads an IES profile from the texture buffer that it already has, through the same filter as the host. `GpuRenderer.draw` refuses a profile that names a texture it did not upload.
 
-The grid follows the profiles, as `LightProbeGrid.flatten` lays it out: the two corners, the three counts, the falloff and 27 floats for each probe. The header float `LIGHTS_GRID` says where the grid begins, or holds `NO_SHADOW`. A directional light takes fifteen floats. The last three of its cascade are its `CascadeBlend`, its fade start and where the cascade before it ends. Nothing is added to the kernel's arguments. See [GPU backend](GPU-backend).
+The grid follows the profiles, as `LightProbeGrid.flatten` lays it out: the two corners, the three counts, the falloff and 27 floats for each probe. The header float `LIGHTS_GRID` says where the grid begins, or holds `NO_SHADOW`. Nothing is added to the kernel's arguments. See [GPU backend](GPU-backend).
+
+A directional light takes fifteen floats. The last three of its cascade are its `CascadeBlend`, its fade start and where the cascade before it ends. A `NODE_BLEND` cascade has no fade start, so that float holds its near plane as a fraction of its span.
 
 ## Errors
 
@@ -185,7 +187,7 @@ The grid follows the profiles, as `LightProbeGrid.flatten` lays it out: the two 
 - `bake_light_probe_grid` refuses a range outside the grid, negative bounces, bounces over part of the grid, and a sample count below one.
 - A bounce count or a sample count above 16777216 is refused.
 - `SunLight.update` refuses a scene that does not hold the sun's cascades, a sun at the origin, and a shadow that `LightShadow.validate` refuses.
-- `ShadowCascade.validate` refuses a `CascadeBlend` that is none of the two. It refuses a `SUN_BLEND` cascade that fades after it ends or ramps in before it starts.
+- `ShadowCascade.validate` refuses a `CascadeBlend` that is none of the three. It refuses a `SUN_BLEND` cascade that fades after it ends or ramps in before it starts.
 
 ## What is not ported
 

@@ -866,6 +866,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_denoise_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 21,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'DenoiseMode'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_denoiser_preset_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2043,6 +2053,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_hinge_limit_is_not_a_bare_number.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 40,
+        "message": "invalid call to 'set_hinge_limits': value passed to 'lower' cannot be converted from 'FloatLiteral[-0.5]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_hit_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2083,12 +2105,36 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_joint_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 23,
+        "message": "invalid call to 'check_joint': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'JointId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_joint_is_not_a_bare_int.mojo": {
     "errors": [
       {
         "column": 22,
         "line": 12,
         "message": "invalid call to 'joint_parent': value passed to 'joint' cannot be converted from 'IntLiteral[1]' to 'Joint'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_joint_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 17,
+        "message": "invalid call to '_name': value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'JointKind'"
       }
     ],
     "notes": [
@@ -3190,6 +3236,34 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'button' cannot be converted from 'IntLiteral[0]' to 'PointerButton'"
+    ]
+  },
+  "tests/compile_fail/a_pointer_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'pointer_id' cannot be converted from 'IntLiteral[1]' to 'PointerId'"
+    ]
+  },
+  "tests/compile_fail/a_pointer_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'pointer_type' cannot be converted from 'IntLiteral[1]' to 'PointerType'"
     ]
   },
   "tests/compile_fail/a_pose_is_not_a_bare_int.mojo": {
@@ -4447,6 +4521,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_touch_action_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'TouchAction'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_track_target_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -5045,6 +5129,32 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_wayland_interface_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "invalid call to '__eq__': value passed to 'other' cannot be converted from 'IntLiteral[0]' to 'WaylandInterface'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_wayland_socket_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'display' cannot be converted from 'IntLiteral[3]' to 'String'",
+      "candidate not viable: value passed to 'socket' cannot be converted from 'IntLiteral[3]' to 'WaylandSocket'"
+    ]
+  },
   "tests/compile_fail/a_waypoint_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -5496,6 +5606,18 @@
       "'AngularAcceleration' is aka 'Quantity[Int(0), Int(0), Int(-2), Int(1)]'"
     ]
   },
+  "tests/compile_fail/an_arcball_input_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 31,
+        "message": "invalid call to '__eq__': value passed to 'other' cannot be converted from 'IntLiteral[1]' to 'ArcballInput'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/an_arcball_modifier_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -5721,6 +5843,20 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/an_edge_ramp_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'edge_ramp' cannot be converted from 'IntLiteral[1]' to 'EdgeRamp'"
+    ]
   },
   "tests/compile_fail/an_element_id_is_not_a_bare_int.mojo": {
     "errors": [

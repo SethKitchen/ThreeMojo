@@ -29,6 +29,11 @@ the alpha into a mask of the pixel's samples. This port takes one sample a
 pixel, or `SUPERSAMPLE` squared under `antialias`, so `alpha_covers` keeps a
 sample where the alpha is above a four-by-four ordered threshold. After
 the supersampled frame is averaged, a pixel's coverage follows its alpha.
+
+**Screen-space widths.** `surface_steps` and `edge_ramp_at` read a
+triangle's plane at the fragment's pixel and at the two pixels beside it,
+as `hashed_threshold` reads the position. They give `render.derivatives`
+what GLSL's `fwidth` reads.
 """
 
 from materials.nodes import (
@@ -39,7 +44,14 @@ from materials.nodes import (
     node_attributes,
 )
 from math.sine import fraction
+from math.vector2 import Vector2
 from math.vector3 import Vector3
+from render.derivatives import (
+    NO_EDGE_RAMP,
+    EdgeRamp,
+    SurfaceSteps,
+    edge_ramp_alpha,
+)
 from std.memory import bitcast
 from render.framebuffer import FloatColor
 from render.srgb import linear_to_srgb, srgb_to_linear
@@ -282,3 +294,61 @@ def alpha_covers(alpha: Float32, x: Int, y: Int) -> Bool:
         covers every sample and an alpha of zero none.
     """
     return alpha > coverage_threshold(x, y)
+
+
+def surface_steps[S: NodeSource](source: S) -> SurfaceSteps:
+    """Return a triangle's plane at the fragment, at the pixel to its
+    right and at the pixel above it: what `fwidth` of a value that reads
+    the surface is measured on.
+
+    The normal and the world position are interpolated at each of the
+    three pixels from the triangle's own plane, as `hashed_threshold`
+    interpolates the position. The normal is the one before any map. Both
+    rasterizers hand in their `NodeSource`, so the differences are the
+    same numbers.
+
+    Args:
+        source: The triangle, at the fragment.
+
+    Returns:
+        The unit normal and the world position at the three pixels.
+    """
+    var here = node_attributes(source, AT_HERE, False)
+    var right = node_attributes(source, AT_RIGHT, False)
+    var up = node_attributes(source, AT_UP, False)
+    return SurfaceSteps(
+        here.normal,
+        here.position,
+        right.normal,
+        right.position,
+        up.normal,
+        up.position,
+    )
+
+
+def edge_ramp_at[S: NodeSource](source: S, ramp: EdgeRamp) -> Float32:
+    """Return `edge_ramp_alpha` for the fragment a triangle's source is at.
+
+    The first pair of texture coordinates is interpolated at the fragment,
+    at the pixel to its right and at the pixel above it, from the
+    triangle's own plane.
+
+    Args:
+        source: The triangle, at the fragment.
+        ramp: Which edge the coordinates describe. `NO_EDGE_RAMP` gives
+            one and reads nothing.
+
+    Returns:
+        What the fragment's alpha is multiplied by, from zero to one.
+    """
+    if ramp == NO_EDGE_RAMP:
+        return 1
+    var here = node_attributes(source, AT_HERE, False)
+    var right = node_attributes(source, AT_RIGHT, False)
+    var up = node_attributes(source, AT_UP, False)
+    return edge_ramp_alpha(
+        ramp,
+        Vector2(here.u, here.v),
+        Vector2(right.u, right.v),
+        Vector2(up.u, up.v),
+    )

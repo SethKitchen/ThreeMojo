@@ -105,10 +105,9 @@ the default scene does not reach is left out, and so is an animation left
 with no channel. An animation whose keys all lie at time zero holds a still
 pose; its clip lasts one frame at 30 frames a second, where three.js makes
 a clip of no length. A skin joint the scene does not reach is refused. So is a specular
-color factor outside zero to one, which a `Color` cannot hold; any map
-that reads a third set of texture coordinates or past it, since a
-geometry here has only `uv` and `uv1`; and a skinned node that is
-instanced, where three.js drops the skin.
+color factor outside zero to one, which a `Color` cannot hold; and any
+map that reads a third set of texture coordinates or past it, since a
+geometry here has only `uv` and `uv1`.
 
 **Names.** A node's name is made unique as three.js's `createUniqueName`
 makes it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are
@@ -158,6 +157,8 @@ draws none of them then.
 `KHR_texture_transform` moves, turns and scales a map's coordinates.
 `KHR_lights_punctual` adds directional, point and spot lights to the scene.
 `EXT_mesh_gpu_instancing` draws a node's primitives as `InstancedMesh`es.
+A skin on that node is dropped, as three.js drops it: its instanced
+meshes are drawn in their bind pose.
 `KHR_mesh_quantization` needs nothing: every attribute is read at any
 component type already.
 `EXT_meshopt_compression` decodes each buffer view it compresses with
@@ -184,7 +185,15 @@ as three.js's plugin reads it.
 **Not ported.** Every other extension: a file whose `extensionsRequired`
 names one is refused, as three.js refuses it, and one that only uses an
 extension is read without it. A primitive of triangle strips or fans is
-refused, and so is a point or a line on a skinned or an instanced node.
+refused.
+
+**A point or a line on a skinned or an instanced node.** three.js has no
+skinned line and no instanced line. Its loader binds a skeleton to a
+`SkinnedMesh` alone, so a primitive of points or lines on a skinned node
+is drawn unskinned. Its `GLTFMeshGpuInstancing` instances a mesh only
+when every primitive is triangles, so a node whose mesh holds a point or
+a line draws that mesh once, as if the node had no instancing. This
+loader does the same.
 
 ## Numerical range correction
 
@@ -952,9 +961,8 @@ def load_gltf(
             camera, a skeleton, a morph target or a track is one its type
             refuses. Also if an extension is malformed, a material's
             texture transforms differ, a specular color factor is outside
-            zero to one, a skinned node is instanced, a point or a line is
-            on a skinned or an instanced node, `targetNames` do not name
-            each target, a texture names no image, a KTX 2.0 image is
+            zero to one, `targetNames` do not name each target, a
+            texture names no image, a KTX 2.0 image is
             refused by `render.ktx2`, a WebP image by `render.webp`, or a
             material, a
             light or an instance matrix is one its type refuses.
@@ -2950,8 +2958,6 @@ struct _Loader(Movable):
             len(scene.instanced_meshes) - self.model.first_instanced_mesh
         )
         self.model.light_count = len(scene.lights) - self.model.first_light
-        self.model.line_count = len(scene.lines) - self.model.first_line
-        self.model.points_count = len(scene.points) - self.model.first_points
         for slot in range(len(self.skinned_nodes)):
             var index = self.skinned_nodes[slot]
             var id = self.skinned_ids[slot]
@@ -2959,6 +2965,9 @@ struct _Loader(Movable):
         self.model.skinned_mesh_count = (
             len(scene.skinned_meshes) - self.model.first_skinned_mesh
         )
+        # A skinned node can hold a line or points, so these come last.
+        self.model.line_count = len(scene.lines) - self.model.first_line
+        self.model.points_count = len(scene.points) - self.model.first_points
         self.name_nodes(scene)
 
     def listed(self, node: Int, key: String, what: String) raises -> List[Int]:
@@ -3096,16 +3105,16 @@ struct _Loader(Movable):
         var instancing = self.extension(node, GPU_INSTANCING)
         if mesh >= 0:
             var skinned = self.document.has(node, "skin")
-            if skinned and instancing != NO_NODE:
-                raise Error(
-                    "glTF: a skinned node cannot be instanced: an instanced"
-                    " skinned mesh is not ported"
-                )
-            if skinned:
+            if instancing != NO_NODE and self.instances(mesh, instancing):
+                # three.js builds each `InstancedMesh` from the node's
+                # mesh and binds a skeleton to a `SkinnedMesh` alone. So
+                # the skin of an instanced node is read and then dropped.
+                if skinned:
+                    _ = self.entry("skins", self.required_integer(node, "skin"))
+                self.draw_instanced(mesh, id, instancing, scene, assets)
+            elif skinned:
                 self.skinned_nodes.append(index)
                 self.skinned_ids.append(id)
-            elif instancing != NO_NODE:
-                self.draw_instanced(mesh, index, id, instancing, scene, assets)
             else:
                 self.draw(mesh, index, id, scene, assets)
         var camera = self.integer(node, "camera", -1)
@@ -3172,39 +3181,14 @@ struct _Loader(Movable):
         for slot in range(self.model.primitive_counts[mesh]):
             var primitive = self.document.at(primitives, slot)
             var at = self.model.first_primitives[mesh] + slot
+            if self.primitive_modes[at] != MODE_TRIANGLES:
+                self.draw_unlit(primitive, at, node, scene, assets)
+                continue
             var geometry = self.model.geometries[at]
             var tinted = assets.geometries.get(geometry).has_attribute(
                 String(COLOR)
             )
             var chosen = self.integer(primitive, "material", -1)
-            var mode = self.primitive_modes[at]
-            if mode != MODE_TRIANGLES:
-                var worn = self.unlit_material(chosen, tinted, mode, assets)
-                if mode == MODE_POINTS:
-                    self.note_variants(
-                        primitive,
-                        GLTF_POINTS,
-                        len(scene.points),
-                        worn,
-                        tinted,
-                        mode,
-                        assets,
-                    )
-                    scene.add_points(Points(geometry, worn, node))
-                else:
-                    self.note_variants(
-                        primitive,
-                        GLTF_LINE,
-                        len(scene.lines),
-                        worn,
-                        tinted,
-                        mode,
-                        assets,
-                    )
-                    scene.add_line(
-                        Line(geometry, worn, node, mode=_line_mode(mode))
-                    )
-                continue
             var material = self.material_for(chosen, tinted, assets)
             var drawn = Mesh(geometry, material, node)
             drawn.update_morph_targets(assets.geometries.get(geometry))
@@ -3256,25 +3240,81 @@ struct _Loader(Movable):
         built.depth_write = base.depth_write
         return assets.materials.add(built)
 
-    def _drawn_primitive(
-        self, primitives: Int, mesh: Int, slot: Int, refusal: String
-    ) raises -> Tuple[Int, GeometryId]:
-        """Return one primitive and its geometry when the primitive is
-        triangles.
+    def draw_unlit(
+        mut self,
+        primitive: Int,
+        at: Int,
+        node: NodeId,
+        mut scene: Scene,
+        mut assets: Assets,
+    ) raises:
+        """Add the `Points` or the `Line` of one primitive that is not
+        triangles, at a node, with the unlit material `unlit_material`
+        makes for it.
 
-        An instanced node and a skinned node both ask this. Each one
-        passes the refusal that names its own kind.
-        """
-        var primitive = self.document.at(primitives, slot)
-        var at = self.model.first_primitives[mesh] + slot
-        if self.primitive_modes[at] != MODE_TRIANGLES:
-            raise Error(refusal)
-        return (primitive, self.model.geometries[at])
+        A plain node, a skinned node and an instanced node all draw such
+        a primitive this way. three.js binds a skeleton to a
+        `SkinnedMesh` alone, and its `GLTFMeshGpuInstancing` instances
+        triangles alone, so a point or a line has neither."""
+        var geometry = self.model.geometries[at]
+        var mode = self.primitive_modes[at]
+        var tinted = assets.geometries.get(geometry).has_attribute(
+            String(COLOR)
+        )
+        var worn = self.unlit_material(
+            self.integer(primitive, "material", -1), tinted, mode, assets
+        )
+        if mode == MODE_POINTS:
+            self.note_variants(
+                primitive,
+                GLTF_POINTS,
+                len(scene.points),
+                worn,
+                tinted,
+                mode,
+                assets,
+            )
+            scene.add_points(Points(geometry, worn, node))
+            return
+        self.note_variants(
+            primitive, GLTF_LINE, len(scene.lines), worn, tinted, mode, assets
+        )
+        scene.add_line(Line(geometry, worn, node, mode=_line_mode(mode)))
+
+    def only_triangles(self, mesh: Int) raises -> Bool:
+        """Return True if every primitive of a glTF mesh is triangles.
+
+        three.js's `GLTFMeshGpuInstancing.createNodeMesh` returns null
+        for a mesh with a primitive of points or lines. The node then
+        draws its mesh once, as a node with no instancing draws it."""
+        require_gltf_mesh(mesh, len(self.model.first_primitives))
+        var first = self.model.first_primitives[mesh]
+        for slot in range(self.model.primitive_counts[mesh]):
+            if self.primitive_modes[first + slot] != MODE_TRIANGLES:
+                return False
+        return True
+
+    def instances(self, mesh: Int, instancing: Int) raises -> Bool:
+        """Return True if `EXT_mesh_gpu_instancing` draws a node's mesh
+        as instanced meshes.
+
+        It does when every primitive of the mesh is triangles and the
+        extension names an attribute. Otherwise three.js's
+        `GLTFMeshGpuInstancing.createNodeMesh` returns null, and the node
+        is drawn as a node with no instancing: skinned when it names a
+        skin, plain when it does not. An extension is read only for a
+        mesh of triangles, and one with no `attributes` object is refused
+        then."""
+        if not self.only_triangles(mesh):
+            return False
+        var attributes = self.document.get(instancing, "attributes")
+        if not self.document.has_kind(attributes, OBJECT):
+            raise Error("glTF: " + GPU_INSTANCING + " needs attributes")
+        return self.document.length(attributes) > 0
 
     def draw_instanced(
         mut self,
         mesh: Int,
-        index: Int,
         node: NodeId,
         instancing: Int,
         mut scene: Scene,
@@ -3288,18 +3328,20 @@ struct _Loader(Movable):
         each the identity's part when the file names none. `_COLOR_0`
         colors the instances, as three.js reads it into `instanceColor`.
         Any other attribute is for a custom shader, which this renderer
-        has not got, and is only counted. With no attribute at all the
-        node draws plain meshes, as three.js draws them.
+        has not got, and is only counted. `instances` has checked that
+        the mesh is triangles and that the extension names an attribute.
+        A skin on the node is not bound, as three.js binds none to an
+        `InstancedMesh`.
         """
         var attributes = self.document.get(instancing, "attributes")
-        if not self.document.has_kind(attributes, OBJECT):
-            raise Error("glTF: " + GPU_INSTANCING + " needs attributes")
         var count = -1
         var moves = List[Float32]()
         var turns = List[Float32]()
         var sizes = List[Float32]()
         var tints = List[Float32]()
-        for slot in range(self.document.length(attributes)):
+        # `instances` passes only an extension that names an attribute.
+        var named = self.document.length(attributes)
+        for slot in range(named):  # pragma: no branch
             var name = self.document.key(attributes, slot)
             var values = self.accessor_floats(
                 self.document.integer(self.document.at(attributes, slot))
@@ -3319,9 +3361,6 @@ struct _Loader(Movable):
                 sizes = _instance_attribute(values, 3, name)
             elif name == "_COLOR_0":
                 tints = _instance_attribute(values, 3, name)
-        if count < 0:
-            self.draw(mesh, index, node, scene, assets)
-            return
         var placings = List[Matrix4]()
         for at in range(count):
             var placed = Object3D()
@@ -3343,21 +3382,15 @@ struct _Loader(Movable):
                     sizes[at * 3], sizes[at * 3 + 1], sizes[at * 3 + 2]
                 )
             placings.append(placed.local_matrix())
-        # `place` asks only for a mesh the node named, zero or more.
-        require_gltf_mesh(mesh, len(self.model.first_primitives))
+        # `instances` passes only a mesh whose primitives are triangles.
         var primitives = self.document.get(
             self.entry("meshes", mesh), "primitives"
         )
         for slot in range(self.model.primitive_counts[mesh]):
-            var primitive, geometry = self._drawn_primitive(
-                primitives,
-                mesh,
-                slot,
-                (
-                    "glTF: an instanced node draws triangles only: an"
-                    " instanced line or points is not ported"
-                ),
-            )
+            var primitive = self.document.at(primitives, slot)
+            var geometry = self.model.geometries[
+                self.model.first_primitives[mesh] + slot
+            ]
             var tinted = assets.geometries.get(geometry).has_attribute(
                 String(COLOR)
             )
@@ -3503,8 +3536,10 @@ struct _Loader(Movable):
         mut scene: Scene,
         mut assets: Assets,
     ) raises:
-        """Add a `SkinnedMesh` per primitive of a skinned node's mesh, bound
-        at the identity as three.js's `GLTFLoader` binds it."""
+        """Add a `SkinnedMesh` per primitive of triangles of a skinned
+        node's mesh, bound at the identity as three.js's `GLTFLoader`
+        binds it. A primitive of points or lines is drawn unskinned, as
+        three.js draws it."""
         var entry = self.entry("nodes", index)
         var mesh = self.required_integer(entry, "mesh")
         require_gltf_mesh(mesh, len(self.model.first_primitives))
@@ -3514,15 +3549,13 @@ struct _Loader(Movable):
             self.entry("meshes", mesh), "primitives"
         )
         for slot in range(self.model.primitive_counts[mesh]):
-            var primitive, geometry = self._drawn_primitive(
-                primitives,
-                mesh,
-                slot,
-                (
-                    "glTF: a skinned node draws triangles only: a skinned"
-                    " line or points is not ported"
-                ),
-            )
+            var primitive = self.document.at(primitives, slot)
+            var at = self.model.first_primitives[mesh] + slot
+            if self.primitive_modes[at] != MODE_TRIANGLES:
+                # three.js binds the skeleton to a `SkinnedMesh` alone.
+                self.draw_unlit(primitive, at, node, scene, assets)
+                continue
+            var geometry = self.model.geometries[at]
             ref shape = assets.geometries.get(geometry)
             var bones = shape.has_attribute(String(SKIN_INDEX))
             var shares = shape.has_attribute(String(SKIN_WEIGHT))

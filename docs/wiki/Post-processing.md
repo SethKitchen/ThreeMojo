@@ -617,7 +617,7 @@ composer.add_pass(god_rays_pass(Vector3(0, 1000, -1000)))
 | `lensflare_pass(threshold=0.5, ghost_samples=4)` | `lensflare` | Add ghosts of the bright light, mirrored through the center. |
 | `dof_pass(focus_distance=1 m, focal_length=1 m, bokeh_scale=1)` | `dof` | Blur the near field and the far field apart, with a bokeh. |
 | `denoise_pass(luma_phi=5, depth_phi=5, normal_phi=5, radius=5)` | `denoise` | Average each pixel with the taps around it that are like it. |
-| `ssr_node_pass(max_distance=1 m, thickness=0.1 m, intensity=1, quality=0.5)` | `ssr` | Add what each metallic surface reflects. See [SSR node](#ssr-node). |
+| `ssr_node_pass(max_distance=1 m, thickness=0.1 m, intensity=1, quality=0.5, stochastic=False, denoise=False)` | `ssr` | Add what each metallic surface reflects. A stochastic pass reflects rough surfaces too. See [SSR node](#ssr-node). |
 | `motion_blur_pass(amount=1, samples=16)` | `motionBlur` | Blur each pixel along its velocity. |
 
 Each pass keeps its settings in `display`, a `DisplaySettings`, with three.js's names.
@@ -647,18 +647,6 @@ A 12 by 8 frame now uses the same pixel offsets as a square frame. Existing rect
 
 The DoF and denoise passes, like the other display passes, run on the host in a `GpuComposer` frame.
 
-### SSR node
-
-`ssr_node_pass` is three.js r186's `SSRNode` in its default mode, in `postprocessing/ssr_node.mojo`. It adds the reflections to the frame, as three.js's SSR example adds them. The composer draws its frame with a normal attachment and a [metalness attachment](Render-target-and-framebuffer#metalness-and-roughness) while the pass is on.
-
-Each pixel with a surface and some metalness sends a ray along its reflection. The ray is `max_distance` long along the view and stops at the near plane. The march crosses the image one pixel at a time, times `quality`. The ray hits where it passes behind the depth, within `thickness` of the surface there. A surface that faces away from the ray is passed over. A hit farther from the pixel's plane than `max_distance` ends the march.
-
-A hit reads the frame's color there. The color is scaled by the metalness, by the square of the part of `max_distance` that is left, and by three.js's Fresnel term, `(dot(incident, reflected) + 1) / 2`. The light is capped at `max_luminance` and scaled by `intensity`.
-
-With `use_roughness` on, the reflections go into a chain of five levels. Each level after the first is a box blur, a level's number of pixels apart. The frame reads the chain at the level that its roughness squared, times four, gives. This is how the example reads the node through its `roughnessNode`. A blur whose pixel count does not fit in an integer is refused. A blur reach above 2047 taps is refused.
-
-The node's stochastic mode, its environment sampling, its history and its binary refinement are not ported. The example leaves all four off. The pass runs on the host in a `GpuComposer` frame.
-
 `bayer16(x, y)` is three.js's `bayer16`: the 16 by 16 Bayer matrix, zero to one, from the node's own image.
 
 The motion blur reads the frame's [velocity attachment](Render-target-and-framebuffer#velocity). The composer draws its frame with one while a motion blur pass is on. The pass scales each velocity by `amount`, three.js's example's `blurAmount`.
@@ -668,6 +656,76 @@ Then it sums the taps as three.js's node sums them. The first tap is the pixel. 
 The camera and the objects move between two calls to `render`. So the first frame is sharp.
 
 The motion blur runs on the device in a `GpuComposer` frame, with the velocities of the host frame. `motion_blur_pixel` does the work on both sides. The other display passes run on the host in a `GpuComposer` frame.
+
+### SSR node
+
+`ssr_node_pass` is three.js r186's `SSRNode`, in `postprocessing/ssr_node.mojo`. It adds the reflections to the frame, as three.js's SSR examples add them. The default is the node's mirror mode. `stochastic=True` is its [stochastic mode](#stochastic-ssr). The composer draws its frame with a normal attachment and a [metalness attachment](Render-target-and-framebuffer#metalness-and-roughness) while the pass is on.
+
+Each pixel with a surface and some metalness sends a ray along its reflection. The ray is `max_distance` long along the view and stops at the near plane. The march crosses the image one pixel at a time, times `quality`. The ray hits where it passes behind the depth, within `thickness` of the surface there. A surface that faces away from the ray is passed over. A hit farther from the pixel's plane than `max_distance` ends the march.
+
+A hit reads the frame's color there. The color is scaled by the metalness, by the square of the part of `max_distance` that is left, and by three.js's Fresnel term, `(dot(incident, reflected) + 1) / 2`. The light is capped at `max_luminance` and scaled by `intensity`.
+
+With `use_roughness` on, the reflections go into a chain of five levels. Each level after the first is a box blur, a level's number of pixels apart. The frame reads the chain at the level that its roughness squared, times four, gives. This is how the example reads the node through its `roughnessNode`. A blur whose pixel count does not fit in an integer is refused. A blur reach above 2047 taps is refused.
+
+`binary_refine`, in the pass's `ssr_node` settings, is three.js's `binaryRefine`. A hit is then bisected eight times between its step and the step before. The result is the place where the ray first passes behind the depth. A refined hit farther from the pixel's plane than `max_distance` reflects nothing.
+
+The pass runs on the host in a `GpuComposer` frame.
+
+#### Stochastic SSR
+
+`ssr_node_pass(stochastic=True)` is the node's stochastic mode. Each pixel with a surface draws one ray from the GGX lobe of its roughness, by `ggx_reflection_sample`. A non-metal reflects too. The numbers come from `analytic_noise4` in `postprocessing/rnoise.mojo`, three.js's `bindAnalyticNoise`. The noise moves each frame.
+
+- `mirror_bias` pulls each ray toward the mirror direction. Zero samples the whole lobe.
+- The march takes `quality` times 64 steps over the whole ray. `step_exponent` puts the steps closer together near the pixel. The noise moves each step.
+- Each hit within `thickness` counts. The mirror mode's facing test and distance limit do not apply.
+- A hit reads the frame's color there, times the lobe's Fresnel and shadowing weight.
+- The alpha holds the distance to the hit, times `specular_dominant_factor` of the roughness.
+- The reflections are not blurred. `use_roughness` has no effect.
+
+The frame has no base color attachment. So the lobe's base color is white, as the node's is without a `diffuseNode`. `SsrNodeFrame.with_diffuse` gives `ssr_node_pixel` a base color.
+
+A ray that hits nothing takes the light of an environment. Give the pass an [`EquirectEnvironment`](#importance-sampled-environment):
+
+```mojo
+var sky = EquirectEnvironment(width, height, texels, importance_sampling=True)
+composer.add_pass(
+    ssr_node_pass(
+        stochastic=True,
+        denoise=True,
+        environment=Optional[EquirectEnvironment](sky),
+    )
+)
+```
+
+- The light is `sample_environment_brdf` along the ray, times `environment_intensity`. The default intensity is pi, as three.js's is.
+- A map with distributions is read by `sample_environment_mis` instead.
+- The alpha of such a pixel is `ENV_RAY_LENGTH`, ten thousand meters.
+- Without an environment, the light is black.
+
+A hit near the border of the image fades over `screen_edge_fade`, times how glossy the surface is. It fades toward the environment's light. With `screen_edge_fade_black`, a hit fades to black, and so does the light of a border pixel whose ray hits nothing.
+
+#### The SSR denoiser
+
+`ssr_node_pass(stochastic=True, denoise=True)` runs the loop of three.js's `webgpu_postprocessing_ssr_denoise` example. The composer draws its frame with a velocity attachment too.
+
+1. The stochastic reflections are the raw signal. Their alpha is the ray length.
+2. `TemporalReprojectNode` reprojects the last result, in its specular mode.
+3. `RecurrentDenoiseNode` denoises that, in its specular mode, with the frame's metalness and roughness.
+4. The denoised result is added to the frame. It is also the next frame's history.
+5. The next frame's reflections read that history for a second bounce, as the example's `setHistory` asks.
+
+The pass keeps the two nodes' settings in `temporal_denoise`, with `mode` set to `SPECULAR_DENOISE` and `alpha_source` set to `RAY_LENGTH_ALPHA`. See [the specular mode](#the-specular-mode). A pass that denoises must be stochastic.
+
+The second bounce adds the history where the hit was, times one less its alpha. three.js subtracts the velocity from the texture coordinate as it is. Its reprojection node halves the velocity and turns its y over. This port keeps the node's subtraction.
+
+`resolution_scale` draws the reflections smaller. The reprojection reads them by texel and the denoise reads them bilinear. The denoised result has the frame's size.
+
+#### How the SSR node differs from three.js
+
+- **A step before the first.** The refinement of a stochastic hit at the first step reads the step before it. Its share of the ray can have a negative base under `step_exponent`, which a GPU's `pow` does not define. That step is the ray's start here.
+- **A second draw.** three.js draws a stochastic ray again when it points into the surface. The sampler bounds its cap so that no ray does. This port draws once.
+- **A ray with no place.** A ray whose end has no finite place on the image hits nothing.
+- **The environment's kind.** three.js builds the distributions when `envImportanceSampling` is on. Here the `EquirectEnvironment` holds them, or does not.
 
 ## More display nodes
 
@@ -751,6 +809,37 @@ three.js's example mixes the AO and the light with the scene and its diffuse col
 
 The derivatives of the history's coordinate are the differences across each 2 by 2 quad, as a GPU's fine derivatives are. A normalized zero vector is zero here, where a GPU gives a NaN. `AlphaSource` says what the raw signal's alpha holds: `AO_ALPHA` for the SSGI, `RAY_LENGTH_ALPHA` or `NO_ALPHA`.
 
+#### The specular mode
+
+`DenoiseMode` is the two nodes' `mode`: `DIFFUSE_DENOISE`, the default, or `SPECULAR_DENOISE`. The [SSR denoiser](#the-ssr-denoiser) runs the specular mode.
+
+The specular reprojection reads the history twice:
+
+1. `ray_length_stats` reads the alpha of the pixel's 3 by 3 raw neighbors. It gives the mean ray length, the share of rays that reached the environment, and the deviation.
+2. `reproject_hit_point` moves the surface along the camera's ray by the mean ray length. `project_world_to_uv` finds where that point was on the last frame.
+3. `specular_history` mixes the history there with the history where the surface was.
+
+The hit point's history weighs less in four cases:
+
+- Its worst texel does not match the surface.
+- The ray lengths differ while the pixel moves.
+- The normal curves. `normal_curvature` is the length of the normal's `fwidth`, times fifty.
+- Rays reached the environment.
+
+`hit_point_reprojection` off reads the surface's history alone.
+
+A pixel whose raw signal is black has no reflection this frame. It holds one frame less, and at least one.
+
+The specular denoise changes three things:
+
+- The disk's radius is scaled by the mean ray length and by the square root of the roughness.
+- The disk lies across the reflected lobe: `specular_dominant_direction` is the reflection for a mirror and the normal for a rough surface.
+- Each tap is weighed down by the difference of its roughness, times `roughness_phi`.
+
+Both modes read the roughness for the normal weight when the denoise has the frame's metalness and roughness. Without them, each surface has a roughness of one.
+
+The expected values of the specular tests come from `assets/ssr_denoise/reference.py`, a Python transcription of the two nodes. Its diffuse results agree with the port's diffuse mode on the same frame.
+
 ### SSS
 
 `sss_pass` is three.js's `SSSNode`. `light` is the main light, one of the scene's `lights`. Each pixel with a surface walks a ray toward the light, `max_distance` long. The walk crosses the image a pixel apart, times `quality`. A step where the ray is behind the depth by less than `thickness` shadows the pixel by `shadow_intensity`. The pass multiplies the frame's light by the result.
@@ -773,7 +862,9 @@ three.js blends every fragment of an object into its targets. This port draws ea
 
 `EquirectEnvironment` is three.js's `ImportanceSampledEnvironment` and its `EnvMapCDFGenerator`. It keeps an equirectangular map in half floats, flipped as `flipY` asks. With importance sampling on, it builds three.js's tables of the rows' and the texels' distributions by luminance. `sample_reflect`, `sample_environment_brdf` and `sample_environment_mis` are three.js's three samples, with the GGX helpers of `SpecularHelpers.js`.
 
-three.js gives the drawn texture coordinate to `equirectUV`, which takes a direction. This port turns the coordinate into its direction with `equirect_uv_to_dir`, which is what the code means. No pass reads the environment, because the SSR node's environment mode is not ported.
+three.js gives the drawn texture coordinate to `equirectUV`, which takes a direction. This port turns the coordinate into its direction with `equirect_uv_to_dir`, which is what the code means. A [stochastic SSR node pass](#stochastic-ssr) reads the environment where a ray hits nothing.
+
+`ggx_reflection_sample` is three.js's `ggxReflectionSample`. It draws a microfacet normal by `sample_ggx_vndf`, the bounded visible normals of the GGX lobe. It returns the reflected ray, the weight of the light along it, the ray's density from `ggx_vndf_pdf`, and the lobe's alpha and reflectance. three.js turns a microfacet normal with a negative z over. The sampler gives none, so this port has no such step.
 
 ### Validation of the more display nodes
 
@@ -781,7 +872,10 @@ three.js gives the drawn texture coordinate to `equirectUV`, which takes a direc
 - `check_taau` refuses a negative threshold, a velocity length that is not positive, and a frame weight or a resolution scale outside zero to one.
 - `check_filters` refuses a number that is not finite, a curvature of a half or more, and a radial blur of no taps. It also refuses sigmas and a radius that are not positive, and a negative edge radius. A depth-aware blend pass must name a texture.
 - `check_ssgi` and `check_sss` refuse counts below one, numbers that are not finite and a negative light index. `sss_light_direction` refuses a light that the scene does not have.
-- `check_temporal_denoise` refuses an `AlphaSource` that is none of the three. `check_draw_filter` refuses a `DrawFilter` that is none of the three. `tests/compile_fail/` proves that a bare number is not either type.
+- `check_temporal_denoise` refuses an `AlphaSource` that is none of the three and a `DenoiseMode` that is neither of the two. `check_draw_filter` refuses a `DrawFilter` that is none of the three. `tests/compile_fail/` proves that a bare number is none of these types.
+- `check_ssr_node` refuses a mirror bias outside zero to one, and a step exponent that is not positive and finite. It refuses a border fade, an environment intensity or a noise index that is negative. It refuses a pass that denoises reflections that are not stochastic.
+- `ssr_node_signal` refuses a history that does not have one entry a pixel, and a history on a frame with no velocity attachment.
+- `ReprojectInputs` and `DenoiseInputs` refuse a raw signal that does not fill its own size.
 
 ### The more display nodes on the GPU
 
@@ -789,11 +883,11 @@ The sharpen, CRT and radial blur passes run on the device in a `GpuComposer` fra
 
 ### What is not ported
 
-- **The specular denoiser.** `TemporalReprojectNode`'s specular mode reprojects the hit point along a ray length in alpha. `RecurrentDenoiseNode`'s specular mode reads the roughness. The SSR node's stochastic mode, which makes that signal, is not ported.
+- **The denoise's base color term.** `RecurrentDenoiseNode` weighs a tap down by the difference of its base color, times `diffusePhi`, when it has a `diffuse` input. The examples give it none, and the frame has no base color attachment.
+- **The denoise without accumulation.** `RecurrentDenoiseNode`'s `accumulate` is always on, and it always has a raw signal, as in the two examples.
 - **The retro materials.** three.js swaps each material for a Phong one unless it is basic. It mixes a standard material's environment into its color, and can map textures without the perspective divide. This port draws each material as it is.
 - **The packed targets.** three.js packs the SSGI's light into 11, 11 and 10 bits and the OIT's revealage into eight. This port keeps both as floats.
-- **The diffuse color.** The SSGI's example reads a diffuse color attachment. The frame's own color stands in for it.
-- **The environment's pass.** No pass reads `EquirectEnvironment`.
+- **The diffuse color.** The SSGI's example reads a diffuse color attachment. The frame's own color stands in for it. The SSR denoise example tints a metal's reflection with it. A stochastic SSR node pass uses white.
 
 ## Renderer effects
 

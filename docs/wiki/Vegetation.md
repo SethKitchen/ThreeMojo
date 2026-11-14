@@ -67,6 +67,27 @@ frames.append(blend_frames(moments))
 
 `examples/meadow_wind.mojo` blends four moments across half of each frame's time. Each frame then costs four renders.
 
+## Draw a frame on a GPU
+
+`MeadowDevice` draws a prepared frame with the GPU rasterizer. The CPU still culls the clusters and grows the drawn ones in `Meadow.update`. This module needs MAX and a GPU.
+
+```mojo
+from extensions.vegetation.gpu import MeadowDevice
+
+var device = MeadowDevice(renderer)
+device.upload(assets)
+var stats = meadow.update(scene, assets, camera, Duration(2.0, SECOND))
+var image = device.draw(renderer, scene, assets, camera)
+```
+
+Make one device for a renderer and keep it between frames. Call `upload` one time after the meadow is built, and again only when a texture changes. A frame replaces cluster geometry, and that needs no upload. `draw` refuses a frame before `upload`, and a renderer of a different size.
+
+The device takes the same inputs that `Renderer.render` gives the CPU rasterizer. These are the prepared frame, the lights with their shadow maps, the fog, the sky and the tone curve. The kernel is the shared rasterizer, so the picture is the CPU picture within the parity tolerance.
+
+An antialiased frame is different in one way. The device draws at `SUPERSAMPLE` times the size and averages the encoded bytes. The CPU averages the linear light before the tone curve. So an edge pixel can differ by a few levels.
+
+`tests/test_vegetation_gpu.mojo` compares a small meadow on both rasterizers. There is no gallery example, because the gallery draws on the CPU. It is a device suite. It is compiled for `sm_80` and has not run on a GPU. [Issue 985](https://github.com/SethKitchen/ThreeMojo/issues/985) stays open until it does.
+
 ## What a frame draws
 
 `update` returns a `FieldStats`.
@@ -96,6 +117,7 @@ The wind loop renders 4 moments for each of its 48 frames, and takes about 55 mi
 | `blade.mojo` | `Blade`, and `BladeMesh`, which bakes blades into one geometry. |
 | `ground.mojo` | `Ground`: hills, a `Canyon`, a `Pond`, the grass masks, the ground mesh, the cliff wall and the mountain ring. `Lot`, `lot_openness` and `lot_shade`. |
 | `field.mojo` | `GrassField`: clusters, levels of detail and the blade stream. |
+| `gpu.mojo` | `MeadowDevice` and `device_size`: a frame drawn by the GPU rasterizer. It needs MAX. |
 | `limbs.mojo` | `CrownShape`, `LimbParameters` and `grow_limbs`: branches grown by space colonization, and `limb_mesh`. |
 | `litter.mojo` | `ground_litter`: fallen leaves, twigs and pebbles on bare ground. |
 | `foliage.mojo` | `LeafShade`, the light through the leaves, `LeafMesh`, `foliage_program`, `wood_program` and `sway_offset`. |
@@ -309,7 +331,7 @@ The mountains are `ridge_ring`, a ring of rugged peaks 900 meters away. Each col
 
 ## Limits
 
-- The CPU culls and grows the clusters, and the CPU rasterizer draws them. There is no GPU path yet.
+- The CPU culls and grows the clusters. No GPU path does that work. `MeadowDevice` draws the prepared frame on a GPU; see [Draw a frame on a GPU](#draw-a-frame-on-a-gpu). Its device suite has not run on a GPU.
 - Culling tests each cluster's bound against the view only. A cluster behind a hill is still drawn.
 - There is no visibility buffer. The rasterizer shades each fragment as it draws it.
 - The grass casts into the same two cascades as the trees. Its shadow on itself is only as sharp as their texels. So the dark roots still stand in for the shadow at the base of each tuft.

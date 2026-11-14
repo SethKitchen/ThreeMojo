@@ -773,25 +773,29 @@ struct CascadeBlend(Equatable, ImplicitlyCopyable, Writable):
 
     `CSM_BLEND` is three.js's `CSMShader`, which weighs each cascade's
     light. `SUN_BLEND` is its `SunShadowNode`, which lights once and
-    blends the cascades' shadows. `ShadowCascade.validate` refuses a
-    blend that is neither.
+    blends the cascades' shadows. `NODE_BLEND` is its `CSMShadowNode`,
+    which lights once and takes the shadow of the slice a depth falls
+    in. `ShadowCascade.validate` refuses a blend that is none of them.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is `CSM_BLEND` or `SUN_BLEND`.
+        """Return True if this is `CSM_BLEND`, `SUN_BLEND` or
+        `NODE_BLEND`.
 
         Returns:
-            Whether the blend is one of the two.
+            Whether the blend is one of the three.
         """
-        return ordinal_valid(self.value, SUN_BLEND.value)
+        return ordinal_valid(self.value, NODE_BLEND.value)
 
 
 # three.js's `CSM`: see `cascade_reach`.
 comptime CSM_BLEND = CascadeBlend(0)
 # three.js's `SunLight`: see `sun_reach`.
 comptime SUN_BLEND = CascadeBlend(1)
+# three.js's `CSMShadowNode`: see `csm_node_reach`.
+comptime NODE_BLEND = CascadeBlend(2)
 
 
 struct ShadowCascade(ImplicitlyCopyable):
@@ -818,7 +822,7 @@ struct ShadowCascade(ImplicitlyCopyable):
     var last: Bool
     # Whether the slices blend into each other, three.js's `CSM.fade`.
     var fade: Bool
-    # Which of three.js's two schemes the slices follow.
+    # Which of three.js's three schemes the slices follow.
     var blend: CascadeBlend
     # Under `SUN_BLEND`: where this slice's shadow starts to fade into the
     # next, three.js's `cascadeData.z`, and where the slice before it ends,
@@ -826,6 +830,10 @@ struct ShadowCascade(ImplicitlyCopyable):
     # `sun_reach`.
     var fade_start: Float32
     var ramp_end: Float32
+    # Under `NODE_BLEND`: the camera's near plane as a fraction of `span`.
+    # three.js's `viewZToOrthographicDepth` takes it from a depth before
+    # `CSMShadowNode` reads the slices. Zero under the other two blends.
+    var near: Float32
 
     def __init__(
         out self,
@@ -837,6 +845,7 @@ struct ShadowCascade(ImplicitlyCopyable):
         blend: CascadeBlend = CSM_BLEND,
         fade_start: Float32 = 0,
         ramp_end: Float32 = 0,
+        near: Float32 = 0,
     ):
         """Describe one slice.
 
@@ -846,11 +855,13 @@ struct ShadowCascade(ImplicitlyCopyable):
             span: What a depth is divided by. Zero for no cascade.
             last: Whether this is the furthest slice.
             fade: Whether the slices blend, three.js's `CSM.fade`. Read
-                under `CSM_BLEND`.
-            blend: `CSM_BLEND` or `SUN_BLEND`.
+                under `CSM_BLEND` and `NODE_BLEND`.
+            blend: `CSM_BLEND`, `SUN_BLEND` or `NODE_BLEND`.
             fade_start: Under `SUN_BLEND`, where the shadow starts to fade
                 into the next slice.
             ramp_end: Under `SUN_BLEND`, where the slice before ends.
+            near: Under `NODE_BLEND`, the camera's near plane as a
+                fraction of `span`.
         """
         self.start = start
         self.end = end
@@ -860,6 +871,7 @@ struct ShadowCascade(ImplicitlyCopyable):
         self.blend = blend
         self.fade_start = fade_start
         self.ramp_end = ramp_end
+        self.near = near
 
     @staticmethod
     def none() -> ShadowCascade:
@@ -886,7 +898,10 @@ struct ShadowCascade(ImplicitlyCopyable):
         Raises:
             Error: If the span is not zero and is negative or not finite,
                 or the start or end is not finite, the start is negative
-                or the end lies before the start.
+                or the end lies before the start. Also if the blend is
+                none of the three, a `SUN_BLEND` slice fades after it
+                ends or ramps in before it starts, or a `NODE_BLEND`
+                slice has a near plane that is negative or not finite.
         """
         if not self.is_cascade():
             return
@@ -905,8 +920,15 @@ struct ShadowCascade(ImplicitlyCopyable):
                 " sooner than it starts"
             )
         require_valid(
-            self.blend.is_valid(), "A cascade blend that is none of the two"
+            self.blend.is_valid(), "A cascade blend that is none of the three"
         )
+        if self.blend == NODE_BLEND and (
+            not isfinite(self.near) or self.near < 0
+        ):
+            raise Error(
+                "A shadow node's cascade needs a near plane at zero or"
+                " beyond it"
+            )
         if self.blend == SUN_BLEND and (
             not isfinite(self.fade_start)
             or not isfinite(self.ramp_end)
@@ -1030,6 +1052,91 @@ def cascade_reach(
         ratio if (not last or depth < center) else Float32(1),
         ratio if (last and depth > center) else Float32(1),
     )
+
+
+def csm_node_reach(
+    depth: Float32, start: Float32, end: Float32, last: Bool, fade: Bool
+) -> SIMD[DType.float32, 2]:
+    """Return how much of a `CSMShadowNode` cascade's light reaches a
+    depth and how much of its shadow falls there: three.js's
+    `CSMShadowNode._setupStandard` and `_setupFade`, split among the
+    cascade lights.
+
+    three.js lights a surface once and works out one shadow value from
+    the cascades. Here each cascade is a light, so that value is split
+    into shares. A cascade before the last takes the light where
+    three.js reads its shadow. The last cascade takes the rest of the
+    light: what the cascade before it leaves, and the light that no
+    cascade shadows, nearer than the first slice and beyond the last.
+
+    Without fade, three.js gives a depth the shadow of the last slice
+    that holds it, both ends included. So a slice owns its start and not
+    its end, and the last slice owns its end too. With fade, a slice
+    reaches a margin further either way, a quarter of its nearer edge
+    squared, and its shadow ramps across that margin. The first slice
+    does not fade at its near edge. The last slice does not reach past
+    its end, and its shadow fades out toward that end.
+
+    The shares add up to three.js's value when every slice before the
+    last is at least as wide as the margin at its far edge. A narrower
+    slice takes less light here than three.js gives it.
+
+    Args:
+        depth: The fragment's depth past the camera's near plane, over
+            the span: three.js's `linearDepth`.
+        start: Where the slice begins, `ShadowCascade.start`.
+        end: Where it ends, `ShadowCascade.end`.
+        last: Whether it is the furthest slice.
+        fade: Whether the slices blend, three.js's `CSMShadowNode.fade`.
+
+    Returns:
+        The share of the light, then the share of its shadow. A margin
+        of zero ramps at once, a ratio of one.
+    """
+    if not fade:
+        if not last:
+            var owned = Float32(0)
+            if depth >= start and depth < end:
+                owned = 1
+            return SIMD[DType.float32, 2](owned, owned)
+        var inside = depth >= start and depth <= end
+        var beyond = depth < 0 or depth > end
+        return SIMD[DType.float32, 2](
+            Float32(1) if (inside or beyond) else Float32(0),
+            Float32(1) if inside else Float32(0),
+        )
+    var center = (start + end) / 2
+    var edge = start if depth < center else end
+    var margin = Float32(0.25) * edge * edge
+    var low = start - margin / 2
+    var high = end
+    if not last:
+        high = end + margin / 2
+    # three.js's `ratio`: how much of this slice's shadow the depth takes.
+    var ratio = Float32(0)
+    if depth >= low and depth <= high:
+        ratio = 1
+        if margin > 0:
+            ratio = max(
+                Float32(0),
+                min(Float32(1), min(depth - low, high - depth) / margin),
+            )
+        # three.js's `i === 0`: the first slice starts at zero.
+        if start == 0 and depth <= center:
+            ratio = 1
+    if not last:
+        return SIMD[DType.float32, 2](ratio, 1)
+    # The slice before the last ramps out across the margin at `start`,
+    # and the last slice takes the light it leaves.
+    var ramp = Float32(0.25) * start * start
+    var share = Float32(1)
+    if depth >= 0 and depth < start + ramp / 2:
+        share = 0
+        if depth > start - ramp / 2:
+            share = (depth - start + ramp / 2) / ramp
+    if share > 0:
+        return SIMD[DType.float32, 2](share, ratio / share)
+    return SIMD[DType.float32, 2](0, 0)
 
 
 trait ShadowShape:
