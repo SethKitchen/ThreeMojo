@@ -15,6 +15,7 @@ from extensions.imaging.dvh import (
     CUBIC_CENTIMETER64,
     DoseVolumeHistogram,
     dose_volume_histogram,
+    dvh_image,
 )
 from extensions.imaging.ids import (
     BACKGROUND,
@@ -35,6 +36,8 @@ from extensions.imaging.rtdose import (
     read_rt_dose,
 )
 from extensions.imaging.rtstruct import read_rt_structures, structure_labels
+from extensions.imaging.transfer import Rgba
+from render.framebuffer import Framebuffer
 from extensions.sdf.vector import v3
 from std.math import inf, nan, sqrt
 from std.testing import (
@@ -505,6 +508,120 @@ def test_histogram_refusals() raises:
     )
     with assert_raises(contains="different grids"):
         _ = dose_volume_histogram(other, map, LabelId(1))
+
+
+def _rgb(image: Framebuffer, x: Int, y: Int) -> Tuple[Int, Int, Int]:
+    var at = (y * image.width + x) * 4
+    return (
+        Int(image.pixels[at]),
+        Int(image.pixels[at + 1]),
+        Int(image.pixels[at + 2]),
+    )
+
+
+def test_dvh_image() raises:
+    var histograms = List[DoseVolumeHistogram]()
+    histograms.append(_known())
+    var low: List[Float64] = [0.5, 0.5]
+    histograms.append(DoseVolumeHistogram(low^, Volume64(1e-9, CUBIC_METER)))
+    var red = Rgba(1, 0, 0, 1)
+    var blue = Rgba(0, 0, 1, 1)
+    # Doses to 10 Gy over 100 pixels, a gray line each 2 Gy, and the part
+    # over 100 pixels, with a gray line each tenth.
+    var image = dvh_image(
+        histograms,
+        [red, blue],
+        AbsorbedDose64(10, GRAY),
+        AbsorbedDose64(2, GRAY),
+        101,
+        101,
+    )
+    var white = (255, 255, 255)
+    var gray = (214, 214, 219)
+    var dark = (61, 61, 66)
+    assert_true(_rgb(image, 25, 65) == white)
+    assert_true(_rgb(image, 20, 65) == gray)
+    assert_true(_rgb(image, 60, 65) == gray)
+    assert_true(_rgb(image, 25, 70) == gray)
+    assert_true(_rgb(image, 0, 65) == dark)
+    assert_true(_rgb(image, 100, 65) == dark)
+    assert_true(_rgb(image, 25, 0) == dark)
+    # From 1.1 to 2 Gy, four of five voxels: 20 pixels from the top, and
+    # one more above.
+    assert_true(_rgb(image, 19, 20) == (255, 0, 0))
+    assert_true(_rgb(image, 19, 19) == (255, 0, 0))
+    assert_true(_rgb(image, 19, 21) == white)
+    # Past 0.5 Gy, no voxel of the second: the bottom rows. It is drawn
+    # last.
+    assert_true(_rgb(image, 70, 99) == (0, 0, 255))
+    assert_true(_rgb(image, 3, 0) == (0, 0, 255))
+    # A grid past the top dose draws no line of dose.
+    var one = List[DoseVolumeHistogram]()
+    one.append(_known())
+    var bare = dvh_image(
+        one,
+        [red],
+        AbsorbedDose64(1, GRAY),
+        AbsorbedDose64(2, GRAY),
+        64,
+        64,
+    )
+    assert_true(_rgb(bare, 32, 3) == white)
+    assert_true(_rgb(bare, 32, 6) == gray)
+    # Refusals.
+    var none = List[DoseVolumeHistogram]()
+    with assert_raises(contains="one color for each"):
+        _ = dvh_image(
+            none,
+            List[Rgba](),
+            AbsorbedDose64(1, GRAY),
+            AbsorbedDose64(1, GRAY),
+            64,
+            64,
+        )
+    with assert_raises(contains="one color for each"):
+        _ = dvh_image(
+            one,
+            List[Rgba](),
+            AbsorbedDose64(1, GRAY),
+            AbsorbedDose64(1, GRAY),
+            64,
+            64,
+        )
+    var sizes: List[Int] = [63, 4097, 64, 64]
+    var heights: List[Int] = [64, 64, 63, 4097]
+    for n in range(4):
+        with assert_raises(contains="pixels on each side"):
+            _ = dvh_image(
+                one,
+                [red],
+                AbsorbedDose64(1, GRAY),
+                AbsorbedDose64(1, GRAY),
+                sizes[n],
+                heights[n],
+            )
+    var tops: List[Float64] = [0.0, inf[DType.float64]()]
+    for t in tops:
+        with assert_raises(contains="top dose"):
+            _ = dvh_image(
+                one,
+                [red],
+                AbsorbedDose64(t, GRAY),
+                AbsorbedDose64(1, GRAY),
+                64,
+                64,
+            )
+    var grids: List[Float64] = [0.0, inf[DType.float64](), 0.009]
+    for g in grids:
+        with assert_raises(contains="at most 100 lines"):
+            _ = dvh_image(
+                one,
+                [red],
+                AbsorbedDose64(1, GRAY),
+                AbsorbedDose64(g, GRAY),
+                64,
+                64,
+            )
 
 
 def main() raises:

@@ -17,7 +17,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL`, `MEGABECQUEREL`, and `parse_dicom_tree` and `read_dicom_tree`, which give a `DicomTree` |
 | `rtstruct` | `RtStructure`, `parse_rt_structures`, `read_rt_structures` and `structure_labels` |
 | `rtdose` | `RtDose`, `parse_rt_dose`, `read_rt_dose`, `AbsorbedDose64`, `GRAY` and `CENTIGRAY` |
-| `dvh` | `DoseVolumeHistogram`, `dose_volume_histogram` and `CUBIC_CENTIMETER64` |
+| `dvh` | `DoseVolumeHistogram`, `dose_volume_histogram`, `dvh_image` and `CUBIC_CENTIMETER64` |
 | `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
@@ -228,6 +228,14 @@ A negative `a` of the gEUD, such as -10, weighs the cold voxels, as for a tumor.
 The doses and the labels must be on one grid. You can fill the structure on the dose grid with `structure_labels`. You can also fill it on the CT, and bring the dose onto the CT grid with `resample_onto`. The second way counts a small region in smaller voxels.
 
 Give a volume in cubic centimeters with `CUBIC_CENTIMETER64`. The `CUBIC_CENTIMETER` of `units.si` is 32-bit, and its scale is off by 3e-9.
+
+`dvh_image(histograms, colors, top, grid, width, height)` plots the curves, each in its color. The dose runs from 0 at the left to `top` at the right. The part of a region runs from 0 at the bottom to all of it at the top. Light gray lines mark each `grid` of dose and each tenth of the region.
+
+![A synthetic five-beam dose over the head phantom CT with isodose lines, and the DVH of a target and an organ at risk](out/radiotherapy.png)
+
+`examples/radiotherapy.mojo` makes this picture. Two regions are contours on the CT slices, as an RT Structure Set gives them. The target has a radius of 15 mm, and an organ at risk of 10 mm radius is 5 mm from it. Five beams in the axial plane cross at the target, on a dose grid of 3 mm voxels. The example scales the dose to a target mean of 60 Gy. It writes the dose as an RT Dose file in memory, reads it back and brings it onto the CT grid.
+
+The left panel has the dose on the hot scale from 6 to 70 Gy. The white line is the 57 Gy isodose, and the pink line is the 30 Gy isodose. The target is green and the organ at risk is blue, in both panels. The target holds 14.2 cm^3, with a D95 of 57.9 Gy and a D2 of 61.1 Gy. The organ at risk gets a mean of 28.9 Gy, and 44.4 Gy at its hottest 0.03 cm^3.
 
 ## Read and write NIfTI files
 
@@ -841,6 +849,7 @@ The tests check these results:
 - Two RT Dose files that pydicom 3.0.1 wrote read with pydicom's dose at each voxel, as 32-bit floats. One is explicit VR with 32-bit values and offsets from 0. The other is implicit VR with 16-bit values and frames from z = 9 mm down to 0. `assets/dicom/make_rtdose.py` makes them.
 - The tumor and the ring of the structure fixtures, filled on each dose grid, have the DVH that numpy 2.1.3 gives. The test compares the least, mean and largest dose, D98, D95, D50, D2, V20 and V40. It also compares D for 0.03 and 0.1 cm^3, and the gEUD at a = -10 and 5. Each agrees to 1e-12.
 - Written files check signed and 32-bit values, one frame without offsets, frames that go down, offsets that are z, and sagittal frames. A malformed file is refused for each check of the reader.
+- A DVH plot of 101 by 101 pixels puts each gray line, its frame and each curve at the right pixels. A grid past the top dose draws no line of dose.
 - On doses of 1 to 5 Gy, D20 is 5 Gy, D21 is 4 Gy and V3 is three voxels. The gEUD is the mean at a = 1, the root mean square at 2 and the harmonic mean at -1. A voxel of no dose makes the gEUD 0 at a = -10.
 - The gEUD refines each power by one Newton step on `log`. The Float64 `exp` of Mojo 1.2 is off by up to 1.2e-11 near x = -30, and by 2.8e-13 near 0. A fractional power is off as much, and `log` is exact to the last digit. Without the step, the gEUD of the tumor at a = -10 was off by 1.4e-12.
 - dicompyler-core 0.5.6 gives the tumor of the fixtures the same volume, mean, V20 and V40. Its D values are in bins of 1 cGy. Each is the low end of its step of the curve, rounded up to a bin. This module gives the high end of the step. dicompyler-core gave no volume to the ring, which has one plane. That check is not part of the test suite.
@@ -920,6 +929,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A file is not an RT Dose or not in `GY`, or has a missing or bad element, frames that are not evenly spaced, or pixel data that does not fill its grid | `parse_rt_dose`, `read_rt_dose` |
 | A DVH has no dose, a dose that is not finite, a bad voxel volume, a bad label or a map on another grid | `dose_volume_histogram`, `DoseVolumeHistogram` |
 | A DVH part, volume, dose, gEUD parameter or curve step is out of range, or a gEUD has a negative dose | `DoseVolumeHistogram` methods |
+| A DVH plot has no histogram, not one color for each, a side out of 64 to 4096 pixels, or a bad top dose or grid | `dvh_image` |
 | A file is not single-file NIfTI-1, or its datatype, unit or axes are not supported | `parse_nifti`, `read_nifti` |
 | Slices disagree, share a position or are not evenly spaced | `stack_slices` |
 | An index is outside the grid | `get`, `set`, `region_grow`, `render_slice` |

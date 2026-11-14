@@ -21,6 +21,9 @@ It keeps each voxel's dose, so it has no bins:
 | gEUD | `equivalent_uniform_dose` | `(mean(d^a))^(1/a)`, after Niemierko |
 | The curve | `curve` | the part that gets each step of dose or more |
 
+`dvh_image` plots the curves of one or more histograms, such as a tumor
+and an organ at risk, each in its own color.
+
 The hottest voxels that reach a fraction or a volume are counted up, to
 1e-9 of a voxel. Each voxel counts whole, with the dose at its center.
 """
@@ -28,7 +31,10 @@ The hottest voxels that reach a fraction or a volume are counted up, to
 from extensions.imaging.ids import BACKGROUND, LabelId, require_label
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
+from extensions.imaging.overlay import draw_line
 from extensions.imaging.rtdose import AbsorbedDose64, GRAY
+from extensions.imaging.transfer import Rgba
+from render.framebuffer import Color, Framebuffer
 from std.math import ceil, floor, isfinite, isinf, log, max
 from units.quantity import Unit
 from units.si import CUBIC_METER, METER, Volume64
@@ -42,6 +48,8 @@ comptime CUBIC_CENTIMETER64 = Unit[3, 0, 0, 0, 0, DType.float64](1.0e-6, "cm^3")
 comptime ROUNDING = 1.0e-9
 # The most points of a curve.
 comptime MOST_POINTS = 100000
+# The most grid lines of dose on a plot.
+comptime MOST_GRID_LINES = 100
 
 
 def _power(x: Float64, y: Float64) -> Float64:
@@ -332,3 +340,80 @@ def dose_volume_histogram(
         * dose.spacing_z.to(METER)
     )
     return DoseVolumeHistogram(doses^, Volume64(voxel, CUBIC_METER))
+
+
+def _pixel(value: Float64) -> Int:
+    """Return the nearest pixel to a place in pixels."""
+    return Int(floor(value + 0.5))
+
+
+def dvh_image(
+    histograms: List[DoseVolumeHistogram],
+    colors: List[Rgba],
+    top: AbsorbedDose64,
+    grid: AbsorbedDose64,
+    width: Int,
+    height: Int,
+) raises -> Framebuffer:
+    """Plot the cumulative curves of dose-volume histograms.
+
+    The dose runs from 0 at the left edge to `top` at the right edge. The
+    part of the region runs from 0 at the bottom edge to all of it at the
+    top edge. Light gray lines mark each `grid` of dose and each tenth of
+    the region. Each curve is a line two pixels thick.
+
+    Args:
+        histograms: The histograms, one or more.
+        colors: The color of each histogram's curve. Their opacity is
+            ignored.
+        top: The dose at the right edge. Positive and finite.
+        grid: The dose between two gray lines, such as 10 Gy. Positive
+            and finite, with no more than 100 lines to `top`.
+        width: The width of the image, from 64 to 4096 pixels.
+        height: The height of the image, from 64 to 4096 pixels.
+
+    Returns:
+        A white image with a dark frame.
+
+    Raises:
+        Error: If there is no histogram, the colors are not one for each
+            histogram, or a dose or a size is out of range.
+    """
+    if len(histograms) == 0 or len(colors) != len(histograms):
+        raise Error("A DVH plot needs one color for each of its histograms")
+    if width < 64 or width > 4096 or height < 64 or height > 4096:
+        raise Error("A DVH plot is from 64 to 4096 pixels on each side")
+    var t = top.to(GRAY)
+    var g = grid.to(GRAY)
+    if not (t > 0) or not isfinite(t):
+        raise Error("The top dose of a DVH plot must be positive and finite")
+    if not (g > 0) or not isfinite(g) or t / g > Float64(MOST_GRID_LINES):
+        raise Error("A DVH plot has a positive grid of at most 100 lines")
+    var image = Framebuffer(width, height, Color(255, 255, 255))
+    var light = Rgba(0.84, 0.84, 0.86, 1)
+    var right = Float64(width - 1)
+    var bottom = Float64(height - 1)
+    for n in range(1, Int(floor(t / g + ROUNDING)) + 1):
+        var x = _pixel(Float64(n) * g / t * right)
+        draw_line(image, x, 0, x, height - 1, light)
+    for n in range(1, 10):  # pragma: no branch
+        var y = _pixel(Float64(n) / 10.0 * bottom)
+        draw_line(image, 0, y, width - 1, y, light)
+    var dark = Rgba(0.24, 0.24, 0.26, 1)
+    draw_line(image, 0, 0, width - 1, 0, dark)
+    draw_line(image, 0, height - 1, width - 1, height - 1, dark)
+    draw_line(image, 0, 0, 0, height - 1, dark)
+    draw_line(image, width - 1, 0, width - 1, height - 1, dark)
+    for h in range(len(histograms)):  # pragma: no branch
+        ref histogram = histograms[h]
+        var count = Float64(histogram.count())
+        var previous = 0
+        for x in range(width):  # pragma: no branch
+            var d = Float64(x) / right * t
+            var part = Float64(histogram._count_at(d)) / count
+            var y = _pixel((1.0 - part) * bottom)
+            if x > 0:
+                draw_line(image, x - 1, previous, x, y, colors[h])
+                draw_line(image, x - 1, previous - 1, x, y - 1, colors[h])
+            previous = y
+    return image^
