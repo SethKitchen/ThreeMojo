@@ -27,7 +27,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `shape` | `molecular_shape` and `MolecularShape` |
 | `accessibility` | `residue_accessibility`, `ResidueAccess` and `max_accessible_area` |
 | `interface` | `chain_interface` and `ChainInterface` |
-| `sequence` | `chain_sequence`, `encode_fasta`, `align_sequences`, `SequenceAlignment`, `blosum62` and `one_letter` |
+| `sequence` | `chain_sequence`, `encode_fasta`, `align_sequences`, `SequenceAlignment`, `aligned_atoms`, `blosum62` and `one_letter` |
 | `pdb_write` | `encode_pdb` |
 | `cif_write` | `encode_mmcif` and `cif_value` |
 | `dihedral` | `backbone_angles`, `BackboneAngles`, `dihedral`, `ramachandran_image`, `ramachandran_color` and `plot_pixel` |
@@ -337,6 +337,20 @@ The alignment is the global method of Needleman and Wunsch, with the affine gaps
 
 A `SequenceAlignment` holds the two sequences with `-` for each gap, the score, and the counts of `identical` and `paired` columns. `identity()` is the share of paired columns that hold the same residue. Check it before you superpose two models, to be sure that they are of one protein.
 
+`aligned_atoms(first, first_chain, second, second_chain, name, open, extend)` pairs the atoms of one name through the alignment. Use it in place of `matched_atoms` when two chains number their residues another way, as a prediction often does. Use it also when one chain has a residue that the other lacks.
+
+```mojo
+var pairs = aligned_atoms(crystal, ChainId(0), predicted, ChainId(0), "CA", -10, -0.5)
+var fixed = List[V3]()
+var moving = List[V3]()
+for pair in pairs:
+    fixed.append(crystal.atoms[pair[0]].position)
+    moving.append(predicted.atoms[pair[1]].position)
+var fit = superpose(fixed, moving)
+```
+
+Each column that pairs two residues pairs their first atoms of the name, when both residues have one.
+
 ## Superpose two models
 
 Superpose two models before you compare them, such as two models of an NMR ensemble, or a crystal structure and a prediction.
@@ -451,6 +465,7 @@ The tests check these results:
 - Over three models as given, one CA moved by `+d` and `-d` has an RMSF of `d sqrt(2/3)`, and every other CA has none. Its residue gets the B-factor `16 pi^2 d^2 / 9`. Models that differ by rigid moves fit to an RMSF below 1e-9 angstroms. Five models with up to 0.5 angstroms of noise per coordinate match a numpy fit by SVD to 2e-15 angstroms. That check is not part of the test suite.
 - The largest areas are the 20 values of Tien and others. A residue's area is the sum of its atoms, and its RSA is that sum over the largest area. The middle of a built helix is more buried than its ends. On a peptide of 12 residues with 2000 points per sphere, the areas match Biopython 1.88's Shrake-Rupley to 0.1 percent. That check is not part of the test suite.
 - Two carbons in two chains 3 angstroms apart each bury a cap of `2 pi R h`, within 1 percent with 2000 points. Chains 20 angstroms apart bury nothing, and a third chain does not change the interface of the other two. On two helices 9 angstroms apart, the buried area of each residue matches Biopython 1.88's Shrake-Rupley to 0.001 square angstroms. That check is not part of the test suite.
+- A peptide numbered from 101, turned and moved, pairs no atom by number. Through the alignment, all 11 CA atoms pair, and the fit has an RMSD below 1e-15 m. A residue that only one chain has, or a residue without the atom, pairs nothing.
 - BLOSUM62 is symmetric, with its diagonal from 4 to 11. Small alignments give their gaps at the ends, inside and in either sequence, with the scores of each gap. A sequence against itself has no gap and an identity of 1. All 400 BLOSUM62 values match Biopython 1.88. On 40 random pairs with changes, insertions and deletions, every score matches Biopython's `PairwiseAligner`. That check is not part of the test suite.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
 

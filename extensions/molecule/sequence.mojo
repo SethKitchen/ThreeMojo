@@ -16,9 +16,14 @@ scores its BLOSUM62 value. A gap of length `L` scores
 `open + (L - 1) * extend`, at the ends too. The identity of an alignment
 is the share of its paired columns that hold the same residue. Use it to
 check that two models are of one protein before a superposition.
+
+`aligned_atoms` pairs the atoms of one name, such as CA, of two chains
+through the alignment of their sequences. It pairs residues where
+`matched_atoms` cannot: when the two chains number their residues
+another way, or when one has a residue that the other lacks.
 """
 
-from extensions.molecule.ids import ChainId, ModelId
+from extensions.molecule.ids import ChainId, ModelId, ResidueId
 from extensions.molecule.structure import Structure
 from std.math import inf, isfinite
 
@@ -341,4 +346,78 @@ def align_sequences(
     bottom.reverse()
     out.first = String(from_utf8_lossy=top)
     out.second = String(from_utf8_lossy=bottom)
+    return out^
+
+
+def _standard_residues(structure: Structure, chain: ChainId) -> List[Int]:
+    """Return the residues of a chain that are standard amino acids."""
+    ref c = structure.chains[chain.value]
+    var out = List[Int]()
+    # Only a chain with a sequence comes here, so it has a residue.
+    for r in range(
+        c.first_residue, c.first_residue + c.residue_count
+    ):  # pragma: no branch
+        if one_letter(structure.residues[r].name).byte_length() > 0:
+            out.append(r)
+    return out^
+
+
+def aligned_atoms(
+    first: Structure,
+    first_chain: ChainId,
+    second: Structure,
+    second_chain: ChainId,
+    name: String,
+    open: Float64,
+    extend: Float64,
+) raises -> List[Tuple[Int, Int]]:
+    """Return the atoms of one name that the sequence alignment pairs.
+
+    The two chains are aligned by `align_sequences`. Each column that
+    pairs two residues pairs their first atoms of the name, when both
+    residues have one.
+
+    Args:
+        first: The structure of the first chain.
+        first_chain: The first chain.
+        second: The structure of the second chain. It can be `first`.
+        second_chain: The second chain.
+        name: The atom name, such as `CA`.
+        open: The gap opening score, such as -10.
+        extend: The gap extension score, such as -0.5.
+
+    Returns:
+        The indexes of the paired atoms in `first.atoms` and
+        `second.atoms`, in the order of the first chain. Pass their
+        positions to `superpose`.
+
+    Raises:
+        Error: If a chain id names no chain, a chain has no standard
+            amino acid, or a gap score is out of range.
+    """
+    # The sequences check the chain ids before the residues are read.
+    var first_sequence = chain_sequence(first, first_chain)
+    var second_sequence = chain_sequence(second, second_chain)
+    var alignment = align_sequences(
+        first_sequence, second_sequence, open, extend
+    )
+    var top = _standard_residues(first, first_chain)
+    var bottom = _standard_residues(second, second_chain)
+    var a = alignment.first.as_bytes()
+    var b = alignment.second.as_bytes()
+    var out = List[Tuple[Int, Int]]()
+    var i = 0
+    var j = 0
+    for column in range(len(a)):  # pragma: no branch
+        var gap_a = a[column] == 45
+        var gap_b = b[column] == 45
+        if not gap_a and not gap_b:
+            var x = first.find_atom(ResidueId(top[i]), name)
+            var y = second.find_atom(ResidueId(bottom[j]), name)
+            if x.value >= 0 and y.value >= 0:
+                out.append((x.value, y.value))
+        if not gap_a:
+            i += 1
+        if not gap_b:
+            j += 1
     return out^

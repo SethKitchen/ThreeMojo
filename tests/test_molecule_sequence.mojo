@@ -6,6 +6,7 @@
 """Chain sequences, FASTA files and global alignments."""
 
 from extensions.molecule.ids import (
+    ResidueId,
     ALL_LOCATIONS,
     COIL,
     ChainId,
@@ -16,12 +17,16 @@ from extensions.molecule.peptide import build_peptide
 from extensions.molecule.sequence import (
     SequenceAlignment,
     align_sequences,
+    aligned_atoms,
     blosum62,
     chain_sequence,
     encode_fasta,
     one_letter,
 )
-from extensions.molecule.structure import parse_pdb_structure
+from extensions.molecule.structure import Structure, parse_pdb_structure
+from extensions.molecule.superpose import matched_atoms, superpose
+from extensions.sdf.vector import V3, v3
+from units.si import METER
 from std.math import inf, nan
 from std.testing import (
     TestSuite,
@@ -157,6 +162,93 @@ def test_small_alignments() raises:
     var free = align_sequences("WCW", "WW", 0, 0)
     assert_almost_equal(free.score, 22.0)
     assert_equal(free.identical, 2)
+
+
+def _renumbered(sequence: String) raises -> Structure:
+    """Return a peptide numbered from 101, turned and moved."""
+    var s = build_peptide(sequence, _coil(sequence.byte_length()))
+    for k in range(len(s.residues)):
+        s.residues[k].seq_id += 100
+        s.residues[k].auth_seq_id += 100
+    for k in range(len(s.atoms)):
+        var p = s.atoms[k].position
+        s.atoms[k].position = v3(-p.y, p.x, p.z) + v3(1e-9, 2e-9, -1e-9)
+    return s^
+
+
+def test_atoms_paired_through_the_alignment() raises:
+    var crystal = build_peptide("MKTAYIAKQRQ", _coil(11))
+    var moved = _renumbered("MKTAYIAKQRQ")
+    # The numbers differ, so no atom pairs by number.
+    assert_equal(
+        len(matched_atoms(crystal, ModelId(0), moved, ModelId(0), "CA")), 0
+    )
+    var pairs = aligned_atoms(
+        crystal, ChainId(0), moved, ChainId(0), "CA", -10, -0.5
+    )
+    assert_equal(len(pairs), 11)
+    var fixed = List[V3]()
+    var moving = List[V3]()
+    for pair in pairs:
+        fixed.append(crystal.atoms[pair[0]].position)
+        moving.append(moved.atoms[pair[1]].position)
+    var fit = superpose(fixed, moving)
+    assert_true(fit.rmsd.to(METER) < 1e-15)
+    # An inserted residue pairs with nothing.
+    var longer = _renumbered("MKTAYGIAKQRQ")
+    var gapped = aligned_atoms(
+        crystal, ChainId(0), longer, ChainId(0), "CA", -10, -0.5
+    )
+    assert_equal(len(gapped), 11)
+    for pair in gapped:
+        var a = crystal.residues[crystal.atoms[pair[0]].residue.value].name
+        var b = longer.residues[longer.atoms[pair[1]].residue.value].name
+        assert_equal(a, b)
+    # And so does a residue that only the first chain has.
+    var reverse = aligned_atoms(
+        longer, ChainId(0), crystal, ChainId(0), "CA", -10, -0.5
+    )
+    assert_equal(len(reverse), 11)
+    # A residue without the atom on either side pairs nothing.
+    var bare = moved.copy()
+    bare.atoms[bare.find_atom(ResidueId(3), "CA").value].name = "CX"
+    assert_equal(
+        len(
+            aligned_atoms(
+                crystal, ChainId(0), bare, ChainId(0), "CA", -10, -0.5
+            )
+        ),
+        10,
+    )
+    assert_equal(
+        len(
+            aligned_atoms(
+                bare, ChainId(0), crystal, ChainId(0), "CA", -10, -0.5
+            )
+        ),
+        10,
+    )
+    # A water inside a chain is not part of its sequence.
+    var text = String(
+        "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00  0.00    "
+        "       C\nHETATM    2  O   HOH A   2       9.000   0.000   0.000  1.00"
+        "  0.00           O\nATOM      3  CA  SER A   3       3.800   0.000  "
+        " 0.000  1.00  0.00           C\nEND\n"
+    )
+    var wet = parse_pdb_structure(text, ALL_LOCATIONS)
+    var two = aligned_atoms(
+        wet,
+        ChainId(0),
+        build_peptide("GS", _coil(2)),
+        ChainId(0),
+        "CA",
+        -10,
+        -0.5,
+    )
+    assert_equal(len(two), 2)
+    assert_equal(two[1][0], 2)
+    with assert_raises(contains="chain"):
+        _ = aligned_atoms(wet, ChainId(4), wet, ChainId(0), "CA", -10, -0.5)
 
 
 def test_refusals() raises:
