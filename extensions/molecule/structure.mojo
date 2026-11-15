@@ -32,7 +32,7 @@ a count, such as `A2`, so the helices of `A` do not mark it.
 """
 
 from extensions.chemistry.quantities import ANGSTROM
-from extensions.molecule.cif import CifBlock, is_null, parse_cif
+from extensions.chemistry.cif import CifBlock, is_null, parse_cif
 from extensions.molecule.ids import (
     ATOM_RECORD,
     AltLocPolicy,

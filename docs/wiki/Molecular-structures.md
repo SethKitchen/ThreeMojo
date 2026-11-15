@@ -13,7 +13,6 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | Module | What it gives |
 |---|---|
 | `ids` | `AtomId`, `ResidueId`, `ChainId`, `ModelId`, `AtomGroup`, `SecondaryKind`, `AltLocPolicy`, `RibbonColoring`, `SurfaceColoring`, `EnsembleFit` and `AlignmentMode` |
-| `cif` | `parse_cif`, `read_cif`, `cif_tokens`, `CifBlock` and `is_null` |
 | `structure` | `Structure`, `parse_mmcif`, `read_mmcif`, `parse_pdb_structure`, `read_pdb_structure` and `SQUARE_ANGSTROM` |
 | `peptide` | `build_peptide`, `place_atom` and `three_letter` |
 | `dssp` | `assign_secondary`, `hydrogen_bonds`, `HydrogenBond`, `secondary_from_bonds`, `bond_energy` and `KILOCALORIE_PER_MOLE` |
@@ -237,6 +236,8 @@ A `BackboneAngles` holds a residue and its three angles as `Angle64` values, fro
 Helices gather near (-60, -45), and strands near (-120, 130). A trans peptide bond has an omega near 180 degrees, and a cis bond has an omega near 0.
 
 ## CIF text
+
+The mmCIF reader takes its tokens and tables from `chemistry.cif`, which the crystal reader of [Crystals and figures](Crystals-and-figures) shares. It gives `parse_cif`, `read_cif`, `cif_tokens`, `CifBlock`, `CifTable` and `is_null`.
 
 The tokens follow CIF 1.1. A `#` starts a comment. A value in single or double quotes ends at a matching quote that a blank follows, so `'O'Brien'` is one value. A line that starts with `;` opens a text field, and the next line that starts with `;` closes it.
 

@@ -154,16 +154,25 @@ struct CifTable(Copyable, Movable):
     """The names of the columns, in lower case."""
     var values: List[String]
     """The values, row by row."""
+    var lines: List[Int]
+    """The line of each value, from one, for messages."""
 
-    def __init__(out self, var tags: List[String], var values: List[String]):
+    def __init__(
+        out self,
+        var tags: List[String],
+        var values: List[String],
+        var lines: List[Int],
+    ):
         """Create a table.
 
         Args:
             tags: The names of the columns.
             values: The values, row by row. A whole number of rows.
+            lines: The line of each value.
         """
         self.tags = tags^
         self.values = values^
+        self.lines = lines^
 
     def rows(self) -> Int:
         """Return the number of rows.
@@ -326,15 +335,17 @@ def parse_cif(text: String) raises -> CifBlock:
             if len(tags) == 0:
                 raise Error(String("Line ", token.line, ": a loop has no name"))
             var values = List[String]()
+            var lines = List[Int]()
             while k < len(tokens) and not _starts_item(tokens[k]):
                 values.append(tokens[k].text)
+                lines.append(tokens[k].line)
                 k += 1
             if len(values) % len(tags) != 0:
                 raise Error(
                     String("Line ", token.line, ": a loop's values do not")
                     + " fill its rows"
                 )
-            tables.append(CifTable(tags^, values^))
+            tables.append(CifTable(tags^, values^, lines^))
             continue
         if k + 1 >= len(tokens) or _starts_item(tokens[k + 1]):
             raise Error(
@@ -342,7 +353,8 @@ def parse_cif(text: String) raises -> CifBlock:
             )
         var tags: List[String] = [lower]
         var values: List[String] = [tokens[k + 1].text]
-        tables.append(CifTable(tags^, values^))
+        var lines: List[Int] = [tokens[k + 1].line]
+        tables.append(CifTable(tags^, values^, lines^))
         k += 2
     return CifBlock(name, tables^)
 

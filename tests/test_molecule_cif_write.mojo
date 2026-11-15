@@ -6,7 +6,7 @@
 """Writing structures as mmCIF files, and reading them back."""
 
 from extensions.chemistry.quantities import ANGSTROM
-from extensions.molecule.cif import parse_cif
+from extensions.chemistry.cif import parse_cif
 from extensions.molecule.cif_write import cif_value, encode_mmcif
 from extensions.molecule.ids import (
     ALL_LOCATIONS,

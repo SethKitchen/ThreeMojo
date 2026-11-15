@@ -6,7 +6,7 @@
 """The CIF tokenizer, CIF blocks and the mmCIF structure reader."""
 
 from extensions.chemistry.quantities import ANGSTROM
-from extensions.molecule.cif import (
+from extensions.chemistry.cif import (
     CifBlock,
     cif_tokens,
     is_null,
@@ -164,6 +164,10 @@ def test_block_tables() raises:
     assert_equal(len(b), 2)
     assert_equal(b[1], "4")
     assert_equal(block.tables[1].rows(), 2)
+    # Each value keeps its line: `5` on line 3, `1 2` on 7 and `3 4` on 8.
+    assert_equal(block.tables[0].lines[0], 3)
+    assert_equal(block.tables[1].lines[1], 7)
+    assert_equal(block.tables[1].lines[3], 8)
     assert_equal(len(block.column("_e.only")), 0)
     with assert_raises(contains="has no _missing"):
         _ = block.column("_missing")
