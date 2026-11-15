@@ -25,6 +25,7 @@
 - `hypothesis`: t tests and rank tests of two groups and of pairs.
 - `tables`: Fisher's exact test, chi-square tests and McNemar's test.
 - `strata`: Mantel-Haenszel pooling of two-by-two tables over strata.
+- `propensity`: inverse probability weights, covariate balance and E-values.
 - `multiple`: adjusted p values for many tests.
 - `correlation`: Pearson's, Spearman's and Kendall's correlations.
 - `anova`: one-way analysis of variance and the Kruskal-Wallis test.
@@ -32,5 +33,6 @@
 - `distributions`: the t and F distributions.
 
 See the wiki pages Survival analysis, Diagnostic tests, Meta-analysis,
-Epidemic models, Sample size and power, and Group comparisons.
+Epidemic models, Sample size and power, Group comparisons, and
+Observational studies.
 """

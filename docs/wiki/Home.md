@@ -101,6 +101,7 @@ Look something up.
 - [Epidemic models](Epidemic-models)
 - [Sample size and power](Sample-size-and-power)
 - [Group comparisons](Group-comparisons)
+- [Observational studies](Observational-studies)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
   - [Anatomy validity](Anatomy-validity)

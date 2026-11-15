@@ -182,6 +182,7 @@
 - [Epidemic models](Epidemic-models)
 - [Sample size and power](Sample-size-and-power)
 - [Group comparisons](Group-comparisons)
+- [Observational studies](Observational-studies)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)
