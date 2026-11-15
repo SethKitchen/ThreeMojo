@@ -936,7 +936,7 @@ print(stats.mean.to(MILLIMETER64), stats.maximum.to(MILLIMETER64))
 var image = render_slice(thickness, K_AXIS, 40)
 ```
 
-A sphere fits when its radius is the distance from its center to the nearest voxel outside the label. `label_distance(map, label)` gives that distance, center to center, for each voxel. The transform is exact: it is the method of Felzenszwalb and Huttenlocher, with the spacing of each axis in its pass. The grid counts as surrounded by voxels outside every label.
+A sphere fits when its radius is the distance from its center to the nearest voxel outside the label. `label_distance(map, label)` gives that distance, center to center, for each voxel. The transform is exact: it is `distance_transform` of the [Numerics](Numerics#measure-distances-on-a-grid) extension, with the spacing of each axis in its pass. The grid counts as surrounded by voxels outside every label.
 
 Only the spheres that no neighbor's sphere holds can be the largest, so only they are drawn. Both maps are volumes on the grid of the label map, in millimeters, with 0 outside the label. A slab of `n` voxels is `n` voxels thick. A thin wall of one or two voxels is measured coarsely, so use voxels several times smaller than the wall.
 

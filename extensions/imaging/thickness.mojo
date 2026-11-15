@@ -27,89 +27,36 @@ the mean and the largest thickness of a label as lengths.
 from extensions.imaging.ids import LabelId, require_label
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
-from std.math import ceil, floor, inf, max, min, sqrt
+from extensions.numerics.distance import NO_SEED, distance_transform
+from std.math import inf, max, min, sqrt
 from units.si import METER, MILLIMETER64, Length64
 
+
 # A squared distance larger than any grid holds.
-comptime FAR = 1.0e30
-
-
-def _pass(
-    mut values: List[Float64],
-    first: Int,
-    stride: Int,
-    count: Int,
-    spacing: Float64,
-):
-    """Replace one line of squared distances by its exact transform.
-
-    The line holds `count` values from `first`, `stride` apart, `spacing`
-    meters apart. This is the lower envelope of parabolas of Felzenszwalb
-    and Huttenlocher. A value of `FAR` is no site at all, so no arithmetic
-    is done on it. A line without a site stays as it is.
-    """
-    var f = List[Float64](capacity=count)
-    for k in range(count):  # pragma: no branch
-        f.append(values[first + k * stride])
-    # The sites of the envelope, and where the region of each starts.
-    var hull = List[Int]()
-    var starts = List[Float64]()
-    for q in range(count):  # pragma: no branch
-        if f[q] >= FAR:
-            continue
-        var xq = Float64(q) * spacing
-        var start = -FAR
-        while len(hull) > 0:
-            var p = hull[len(hull) - 1]
-            var xp = Float64(p) * spacing
-            start = ((f[q] + xq * xq) - (f[p] + xp * xp)) / (2.0 * (xq - xp))
-            if start > starts[len(starts) - 1]:
-                break
-            _ = hull.pop()
-            _ = starts.pop()
-            start = -FAR
-        hull.append(q)
-        starts.append(start)
-    if len(hull) == 0:
-        return
-    var at = 0
-    for q in range(count):  # pragma: no branch
-        var x = Float64(q) * spacing
-        while at + 1 < len(hull) and starts[at + 1] < x:
-            at += 1
-        var d = x - Float64(hull[at]) * spacing
-        values[first + q * stride] = d * d + f[hull[at]]
-
-
 def _squared_distances(
     map: LabelMap, seeds: List[Bool], border_is_seed: Bool
-) -> List[Float64]:
+) raises -> List[Float64]:
     """Return the squared distance of each voxel to the nearest seed, in
-    square meters, on a grid padded by one voxel, or `FAR` without one."""
+    square meters, on a grid padded by one voxel, or `NO_SEED` without
+    one."""
     var px = map.nx + 2
     var py = map.ny + 2
     var pz = map.nz + 2
-    var border = 0.0 if border_is_seed else FAR
-    var values = List[Float64](length=px * py * pz, fill=border)
+    var padded = List[Bool](length=px * py * pz, fill=border_is_seed)
     for k in range(map.nz):  # pragma: no branch
         for j in range(map.ny):  # pragma: no branch
             for i in range(map.nx):  # pragma: no branch
-                var seed = seeds[map.index(i, j, k)]
                 var at = (i + 1) + px * ((j + 1) + py * (k + 1))
-                values[at] = 0.0 if seed else FAR
-    var sx = map.spacing_x.to(METER)
-    var sy = map.spacing_y.to(METER)
-    var sz = map.spacing_z.to(METER)
-    for k in range(pz):  # pragma: no branch
-        for j in range(py):  # pragma: no branch
-            _pass(values, px * (j + py * k), 1, px, sx)
-    for k in range(pz):  # pragma: no branch
-        for i in range(px):  # pragma: no branch
-            _pass(values, i + px * py * k, px, py, sy)
-    for j in range(py):  # pragma: no branch
-        for i in range(px):  # pragma: no branch
-            _pass(values, i + px * j, px * py, pz, sz)
-    return values^
+                padded[at] = seeds[map.index(i, j, k)]
+    return distance_transform(
+        padded,
+        px,
+        py,
+        pz,
+        map.spacing_x.to(METER),
+        map.spacing_y.to(METER),
+        map.spacing_z.to(METER),
+    )[0].copy()
 
 
 def seed_distances(
@@ -143,7 +90,7 @@ def seed_distances(
         for j in range(map.ny):  # pragma: no branch
             for i in range(map.nx):  # pragma: no branch
                 var s = squared[(i + 1) + px * ((j + 1) + py * (k + 1))]
-                var d = sqrt(s) if s < FAR else inf[DType.float64]()
+                var d = sqrt(s) if s < NO_SEED else inf[DType.float64]()
                 out.append(Length64(d, METER))
     return out^
 

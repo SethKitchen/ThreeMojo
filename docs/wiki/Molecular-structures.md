@@ -18,7 +18,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `dssp` | `assign_secondary`, `hydrogen_bonds`, `HydrogenBond`, `secondary_from_bonds`, `bond_energy` and `KILOCALORIE_PER_MOLE` |
 | `hbonds` | `bond_geometry` |
 | `ribbon` | `ribbon_geometry` and `chain_color` |
-| `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `distance_transform`, `vdw_radius`, `sphere_points` and `AtomCells` |
+| `surface` | `accessible_areas`, `molecular_surface`, `excluded_surface`, `vdw_radius`, `sphere_points` and `AtomCells` |
 | `coloring` | `color_surface`, `color_surface_potential`, `atom_color` and `kyte_doolittle` |
 | `charge` | `formal_charges`, `Charges` and `coulomb_potential` |
 | `confidence` | `confidence_color`, `confidence_summary` and `ConfidenceSummary` |
@@ -372,7 +372,7 @@ The probe's center can reach the points outside every grown sphere. The surface 
 
 Elsewhere, an exact Euclidean distance transform of the grid gives the distance to the nearest reachable grid point. That distance, less the point's own distance to the spheres, is an upper bound within one step of the true distance. This is the method of EDTSurf, with exact corrections.
 
-`distance_transform(seeds, px, py, pz)` is the transform of Felzenszwalb and Huttenlocher, run along x, then y, then z. It gives the squared distance to the nearest seed in grid steps, and the index of that seed.
+The excluded surface takes the distance to the reachable region from `distance_transform` of the [Numerics](Numerics#measure-distances-on-a-grid) extension. It gives the squared distance to the nearest seed in grid steps, and the index of that seed.
 
 ## Read and align sequences
 

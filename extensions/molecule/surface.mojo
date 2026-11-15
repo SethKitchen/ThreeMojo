@@ -32,6 +32,7 @@ from extensions.chemistry.quantities import ANGSTROM
 from extensions.humanoid.skeleton.isosurface import SampleGrid, mesh_samples
 from extensions.molecule.ids import ModelId
 from extensions.molecule.structure import Structure
+from extensions.numerics.distance import distance_transform
 from extensions.sdf.vector import V3, distance, dot, length, v3
 from loaders.pdb import cpk_color
 from math.vector3 import Vector3
@@ -452,103 +453,8 @@ def molecular_surface(
 
 
 # A squared distance, in steps, larger than any on a grid.
+# A distance larger than any on a grid, for a point with no candidate.
 comptime _FAR_SQUARE = 1.0e18
-
-
-def _meet(f: List[Float64], p: Int, q: Int) -> Float64:
-    """Return where the parabolas of positions `p` and `q` cross."""
-    var a = f[q] + Float64(q * q)
-    var b = f[p] + Float64(p * p)
-    return (a - b) / Float64(2 * q - 2 * p)
-
-
-def _pass(
-    mut d: List[Float64],
-    mut feature: List[Int],
-    start: Int,
-    stride: Int,
-    n: Int,
-    mut v: List[Int],
-    mut z: List[Float64],
-    mut f: List[Float64],
-    mut g: List[Int],
-):
-    """Run the one-dimensional transform of Felzenszwalb and Huttenlocher
-    along one line, keeping the nearest seed of each point."""
-    for q in range(n):  # pragma: no branch
-        f[q] = d[start + q * stride]
-        g[q] = feature[start + q * stride]
-    var k = 0
-    v[0] = 0
-    z[0] = -_FAR_SQUARE
-    z[1] = _FAR_SQUARE
-    for q in range(1, n):  # pragma: no branch
-        var s = _meet(f, v[k], q)
-        while s <= z[k]:
-            k -= 1
-            s = _meet(f, v[k], q)
-        k += 1
-        v[k] = q
-        z[k] = s
-        z[k + 1] = _FAR_SQUARE
-    k = 0
-    for q in range(n):  # pragma: no branch
-        while z[k + 1] < Float64(q):
-            k += 1
-        var p = v[k]
-        d[start + q * stride] = Float64((q - p) * (q - p)) + f[p]
-        feature[start + q * stride] = g[p]
-
-
-def distance_transform(
-    seeds: List[Bool], px: Int, py: Int, pz: Int
-) raises -> Tuple[List[Float64], List[Int]]:
-    """Return the exact Euclidean distance from each grid point to a seed.
-
-    This is the separable transform of Felzenszwalb and Huttenlocher, run
-    along x, then y, then z. It also keeps the nearest seed.
-
-    Args:
-        seeds: One flag per point, `i` fastest.
-        px: Points along x. At least one.
-        py: Points along y. At least one.
-        pz: Points along z. At least one.
-
-    Returns:
-        The squared distance to the nearest seed, in grid steps, and the
-        index of that seed. A grid with no seed gives distances of 1e18
-        or more and indexes of -1.
-
-    Raises:
-        Error: If a size is not positive, or the flags do not fill the
-            grid.
-    """
-    if px < 1 or py < 1 or pz < 1:
-        raise Error("A distance transform needs at least one point a side")
-    if len(seeds) != px * py * pz:
-        raise Error("The seeds must fill the grid")
-    var count = px * py * pz
-    var d = List[Float64](length=count, fill=_FAR_SQUARE)
-    var feature = List[Int](length=count, fill=-1)
-    for index in range(count):  # pragma: no branch
-        if seeds[index]:
-            d[index] = 0
-            feature[index] = index
-    var longest = max(px, max(py, pz))
-    var v = List[Int](length=longest, fill=0)
-    var z = List[Float64](length=longest + 1, fill=0)
-    var f = List[Float64](length=longest, fill=0)
-    var g = List[Int](length=longest, fill=0)
-    for k in range(pz):  # pragma: no branch
-        for j in range(py):  # pragma: no branch
-            _pass(d, feature, px * (j + py * k), 1, px, v, z, f, g)
-    for k in range(pz):  # pragma: no branch
-        for i in range(px):  # pragma: no branch
-            _pass(d, feature, i + px * py * k, px, py, v, z, f, g)
-    for j in range(py):  # pragma: no branch
-        for i in range(px):  # pragma: no branch
-            _pass(d, feature, i + px * j, px * py, pz, v, z, f, g)
-    return (d^, feature^)
 
 
 def excluded_surface(

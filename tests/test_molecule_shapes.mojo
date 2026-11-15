@@ -39,7 +39,6 @@ from extensions.molecule.surface import (
     _crease,
     _exits,
     accessible_areas,
-    distance_transform,
     excluded_surface,
     molecular_surface,
     sphere_points,
@@ -424,44 +423,6 @@ def test_surface_of_one_atom() raises:
         _ = molecular_surface(
             lone, ModelId(0), Length64(-1, METER), Length64(0.3, ANGSTROM)
         )
-
-
-def test_distance_transform_is_exact() raises:
-    # One seed in a 5 by 4 by 3 grid: the squared distance is i^2 + j^2 + k^2
-    # from it, and every point names it.
-    var seeds = List[Bool](length=60, fill=False)
-    seeds[0] = True
-    var result = distance_transform(seeds, 5, 4, 3)
-    var worst = 0.0
-    var named = True
-    for k in range(3):
-        for j in range(4):
-            for i in range(5):
-                var at = i + 5 * (j + 4 * k)
-                worst = max(
-                    worst, abs(result[0][at] - Float64(i * i + j * j + k * k))
-                )
-                named = named and result[1][at] == 0
-    assert_equal(worst, 0)
-    assert_true(named)
-    # Two seeds on a line split it between them.
-    var line: List[Bool] = [True, False, False, False, False, False, True]
-    var split = distance_transform(line, 7, 1, 1)
-    assert_equal(split[0][3], 9)
-    assert_equal(split[1][2], 0)
-    assert_equal(split[1][4], 6)
-    # No seed at all.
-    var none = distance_transform(List[Bool](length=4, fill=False), 2, 2, 1)
-    assert_true(none[0][3] >= 1e18)
-    assert_equal(none[1][3], -1)
-    with assert_raises(contains="at least one point"):
-        _ = distance_transform(List[Bool](), 0, 1, 1)
-    with assert_raises(contains="at least one point"):
-        _ = distance_transform(List[Bool](), 1, 0, 1)
-    with assert_raises(contains="at least one point"):
-        _ = distance_transform(List[Bool](), 1, 1, 0)
-    with assert_raises(contains="fill the grid"):
-        _ = distance_transform(List[Bool](length=3, fill=True), 2, 2, 1)
 
 
 def test_excluded_surface_of_one_atom_is_its_sphere() raises:

@@ -17,6 +17,7 @@
 | `search` | `bisect`, `golden_minimum` and `GOLDEN`, the searches along one variable |
 | `matrix3x3` | `Matrix3x3`, `determinant3` and `adjugate3`, the 3 by 3 matrices of SIMD lanes |
 | `noise` | `Xorshift64`, seeded uniform and normal numbers for synthetic data |
+| `distance` | `distance_transform` and `NO_SEED`, the exact distance from each grid point to the nearest seed |
 | `sparse` | `SparseBuilder`, which assembles triplets, and `CsrMatrix` |
 | `iterative` | `conjugate_gradient` with a Jacobi preconditioner, and `SolveStatus` |
 | `skyline` | `reverse_cuthill_mckee`, `profile` and `SkylineFactor` |
@@ -148,6 +149,12 @@ var root = bisect[below](0.0, 2.0, 60)
 
 Both give the middle of the last bracket. The test and the cost run in order, so a fit can start each call from the last fit. The equilibrium temperatures of chemistry, the isoelectric point, the Weibull shape, and the T1, IVIM and negative binomial fits use them.
 
+## Measure distances on a grid
+
+`distance_transform(seeds, px, py, pz, sx, sy, sz)` gives the exact squared Euclidean distance from each point of a grid to the nearest seed, and the index of that seed. It is the method of Felzenszwalb and Huttenlocher (2012), one pass along each axis. Each pass is the lower envelope of parabolas, with the spacing of its axis. A point with no seed anywhere keeps `NO_SEED` and the index -1.
+
+The local thickness and the label distances of the imaging extension use it with the voxel spacing in meters. The excluded surface of a molecule uses it in grid steps, and takes the nearest seed too.
+
 ## Make seeded synthetic data
 
 `Xorshift64(seed)` gives numbers that one seed gives again on every machine. It steps a 64-bit state by the three shifts of Marsaglia (2003). `uniform()` gives its top 53 bits as a number strictly between 0 and 1. `normal()` gives a standard normal number from two uniforms, by Box and Muller (1958). A seed of 0 is refused, because xorshift never leaves it.
@@ -175,6 +182,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A spread has no point | `PointSpread.covariance`, `PointSpread.principal` |
 | Eigenpairs do not have one vector for each value | `descending` |
 | A seed is 0 | `Xorshift64` |
+| A grid size is below 1, a spacing is not positive and finite, or the seeds do not fill the grid | `distance_transform` |
 | A degree of freedom is not from more than 0 to 1e8, a probability is not between 0 and 1, or a value is out of range | The t, F and beta functions, `normal_quantile` |
 | A gamma shape is not above 0 and at most 1e7, a point is below 0 or not a number, or a probability is not above 0 and below 1 | `gamma_tails`, `gamma_quantile`, `gamma_upper_quantile` |
 | A chi-square freedom is not from 1 to 1000, or the statistic is negative or not a number | `chi_square_p_value` |
@@ -203,4 +211,5 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Acklam, "An algorithm for computing the inverse normal cumulative distribution function", 2003.
 - West, "Updating mean and variance estimates: an improved method", Communications of the ACM, 1979.
 - Marsaglia, "Xorshift RNGs", Journal of Statistical Software, 2003.
+- Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", Theory of Computing, 2012.
 - Box and Muller, "A note on the generation of random normal deviates", Annals of Mathematical Statistics, 1958.
