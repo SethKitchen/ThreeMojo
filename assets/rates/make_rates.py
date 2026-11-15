@@ -3,16 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Write synthetic cohort strata and their Poisson regression by
+"""Write the Poisson regression of synthetic cohort strata by
 statsmodels, a Python library.
 
-    python3 make_rates.py
+    mojo run -I . tools/make_rates.mojo
+    cd assets/rates && python3 make_rates.py
 
-Run it with numpy and statsmodels 0.15.0. It writes two files:
+Run it with numpy and statsmodels 0.15.0. `tools/make_rates.mojo` writes
+the 48 synthetic strata, `strata.txt`, one to a line: the events, the
+person-years, the age in decades, 1 for smokers or 0, and an air
+pollution index. This script reads them.
 
-- `strata.txt` holds 48 synthetic strata of a cohort, one to a line: the
-  events, the person-years, the age in decades, 1 for smokers or 0, and
-  an air pollution index.
 - `rates_expected.txt` holds the Poisson regression of the events on the
   covariates with the log of the person-years as the offset, by `GLM`
   fitted to 1e-12:
@@ -28,17 +29,9 @@ Run it with numpy and statsmodels 0.15.0. It writes two files:
 import numpy as np
 import statsmodels.api as sm
 
-rng = np.random.default_rng(20261115)
-n = 48
-age = np.round(rng.uniform(4.0, 8.0, n), 1)
-smoker = (np.arange(n) % 2).astype(int)
-pollution = np.round(rng.normal(3.0, 1.0, n), 2)
-years = np.round(rng.uniform(200.0, 3000.0, n), 1)
-rate = np.exp(-11.0 + 0.9 * age + 1.1 * smoker + 0.15 * pollution)
-events = rng.poisson(rate * years)
-with open("strata.txt", "w") as out:
-    for i in range(n):
-        out.write("%d %.1f %.1f %d %.2f\n" % (events[i], years[i], age[i], smoker[i], pollution[i]))
+with open("strata.txt") as data:
+    rows = np.array([[float(v) for v in line.split()] for line in data if line.strip()])
+events, years, age, smoker, pollution = rows.T
 x = sm.add_constant(np.column_stack([age, smoker, pollution]))
 fit = sm.GLM(events, x, family=sm.families.Poisson(), offset=np.log(years)).fit(
     method="newton", tol=1e-12, maxiter=100

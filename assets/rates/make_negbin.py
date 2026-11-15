@@ -5,13 +5,15 @@
 
 """Write a negative binomial (NB2) model of event rates with statsmodels.
 
-    python3 make_negbin.py > negbin_expected.txt
+    mojo run -I . tools/make_rates.mojo
+    cd assets/rates && python3 make_negbin.py > negbin_expected.txt
 
-Run it with numpy 2.5.4, scipy 1.18.1 and statsmodels 0.15.0. A synthetic
-cohort has 120 strata, each with a person-time in years, a smoking flag
-and an age in decades from 60. Its counts are gamma-Poisson with a
-dispersion of 0.5, so they spread more than Poisson counts. Each `stratum`
-line holds the events, the person-years and the two covariates.
+Run it with numpy 2.5.4, scipy 1.18.1 and statsmodels 0.15.0.
+`tools/make_rates.mojo` writes the synthetic cohort, `negbin_strata.txt`:
+120 strata, each with the events, a person-time in years, a smoking flag
+and a standardized age. Its counts are gamma-Poisson with a dispersion
+of 0.5, so they spread more than Poisson counts. This script copies each
+stratum to a `stratum` line, then writes:
 
 - `params`: the intercept, the two log rate ratios and alpha, from
   statsmodels' `NegativeBinomial` with `loglike_method="nb2"` and the
@@ -29,14 +31,10 @@ import numpy
 import scipy.stats
 import statsmodels.api as sm
 
-generator = numpy.random.default_rng(20261115)
-n = 120
-years = numpy.round(generator.uniform(50.0, 400.0, n), 1)
-smoking = (generator.random(n) < 0.4).astype(float)
-age = numpy.round(generator.normal(0.0, 1.0, n), 2)
-rate = numpy.exp(-3.0 + 0.6 * smoking + 0.4 * age)
-mean = years * rate * generator.gamma(2.0, 0.5, n)
-events = generator.poisson(mean)
+with open("negbin_strata.txt") as data:
+    rows = numpy.array([[float(v) for v in line.split()] for line in data if line.strip()])
+events, years, smoking, age = rows.T
+n = len(events)
 X = sm.add_constant(numpy.column_stack([smoking, age]))
 
 

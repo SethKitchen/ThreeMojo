@@ -282,9 +282,9 @@ The tests compare `proportions` with statsmodels 0.15.0. `assets/proportions/mak
 - The six proportions of a test of 90, 30, 10 and 170 patients, and their exact intervals, agree to 1e-12. Its likelihood ratios and their intervals agree with `Table2x2` to 1e-12.
 - The risk difference of 30 of 100 against 15 of 100 agrees with the Wald interval of `confint_proportions_2indep`. Its risk ratio and odds ratio agree with `Table2x2`, all to 1e-12.
 
-The tests compare `rates` with the Poisson `GLM` of statsmodels 0.15.0, with an offset, on 48 synthetic strata. `assets/rates/make_rates.py` writes them. The coefficients agree to a relative 1e-12. The standard errors, z values, interval ends, deviance, dispersion and rates agree to 1e-11.
+The tests compare `rates` with the Poisson `GLM` of statsmodels 0.15.0, with an offset, on 48 synthetic strata. `tools/make_rates.mojo` writes them, and `assets/rates/make_rates.py` writes the expected values. The coefficients agree to a relative 1e-12. The standard errors, z values, interval ends, deviance, dispersion and rates agree to 1e-11.
 
-The tests compare `negbin` with the `NegativeBinomial` model of statsmodels 0.15.0 on 120 synthetic strata of gamma-Poisson counts, with alpha near 0.5. `assets/rates/make_negbin.py` writes them. The coefficients and alpha agree to a relative 1e-10, and their errors to 1e-9. The log-likelihoods agree to 1e-12, and the likelihood ratio to 1e-11. The deviance and the dispersion agree with statsmodels' `GLM` at the fitted alpha to 1e-9 and 1e-8.
+The tests compare `negbin` with the `NegativeBinomial` model of statsmodels 0.15.0 on 120 synthetic strata of gamma-Poisson counts, with alpha near 0.5. `tools/make_rates.mojo` writes them, and `assets/rates/make_negbin.py` writes the expected values. The coefficients and alpha agree to a relative 1e-10, and their errors to 1e-9. The log-likelihoods agree to 1e-12, and the likelihood ratio to 1e-11. The deviance and the dispersion agree with statsmodels' `GLM` at the fitted alpha to 1e-9 and 1e-8.
 
 The tests compare `kappa` with `cohens_kappa` of statsmodels 0.15.0. The tables are four grades of 120 synthetic films, by each weighting, and two categories of 60 smears. `assets/agreement/make_kappa.py` writes them. Kappa agrees to a relative 1e-14, and its errors and interval ends to 1e-12.
 

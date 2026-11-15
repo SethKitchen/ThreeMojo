@@ -86,7 +86,7 @@ Here `S0` is the susceptible fraction at the start and `p` is the immune fractio
 
 ![40 days of synthetic case counts as bars, with the fitted exponential growth](out/incidence.png)
 
-`examples/incidence.mojo` makes this picture. Each blue bar is the cases of one day of a synthetic outbreak, and the red curve is the fitted growth. The cases grow by 0.122 a day, from 0.119 to 0.125, and they double each 5.7 days. With a latent period of 3 days and an infectious period of 5 days, R is 2.20, from 2.16 to 2.24.
+`examples/incidence.mojo` makes this picture. Each blue bar is the cases of one day of a synthetic outbreak, and the red curve is the fitted growth. The cases grow by 0.121 a day, from 0.118 to 0.124, and they double each 5.7 days. With a latent period of 3 days and an infectious period of 5 days, R is 2.18, from 2.15 to 2.22.
 
 Early in an epidemic, the cases grow by a fixed fraction each day. `growth_rate(counts, step, tolerance, max_steps)` fits the count at time `t` as `exp(a + r t)`, by Poisson regression of the counts on the time. The counts are in order, `step` apart. The result is a `GrowthFit`:
 
@@ -109,7 +109,7 @@ The tests compare the module with scipy 1.18.1. `assets/epidemic/make_epidemic.p
 - With a step of 0.05 days, each fraction at 10, 30, 60, 90 and 150 days agrees to 1e-10.
 - The final size relation agrees with scipy's `brentq` to a relative 1e-14.
 
-The tests compare `incidence` with the Poisson `GLM` of statsmodels 0.15.0 on 40 days of synthetic counts. The intercept and the rate agree to a relative 1e-12. Their standard errors, the dispersion and the deviance agree to 1e-11.
+The tests compare `incidence` with the Poisson `GLM` of statsmodels 0.15.0 on 40 days of synthetic counts, which `tools/make_incidence.mojo` writes. The intercept and the rate agree to a relative 1e-12. Their standard errors, the dispersion and the deviance agree to 1e-11.
 
 The tests also check properties of the models:
 

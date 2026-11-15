@@ -3,15 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Write synthetic daily case counts and their growth by statsmodels, a
+"""Write the growth of synthetic daily case counts by statsmodels, a
 Python library.
 
-    python3 make_incidence.py
+    mojo run -I . tools/make_incidence.mojo
+    cd assets/incidence && python3 make_incidence.py
 
-Run it with numpy and statsmodels 0.15.0. It writes two files:
+Run it with numpy and statsmodels 0.15.0. `tools/make_incidence.mojo`
+writes 40 days of synthetic case counts, `cases.txt`, one to a line:
+Poisson counts about `8 exp(0.12 t)` cases on day t, from 0. This script
+reads them.
 
-- `cases.txt` holds 40 days of synthetic case counts, one to a line. They
-  are Poisson counts about `8 exp(0.12 t)` cases on day t, from 0.
 - `incidence_expected.txt` holds the Poisson regression of the counts on
   the day, by statsmodels' `GLM` with a Poisson family, fitted by Newton
   steps to 1e-12: the intercept and the growth rate per day, their
@@ -22,12 +24,9 @@ Run it with numpy and statsmodels 0.15.0. It writes two files:
 import numpy as np
 import statsmodels.api as sm
 
-rng = np.random.default_rng(20261115)
-days = np.arange(40)
-cases = rng.poisson(8.0 * np.exp(0.12 * days))
-with open("cases.txt", "w") as out:
-    for c in cases:
-        out.write("%d\n" % c)
+with open("cases.txt") as data:
+    cases = np.array([int(line) for line in data if line.strip()])
+days = np.arange(len(cases))
 x = sm.add_constant(days.astype(float))
 fit = sm.GLM(cases, x, family=sm.families.Poisson()).fit(
     method="newton", tol=1e-12, maxiter=100

@@ -3,16 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Write a synthetic cohort and its linear regression by statsmodels, a
+"""Write the linear regression of a synthetic cohort by statsmodels, a
 Python library.
 
-    python3 make_regression.py
+    mojo run -I . tools/make_regression.mojo
+    cd assets/regression && python3 make_regression.py
 
-Run it with numpy and statsmodels 0.15.0. It writes two files:
+Run it with numpy and statsmodels 0.15.0. `tools/make_regression.mojo`
+writes 80 synthetic patients, `pressure.txt`, one to a line: the systolic
+blood pressure in mmHg, the age in years, the body mass index in kg/m^2,
+and the salt intake in g a day. This script reads them.
 
-- `pressure.txt` holds 80 synthetic patients, one to a line: the systolic
-  blood pressure in mmHg, the age in years, the body mass index in kg/m^2,
-  and the salt intake in g a day.
 - `regression_expected.txt` holds the least squares fit of `OLS` with an
   intercept:
 
@@ -27,15 +28,9 @@ Run it with numpy and statsmodels 0.15.0. It writes two files:
 import numpy as np
 import statsmodels.api as sm
 
-rng = np.random.default_rng(20261115)
-n = 80
-age = np.round(rng.uniform(30, 80, n))
-bmi = np.round(rng.normal(27.0, 4.0, n), 1)
-salt = np.round(rng.normal(8.0, 2.5, n), 1)
-pressure = np.round(90 + 0.6 * age + 0.9 * bmi + 1.2 * salt + rng.normal(0, 9, n))
-with open("pressure.txt", "w") as out:
-    for i in range(n):
-        out.write("%d %d %.1f %.1f\n" % (pressure[i], age[i], bmi[i], salt[i]))
+with open("pressure.txt") as data:
+    rows = np.array([[float(v) for v in line.split()] for line in data if line.strip()])
+pressure, age, bmi, salt = rows.T
 x = sm.add_constant(np.column_stack([age, bmi, salt]))
 fit = sm.OLS(pressure, x).fit()
 ci = fit.conf_int(0.05)

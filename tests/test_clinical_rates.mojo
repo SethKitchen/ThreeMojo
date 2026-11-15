@@ -7,7 +7,7 @@
 
 `assets/rates/rates_expected.txt` holds the results of statsmodels 0.15.0
 on the synthetic strata of `assets/rates/strata.txt`. See
-`assets/rates/make_rates.py`.
+`tools/make_rates.mojo` and `assets/rates/make_rates.py`.
 """
 
 from extensions.clinical.rates import RateModel, poisson_regression

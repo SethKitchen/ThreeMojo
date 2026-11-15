@@ -6,7 +6,8 @@
 """Negative binomial (NB2) regression of event rates.
 
 `assets/rates/negbin_expected.txt` holds 120 synthetic strata with the
-values of statsmodels. See `assets/rates/make_negbin.py`.
+values of statsmodels. See `tools/make_rates.mojo` and
+`assets/rates/make_negbin.py`.
 """
 
 from extensions.numerics.elementary import precise_exp

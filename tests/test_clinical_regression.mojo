@@ -7,7 +7,8 @@
 
 `assets/regression/regression_expected.txt` holds the results of
 statsmodels 0.15.0 on the synthetic cohort of
-`assets/regression/pressure.txt`. See `assets/regression/make_regression.py`.
+`assets/regression/pressure.txt`. See `tools/make_regression.mojo` and
+`assets/regression/make_regression.py`.
 """
 
 from extensions.clinical.regression import LinearModel, linear_regression

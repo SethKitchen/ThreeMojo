@@ -189,7 +189,7 @@ The tests take 30 synthetic pairs of glucose and HbA1c with ties. Their correlat
 
 F and H of three synthetic groups agree with scipy's `f_oneway` and `kruskal` to a relative 1e-13, and their p values to 1e-10 and 1e-11. `tools/make_anova.mojo` writes the groups, and `assets/hypothesis/make_anova.py` writes the results of scipy.
 
-The tests fit a linear model of 80 synthetic patients with three covariates. Its coefficients, standard errors, t values and interval ends agree with statsmodels' `OLS` to a relative 1e-12. R^2 and the residual deviation agree to 1e-13, and the predictions to 1e-13. `assets/regression/make_regression.py` writes them.
+The tests fit a linear model of 80 synthetic patients with three covariates. Its coefficients, standard errors, t values and interval ends agree with statsmodels' `OLS` to a relative 1e-12. R^2 and the residual deviation agree to 1e-13, and the predictions to 1e-13. `tools/make_regression.mojo` writes the patients, and `assets/regression/make_regression.py` writes the expected values.
 
 The adjusted p values of 12 p values, with a tie, agree with statsmodels' `multipletests` to a relative 1e-15 by each method. `assets/hypothesis/make_multiple.py` writes them.
 

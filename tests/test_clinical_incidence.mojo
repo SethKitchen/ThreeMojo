@@ -7,7 +7,8 @@
 
 `assets/incidence/incidence_expected.txt` holds the Poisson regression of
 statsmodels 0.15.0 on the synthetic counts of
-`assets/incidence/cases.txt`. See `assets/incidence/make_incidence.py`.
+`assets/incidence/cases.txt`. See `tools/make_incidence.mojo` and
+`assets/incidence/make_incidence.py`.
 """
 
 from extensions.clinical.incidence import (

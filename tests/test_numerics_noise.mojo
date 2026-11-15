@@ -6,6 +6,7 @@
 """Seeded uniform and normal numbers by xorshift64."""
 
 from extensions.numerics.noise import Xorshift64
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -35,10 +36,12 @@ def test_moments() raises:
     var noise = Xorshift64(7)
     var n = 20000
     var sum = 0.0
+    var inside = True
     for _ in range(n):
         var u = noise.uniform()
-        assert_true(u > 0 and u < 1)
+        inside = inside and u > 0 and u < 1
         sum += u
+    assert_true(inside)
     assert_almost_equal(sum / Float64(n), 0.5, atol=0.01)
     var mean = 0.0
     var square = 0.0
@@ -48,6 +51,50 @@ def test_moments() raises:
         square += z * z / Float64(n)
     assert_almost_equal(mean, 0.0, atol=0.03)
     assert_almost_equal(square, 1.0, atol=0.04)
+
+
+def test_counts_and_gammas() raises:
+    var noise = Xorshift64(11)
+    var n = 4000
+    # Poisson means of 3 and of 1200: mean = variance.
+    var means: List[Float64] = [3.0, 1200.0]
+    for m in means:
+        var sum = 0.0
+        var square = 0.0
+        for _ in range(n):
+            var k = Float64(noise.poisson(m))
+            sum += k / Float64(n)
+            square += k * k / Float64(n)
+        assert_almost_equal(sum, m, rtol=0.03)
+        assert_almost_equal(square - sum * sum, m, rtol=0.1)
+    assert_equal(noise.poisson(0.0), 0)
+    # Gamma shapes of 2 and of 0.5: mean shape scale, variance shape
+    # scale^2.
+    var shapes: List[Float64] = [2.0, 0.5]
+    for a in shapes:
+        var sum = 0.0
+        var square = 0.0
+        var positive = True
+        for _ in range(n):
+            var g = noise.gamma(a, 3.0)
+            positive = positive and g > 0
+            sum += g / Float64(n)
+            square += g * g / Float64(n)
+        assert_true(positive)
+        assert_almost_equal(sum, 3.0 * a, rtol=0.06)
+        assert_almost_equal(square - sum * sum, 9.0 * a, rtol=0.15)
+    var x = noise.between(2.0, 5.0)
+    assert_true(x > 2.0 and x < 5.0)
+    var bad: List[Float64] = [-1.0, inf[DType.float64](), nan[DType.float64]()]
+    for v in bad:
+        with assert_raises(contains="Poisson mean"):
+            _ = noise.poisson(v)
+        with assert_raises(contains="gamma shape"):
+            _ = noise.gamma(v, 1.0)
+        with assert_raises(contains="gamma shape"):
+            _ = noise.gamma(1.0, v)
+    with assert_raises(contains="gamma shape"):
+        _ = noise.gamma(0.0, 1.0)
 
 
 def test_zero_seed() raises:

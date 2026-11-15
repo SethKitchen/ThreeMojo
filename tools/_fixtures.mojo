@@ -11,8 +11,10 @@ the reference library and writes the expected values. Only that script
 needs Python.
 
 - `SEED` is the seed of every generator, so one run gives the same files.
+  It has many set bits, as xorshift needs.
 - `normal(noise, mean, sd)` gives a normal number.
-- `whole(x)` rounds to an integer, a half to the even one.
+- `whole(x)` rounds to an integer, a half to the even one, and
+  `rounded(x, places)` rounds to decimal places.
 - `numbers(values)` and `integers(values)` join values with spaces, each
   number as the shortest text that reads back to it.
 - `write_text(path, text)` writes a file.
@@ -21,8 +23,10 @@ needs Python.
 from extensions.numerics.noise import Xorshift64
 from std.pathlib import Path
 
-comptime SEED = 20261115
-"""The seed of every fixture generator."""
+comptime SEED: UInt64 = 0x9E3779B97F4A7C15
+"""The seed of every fixture generator: the bits of the golden ratio.
+Xorshift needs many set bits in its seed; a small seed gives small first
+numbers."""
 
 
 def normal(mut noise: Xorshift64, mean: Float64, sd: Float64) -> Float64:
@@ -49,6 +53,23 @@ def whole(x: Float64) -> Int:
         The nearest integer.
     """
     return Int(round(x))
+
+
+def rounded(x: Float64, places: Int) -> Float64:
+    """Return a number rounded to decimal places, a half to the even one.
+
+    Args:
+        x: The number, finite.
+        places: The decimal places, 0 or more.
+
+    Returns:
+        The nearest multiple of `10^-places`, as the division of an
+        integer by `10^places`.
+    """
+    var scale = 1.0
+    for _ in range(places):
+        scale *= 10.0
+    return Float64(whole(x * scale)) / scale
 
 
 def numbers(values: List[Float64]) -> String:
