@@ -17,6 +17,7 @@
 | `hyperelastic` | `solve_neo_hookean` and `HyperelasticResult` |
 | `post` | `stress_geometry`, `deformed_geometry`, `stress_color`, `mode_geometry`, `temperature_geometry` and `dose_geometry` |
 | `summary` | `stress_summary`, `MaterialStress` and `strain_energy` |
+| `failure` | `effective_strains`, `pistoia_failure` and `PistoiaFailure` |
 | `quality` | `element_quality`, `ElementQuality`, `mesh_quality` and `MeshQuality` |
 | `probe` | `locate_point`, `MeshPoint`, `sample_field`, `sample_temperature` and `sample_displacement` |
 | `dose` | `thermal_dose` and `dose_volume` |
@@ -224,6 +225,23 @@ A material without elements has no row. The peak of one element depends on the m
 var energy = strain_energy(problem, result).to(JOULE)
 var stiffness = 2 * energy / (press * press)
 ```
+
+## Estimate the failure load of a bone
+
+A linear model of a bone, such as a radius from high-resolution CT, gives the strain of each element under a load. Pistoia and others (2002) found the load at which a radius fails. At about that load, 2 percent of its bone tissue passes an effective strain of 7000 microstrain. Studies of osteoporosis use this criterion to estimate the strength of a bone from its scan.
+
+```mojo
+from extensions.fem.failure import pistoia_failure
+
+var failure = pistoia_failure(problem, result, MaterialId(0), 0.007, 0.02)
+var load = failure.factor * reaction
+```
+
+`effective_strains(problem, result)` gives `sqrt(2 U / E)` of each element, with `U` its strain energy density. Under a uniaxial stress, it is the strain along the stress.
+
+`pistoia_failure(problem, result, material, critical, fraction)` takes the elements of one material, such as bone without the platens that press it. It takes them from the largest effective strain down, until their volume reaches the fraction of the material's volume. The strain of the last of them is the `threshold`. The model is linear, so the material fails near `factor = critical / threshold` times the solved load.
+
+The factor scales the whole solution: the forces, the reactions and the prescribed displacements. So a model pressed by a prescribed displacement fails near the factor times its reaction force.
 
 ## Principal stresses
 
@@ -448,6 +466,9 @@ The tests check these results:
 - The six tetrahedra of each voxel fill its volume exactly.
 - A quadratic bar under a pull or a pressure has the exact uniform stress and stretch.
 - A quadratic cantilever of 60 elements bends to 98 percent of beam theory.
+- A bar has a Poisson's ratio of 0 and its sides held. Pulled to a strain of 0.001, it has an effective strain of 0.001 in every element. So it fails at 7 times the load for a critical strain of 0.007.
+- A soft half and a stiff half of twice the modulus, in series, carry one stress. Their thresholds are 0.002 and 0.001 for a pull of 3 mm.
+- Twelve elements have effective strains of 1e-4 to 12e-4. They reach a fifth of their volume at the third largest, and a twentieth at the largest.
 - A quadratic element stiffness is symmetric, and its ten shape gradients sum to zero.
 - A column standing under its own weight puts all of it on its base. With ten-node elements, its top drops by exactly `rho g L^2 / (2 E)`.
 - Two labels meshed together share the nodes of their interface, and each has its own material.
@@ -510,6 +531,7 @@ Every function raises `Error` for input it cannot use.
 | A result is not for its mesh | `stress_geometry` |
 | A Neo-Hookean solve has quadratic elements, a thermal load, steps out of 1 to 1000, a tolerance not between 0 and 1, no Newton step, or an element turned inside out | `solve_neo_hookean` |
 | A result is not for its mesh, or a stress threshold is negative or not finite | `stress_summary`, `strain_energy` |
+| A result is not for its problem, the material names none or has no element, the critical strain is not positive and finite, the share is not between 0 and 1, or the material has no strain there | `effective_strains`, `pistoia_failure` |
 | A mesh has no element, or an element id names no element | `mesh_quality`, `element_quality` |
 | A dose has fewer than two records, times that do not rise, records of other sizes, doses that do not fit the mesh, or a bad threshold or scale | `thermal_dose`, `dose_volume`, `dose_geometry` |
 | No element holds a point, or a field or a mesh point does not fit the mesh | `locate_point`, `sample_field`, `sample_temperature`, `sample_displacement` |
@@ -527,6 +549,7 @@ Every function raises `Error` for input it cannot use.
 - The solver is iterative. A large or badly conditioned problem needs a large budget.
 - A voxel mesh has stair steps on curved surfaces. The stress at a stair step is not the stress of the smooth shape.
 - A thermal dose of 240 minutes is a threshold from research, and tissues differ. A dosed volume is not a prediction of a treatment.
+- The criterion of Pistoia is a rule from linear models of the distal radius. Its critical strain and share suit that site and that kind of model. It estimates a failure load for research, and it does not predict the fracture of a patient.
 
 ## References
 
@@ -541,3 +564,4 @@ Every function raises `Error` for input it cannot use.
 - Hinton, Rock and Zienkiewicz, "A note on mass lumping and related processes in the finite element method", 1976.
 - Pennes, "Analysis of tissue and arterial blood temperatures in the resting human forearm", 1948.
 - Sapareto and Dewey, "Thermal dose determination in cancer therapy", International Journal of Radiation Oncology, Biology, Physics, 1984.
+- Pistoia and others, "Estimation of distal radius failure load with micro-finite element analysis models based on three-dimensional peripheral quantitative computed tomography images", Bone, 2002.
