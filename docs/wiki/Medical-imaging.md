@@ -23,6 +23,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `diffusion` | `fit_adc`, `AdcFit`, `fit_kurtosis`, `KurtosisFit`, `adc_maps`, `AdcMaps`, `kurtosis_maps`, `KurtosisMaps`, `computed_dwi`, `Diffusivity64`, `BValue64`, `SQUARE_MILLIMETER_PER_SECOND`, `SQUARE_MICROMETER_PER_SECOND` and `SECOND_PER_SQUARE_MILLIMETER` |
 | `relaxometry` | `fit_t2`, `T2Fit`, `fit_t1`, `T1Fit`, `t2_maps`, `t1_maps`, `RelaxationMaps` and `MILLISECOND64` |
 | `ivim` | `fit_ivim`, `IvimFit`, `ivim_maps` and `IvimMaps` |
+| `perfusion` | `Deconvolution`, `PerfusionFit`, `ct_concentration`, `dsc_concentration`, `ct_concentration_series`, `perfusion_maps`, `PerfusionMaps`, `perfusion_mismatch`, `PerfusionMismatch`, `BloodFlow64`, `BloodVolume64`, `MILLILITER_PER_100_GRAM_PER_MINUTE`, `MILLILITER_PER_100_GRAM`, `CUBIC_METER_PER_KILOGRAM`, `BRAIN_DENSITY`, `HEMATOCRIT_FACTOR` and `MAX_FRAMES` |
 | `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
@@ -201,6 +202,40 @@ var maps = tofts_maps(series, times, plasma, map, LabelId(1), STANDARD_TOFTS)
 `tofts_maps(series, times, plasma, map, label, model)` fits each voxel of a label, in a series of volumes of concentration. `parker_aif(times)` gives the population arterial input function of Parker and others (2006), in mM of blood. Divide it by `1 - Hct` for plasma.
 
 Concentrations are plain values in one unit, such as mM. The model is linear in concentration, so the unit cancels.
+
+## Measure perfusion by CT or DSC-MRI
+
+A CT perfusion or a DSC-MRI scan follows a bolus of contrast agent through the brain. Deconvolution gives the cerebral blood flow (CBF), the blood volume (CBV), the mean transit time (MTT) and Tmax of each voxel. Stroke research uses these maps to find the ischemic core and the tissue at risk.
+
+```mojo
+var arterial = ct_concentration(artery_hu, 4)
+var deconvolution = Deconvolution.circular(arterial, Duration64(1.5, SECOND), 0.15)
+var fit = deconvolution.fit(ct_concentration(tissue_hu, 4))
+print(fit.blood_flow(density, HEMATOCRIT_FACTOR).to(MILLILITER_PER_100_GRAM_PER_MINUTE))
+print(fit.tmax.to(SECOND), fit.mtt().to(SECOND))
+```
+
+The tissue concentration is the arterial concentration convolved with `k(t) = F R(t)`, the flow F times the residue function R. `ct_concentration(values, baseline)` gives the enhancement in HU over the mean of the first frames. `dsc_concentration(signals, baseline, echo_time)` gives the change of R2*, `-ln(S / S0) / TE`, in 1/s. Both are in proportion to the concentration of the agent.
+
+`Deconvolution(arterial, step, threshold)` writes the convolution as the lower triangular matrix `A[j, i] = step * Ca[j - i]` of Ostergaard and others (1996). `Deconvolution.circular(arterial, step, threshold)` pads the curves with zeros to twice their length. It takes the block-circulant matrix of Wu and others (2003), so a delay of a tissue curve does not change its flow. Both drop the singular values below `threshold` of the largest, which keeps the noise from growing. The singular values come from the eigenvalues of `A^T A`, by the Jacobi method.
+
+`fit(tissue)` gives a `PerfusionFit`:
+
+- `flow`: the largest value of k, a rate a second.
+- `tmax`: the time of the largest value of k.
+- `volume`: the area of the tissue curve over that of the arterial curve.
+- `mtt()`: the volume over the flow, by the central volume theorem.
+- `blood_flow(density, factor)` and `blood_volume(density, factor)`: CBF and CBV for each mass of tissue, such as mL/100 g/min and mL/100 g. `BRAIN_DENSITY` is 1.04 g/mL. `HEMATOCRIT_FACTOR` is `(1 - 0.45) / (1 - 0.25)`, from the hematocrit of the large vessels and of the capillaries.
+
+`ct_concentration_series(series, baseline)` gives the enhancement of each voxel of a CT series. `perfusion_maps(series, deconvolution, map, label, density, factor)` fits each voxel of a label. The maps hold CBF, CBV, the MTT in s and Tmax in s.
+
+`perfusion_mismatch(maps, map, label, reference, share, tmax)` gives the volume whose CBF is below `share` of a reference CBF, such as 30 percent of the other hemisphere. It also gives the volume whose Tmax is above `tmax`, such as 6 s. `ratio()` and `difference()` give their mismatch ratio and mismatch volume, as the DEFUSE 3 trial of Albers and others (2018) used them.
+
+![A synthetic stroke in the head phantom: the CBF map, the Tmax map, and the core and tissue at risk over the scan](out/perfusion.png)
+
+`examples/perfusion.mojo` makes this picture. It makes a synthetic CT perfusion of 40 frames of the head phantom, with a stroke in the left hemisphere. The left panel is the CBF map from 0 to 80 mL/100 g/min. The middle panel is the Tmax map from 0 to 12 s. The right panel is the scan at the arterial peak. The core is red and the rest of the tissue at risk green.
+
+The truncation lowers the CBF of fast flows most, so the reference is 31 mL/100 g/min, not 55. The core is 1.6 mL, and 4.9 mL has a Tmax above 6 s. The mismatch ratio is 3.1.
 
 ## Measure diffusion
 
@@ -1071,6 +1106,11 @@ The tests check these results:
 - A voxel with a signal at the threshold, with no number or with an infinite signal has no fit.
 - numpy and scipy fit the IVIM model of 8 synthetic voxels with Rician noise, at 11 b-values, in the same segments. `assets/diffusion/make_ivim.py` makes the file. D and f agree to 1e-12 and 1e-11. scipy's bounded `minimize_scalar` finds D* to 1e-14 in its log. The search here agrees to 1e-6, because the sum of squares is flat at its least.
 - An exact model with a fast D* of 0.4 mm^2/s gives back D and f to 1e-12, and D* to 1e-6. The IVIM maps agree with the fits to the rounding of 32-bit values.
+- numpy's `svd` deconvolves 4 synthetic CT tissue curves, from gray matter to an ischemic core, with noise. The lower triangular matrix keeps the singular values above 0.2 of the largest, and the block-circulant matrix those above 0.15. `assets/perfusion/make_perfusion.py` makes the file, and checks that no singular value is within 1 percent of a threshold.
+- Each value of the residue agrees with numpy to 1e-11 of its peak. The flow agrees to a relative 1e-11, the volume to 1e-13, and Tmax is the same frame. The change of R2* of a DSC curve agrees to 1e-12.
+- A well conditioned arterial curve, `0.5^j`, gives back an exact residue to 1e-15 with every singular value kept. A tissue curve delayed by 3 frames keeps its circular flow to 1e-11 and moves Tmax by 4.5 s. The lower triangular flow falls by 0.4 percent.
+- A flow of 0.01 a second gives a CBF of `0.01 x 6000 x 0.7333 / 1.04` mL/100 g/min, to 1e-14. The maps agree with the fits to the rounding of 32-bit values. A curve with no enhancement has no MTT.
+- The mismatch of six voxels of 8 mm^3 counts two of core and three at risk: a ratio of 1.5.
 - `numpy.polyfit` fits the T2 of 8 synthetic voxels with Rician noise, at 8 echo times. T2 and S0 agree to a relative 1e-12. `assets/relaxometry/make_relaxometry.py` makes the file.
 - scipy's `least_squares` fits the T1 of 8 synthetic voxels at 8 inversion times, for each count of negative signals, to 1e-15. T1, A and B agree to 1e-8, and the count of negative signals is the same.
 - An exact decay with a T2 of 50 ms gives it back to 1e-13. An exact recovery with a T1 of 800 ms, A 1000 and B 2000 gives them back to 1e-10. It has three negative signals before the null at 554.5 ms.
@@ -1191,6 +1231,12 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A relaxation series has not one volume for each time, volumes on different grids, or a threshold below 0 or not finite | `t2_maps`, `t1_maps` |
 | An IVIM fit has fewer than four b-values, a first b-value that is not 0, b-values that are not finite or do not rise, a split that is not positive and finite, too few b-values on either side of the split, or a signal that is not positive and finite | `fit_ivim` |
 | An IVIM series has not one volume for each b-value, volumes on different grids, or a threshold below 0 or not finite | `ivim_maps` |
+| A perfusion curve has not from 2 to 128 frames, a value that is not finite, or an arterial sum of 0 or less, or the step or the threshold is out of range | `Deconvolution`, `Deconvolution.circular` |
+| A tissue curve does not have one finite value for each frame | `Deconvolution.residue`, `Deconvolution.fit` |
+| A baseline is not from 1 frame to all of them, a DSC signal is not positive and finite, or the echo time is not positive and finite | `ct_concentration`, `dsc_concentration`, `ct_concentration_series` |
+| The flow is not above 0 for an MTT, or the density or the hematocrit factor is not positive and finite | `PerfusionFit` |
+| A perfusion series has not one volume for each frame, volumes on different grids, or a bad label | `ct_concentration_series`, `perfusion_maps` |
+| A mismatch has a bad label, maps on another grid, a reference CBF or a Tmax that is not positive and finite, or a share that is not above 0 and below 1, or a ratio has a core of 0 | `perfusion_mismatch`, `PerfusionMismatch.ratio` |
 | A tumor volume or the time between two scans is not positive and finite, or two volumes are equal for a doubling time | `doubling_time`, `growth_rate` |
 | A diameter has a bad label, the background or an empty label | `longest_diameter` |
 | A RECIST sum is out of its range, or a response is not valid | `recist_response`, `response_name` |
@@ -1222,6 +1268,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The Tofts models take the plasma curve as linear between its samples. They take the tissue as one well-mixed compartment, and the extended model adds the vessels. They do not fit a delay of the bolus. A fit with `ve` above 1 does not suit the tissue.
 - The diffusion fits take one trace-weighted image for each b-value. They do not fit a tensor, the directions of diffusion, or the perfusion of IVIM at low b-values. They are least squares of ln S, without weights. A signal near the noise floor biases them, because Rician noise does not fall to 0.
 - The IVIM fit is segmented, not a joint fit of all four parameters. D* is uncertain with few low b-values or much noise, and the fit gives no error of its parameters.
+- The perfusion deconvolution truncates at one fixed threshold. It does not choose a threshold for each voxel by its oscillation, as oSVD does. The truncation lowers the CBF of fast flows most, so compare a CBF with a reference from the same scan. The arterial curve is one curve, chosen by the user, with no correction of partial volume. The DSC change of R2* takes no correction of the leakage of contrast. The core and Tmax thresholds come from trials of research. They are not a treatment decision.
 - The T2 fit is mono-exponential and unweighted in `ln S`, so stimulated echoes and the noise floor bias it. The T1 fit takes an ideal inversion recovery with a long repetition time. It does not fit a look-locker or variable flip angle series.
 - A longest diameter is between voxel centers in one slice of `k`. It does not measure across slices or along an oblique plane. The RECIST response covers target lesions only, by their sums. It does not judge new lesions, lymph nodes or non-target lesions.
 - Registration is rigid, with six parameters. It does not scale, shear or bend, so it does not follow breathing or soft tissue that changes shape. The simplex finds a nearby least point, so a start far from the answer can end at another one.
@@ -1250,6 +1297,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Blackledge and others, on computed diffusion-weighted MR images for the detection of tumors, Radiology, 2011.
 - Barral and others, "A robust methodology for in vivo T1 mapping", Magnetic Resonance in Medicine, 2010.
 - Le Bihan and others, "Separation of diffusion and perfusion in intravoxel incoherent motion MR imaging", Radiology, 1988.
+- Ostergaard and others, "High resolution measurement of cerebral blood flow using intravascular tracer bolus passages. Part I: Mathematical approach and statistical analysis", Magnetic Resonance in Medicine, 1996.
+- Wu and others, on SVD with a block-circulant deconvolution matrix, insensitive to the arrival time of the tracer, Magnetic Resonance in Medicine, 2003.
+- Albers and others, "Thrombectomy for stroke at 6 to 16 hours with selection by perfusion imaging", New England Journal of Medicine, 2018.
 - ICRU Report 83, "Prescribing, Recording, and Reporting Photon-Beam Intensity-Modulated Radiation Therapy (IMRT)", 2010.
 - Zwanenburg and others, "The Image Biomarker Standardization Initiative", Radiology, 2020.
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.

@@ -272,6 +272,9 @@ $(call gallery,fusion,fusion)
 # A synthetic diffusion MRI of the head phantom: a scan at b = 1000, the ADC
 # map with a lesion of restricted diffusion, and a computed image at b = 2000.
 $(call gallery,diffusion,diffusion)
+# A synthetic CT perfusion of a stroke in the head phantom: the CBF and
+# Tmax maps, and the ischemic core and the tissue at risk over the scan.
+$(call gallery,perfusion,perfusion)
 # A synthetic five-beam dose over the head phantom CT, with isodose lines,
 # and the dose-volume histograms of a target and an organ at risk.
 $(call gallery,radiotherapy,radiotherapy)
