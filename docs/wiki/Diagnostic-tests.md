@@ -1,6 +1,6 @@
 # Diagnostic tests
 
-`extensions/clinical/` measures diagnostic tests and the methods that measure patients. `roc` gives the ROC curve of a test, its area (AUC) with a 95 percent interval, the best threshold, and DeLong's comparison of two tests. `agreement` gives the Bland-Altman agreement of two methods and the intraclass correlations of several raters. `logistic` models the risk of an outcome from covariates. `proportions` measures a test from its two-by-two table, and compares the risks of two groups.
+`extensions/clinical/` measures diagnostic tests and the methods that measure patients. `roc` gives the ROC curve of a test, its area (AUC) with a 95 percent interval, the best threshold, and DeLong's comparison of two tests. `agreement` gives the Bland-Altman agreement of two methods and the intraclass correlations of several raters. `logistic` models the risk of an outcome from covariates. `proportions` measures a test from its two-by-two table, and compares the risks of two groups. `calibration` measures whether the risks of a model are right, and whether the model does more good than harm.
 
 It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
 
@@ -19,6 +19,7 @@ Marker A has an AUC of 0.820, with a 95 percent interval from 0.751 to 0.890. Ma
 | `logistic` | `LogisticModel` and `logistic_regression` |
 | `kappa` | `Kappa`, `cohens_kappa`, `linear_weighted_kappa`, `quadratic_weighted_kappa` and `MAX_CATEGORIES` |
 | `rates` | `RateModel`, `poisson_regression`, `YEAR64` and `PER_YEAR64` |
+| `calibration` | `brier_score`, `scaled_brier_score`, `RiskGroup`, `risk_groups`, `HosmerLemeshow`, `hosmer_lemeshow`, `CalibrationFit`, `calibration_fit`, `recalibrate`, `net_benefit`, `DecisionCurve`, `decision_curve`, `calibration_image`, `decision_curve_image`, `MAX_GROUPS` and `MAX_THRESHOLDS` |
 | `proportions` | `Estimate`, `wilson_interval`, `exact_interval`, `DiagnosticAccuracy`, `diagnostic_accuracy`, `RiskComparison` and `compare_risks` |
 | `distributions` | `beta_tails`, `beta_quantile`, `normal_quantile`, `student_t_upper`, `student_t_quantile`, `f_upper`, `f_quantile`, `precise_exp` and `MAX_DEGREES` |
 
@@ -122,6 +123,41 @@ The fit uses the log of the person-time as the offset. It uses iteratively rewei
 - `baseline_rate()`, the rate of a stratum with every covariate 0, and `rate(row)`, the fitted rate of a stratum. Rates are per year: `YEAR64` is the Julian year of 365.25 days.
 - `deviance` and `dispersion`. A dispersion above 1 means more spread than Poisson counts have. Then multiply the standard errors by its square root.
 
+## Evaluate a risk model
+
+A risk model gives each patient a risk of an outcome. The AUC says whether the patients with the outcome get higher risks. Calibration says whether the risks are right: of the patients with a risk of 20 percent, about 20 percent must have the outcome. A decision curve says whether the model does more good than harm when a risk above a threshold leads to a treatment.
+
+![The calibration plot and the decision curve of an overfitted risk model and of the same model recalibrated](out/risk-model.png)
+
+`examples/risk_model.mojo` makes this picture from 2000 synthetic patients. An overfitted model, in orange, gives risks that are too high and too far from the mean. Its calibration slope is 0.76, and it expects 1.20 times the events that occur. `recalibrate` corrects the risks, in blue, with the same AUC of 0.775. On the left, the groups of the overfitted model fall below the gray diagonal. On the right, the recalibrated model has more net benefit above a threshold of about 20 percent.
+
+The example fits the recalibration on the same patients that it draws, so the recalibration looks too good. A study fits it on other patients.
+
+```mojo
+from extensions.clinical.calibration import calibration_fit, decision_curve, hosmer_lemeshow
+
+var fit = calibration_fit(risks, outcomes)
+print(fit.slope, fit.in_the_large, fit.expected_over_observed)
+var test = hosmer_lemeshow(risks, outcomes, 10)
+var curve = decision_curve(risks, outcomes, [0.05, 0.1, 0.2, 0.3])
+```
+
+Each risk must be between 0 and 1, and not at either end.
+
+- `brier_score(risks, outcomes)` is the mean of `(risk - outcome)^2`, with an outcome of 1 or 0. `scaled_brier_score` is `1 - B / (s (1 - s))`, where `s (1 - s)` is the score of giving each patient the share `s`.
+- `risk_groups(risks, outcomes, groups)` sorts the patients by risk into groups of near-equal size, as `numpy.array_split` does. Each `RiskGroup` gives its `count`, its `expected` events, which are the sum of its risks, and its `events`. `mean_risk()` and `observed()` give the two shares that a calibration plot draws.
+- `hosmer_lemeshow(risks, outcomes, groups)` sums `(O - E)^2 / (E (1 - E / n))` over the groups, with `g - 2` degrees of freedom. Use 10 groups. A large cohort finds a small miscalibration, so look at the plot too.
+- `calibration_fit(risks, outcomes)` fits the logistic model of the outcome on the logit of the risk. Its `slope` is 1 for right risks, and below 1 for risks too far from the mean, as an overfitted model gives. `in_the_large` is the intercept with the logit as an offset, below 0 for risks that are too high. `expected_over_observed` is the sum of the risks over the events.
+- `recalibrate(risks, fit)` gives `1 / (1 + exp(-(a + b logit(risk))))`. It keeps the order of the risks, so it keeps the AUC.
+
+`net_benefit(risks, outcomes, threshold)` treats each patient with a risk at the threshold or above, as dcurves does. The threshold is the risk at which a patient takes the harm of a treatment for the chance of its benefit. So a false positive weighs `t / (1 - t)` of a true positive:
+
+    NB = TP / n - FP / n * t / (1 - t)
+
+`decision_curve(risks, outcomes, thresholds)` gives the net benefit of the model and of treating all at each threshold. Treating none has a net benefit of 0. `avoided` gives the net treatments avoided for each patient, against treating all. A model is of use at the thresholds where its net benefit is above both other strategies.
+
+`calibration_image(models, colors, size)` and `decision_curve_image(curves, colors, width, height)` draw them. The net benefit of a decision curve runs up to the prevalence, the most net benefit of any strategy. It runs down to a quarter of the prevalence below 0.
+
 ## Measure the agreement of two methods
 
 ![A Bland-Altman plot of two readers who measure 40 synthetic tumors](out/agreement.png)
@@ -216,6 +252,13 @@ The tests compare `rates` with the Poisson `GLM` of statsmodels 0.15.0, with an 
 
 The tests compare `kappa` with `cohens_kappa` of statsmodels 0.15.0. The tables are four grades of 120 synthetic films, by each weighting, and two categories of 60 smears. `assets/agreement/make_kappa.py` writes them. Kappa agrees to a relative 1e-14, and its errors and interval ends to 1e-12.
 
+The tests compare `calibration` with scikit-learn 1.9.1, scipy 1.18.1, statsmodels 0.15.0 and dcurves 1.1.7 on 300 synthetic patients. `assets/calibration/make_calibration.py` writes them.
+
+- The Brier score agrees with `brier_score_loss` to a relative 1e-14. The counts and events of the ten groups of risk are those of `numpy.array_split`, and their mean risks agree to 1e-14.
+- The Hosmer-Lemeshow statistic agrees with its formula in numpy to 1e-12, and its p value with scipy to 1e-10.
+- The calibration intercept, the slope and their errors agree with the `Logit` model of statsmodels to 1e-11. The calibration in the large and its error agree with its binomial `GLM` with an offset to 1e-12.
+- At 32 thresholds, the net benefit of the model differs from that of dcurves by 1e-15 or less. Treating all differs by 1e-14 or less, and the treatments avoided by 1e-12 or less.
+
 The tests also check cases by hand:
 
 - Three diseased scores of 3, 2 and 2 against healthy scores of 2, 1 and 0 give an AUC of 8/9. The standard error is from the variances 1/108 and 1/27 of the components. The best threshold is 2.
@@ -233,6 +276,11 @@ The tests also check cases by hand:
 - With no success in 20 trials, the exact high end is `1 - 0.025^(1/20)`. The beta quantile of Beta(2, 1) is the square root, on both sides of a half.
 - The likelihood ratios of the test are 6 and 0.1 / 0.85. With no false positive, a half is added to each cell.
 - Equal risks need an infinite number to treat.
+- Risks of 0.2 and 0.8, for outcomes of 0 and 1, give a Brier score of 0.04, scaled to 0.84.
+- Seven patients make groups of 3, 2 and 2, and patients of equal risk keep their order. Groups whose events are what the model expects give a Hosmer-Lemeshow statistic of 0 and a p value of 1.
+- Risks of 0.25 and 0.75, with a quarter and three quarters of events, are right. They give a slope of 1, intercepts of 0 and an E/O of 1, and recalibration changes no risk.
+- At a threshold of 0.3, two true positives and one false positive of four patients give a net benefit of `1/2 - 1/4 * 3/7`.
+- The calibration plot and the decision curve have their groups, curves, lines and frame in the right pixels.
 
 ## Errors
 
@@ -257,6 +305,13 @@ Every function raises `Error` for input it cannot use.
 | An index names no coefficient, or a row does not have one finite value for each covariate | `LogisticModel` |
 | A degree of freedom is not from more than 0 to 1e8, a probability is not between 0 and 1, or a value is out of range | `distributions` |
 | There is no curve, the colors are not one for each curve, or the side is out of 64 to 4096 pixels | `roc_image` |
+| A risk is not between 0 and 1, or there is not one risk for each outcome | `calibration` |
+| The outcomes are all the same | `scaled_brier_score`, `calibration_fit` |
+| There are not 2 to 100 groups and no more than the patients, or fewer than 3 groups for a test | `risk_groups`, `hosmer_lemeshow` |
+| The logits of the risks are all equal or separate the outcomes | `calibration_fit` |
+| The intercept or the slope is not finite | `recalibrate` |
+| A threshold is not between 0 and 1, there are not 2 to 1000 rising thresholds, or no patient has the outcome | `net_benefit`, `decision_curve` |
+| There is no model, the colors are not one for each, a model has no group, the curves do not share thresholds and patients, or a side is out of 64 to 4096 pixels | `calibration_image`, `decision_curve_image` |
 
 ## Limits
 
@@ -268,6 +323,9 @@ Every function raises `Error` for input it cannot use.
 - The ICC needs a complete table, with each rating present. It uses an analysis of variance, not a mixed model.
 - A p value below about 1e-307 is given as 0.
 - The logistic model has no penalty, so a covariate that separates the outcomes has no finite estimate. It adds no interaction or curve that the caller does not add as a covariate.
+- Groups of risk split patients of equal risk by their order, so a tool that keeps ties together can give other groups. The Hosmer-Lemeshow test changes with the number of groups.
+- Calibration and net benefit are those of the patients given. Measure a model on patients other than those it was fitted on.
+- A decision curve takes one threshold for all patients, and no harm other than the harm that the threshold implies.
 
 ## References
 
@@ -278,6 +336,10 @@ Every function raises `Error` for input it cannot use.
 - Bland and Altman, "Statistical methods for assessing agreement between two methods of clinical measurement", The Lancet, 1986.
 - Bland and Altman, "Measuring agreement in method comparison studies", Statistical Methods in Medical Research, 1999.
 - Shrout and Fleiss, "Intraclass correlations: uses in assessing rater reliability", Psychological Bulletin, 1979.
+- Brier, "Verification of forecasts expressed in terms of probability", Monthly Weather Review, 1950.
+- Hosmer, Lemeshow and Sturdivant, "Applied Logistic Regression", third edition, Wiley, 2013.
+- Van Calster and others, "Calibration: the Achilles heel of predictive analytics", BMC Medicine, 2019.
+- Vickers and Elkin, "Decision curve analysis: a novel method for evaluating prediction models", Medical Decision Making, 2006.
 - McGraw and Wong, "Forming inferences about some intraclass correlation coefficients", Psychological Methods, 1996.
 - Koo and Li, "A guideline of selecting and reporting intraclass correlation coefficients for reliability research", Journal of Chiropractic Medicine, 2016.
 - Breslow and Day, "Statistical Methods in Cancer Research, Volume II: The Design and Analysis of Cohort Studies", 1987.

@@ -295,6 +295,9 @@ $(call gallery,indentation,indentation)
 $(call gallery,survival,survival)
 # The ROC curves of two synthetic markers, with the chance diagonal.
 $(call gallery,roc,roc)
+# The calibration plot and the decision curve of an overfitted risk model,
+# and of the same model recalibrated, on 2000 synthetic patients.
+$(call gallery,risk-model,risk_model)
 # A Bland-Altman plot of two readers who measure 40 synthetic tumors.
 $(call gallery,agreement,agreement)
 # A forest plot of the 13 trials of the BCG vaccine against tuberculosis.
