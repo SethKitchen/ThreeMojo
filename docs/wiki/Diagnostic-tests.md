@@ -189,7 +189,7 @@ Each risk must be between 0 and 1, and not at either end.
 
 `examples/agreement.mojo` makes this picture. Two readers measure the volumes of 40 synthetic tumors. Each cross is a tumor, with its mean volume across and the difference, reader A less reader B, up. The blue line is the bias, and the red lines are the limits of agreement. The gray line is 0.
 
-Reader A reads 1.36 mL less than reader B, with a 95 percent interval from 0.92 to 1.79 mL less. The limits of agreement are -4.02 and 1.31 mL. The ICC(A,1) is 0.983, from 0.862 to 0.995.
+Reader A reads 0.79 mL less than reader B, with a 95 percent interval from 0.27 to 1.31 mL less. The limits of agreement are -3.99 and 2.41 mL. The ICC(A,1) is 0.993, from 0.984 to 0.997.
 
 `bland_altman(first, second)` takes the value of each subject by two methods. A value is a plain number in a unit that you choose, such as a volume in milliliters. The result gives:
 
@@ -261,11 +261,11 @@ The tests compare the module with scikit-learn 1.9.1 and MLstatkit 0.1.91 on two
 - DeLong's z and the standard error of the difference agree to a relative 1e-12. The p value agrees to a relative 1e-11.
 - The threshold, sensitivity and specificity of the largest Youden index are the same as numpy finds on the curve.
 
-The tests compare `agreement` and the [distributions](Numerics#use-statistical-distributions) with pingouin 0.7.0 and scipy 1.18.1. `assets/agreement/make_agreement.py` writes the expected values and 40 synthetic pairs of tumor volumes.
+The tests compare `agreement` and the [distributions](Numerics#use-statistical-distributions) with pingouin 0.7.0 and scipy 1.18.1. `tools/make_agreement.mojo` writes 40 synthetic pairs of tumor volumes, and `assets/agreement/make_agreement.py` writes the expected values.
 
-- The six ICC of table 2 of Shrout and Fleiss and of the two readers agree with pingouin to a relative 1e-12. Their F statistics agree to 1e-12, and their p values and interval ends to 1e-10. pingouin rounds its intervals to two decimals. So the script finds the ends with its formulas and scipy, and checks that they round to the ends of pingouin.
+- The six ICC of table 2 of Shrout and Fleiss and of the two readers agree with pingouin to a relative 1e-12. Their F statistics agree to 1e-12, and their p values to 1e-10. pingouin rounds its intervals to two decimals, and the interval ends round to those of pingouin.
 - The six ICC of Shrout and Fleiss are their published values to two decimals: 0.17, 0.29, 0.71, 0.44, 0.62 and 0.91.
-- The bias, deviation and limits of the two readers agree with numpy to a relative 1e-13. Their intervals agree to 1e-12.
+- The bias, deviation and limits of the two readers agree with their closed form to a relative 1e-13, and their t intervals to 1e-12. No library gives them.
 - The upper tail and the 0.975 quantile of t and F agree with scipy to a relative 1e-12. The cases have whole and real degrees of freedom.
 
 The tests compare `logistic` with the `Logit` model of statsmodels 0.15.0 on a synthetic cohort of 200 patients with three covariates. `tools/make_logistic.mojo` writes the cohort, and `assets/logistic/make_logistic.py` writes the expected values.

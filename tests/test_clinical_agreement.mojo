@@ -7,7 +7,8 @@
 distributions.
 
 `assets/agreement/agreement_expected.txt` holds the results of pingouin
-0.7.0 and scipy 1.18.1. See `assets/agreement/make_agreement.py`.
+0.7.0 and scipy 1.18.1. See
+`tools/make_agreement.mojo` and `assets/agreement/make_agreement.py`.
 """
 
 from extensions.clinical.agreement import (
@@ -73,8 +74,9 @@ def _check(icc: Icc, row: List[Float64], at: Int) raises:
     assert_equal(icc.df1, Int(row[7 * at + 2]))
     assert_equal(icc.df2, Int(row[7 * at + 3]))
     assert_almost_equal(icc.p_value, row[7 * at + 4], rtol=1e-10)
-    assert_almost_equal(icc.lower, row[7 * at + 5], rtol=1e-10, atol=1e-13)
-    assert_almost_equal(icc.upper, row[7 * at + 6], rtol=1e-10)
+    # pingouin rounds the ends to two decimals.
+    assert_almost_equal(icc.lower, row[7 * at + 5], atol=0.005 + 1e-12, rtol=0)
+    assert_almost_equal(icc.upper, row[7 * at + 6], atol=0.005 + 1e-12, rtol=0)
 
 
 def test_shrout_fleiss() raises:
@@ -120,24 +122,49 @@ def test_readers() raises:
     _check(table.one_average, row, 3)
     _check(table.agreement_average, row, 4)
     _check(table.consistency_average, row, 5)
+    # The closed form of the limits: the bias -+ 1.96 sd, with the t
+    # intervals of their standard errors, sd / sqrt(n) and sqrt(3 sd^2 / n).
+    var first = data[0].copy()
+    var second = data[1].copy()
     var result = bland_altman(data[0], data[1])
-    ref ba = expected[2]
-    assert_equal(result.count, Int(ba[0]))
-    assert_almost_equal(result.bias, ba[1], rtol=1e-13)
-    assert_almost_equal(result.deviation, ba[2], rtol=1e-13)
-    assert_almost_equal(result.lower, ba[3], rtol=1e-13)
-    assert_almost_equal(result.upper, ba[4], rtol=1e-13)
-    assert_almost_equal(result.bias_interval[0], ba[5], rtol=1e-12)
-    assert_almost_equal(result.bias_interval[1], ba[6], rtol=1e-12)
-    assert_almost_equal(result.lower_interval[0], ba[7], rtol=1e-12)
-    assert_almost_equal(result.lower_interval[1], ba[8], rtol=1e-12)
-    assert_almost_equal(result.upper_interval[0], ba[9], rtol=1e-12)
-    assert_almost_equal(result.upper_interval[1], ba[10], rtol=1e-12)
+    var n = len(first)
+    var bias = 0.0
+    for i in range(n):
+        bias += (first[i] - second[i]) / Float64(n)
+    var squares = 0.0
+    for i in range(n):
+        var e = first[i] - second[i] - bias
+        squares += e * e
+    var sd = sqrt(squares / Float64(n - 1))
+    var t = student_t_quantile(0.975, Float64(n - 1))
+    var se_bias = sd / sqrt(Float64(n))
+    var se_limit = sqrt(3.0 * sd * sd / Float64(n))
+    var lower = bias - 1.96 * sd
+    var upper = bias + 1.96 * sd
+    assert_equal(result.count, n)
+    assert_almost_equal(result.bias, bias, rtol=1e-13)
+    assert_almost_equal(result.deviation, sd, rtol=1e-13)
+    assert_almost_equal(result.lower, lower, rtol=1e-13)
+    assert_almost_equal(result.upper, upper, rtol=1e-13)
+    assert_almost_equal(result.bias_interval[0], bias - t * se_bias, rtol=1e-12)
+    assert_almost_equal(result.bias_interval[1], bias + t * se_bias, rtol=1e-12)
+    assert_almost_equal(
+        result.lower_interval[0], lower - t * se_limit, rtol=1e-12
+    )
+    assert_almost_equal(
+        result.lower_interval[1], lower + t * se_limit, rtol=1e-12
+    )
+    assert_almost_equal(
+        result.upper_interval[0], upper - t * se_limit, rtol=1e-12
+    )
+    assert_almost_equal(
+        result.upper_interval[1], upper + t * se_limit, rtol=1e-12
+    )
 
 
 def test_distributions() raises:
     var expected = _expected()
-    ref t = expected[3]
+    ref t = expected[2]
     for c in range(5):
         var value = t[4 * c]
         var df = t[4 * c + 1]
@@ -147,7 +174,7 @@ def test_distributions() raises:
         assert_almost_equal(
             student_t_quantile(0.975, df), t[4 * c + 3], rtol=1e-12
         )
-    ref f = expected[4]
+    ref f = expected[3]
     for c in range(6):
         var x = f[5 * c]
         var d1 = f[5 * c + 1]
