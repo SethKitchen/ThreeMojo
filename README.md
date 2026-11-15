@@ -845,7 +845,7 @@ A library for the requirements that turn a material into a product. A checked bo
 
 ### Biomedical research tools
 
-Medical images, macromolecules and solid mechanics, for research and teaching. A checked box records implemented scope. It does not establish clinical or engineering validity. These tools are not medical devices.
+Medical images, macromolecules, solid mechanics and the statistics of clinical research, for research and teaching. A checked box records implemented scope. It does not establish clinical or engineering validity. These tools are not medical devices.
 
 - [x] [DICOM volumes](https://github.com/SethKitchen/ThreeMojo/wiki/Medical-imaging#read-a-dicom-series): explicit and implicit VR little-endian Part 10 files, slice stacks with physical spacing, a writer and a head phantom [#987](https://github.com/SethKitchen/ThreeMojo/issues/987)
 - [x] [Multi-frame DICOM](https://github.com/SethKitchen/ThreeMojo/wiki/Medical-imaging#read-a-multi-frame-file): enhanced CT and MR files placed by their shared and per-frame functional groups, native and RLE, read and written [#1016](https://github.com/SethKitchen/ThreeMojo/issues/1016)
@@ -950,6 +950,7 @@ Medical images, macromolecules and solid mechanics, for research and teaching. A
 - [x] [Strain energy](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#summarize-the-stress-of-each-material): the energy stored in a solved model, exact for both element orders, and its apparent stiffness [#1054](https://github.com/SethKitchen/ThreeMojo/issues/1054)
 - [x] [Survival analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Survival-analysis): Kaplan-Meier curves, medians, the log-rank test and plots, which match lifelines on the 6-MP leukemia trial [#1089](https://github.com/SethKitchen/ThreeMojo/issues/1089)
 - [x] [Cox regression](https://github.com/SethKitchen/ThreeMojo/wiki/Survival-analysis#fit-a-cox-model): hazard ratios of covariates with Efron ties, intervals, tests, concordance and predicted survival; they match lifelines [#1090](https://github.com/SethKitchen/ThreeMojo/issues/1090)
+- [x] [Restricted mean survival](https://github.com/SethKitchen/ThreeMojo/wiki/Survival-analysis#find-the-restricted-mean-survival-time): the Nelson-Aalen hazard, and the RMST of a group and of two groups with standard errors; they match lifelines [#1098](https://github.com/SethKitchen/ThreeMojo/issues/1098)
 - [x] [ROC analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests): ROC curves, AUC with DeLong intervals, Youden thresholds and DeLong's test of two tests; they match scikit-learn and MLstatkit [#1091](https://github.com/SethKitchen/ThreeMojo/issues/1091)
 - [x] [Agreement and reliability](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests#measure-the-agreement-of-two-methods): Bland-Altman limits with intervals and plots, and the six intraclass correlations; they match pingouin [#1092](https://github.com/SethKitchen/ThreeMojo/issues/1092)
 - [x] [Logistic regression](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests#model-the-risk-of-an-outcome): odds ratios with intervals, Wald and likelihood ratio tests, and predicted risks; they match statsmodels [#1093](https://github.com/SethKitchen/ThreeMojo/issues/1093)

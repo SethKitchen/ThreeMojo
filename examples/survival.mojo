@@ -15,10 +15,12 @@ as Gehan (1965) gives them. A time with a `+` is censored.
 The blue curve is the 6-MP group and the red curve the placebo group,
 from 0 to 36 weeks, with a gray line each 6 weeks. A tick marks each
 censored patient. The program prints the median remission of each group,
-the log-rank test, and the hazard ratio of the placebo by a Cox model.
+the log-rank test, the hazard ratio of the placebo by a Cox model, and the
+difference of the restricted mean remission to 23 weeks.
 """
 
 from extensions.clinical.cox import cox_regression
+from extensions.clinical.rmst import compare_restricted_means
 from extensions.clinical.survival import (
     SurvivalCurve,
     WEEK64,
@@ -114,5 +116,16 @@ def main() raises:
         band[1],
         "; p",
         model.p_value(0),
+    )
+    var rmst = compare_restricted_means(
+        curves[0], curves[1], Duration64(23, WEEK64)
+    )
+    print(
+        "Restricted mean to 23 weeks: 6-MP longer by",
+        rmst.difference.to(WEEK64),
+        "weeks, standard error",
+        rmst.standard_error.to(WEEK64),
+        "; p",
+        rmst.p_value,
     )
     print("Wrote", destination)

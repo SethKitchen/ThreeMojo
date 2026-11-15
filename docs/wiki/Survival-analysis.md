@@ -1,12 +1,14 @@
 # Survival analysis
 
-`extensions/clinical/` gives the survival of groups of patients. It makes Kaplan-Meier curves with 95 percent intervals and medians. It compares two groups by the log-rank test, and it plots the curves. It fits Cox models of survival on covariates, such as an age or a treatment. It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
+`extensions/clinical/` gives the survival of groups of patients. It makes Kaplan-Meier curves with 95 percent intervals and medians. It compares two groups by the log-rank test, and it plots the curves. It fits Cox models of survival on covariates, such as an age or a treatment. It gives the cumulative hazard and the restricted mean survival time.
+
+It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
 
 ![The Kaplan-Meier curves of 6-MP and of a placebo in acute leukemia, with a tick at each censored patient](out/survival.png)
 
 `examples/survival.mojo` makes this picture. It uses the trial of 6-mercaptopurine (6-MP) against a placebo in 42 children with acute leukemia, of Freireich and others (1963). The blue curve is 6-MP, and the red curve is the placebo. Time runs from 0 to 36 weeks, with a gray line each 6 weeks. The median remission is 23 weeks with 6-MP and 8 weeks with the placebo. The log-rank chi-square is 16.79, and its p value is 4.2e-5.
 
-A Cox model gives the placebo a hazard ratio of 4.82, with a 95 percent interval from 2.15 to 10.81. The program prints these values.
+A Cox model gives the placebo a hazard ratio of 4.82, with a 95 percent interval from 2.15 to 10.81. To 23 weeks, the restricted mean remission is 9.2 weeks longer with 6-MP, with a p value of 8.5e-6. The program prints these values.
 
 ## Modules
 
@@ -14,6 +16,7 @@ A Cox model gives the placebo a hazard ratio of 4.82, with a 95 percent interval
 |---|---|
 | `survival` | `SurvivalCurve`, `kaplan_meier`, `LogRank`, `log_rank_test`, `survival_image`, `require_group`, `DAY64` and `WEEK64` |
 | `cox` | `CoxModel`, `cox_regression`, `chi_square_p_value` and `MAX_COVARIATES` |
+| `rmst` | `CumulativeHazard`, `nelson_aalen`, `RestrictedMean`, `restricted_mean`, `RestrictedComparison` and `compare_restricted_means` |
 
 ## Make a survival curve
 
@@ -109,6 +112,25 @@ The model gives:
 
 `chi_square_p_value(statistic, freedom)` gives the upper tail of the chi-square distribution in closed form.
 
+## Find the cumulative hazard
+
+`nelson_aalen(curve)` gives the Nelson-Aalen cumulative hazard of a group from its Kaplan-Meier curve. At each time of an event, the hazard grows by `d / n`. The `variance` grows by `d (n - d) / n^3`, and `interval(i)` gives the 95 percent interval `H exp(-+ 1.96 sqrt(v) / H)`. These are the values of lifelines without smoothing.
+
+## Find the restricted mean survival time
+
+`restricted_mean(curve, horizon)` gives the restricted mean survival time (RMST): the area under the curve from 0 to the horizon. It is the mean time free of the event over that span. It is in units of time, and it does not need proportional hazards.
+
+```mojo
+from extensions.clinical.rmst import restricted_mean
+
+var mean = restricted_mean(curve, Duration64(9, WEEK64))
+print(mean.mean.to(WEEK64), mean.interval()[0].to(WEEK64))
+```
+
+The standard error is that of Klein and Moeschberger, as R's survRM2 gives. It sums `A_j^2 d_j / (n_j (n_j - d_j))` over the times of events up to the horizon, with `A_j` the area from `t_j` to the horizon. Choose a horizon where both groups still have patients at risk.
+
+`compare_restricted_means(first, second, horizon)` gives the difference of two restricted means, first less second, with its standard error, z, two-sided p value and 95 percent interval.
+
 ## Draw the curves
 
 `survival_image(curves, colors, top, grid, width, height)` plots the curves as steps on a white image. Time runs from 0 at the left edge to `top` at the right edge. Survival runs from 0 at the bottom edge to 1 at the top edge. A light gray line marks each `grid` of time and each tenth of survival. A short vertical tick marks each censored patient on its curve.
@@ -121,6 +143,8 @@ The tests compare the module with lifelines 0.30.3, a Python library, on the tri
 - The medians are 23 and 8 weeks, as lifelines gives.
 - The log-rank statistic agrees to a relative 1e-12, and its p value to a relative 1e-11.
 - The 6-MP group has 9 relapses, and the placebo group has 21.
+- The Nelson-Aalen hazard of each group agrees with lifelines to a relative 1e-14, and the ends of its interval to 1e-13.
+- The restricted mean to 23 weeks agrees with lifelines' `restricted_mean_survival_time` to 1e-14. Its standard error agrees with the formula in numpy to 1e-13, and the test of the difference to 1e-11.
 
 The tests compare the Cox model with lifelines on a synthetic cohort of 120 patients with three covariates. The cohort has 70 events and 32 tied times. `assets/survival/make_cox.py` makes it.
 
@@ -142,6 +166,8 @@ The tests check Cox models by hand:
 - Three events at one time give no comparable pair, and a coefficient of 0.
 - The chi-square tail matches scipy for 3, 4, 200 and 201 degrees of freedom.
 
+The tests check the cumulative hazard and the restricted mean by hand. Three patients have events at 1 and 2 weeks, and one is censored at 3 weeks. To 4 weeks, the area is `1 + 2/3 + 2 x 1/3 = 7/3`, and its variance is `(16/9) / 6 + (4/9) / 2`. A group with no event has a restricted mean of the whole horizon, with no error.
+
 ## Errors
 
 Every function raises `Error` for input it cannot use.
@@ -151,7 +177,8 @@ Every function raises `Error` for input it cannot use.
 | A group has no patient, or its times and flags differ in number | `kaplan_meier`, `log_rank_test`, `cox_regression` |
 | A time is negative or not finite | `kaplan_meier`, `log_rank_test`, `cox_regression` |
 | No event changes the risk of either group | `log_rank_test` |
-| A row index names no time | `SurvivalCurve.interval` |
+| A row index names no time | `SurvivalCurve.interval`, `CumulativeHazard.interval` |
+| The horizon is not positive and finite | `restricted_mean`, `compare_restricted_means` |
 | There is no event, the covariates are not one finite row of 1 to 32 values for each patient, the tolerance is not between 0 and 1, or the steps are not from 1 to 1000 | `cox_regression` |
 | The information matrix is not positive definite, because a covariate is constant, is collinear with others, or separates the patients | `cox_regression` |
 | An index names no covariate, a row does not have one finite value for each covariate, or a time is negative or not finite | `CoxModel` |
@@ -178,4 +205,8 @@ Every function raises `Error` for input it cannot use.
 - Efron, "The efficiency of Cox's likelihood function for censored data", Journal of the American Statistical Association, 1977.
 - Breslow, "Covariance analysis of censored survival data", Biometrics, 1974.
 - Harrell and others, "Evaluating the yield of medical tests", Journal of the American Medical Association, 1982.
+- Nelson, "Theory and applications of hazard plotting for censored failure data", Technometrics, 1972.
+- Aalen, "Nonparametric inference for a family of counting processes", Annals of Statistics, 1978.
+- Royston and Parmar, "Restricted mean survival time: an alternative to the hazard ratio", BMC Medical Research Methodology, 2013.
+- Klein and Moeschberger, "Survival Analysis: Techniques for Censored and Truncated Data", 2nd edition, 2003.
 - Kalbfleisch and Prentice, "The Statistical Analysis of Failure Time Data", 2nd edition, 2002.
