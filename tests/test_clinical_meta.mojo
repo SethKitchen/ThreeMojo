@@ -12,7 +12,9 @@ and scipy 1.18.1 on the BCG vaccine trials of `assets/meta/bcg.txt`. See
 
 from extensions.clinical.meta import (
     MetaAnalysis,
+    egger_test,
     forest_image,
+    funnel_image,
     log_odds_ratio,
     log_risk_ratio,
     meta_analysis,
@@ -208,6 +210,41 @@ def test_forest_image() raises:
     for w in widths:
         with assert_raises(contains="pixels wide"):
             _ = forest_image(effects, variances, result, w)
+
+
+def test_egger() raises:
+    var trials = _trials()
+    var line = open("assets/meta/egger_expected.txt", "r").read()
+    var expected = _numbers(String(line.splitlines()[0]))
+    var test = egger_test(trials[0], trials[1])
+    assert_almost_equal(test.intercept, expected[0], rtol=1e-12)
+    assert_almost_equal(test.standard_error, expected[1], rtol=1e-12)
+    assert_almost_equal(test.t, expected[2], rtol=1e-12)
+    assert_almost_equal(test.p_value, expected[3], rtol=1e-11)
+    assert_almost_equal(test.slope, expected[4], rtol=1e-12)
+    with assert_raises(contains="three studies or more"):
+        _ = egger_test([0.0, 1.0], [1.0, 1.0])
+    with assert_raises(contains="constant or collinear"):
+        _ = egger_test([0.0, 1.0, 2.0], [1.0, 1.0, 1.0])
+
+
+def test_funnel_image() raises:
+    # Effects 0, 2 and 1 of variances 1, 1 and 4: a fixed effect of 1 at
+    # the middle column, and an error of 2.1 at the bottom.
+    var effects: List[Float64] = [0.0, 2.0, 1.0]
+    var variances: List[Float64] = [1.0, 1.0, 4.0]
+    var result = meta_analysis(effects, variances)
+    var image = funnel_image(effects, variances, result, 101, 101)
+    assert_true(_rgb(image, 50, 30) == (38, 102, 217))
+    # The first study: effect 0 at x = 39, error 1 at y = 48.
+    assert_true(_rgb(image, 41, 48) == (61, 61, 66))
+    with assert_raises(contains="its own studies"):
+        _ = funnel_image([0.0, 2.0], [1.0, 1.0], result, 101, 101)
+    var sizes: List[Int] = [63, 4097, 64, 64]
+    var heights: List[Int] = [64, 64, 63, 4097]
+    for n in range(4):
+        with assert_raises(contains="pixels a side"):
+            _ = funnel_image(effects, variances, result, sizes[n], heights[n])
 
 
 def main() raises:

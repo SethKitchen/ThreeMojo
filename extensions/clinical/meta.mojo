@@ -18,10 +18,16 @@ The result also gives Cochran's Q test of heterogeneity, I^2, and the
 prediction interval of Higgins and others (2009) for the effect of a new
 study. `log_risk_ratio` and `log_odds_ratio` give the effect of a study
 from its counts. `forest_image` draws a forest plot.
+
+Small studies with large effects can be published more often than small
+studies with none. `egger_test` tests this asymmetry: it regresses each
+effect over its standard error on its precision, and tests the intercept.
+`funnel_image` draws each effect against its standard error.
 """
 
 from extensions.clinical.cox import chi_square_p_value
 from extensions.clinical.distributions import student_t_quantile
+from extensions.clinical.regression import linear_regression
 from extensions.clinical.survival import Z95
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
@@ -395,6 +401,166 @@ def forest_image(
         right,
         Rgba(0.15, 0.4, 0.85, 1),
     )
+    draw_line(image, 0, 0, width - 1, 0, dark)
+    draw_line(image, 0, height - 1, width - 1, height - 1, dark)
+    draw_line(image, 0, 0, 0, height - 1, dark)
+    draw_line(image, width - 1, 0, width - 1, height - 1, dark)
+    return image^
+
+
+struct EggerTest(Copyable, Movable):
+    """Egger's regression test of the asymmetry of a funnel plot."""
+
+    var intercept: Float64
+    """The intercept of the regression of `y / se` on `1 / se`. 0 for a
+    symmetric funnel."""
+    var standard_error: Float64
+    """The standard error of the intercept."""
+    var t: Float64
+    """The intercept over its standard error."""
+    var p_value: Float64
+    """The two-sided p value, on `k - 2` degrees of freedom."""
+    var slope: Float64
+    """The slope: an estimate of the effect that is free of the
+    asymmetry."""
+
+    def __init__(
+        out self,
+        intercept: Float64,
+        standard_error: Float64,
+        t: Float64,
+        p_value: Float64,
+        slope: Float64,
+    ):
+        """Create a result.
+
+        Args:
+            intercept: The intercept.
+            standard_error: Its standard error.
+            t: Its t value.
+            p_value: Its two-sided p value.
+            slope: The slope.
+        """
+        self.intercept = intercept
+        self.standard_error = standard_error
+        self.t = t
+        self.p_value = p_value
+        self.slope = slope
+
+
+def egger_test(
+    effects: List[Float64], variances: List[Float64]
+) raises -> EggerTest:
+    """Test the asymmetry of the studies by Egger's regression.
+
+    Args:
+        effects: The effect of each study.
+        variances: The variance of each effect. Three studies or more.
+
+    Returns:
+        The intercept of the least squares line of `y / se` on `1 / se`,
+        with its test.
+
+    Raises:
+        Error: If the studies are not valid, there are fewer than three, or
+            their precisions do not vary.
+    """
+    _require_studies(effects, variances)
+    if len(effects) < 3:
+        raise Error("Egger's test needs three studies or more")
+    var standardized = List[Float64]()
+    var precision = List[List[Float64]]()
+    for i in range(len(effects)):  # pragma: no branch
+        var se = sqrt(variances[i])
+        standardized.append(effects[i] / se)
+        precision.append([1.0 / se])
+    var fit = linear_regression(standardized, precision)
+    return EggerTest(
+        fit.coefficients[0],
+        fit.standard_errors[0],
+        fit.t(0),
+        fit.p_value(0),
+        fit.coefficients[1],
+    )
+
+
+def funnel_image(
+    effects: List[Float64],
+    variances: List[Float64],
+    result: MetaAnalysis,
+    width: Int,
+    height: Int,
+) raises -> Framebuffer:
+    """Draw a funnel plot: each effect against its standard error.
+
+    The effect runs across, from the least to the most of the funnel's
+    edges and the effects, with a margin of a twentieth of the range. The
+    standard error runs from 0 at the top edge to 1.05 times the largest
+    standard error at the bottom edge. A blue line marks the fixed effect, and gray
+    lines its 95 percent funnel, `estimate -+ 1.96 se`. A cross marks each
+    study. Without bias, the crosses fall evenly about the blue line.
+
+    Args:
+        effects: The effect of each study.
+        variances: The variance of each effect.
+        result: Their meta-analysis, from `meta_analysis`.
+        width: The width of the image, from 64 to 4096 pixels.
+        height: The height of the image, from 64 to 4096 pixels.
+
+    Returns:
+        A white image with a dark frame.
+
+    Raises:
+        Error: If the studies are not valid, the result is not theirs, or a
+            size is out of range.
+    """
+    _require_studies(effects, variances)
+    var k = len(effects)
+    if result.studies != k:
+        raise Error("A funnel plot needs the meta-analysis of its own studies")
+    if width < 64 or width > 4096 or height < 64 or height > 4096:
+        raise Error("A funnel plot is from 64 to 4096 pixels a side")
+    var center = result.fixed.estimate
+    var deepest = 0.0
+    for v in variances:  # pragma: no branch
+        deepest = max(deepest, sqrt(v))
+    deepest *= 1.05
+    var low = center - Z95 * deepest
+    var high = center + Z95 * deepest
+    for e in effects:  # pragma: no branch
+        low = min(low, e)
+        high = max(high, e)
+    var margin = 0.05 * (high - low)
+    low -= margin
+    high += margin
+    var image = Framebuffer(width, height, Color(255, 255, 255))
+    var right = Float64(width - 1)
+    var bottom = Float64(height - 1)
+    var gray = Rgba(0.6, 0.6, 0.63, 1)
+    var apex = _column(center, low, high, right)
+    draw_line(
+        image,
+        apex,
+        0,
+        _column(center - Z95 * deepest, low, high, right),
+        height - 1,
+        gray,
+    )
+    draw_line(
+        image,
+        apex,
+        0,
+        _column(center + Z95 * deepest, low, high, right),
+        height - 1,
+        gray,
+    )
+    draw_line(image, apex, 0, apex, height - 1, Rgba(0.15, 0.4, 0.85, 1))
+    var dark = Rgba(0.24, 0.24, 0.26, 1)
+    for i in range(k):  # pragma: no branch
+        var x = _column(effects[i], low, high, right)
+        var y = Int(floor(sqrt(variances[i]) / deepest * bottom + 0.5))
+        draw_line(image, x - 3, y, x + 3, y, dark)
+        draw_line(image, x, y - 3, x, y + 3, dark)
     draw_line(image, 0, 0, width - 1, 0, dark)
     draw_line(image, 0, height - 1, width - 1, height - 1, dark)
     draw_line(image, 0, 0, 0, height - 1, dark)

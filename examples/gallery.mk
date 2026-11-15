@@ -296,6 +296,8 @@ $(call gallery,roc,roc)
 $(call gallery,agreement,agreement)
 # A forest plot of the 13 trials of the BCG vaccine against tuberculosis.
 $(call gallery,forest,forest)
+# A funnel plot of the BCG vaccine trials, with the fixed effect and its funnel.
+$(call gallery,funnel,funnel)
 # One SEIR epidemic with 0, 30 and 50 percent of the population vaccinated.
 $(call gallery,epidemic,epidemic)
 # 40 days of synthetic case counts with their fitted exponential growth.
