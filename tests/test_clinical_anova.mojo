@@ -7,7 +7,7 @@
 
 `assets/hypothesis/anova_expected.txt` holds the results of scipy 1.18.1
 on the synthetic groups of `assets/hypothesis/three_groups.txt`. See
-`assets/hypothesis/make_anova.py`.
+`tools/make_anova.mojo` and `assets/hypothesis/make_anova.py`.
 """
 
 from extensions.clinical.anova import kruskal_wallis, one_way_anova

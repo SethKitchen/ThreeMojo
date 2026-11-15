@@ -3,35 +3,25 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Write tests of several groups by scipy, a Python library.
+"""Write the results of scipy, a Python library, for several groups.
 
-    python3 make_anova.py
+    mojo run -I . tools/make_anova.mojo
+    cd assets/hypothesis && python3 make_anova.py
 
-Run it with numpy and scipy 1.18.1. It writes two files:
+Run it with numpy and scipy 1.18.1. `tools/make_anova.mojo` writes the
+synthetic groups, `three_groups.txt`: three lines of falls of LDL
+cholesterol in mg/dL, whole numbers so that some tie. This script reads
+them and writes `anova_expected.txt`:
 
-- `three_groups.txt` holds three lines of synthetic falls of LDL
-  cholesterol in mg/dL, whole numbers so that some tie, of 18, 22 and 20
-  patients on three doses.
-- `anova_expected.txt` holds the results:
-
-  - `anova`: F, the two degrees of freedom and the p value of
-    `f_oneway`.
-  - `kruskal`: H with the tie correction, the degrees of freedom and the
-    p value of `kruskal`.
+- `anova`: F, the two degrees of freedom and the p value of `f_oneway`.
+- `kruskal`: H with the tie correction, the degrees of freedom and the
+  p value of `kruskal`.
 """
 
-import numpy as np
 from scipy import stats
 
-rng = np.random.default_rng(20261115)
-groups = [
-    np.round(rng.normal(20.0, 8.0, 18)),
-    np.round(rng.normal(26.0, 8.0, 22)),
-    np.round(rng.normal(31.0, 9.0, 20)),
-]
-with open("three_groups.txt", "w") as out:
-    for g in groups:
-        out.write(" ".join("%d" % v for v in g) + "\n")
+with open("three_groups.txt") as data:
+    groups = [[float(v) for v in line.split()] for line in data if line.strip()]
 f = stats.f_oneway(*groups)
 k = stats.kruskal(*groups)
 n = sum(len(g) for g in groups)

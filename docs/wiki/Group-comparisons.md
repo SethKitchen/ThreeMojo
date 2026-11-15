@@ -187,7 +187,7 @@ The tests compare `strata` with the `StratifiedTable` of statsmodels 0.15.0 on f
 
 The tests take 30 synthetic pairs of glucose and HbA1c with ties. Their correlations agree with scipy's `pearsonr`, `spearmanr` and `kendalltau` to a relative 1e-14. The p values agree to 1e-11, and Pearson's interval to 1e-13. `assets/hypothesis/make_correlation.py` writes them.
 
-F and H of three synthetic groups agree with scipy's `f_oneway` and `kruskal` to a relative 1e-13, and their p values to 1e-10 and 1e-11. `assets/hypothesis/make_anova.py` writes them.
+F and H of three synthetic groups agree with scipy's `f_oneway` and `kruskal` to a relative 1e-13, and their p values to 1e-10 and 1e-11. `tools/make_anova.mojo` writes the groups, and `assets/hypothesis/make_anova.py` writes the results of scipy.
 
 The tests fit a linear model of 80 synthetic patients with three covariates. Its coefficients, standard errors, t values and interval ends agree with statsmodels' `OLS` to a relative 1e-12. R^2 and the residual deviation agree to 1e-13, and the predictions to 1e-13. `assets/regression/make_regression.py` writes them.
 
