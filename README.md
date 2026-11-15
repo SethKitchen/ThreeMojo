@@ -956,6 +956,7 @@ Medical images, macromolecules and solid mechanics, for research and teaching. A
 - [x] [Meta-analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Meta-analysis): fixed and random effects, Q, I^2, tau^2, prediction intervals and forest plots of the BCG trials; they match statsmodels [#1094](https://github.com/SethKitchen/ThreeMojo/issues/1094)
 - [x] [Epidemic models](https://github.com/SethKitchen/ThreeMojo/wiki/Epidemic-models): SIR and SEIR epidemics with vaccination, peaks, final sizes and herd immunity, with plots; they match scipy [#1095](https://github.com/SethKitchen/ThreeMojo/issues/1095)
 - [x] [Two-by-two tables](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests#measure-a-test-from-its-table): sensitivity, specificity, predictive values and likelihood ratios, risk ratios and the number needed to treat; they match statsmodels [#1096](https://github.com/SethKitchen/ThreeMojo/issues/1096)
+- [x] [Sample size and power](https://github.com/SethKitchen/ThreeMojo/wiki/Sample-size-and-power): two proportions, two means and survival by Schoenfeld and Freedman; they match statsmodels and lifelines [#1097](https://github.com/SethKitchen/ThreeMojo/issues/1097)
 
 ### Out of scope
 

@@ -180,6 +180,7 @@
 - [Diagnostic tests](Diagnostic-tests)
 - [Meta-analysis](Meta-analysis)
 - [Epidemic models](Epidemic-models)
+- [Sample size and power](Sample-size-and-power)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)

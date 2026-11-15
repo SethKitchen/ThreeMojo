@@ -14,8 +14,9 @@
 - `proportions`: proportion intervals and two-by-two tables.
 - `meta`: meta-analysis of studies, with forest plots.
 - `epidemic`: SIR and SEIR models of an epidemic.
+- `power`: the sample size and the power of a study.
 - `distributions`: the t and F distributions.
 
-See the wiki pages Survival analysis, Diagnostic tests, Meta-analysis
-and Epidemic models.
+See the wiki pages Survival analysis, Diagnostic tests, Meta-analysis,
+Epidemic models, and Sample size and power.
 """

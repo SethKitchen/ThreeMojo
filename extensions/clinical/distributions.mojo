@@ -14,6 +14,8 @@ function.
   quantile of Student's t.
 - `f_upper` and `f_quantile` give the upper tail and the quantile of the F
   distribution.
+- `normal_quantile` gives the quantile of the standard normal
+  distribution.
 - `precise_exp` is `exp` to about one unit in the last place. The `exp`
   of Mojo 1.2 is off by about 3e-11 near -70, and a p value is an `exp`.
 
@@ -22,7 +24,8 @@ bisection. The degrees of freedom are real numbers, as the interval of an
 ICC needs.
 """
 
-from std.math import expm1, floor, inf, isfinite, ldexp, lgamma, log, log1p
+from std.math import erfc, expm1, floor, inf, isfinite, ldexp, lgamma, log
+from std.math import log1p
 from std.math import sqrt
 
 # The most degrees of freedom of a distribution here.
@@ -181,6 +184,73 @@ def beta_quantile(p: Float64, a: Float64, b: Float64) raises -> Float64:
     if p <= 0.5:
         return _invert(p, a, b)[0]
     return _invert(1.0 - p, b, a)[1]
+
+
+# The rational approximation of Acklam (2003) to the normal quantile.
+comptime _A0 = -3.969683028665376e01
+comptime _A1 = 2.209460984245205e02
+comptime _A2 = -2.759285104469687e02
+comptime _A3 = 1.383577518672690e02
+comptime _A4 = -3.066479806614716e01
+comptime _A5 = 2.506628277459239e00
+comptime _B0 = -5.447609879822406e01
+comptime _B1 = 1.615858368580409e02
+comptime _B2 = -1.556989798598866e02
+comptime _B3 = 6.680131188771972e01
+comptime _B4 = -1.328068155288572e01
+comptime _C0 = -7.784894002430293e-03
+comptime _C1 = -3.223964580411365e-01
+comptime _C2 = -2.400758277161838e00
+comptime _C3 = -2.549732539343734e00
+comptime _C4 = 4.374664141464968e00
+comptime _C5 = 2.938163982698783e00
+comptime _D0 = 7.784695709041462e-03
+comptime _D1 = 3.224671290700398e-01
+comptime _D2 = 2.445134137142996e00
+comptime _D3 = 3.754408661907416e00
+comptime _SQRT_TWO = 1.4142135623730951
+comptime _SQRT_TWO_PI = 2.5066282746310002
+
+
+def normal_quantile(p: Float64) raises -> Float64:
+    """Return the quantile of the standard normal distribution.
+
+    Acklam's rational approximation, good to about 1e-9, starts one step
+    of Halley's method on `erfc`, which is exact. Above a half, the
+    quantile is the negative of the quantile of `1 - p`, which is exact.
+
+    Args:
+        p: The probability. Between 0 and 1, and at least 1e-300 from
+            each end.
+
+    Returns:
+        The z with P(Z <= z) = p.
+
+    Raises:
+        Error: If the probability is out of range.
+    """
+    _require_probability(p)
+    if p > 0.5:
+        return -normal_quantile(1.0 - p)
+    if p < 1e-300:
+        raise Error("A normal quantile needs a probability of 1e-300 or more")
+    var x: Float64
+    if p < 0.02425:
+        var q = sqrt(-2.0 * log(p))
+        x = (((((_C0 * q + _C1) * q + _C2) * q + _C3) * q + _C4) * q + _C5) / (
+            (((_D0 * q + _D1) * q + _D2) * q + _D3) * q + 1.0
+        )
+    else:
+        var q = p - 0.5
+        var r = q * q
+        x = (
+            (((((_A0 * r + _A1) * r + _A2) * r + _A3) * r + _A4) * r + _A5)
+            * q
+            / (((((_B0 * r + _B1) * r + _B2) * r + _B3) * r + _B4) * r + 1.0)
+        )
+    var e = 0.5 * erfc(-x / _SQRT_TWO) - p
+    var u = e * _SQRT_TWO_PI * precise_exp(0.5 * x * x)
+    return x - u / (1.0 + 0.5 * x * u)
 
 
 def _require_probability(p: Float64) raises:

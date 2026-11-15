@@ -99,6 +99,7 @@ Look something up.
 - [Diagnostic tests](Diagnostic-tests)
 - [Meta-analysis](Meta-analysis)
 - [Epidemic models](Epidemic-models)
+- [Sample size and power](Sample-size-and-power)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
   - [Anatomy validity](Anatomy-validity)
