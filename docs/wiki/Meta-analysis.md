@@ -76,10 +76,10 @@ The test has little power with fewer than about ten studies. Asymmetry can also 
 
 The tests compare the module with statsmodels 0.15.0 and scipy 1.18.1 on the BCG trials. `assets/meta/make_meta.py` writes the expected values.
 
-- The log risk ratio and the variance of each trial agree with numpy to a relative 1e-14.
-- The fixed and random effects, their standard errors, interval ends and z agree with `combine_effects` of statsmodels to a relative 1e-12. The p values agree to 1e-10.
-- Q, I^2, tau^2 and the weights agree to 1e-12. They are the published values of the R package metafor: Q is 152.23, I^2 is 92.12 percent and tau^2 is 0.3088.
-- The prediction interval agrees with scipy's t quantile to 1e-12.
+- The log risk ratio and the variance of each trial agree with statsmodels' `effectsize_2proportions` to a relative 1e-14.
+- The fixed and random effects, their standard errors and interval ends agree with `combine_effects` of statsmodels to a relative 1e-12. Each z is the effect over its standard error. The p values agree with scipy's normal tail to 1e-10.
+- Q, I^2, tau^2 and the weights agree to 1e-12, and the p value of Q to 1e-10. They are the published values of the R package metafor: Q is 152.23, I^2 is 92.12 percent and tau^2 is 0.3088.
+- The t quantile agrees with scipy to 1e-11. The prediction interval is the random effect `-+ t sqrt(tau^2 + se^2)` from the statsmodels values, to 1e-12.
 - Egger's intercept, its standard error, t and slope agree with statsmodels' `OLS` to 1e-12, and the p value to 1e-11. `assets/meta/make_egger.py` writes them.
 
 The tests also check cases by hand:

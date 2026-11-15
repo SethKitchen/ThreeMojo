@@ -7,7 +7,8 @@
 
 `assets/meta/meta_expected.txt` holds the results of statsmodels 0.15.0
 and scipy 1.18.1 on the BCG vaccine trials of `assets/meta/bcg.txt`. See
-`assets/meta/make_meta.py`.
+`assets/meta/make_meta.py`. The test builds the prediction interval from
+their tau^2, standard error and t point.
 """
 
 from extensions.clinical.meta import (
@@ -19,6 +20,7 @@ from extensions.clinical.meta import (
     log_risk_ratio,
     meta_analysis,
 )
+from extensions.numerics.distributions import student_t_quantile
 from render.framebuffer import Framebuffer
 from std.math import inf, log, nan, sqrt
 from std.testing import (
@@ -76,8 +78,8 @@ def test_bcg() raises:
         assert_almost_equal(pooled[m].standard_error, row[1], rtol=1e-12)
         assert_almost_equal(pooled[m].lower, row[2], rtol=1e-12)
         assert_almost_equal(pooled[m].upper, row[3], rtol=1e-12)
-        assert_almost_equal(pooled[m].z, row[4], rtol=1e-12)
-        assert_almost_equal(pooled[m].p_value, row[5], rtol=1e-10)
+        assert_almost_equal(pooled[m].z, row[0] / row[1], rtol=1e-12)
+        assert_almost_equal(pooled[m].p_value, row[4], rtol=1e-10)
     ref spread = expected[3]
     assert_almost_equal(result.q, spread[0], rtol=1e-12)
     assert_almost_equal(result.q_p_value, spread[1], rtol=1e-10)
@@ -88,9 +90,16 @@ def test_bcg() raises:
         assert_almost_equal(
             result.random_weights[i], expected[5][i], rtol=1e-12
         )
+    # The prediction interval of Higgins and others (2009) is the random
+    # effect -+ t sqrt(tau^2 + se^2), with scipy's t of 11 degrees of
+    # freedom.
+    var t = expected[6][0]
+    assert_almost_equal(student_t_quantile(0.975, 11.0), t, rtol=1e-11)
+    var se = expected[2][1]
+    var half = t * sqrt(spread[3] + se * se)
     var band = result.prediction_interval()
-    assert_almost_equal(band[0], expected[6][0], rtol=1e-12)
-    assert_almost_equal(band[1], expected[6][1], rtol=1e-12)
+    assert_almost_equal(band[0], expected[2][0] - half, rtol=1e-12)
+    assert_almost_equal(band[1], expected[2][0] + half, rtol=1e-12)
 
 
 def test_by_hand() raises:
