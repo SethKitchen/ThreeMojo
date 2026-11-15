@@ -19,6 +19,7 @@ A Cox model gives the placebo a hazard ratio of 4.82, with a 95 percent interval
 | `logrank` | `GroupLogRank`, `log_rank_groups` and `MAX_GROUPS` |
 | `rmst` | `CumulativeHazard`, `nelson_aalen`, `RestrictedMean`, `restricted_mean`, `RestrictedComparison` and `compare_restricted_means` |
 | `competing` | `CumulativeIncidence`, `cumulative_incidence` and `incidence_image` |
+| `nnt` | `SurvivalDifference` and `survival_difference` |
 
 ## Make a survival curve
 
@@ -164,6 +165,23 @@ Events of both causes at one time count at once. lifelines jitters such ties apa
 
 `incidence_image(curves, colors, top, grid, ceiling, width, height)` draws the curves as rising steps. The incidence runs from 0 at the bottom edge to `ceiling` at the top edge.
 
+## Find the number needed to treat
+
+A difference of survival at a time is easy to read as a number needed to treat (NNT). It is the number of patients to treat for one more to be free of the event at that time.
+
+```mojo
+from extensions.clinical.nnt import survival_difference
+
+var gap = survival_difference(drug, placebo, Duration64(10, WEEK64))
+print(gap.difference, gap.nnt(), gap.nnt_interval()[0], gap.nnt_interval()[1])
+```
+
+`survival_difference(treated, control, time)` gives the survival of each Kaplan-Meier curve at the time and their difference, treated less control. The standard error of the difference sums the Greenwood variance `S^2 sum d / (n (n - d))` of each curve. A curve that falls to 0 has no variance from then on. The result gives the 95 percent interval from `lower` to `upper`.
+
+`nnt()` gives `1 / difference`, as Altman and Andersen (1999) give it. It is below 0 when the treated group does worse: its size is then the number needed to harm. `nnt_interval()` gives `1 / upper` and `1 / lower`. When the interval of the difference holds 0, the first end is the least number to treat for a benefit. The second end is then below 0. The NNT then runs from that benefit through infinity to that harm.
+
+In the 6-MP trial, 75 percent of the 6-MP group and 38 percent of the placebo group are in remission at 10 weeks. The difference is 0.37, so 2.7 children need 6-MP for one more to be in remission at 10 weeks.
+
 ## Draw the curves
 
 `survival_image(curves, colors, top, grid, width, height)` plots the curves as steps on a white image. Time runs from 0 at the left edge to `top` at the right edge. Survival runs from 0 at the bottom edge to 1 at the top edge. A light gray line marks each `grid` of time and each tenth of survival. A short vertical tick marks each censored patient on its curve.
@@ -179,6 +197,8 @@ The tests compare the module with lifelines 0.30.3, a Python library, on the tri
 - The log-rank test of three synthetic arms with ties agrees with lifelines' `multivariate_logrank_test` to a relative 1e-12, and its p value to 1e-11. With two groups, it is the two-group test.
 - The Nelson-Aalen hazard of each group agrees with lifelines to a relative 1e-14, and the ends of its interval to 1e-13.
 - The restricted mean to 23 weeks agrees with lifelines' `restricted_mean_survival_time` to 1e-14. Its standard error agrees with the formula in numpy to 1e-13, and the test of the difference to 1e-11.
+
+The tests compare `nnt` with lifelines on the 6-MP trial at 10, 15 and 20 weeks. `assets/survival/make_nnt.py` writes the values. Each survival agrees with lifelines' `KaplanMeierFitter` to 1e-14. The standard error, the interval and the NNT agree with the Greenwood formula in numpy to 1e-13.
 
 The tests compare `competing` with the `AalenJohansenFitter` of lifelines on a synthetic cohort of 80 patients with two causes. No two events tie, so lifelines does not jitter them. `assets/competing/make_competing.py` writes them.
 
@@ -210,6 +230,8 @@ The tests check the cumulative hazard and the restricted mean by hand. Three pat
 
 The tests check competing risks by hand. Four patients have a relapse at 1 day, a death at 2, a censoring at 3 and a relapse at 4. The incidence of relapse is 0.25, then 0.25, then 0.75, and that of death is 0.25. Once no patient is left, the two incidences sum to 1. The first variance is `p (1 - p) / n`, or 3/64. A relapse and a death at one time of three patients give each cause an incidence of 1/3.
 
+The tests check the NNT by hand. Before any event, both groups survive whole, with no error, and the NNT is refused. After the last event of a group, its survival is 0 with no variance. A difference of -1/2 gives an NNT of -2, a number needed to harm of 2. An interval of the difference that holds 0 gives an NNT interval from a benefit to a harm.
+
 ## Errors
 
 Every function raises `Error` for input it cannot use.
@@ -230,6 +252,7 @@ Every function raises `Error` for input it cannot use.
 | A side is out of 64 to 4096 pixels, the top time is not positive and finite, or the grid gives more than 100 lines | `survival_image` |
 | The competing events are not one for each patient, or a patient has both first events | `cumulative_incidence` |
 | A row index names no time | `CumulativeIncidence.interval` |
+| The time of a survival difference is below 0 or not finite, or the difference is 0 for an NNT | `survival_difference`, `SurvivalDifference.nnt` |
 | There is no curve, the colors are not one for each, a side is out of 64 to 4096 pixels, a time is out of range, or the ceiling is not above 0 and at most 1 | `incidence_image` |
 
 ## Limits
@@ -256,6 +279,7 @@ Every function raises `Error` for input it cannot use.
 - Aalen and Johansen, "An empirical transition matrix for non-homogeneous Markov chains based on censored observations", Scandinavian Journal of Statistics, 1978.
 - Collett, a textbook on the survival data of medical research, third edition, CRC Press, 2015.
 - Putter, Fiocco and Geskus, "Tutorial in biostatistics: competing risks and multi-state models", Statistics in Medicine, 2007.
+- Altman and Andersen, "Calculating the number needed to treat for trials where the outcome is time to an event", BMJ, 1999.
 - Aalen, "Nonparametric inference for a family of counting processes", Annals of Statistics, 1978.
 - Royston and Parmar, "Restricted mean survival time: an alternative to the hazard ratio", BMC Medical Research Methodology, 2013.
 - Klein and Moeschberger, "Survival Analysis: Techniques for Censored and Truncated Data", 2nd edition, 2003.
