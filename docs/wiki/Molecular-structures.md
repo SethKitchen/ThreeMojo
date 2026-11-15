@@ -37,6 +37,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `pdb_write` | `encode_pdb` |
 | `cif_write` | `encode_mmcif` and `cif_value` |
 | `dihedral` | `backbone_angles`, `BackboneAngles`, `dihedral`, `ramachandran_image`, `ramachandran_color` and `plot_pixel` |
+| `amphipathic` | `eisenberg_hydrophobicity`, `sequence_hydrophobicity`, `HydrophobicMoment`, `hydrophobic_moment`, `window_moment`, `HelicalWheel`, `helical_wheel` and `MAX_WHEEL` |
 
 ## Read an mmCIF file
 
@@ -494,6 +495,34 @@ Path("map.png").write_bytes(encode(map_image(map, Length64(20, ANGSTROM))))
 
 `map.contacts(cutoff, separation)` gives the pairs of rows closer than the cutoff, each pair once. Two residues of one chain must be at least `separation` residues apart. Residues of two chains always count. `map_image(map, far)` draws one pixel per pair: dark blue at zero distance, and white at `far` and beyond.
 
+## Find amphipathic helices
+
+Some helices bind a membrane, such as those of antimicrobial peptides. Such a helix has its hydrophobic side chains on one face and its charged side chains on the other. The hydrophobic moment of Eisenberg and others measures how much a helix is amphipathic.
+
+![The helical wheels of magainin 2 and of a designed peptide of leucine and lysine](out/helical-wheel.png)
+
+`examples/helical_wheel.mojo` makes this picture. The left wheel is magainin 2, from the skin of the African clawed frog. The right wheel is the designed peptide `(LKKLLKL)3`. Orange discs are hydrophobic and blue discs hydrophilic. The arrow points along the hydrophobic moment: 0.45 for magainin 2 and 0.77 for the designed peptide.
+
+```mojo
+from extensions.molecule.amphipathic import hydrophobic_moment, sequence_hydrophobicity
+
+var values = sequence_hydrophobicity("GIGKFLHSAKKFGKAFVGEIMNS")
+var moment = hydrophobic_moment(values, Angle64(100, DEGREE64))
+print(moment.mean, moment.moment, moment.direction.to(DEGREE64))
+```
+
+`sequence_hydrophobicity(sequence)` gives the value of each residue on the normalized consensus scale of Eisenberg and others (1984), from -2.53 for arginine to 1.38 for isoleucine. `eisenberg_hydrophobicity(code)` gives the value of one code.
+
+Each residue of an alpha helix turns 100 degrees about the axis. `hydrophobic_moment(values, angle)` sums the value `h` of each residue as a vector at its angle:
+
+    mu = |sum of h_n exp(i n delta)| / N
+
+The result gives the `mean` hydrophobicity, the `moment` and its `direction`, the middle of the hydrophobic face. Use 100 degrees for an alpha helix, and 160 to 180 degrees for a strand.
+
+`window_moment(values, angle, window)` gives the largest moment of a window of residues, as the R package Peptides gives it. Each window takes its first residue at angle 0, and `start` names the first residue of the best window. A window of 11 residues is usual.
+
+`helical_wheel(values, angle, size)` draws the residues as seen down the axis of the helix. Residue `n` sits at the angle `n * angle`, clockwise from the top. The residues spiral out by one disc for each full turn, so that no two overlap. A dark arrow points along the moment. The result gives the center of each disc, so the caller can write each letter.
+
 ## Color a surface
 
 A surface comes with CPK colors. `color_surface(geometry, structure, model, coloring)` colors it again by another property of the atom under each vertex:
@@ -625,6 +654,13 @@ The tests check these results:
 - Variants read as `R175H`, `p.R175H` and `p.Arg175His`. Each malformed form is refused, as are a stop, a number of 0 and a change to the same amino acid.
 - Four variants on an ideal helix give their residues, their charge, hydropathy and BLOSUM62 changes, their mean B-factors and their RSA. Their contacts match a search of every pair of atoms. A wrong wild type and a missing number are refused.
 
+The tests compare `amphipathic` with the Python package peptides 0.5.0, a port of the R package Peptides. The peptides are melittin, magainin 2, LL-37 and a designed peptide. `assets/amphipathic/make_amphipathic.py` writes them.
+
+- The mean hydrophobicity and the moment of each whole peptide at 100 degrees agree to a relative 1e-13. The direction agrees with numpy to 1e-11 degrees.
+- The largest moment of a window of 11 residues agrees to 1e-13, and its first residue is the one that numpy finds. The moment at 160 degrees agrees to 1e-12.
+- One residue has its own value as its moment. Two equal residues 180 degrees apart cancel. A turn of four residues, two hydrophobic and two not, has the moment `sqrt(8) / 4` at 45 degrees.
+- The first disc of a wheel sits straight up, 12 percent of the side out. Leucine is orange and lysine blue, and the arrow leaves the center along the moment.
+
 ## Errors
 
 Every function raises `Error` for input it cannot use.
@@ -635,6 +671,8 @@ Every function raises `Error` for input it cannot use.
 | A variant's number is not in the chain, or the residue there is not its wild type, or the chain is not in the model, or the reach is not positive and finite | `variant_sites` |
 | A quoted value or a text field has no end | `cif_tokens`, `parse_cif`, `parse_mmcif` |
 | A link cutoff is not positive and finite | `disulfide_bonds`, `salt_bridges` |
+| A sequence is empty or holds a code that is not one of the twenty, a value is not finite, the angle is not between 0 and 360 degrees, or a window is below 1 | `amphipathic` |
+| A wheel has more than 100 residues, or its side is out of 64 to 4096 pixels | `helical_wheel` |
 | A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, an alignment mode is not valid, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
@@ -670,6 +708,7 @@ Every function raises `Error` for input it cannot use.
 - A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
 - A variant is found by its author number in the file. A file numbered another way, or a residue with an insertion code, needs its numbers mapped first. A site's measures are of the wild-type structure; the variant's own shape is not modeled.
 - The Coulomb potential uses formal charges at pH 7 and the dielectric `4 r`. It is not a Poisson-Boltzmann solution. It leaves out a charged histidine, other protonation states and the ions of the solvent.
+- A hydrophobic moment takes the sequence as one ideal helix or strand. It does not find where a helix starts or ends, and it does not predict the activity or the toxicity of a peptide.
 
 ## References
 
@@ -698,5 +737,8 @@ Every function raises `Error` for input it cannot use.
 - Richardson, "The anatomy and taxonomy of protein structure", 1981.
 - Kabsch and Sander, "Dictionary of protein secondary structure: pattern recognition of hydrogen-bonded and geometrical features", 1983.
 - Kyte and Doolittle, "A simple method for displaying the hydropathic character of a protein", 1982.
+- Eisenberg, Weiss and Terwilliger, "The helical hydrophobic moment: a measure of the amphiphilicity of a helix", Nature, 1982.
+- Eisenberg, Schwarz, Komaromy and Wall, "Analysis of membrane and surface protein sequences with the hydrophobic moment plot", Journal of Molecular Biology, 1984.
+- Zasloff, "Magainins, a class of antimicrobial peptides from Xenopus skin", Proceedings of the National Academy of Sciences, 1987.
 - Kabsch, "A solution for the best rotation to relate two sets of vectors", 1976.
 - Horn, "Closed-form solution of absolute orientation using unit quaternions", 1987.

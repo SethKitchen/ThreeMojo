@@ -281,6 +281,9 @@ $(call gallery,longitudinal,longitudinal)
 # An ideal peptide of a helix, a loop and a strand: its cartoon ribbon, and
 # its excluded surface colored by element and by hydropathy.
 $(call gallery,molecule,molecule)
+# The helical wheels of magainin 2 and of a designed peptide of leucine and
+# lysine, with their hydrophobic moments.
+$(call gallery,helical-wheel,helical_wheel)
 # A synthetic predicted model: its ribbon and excluded surface colored by
 # pLDDT in the four bands of the AlphaFold database.
 $(call gallery,predicted,predicted)
