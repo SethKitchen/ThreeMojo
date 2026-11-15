@@ -17,6 +17,8 @@ Marker A has an AUC of 0.820, with a 95 percent interval from 0.751 to 0.890. Ma
 | `roc` | `RocCurve`, `roc_curve`, `RocComparison`, `compare_roc` and `roc_image` |
 | `agreement` | `BlandAltman`, `bland_altman`, `bland_altman_image`, `Icc`, `IccTable`, `intraclass_correlation` and `LIMIT_FACTOR` |
 | `logistic` | `LogisticModel` and `logistic_regression` |
+| `kappa` | `Kappa`, `cohens_kappa`, `linear_weighted_kappa`, `quadratic_weighted_kappa` and `MAX_CATEGORIES` |
+| `rates` | `RateModel`, `poisson_regression`, `YEAR64` and `PER_YEAR64` |
 | `proportions` | `Estimate`, `wilson_interval`, `exact_interval`, `DiagnosticAccuracy`, `diagnostic_accuracy`, `RiskComparison` and `compare_risks` |
 | `distributions` | `beta_tails`, `beta_quantile`, `normal_quantile`, `student_t_upper`, `student_t_quantile`, `f_upper`, `f_quantile`, `precise_exp` and `MAX_DEGREES` |
 
@@ -110,6 +112,16 @@ Index 0 of the model is the intercept, and index `i + 1` is covariate `i`. The m
 
 The fit uses Newton steps from 0, as statsmodels does. When the steps run out first, `converged` is `False`. That occurs when a covariate separates the patients with the outcome from those without it.
 
+## Model the rate of events
+
+A cohort counts the events of each stratum, such as the cancers of smokers in their sixties, over its person-time. `poisson_regression(events, exposure, covariates, tolerance, max_steps)` takes the events, the person-time as durations, and one row of covariates for each stratum. It models the rate of a stratum as a baseline rate times `exp(x . b)`. `exp(b_i)` is the rate ratio of covariate `i`.
+
+The fit uses the log of the person-time as the offset. It uses iteratively reweighted least squares from `mu = (y + mean(y)) / 2`, as statsmodels starts. The model gives:
+
+- `rate_ratio(i)`, `interval(i)`, `z(i)` and `p_value(i)` for covariate `i`, with `i` from 1.
+- `baseline_rate()`, the rate of a stratum with every covariate 0, and `rate(row)`, the fitted rate of a stratum. Rates are per year: `YEAR64` is the Julian year of 365.25 days.
+- `deviance` and `dispersion`. A dispersion above 1 means more spread than Poisson counts have. Then multiply the standard errors by its square root.
+
 ## Measure the agreement of two methods
 
 ![A Bland-Altman plot of two readers who measure 40 synthetic tumors](out/agreement.png)
@@ -146,6 +158,15 @@ The limits do not say whether two methods agree well enough. Compare them with t
 Each `Icc` gives the `value` and the F statistic `f` with its degrees of freedom `df1` and `df2`. It also gives the `p_value` of the test that the correlation is 0, and the 95 percent interval from `lower` to `upper`. The formulas are those of pingouin 0.7.0. The interval of ICC(A,1) uses the degrees of freedom of Satterthwaite, which are not whole numbers.
 
 Use ICC(A,1) when two raters must give the same value, as for a radiomics feature that must be the same for each reader. Use ICC(C,1) when only the order of the subjects counts.
+
+## Measure the agreement of raters on categories
+
+Two raters, such as two radiologists, put each subject in one of k categories. Their table holds the subjects that rater A put in category i, by row, and rater B in category j, by column. Kappa is the agreement beyond the agreement that chance gives: 1 for full agreement, 0 for chance agreement, and below 0 for less than chance.
+
+- `cohens_kappa(table)` counts exact agreement only, `(p_o - p_e) / (1 - p_e)`.
+- `linear_weighted_kappa(table)` and `quadratic_weighted_kappa(table)` give part credit to near categories, for ordered categories such as grades. The agreement weight of categories i and j is `1 - |i - j| / (k - 1)`, or `1 - ((i - j) / (k - 1))^2`.
+
+Each gives a `Kappa` with the `value`, its `standard_error`, and the 95 percent interval from `lower` to `upper`. It also gives the test that kappa is 0: the `null_error`, z and the two-sided `p_value`. The errors are the large-sample errors of Fleiss, Cohen and Everitt, as statsmodels gives them.
 
 ## Use the t and F distributions
 
@@ -191,6 +212,10 @@ The tests compare `proportions` with statsmodels 0.15.0. `assets/proportions/mak
 - The six proportions of a test of 90, 30, 10 and 170 patients, and their exact intervals, agree to 1e-12. Its likelihood ratios and their intervals agree with `Table2x2` to 1e-12.
 - The risk difference of 30 of 100 against 15 of 100 agrees with the Wald interval of `confint_proportions_2indep`. Its risk ratio and odds ratio agree with `Table2x2`, all to 1e-12.
 
+The tests compare `rates` with the Poisson `GLM` of statsmodels 0.15.0, with an offset, on 48 synthetic strata. `assets/rates/make_rates.py` writes them. The coefficients agree to a relative 1e-12. The standard errors, z values, interval ends, deviance, dispersion and rates agree to 1e-11.
+
+The tests compare `kappa` with `cohens_kappa` of statsmodels 0.15.0. The tables are four grades of 120 synthetic films, by each weighting, and two categories of 60 smears. `assets/agreement/make_kappa.py` writes them. Kappa agrees to a relative 1e-14, and its errors and interval ends to 1e-12.
+
 The tests also check cases by hand:
 
 - Three diseased scores of 3, 2 and 2 against healthy scores of 2, 1 and 0 give an AUC of 8/9. The standard error is from the variances 1/108 and 1/27 of the components. The best threshold is 2.
@@ -203,6 +228,8 @@ The tests also check cases by hand:
 - Two raters who differ by a constant leave no residual, and the ICC refuses them.
 - A two-by-two table of 10 and 20 exposed patients, and 5 and 40 others, gives an odds ratio of 4. Its standard error is Woolf's `sqrt(1/10 + 1/20 + 1/5 + 1/40)`. The intercept is the log odds 5/40.
 - A covariate that separates the outcomes does not converge.
+- Events of 10 in 100 person-years against 20 in 50 give a rate ratio of 4 and a baseline rate of 0.1 a year. The log of the ratio has the standard error `sqrt(1/10 + 1/20)`.
+- Full agreement gives a kappa of 1 with no error. Equal cells give a kappa of 0 and a p value of 1. With two categories, the weighted kappas are the simple one. Systematic disagreement gives a kappa below 0.
 - With no success in 20 trials, the exact high end is `1 - 0.025^(1/20)`. The beta quantile of Beta(2, 1) is the square root, on both sides of a half.
 - The likelihood ratios of the test are 6 and 0.1 / 0.85. With no false positive, a half is added to each cell.
 - Equal risks need an infinite number to treat.
@@ -221,6 +248,9 @@ Every function raises `Error` for input it cannot use.
 | The result is not that of the data, the means or the differences do not vary, or a side is out of 64 to 4096 pixels | `bland_altman_image` |
 | The ratings are not a finite table of two subjects and two raters or more, or they have no residual variation | `intraclass_correlation` |
 | A proportion has no trial, or successes out of range | `wilson_interval`, `exact_interval`, `compare_risks` |
+| The strata are not one count of 0 or more, positive person-time and one finite row each, with an event in all and more strata than coefficients, or the tolerance or the steps are out of range | `poisson_regression` |
+| A covariate is constant or collinear with others, or an index names no covariate | `poisson_regression`, `RateModel` |
+| A kappa table is not square, has not 2 to 100 categories, has a count below 0 or no subject, or its raters agree by chance alone | `kappa` |
 | A cell of a diagnostic table is negative, or the table has no diseased, healthy, positive or negative patient | `diagnostic_accuracy` |
 | The covariates are not one finite row of 1 to 32 values for each patient, all outcomes are the same, the tolerance is not between 0 and 1, or the steps are not from 1 to 1000 | `logistic_regression` |
 | The information matrix is not positive definite, because a covariate is constant, is collinear with others, or separates the outcomes | `logistic_regression` |
@@ -250,6 +280,9 @@ Every function raises `Error` for input it cannot use.
 - Shrout and Fleiss, "Intraclass correlations: uses in assessing rater reliability", Psychological Bulletin, 1979.
 - McGraw and Wong, "Forming inferences about some intraclass correlation coefficients", Psychological Methods, 1996.
 - Koo and Li, "A guideline of selecting and reporting intraclass correlation coefficients for reliability research", Journal of Chiropractic Medicine, 2016.
+- Breslow and Day, "Statistical Methods in Cancer Research, Volume II: The Design and Analysis of Cohort Studies", 1987.
+- Cohen, "A coefficient of agreement for nominal scales", Educational and Psychological Measurement, 1960.
+- Fleiss, Cohen and Everitt, "Large sample standard errors of kappa and weighted kappa", Psychological Bulletin, 1969.
 - Clopper and Pearson, "The use of confidence or fiducial limits illustrated in the case of the binomial", Biometrika, 1934.
 - Wilson, "Probable inference, the law of succession, and statistical inference", Journal of the American Statistical Association, 1927.
 - Simel, Samsa and Matchar, "Likelihood ratios with confidence: sample size estimation for diagnostic test studies", Journal of Clinical Epidemiology, 1991.
