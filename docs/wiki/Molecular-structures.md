@@ -38,6 +38,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `cif_write` | `encode_mmcif` and `cif_value` |
 | `dihedral` | `backbone_angles`, `BackboneAngles`, `dihedral`, `ramachandran_image`, `ramachandran_color` and `plot_pixel` |
 | `amphipathic` | `eisenberg_hydrophobicity`, `sequence_hydrophobicity`, `HydrophobicMoment`, `hydrophobic_moment`, `window_moment`, `HelicalWheel`, `helical_wheel` and `MAX_WHEEL` |
+| `phylogeny` | `alignment_distances`, `kimura_distances`, `neighbor_joining`, `upgma`, `midpoint_root`, `PhyloTree`, `tree_image`, `TreeDrawing` and `MAX_TAXA` |
 
 ## Read an mmCIF file
 
@@ -409,6 +410,32 @@ var fit = superpose(fixed, moving)
 
 Each column that pairs two residues pairs their first atoms of the name, when both residues have one. A last argument of `LOCAL_ALIGNMENT` pairs a fragment with its part of a whole chain.
 
+## Build a tree of sequences
+
+The sequences of a pathogen change as it spreads, so a tree of its sequences traces the spread. A tree of a protein family shows which members are near kin.
+
+![The neighbor-joining tree of a synthetic outbreak in three wards](out/phylogeny.png)
+
+`examples/phylogeny.mojo` makes this picture. A protein of 300 residues of a synthetic pathogen spreads from one source into three wards, and in each ward to four patients. It changes a little on each branch of the spread. The neighbor-joining tree of the twelve sequences finds the three wards: the patients of each ward share a branch.
+
+```mojo
+from extensions.molecule.phylogeny import alignment_distances, kimura_distances, midpoint_root, neighbor_joining
+
+var distances = kimura_distances(alignment_distances(sequences, -10.0, -0.5))
+var tree = midpoint_root(neighbor_joining(distances, names))
+print(tree.newick())
+```
+
+- `alignment_distances(sequences, open, extend)` aligns each pair end to end with BLOSUM62, and gives `1 - identity`, the p-distance.
+- `kimura_distances(p)` corrects the p-distances for more than one change at a site: `-ln(1 - p - 0.2 p^2)`, after Kimura. It refuses a p-distance above about 0.85.
+- `neighbor_joining(distances, names)` builds the tree of Saitou and Nei, as Biopython builds it. It needs no molecular clock. Its root is the last join, so read it as unrooted. Branch lengths can be below 0.
+- `upgma(distances, names)` builds the rooted tree of the average linkage, as scipy's `linkage` with the average method builds it. It takes a molecular clock, so each leaf is at the same depth.
+- `midpoint_root(tree)` roots a tree at the middle of its longest path between two leaves, as Biopython's `root_at_midpoint` does.
+
+A `PhyloTree` holds its leaves as nodes 0 to `n - 1`, in the order of the names. `path_length(a, b)` gives the sum of the branch lengths between two leaves, and `leaf_order()` gives the leaves in the order of a walk from the root. `newick()` writes the tree as Newick text.
+
+`tree_image(tree, width, height, label)` draws the tree with the root at the left and the leaves in rows. It keeps `label` pixels at the right, and gives the place of each leaf's name so the caller can write it.
+
 ## Superpose two models
 
 Superpose two models before you compare them, such as two models of an NMR ensemble, or a crystal structure and a prediction.
@@ -654,6 +681,14 @@ The tests check these results:
 - Variants read as `R175H`, `p.R175H` and `p.Arg175His`. Each malformed form is refused, as are a stop, a number of 0 and a change to the same amino acid.
 - Four variants on an ideal helix give their residues, their charge, hydropathy and BLOSUM62 changes, their mean B-factors and their RSA. Their contacts match a search of every pair of atoms. A wrong wild type and a missing number are refused.
 
+The tests compare `phylogeny` with Biopython 1.88 and scipy 1.18.1 on eight synthetic sequences of 120 residues. They evolve from one root along a known tree, by substitutions only. `assets/phylogeny/make_phylogeny.py` writes them.
+
+- The p-distances from the alignments agree with the share of sites that differ to 1e-15, and Kimura's distances with numpy to 1e-14.
+- The path lengths between the leaves of the neighbor-joining tree agree with Biopython's `DistanceTreeConstructor.nj` to 1e-13. Rooted at the midpoint, each leaf is as deep as Biopython's `root_at_midpoint` puts it, to 1e-14.
+- The path lengths of the UPGMA tree are the cophenetic distances of scipy's average linkage, to 1e-14.
+- The distances of the tree `((A:1,B:2):3,(C:4,D:5))` give it back exactly, and its midpoint is the node over C and D. A clock tree writes the Newick text `((D:2.0,C:2.0):1.0,(B:1.0,A:1.0):2.0):0.0;`. Two sequences join half way.
+- A drawn clock tree has each leaf at the same column, in rows 28 pixels apart.
+
 The tests compare `amphipathic` with the Python package peptides 0.5.0, a port of the R package Peptides. The peptides are melittin, magainin 2, LL-37 and a designed peptide. `assets/amphipathic/make_amphipathic.py` writes them.
 
 - The mean hydrophobicity and the moment of each whole peptide at 100 degrees agree to a relative 1e-13. The direction agrees with numpy to 1e-11 degrees.
@@ -673,6 +708,10 @@ Every function raises `Error` for input it cannot use.
 | A link cutoff is not positive and finite | `disulfide_bonds`, `salt_bridges` |
 | A sequence is empty or holds a code that is not one of the twenty, a value is not finite, the angle is not between 0 and 360 degrees, or a window is below 1 | `amphipathic` |
 | A wheel has more than 100 residues, or its side is out of 64 to 4096 pixels | `helical_wheel` |
+| There are not 2 to 1000 sequences, a matrix is not square, symmetric, finite and 0 or more with 0 on its diagonal, or the names do not fit it | `alignment_distances`, `neighbor_joining`, `upgma` |
+| A p-distance is below 0, not finite or too large for Kimura's formula | `kimura_distances` |
+| A leaf index names no leaf, or a tree has no root | `PhyloTree.path_length`, `midpoint_root` |
+| A side of a tree image is out of 64 to 4096 pixels, or its label space is out of 0 to half its width | `tree_image` |
 | A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, an alignment mode is not valid, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
@@ -709,6 +748,7 @@ Every function raises `Error` for input it cannot use.
 - A variant is found by its author number in the file. A file numbered another way, or a residue with an insertion code, needs its numbers mapped first. A site's measures are of the wild-type structure; the variant's own shape is not modeled.
 - The Coulomb potential uses formal charges at pH 7 and the dielectric `4 r`. It is not a Poisson-Boltzmann solution. It leaves out a charged histidine, other protonation states and the ions of the solvent.
 - A hydrophobic moment takes the sequence as one ideal helix or strand. It does not find where a helix starts or ends, and it does not predict the activity or the toxicity of a peptide.
+- The trees are distance trees. They do not fit a model of evolution by likelihood, give no bootstrap support, and take the gaps of an alignment out of its identity. A tree of a few sequences is not a study of an outbreak.
 
 ## References
 
@@ -740,5 +780,8 @@ Every function raises `Error` for input it cannot use.
 - Eisenberg, Weiss and Terwilliger, "The helical hydrophobic moment: a measure of the amphiphilicity of a helix", Nature, 1982.
 - Eisenberg, Schwarz, Komaromy and Wall, "Analysis of membrane and surface protein sequences with the hydrophobic moment plot", Journal of Molecular Biology, 1984.
 - Zasloff, "Magainins, a class of antimicrobial peptides from Xenopus skin", Proceedings of the National Academy of Sciences, 1987.
+- Saitou and Nei, "The neighbor-joining method: a new method for reconstructing phylogenetic trees", Molecular Biology and Evolution, 1987.
+- Sokal and Michener, "A statistical method for evaluating systematic relationships", University of Kansas Science Bulletin, 1958.
+- Kimura, "The Neutral Theory of Molecular Evolution", Cambridge University Press, 1983.
 - Kabsch, "A solution for the best rotation to relate two sets of vectors", 1976.
 - Horn, "Closed-form solution of absolute orientation using unit quaternions", 1987.

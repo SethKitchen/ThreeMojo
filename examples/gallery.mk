@@ -284,6 +284,9 @@ $(call gallery,molecule,molecule)
 # The helical wheels of magainin 2 and of a designed peptide of leucine and
 # lysine, with their hydrophobic moments.
 $(call gallery,helical-wheel,helical_wheel)
+# The neighbor-joining tree of a synthetic outbreak in three wards, rooted at
+# its midpoint, with each patient named.
+$(call gallery,phylogeny,phylogeny)
 # A synthetic predicted model: its ribbon and excluded surface colored by
 # pLDDT in the four bands of the AlphaFold database.
 $(call gallery,predicted,predicted)
