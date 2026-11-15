@@ -288,7 +288,9 @@ The tests compare `negbin` with the `NegativeBinomial` model of statsmodels 0.15
 
 The tests compare `kappa` with `cohens_kappa` of statsmodels 0.15.0. The tables are four grades of 120 synthetic films, by each weighting, and two categories of 60 smears. `assets/agreement/make_kappa.py` writes them. Kappa agrees to a relative 1e-14, and its errors and interval ends to 1e-12.
 
-The tests compare `fleiss_kappa` with `fleiss_kappa` of statsmodels 0.15.0 on two tables. One is the example of 10 subjects and 14 raters on the Wikipedia page of Fleiss' kappa, with a kappa of 0.210. The other has 40 synthetic films and 6 readers, which `tools/make_fleiss.mojo` writes. `assets/agreement/make_fleiss.py` writes the values. Kappa and Randolph's kappa agree to a relative 1e-14. No library gives the null error or the category kappas, so the null error, z, the p value and the category kappas agree with their closed forms to 1e-13.
+The tests compare `fleiss_kappa` with `fleiss_kappa` of statsmodels 0.15.0 on two tables. One is the example of 10 subjects and 14 raters on the Wikipedia page of Fleiss' kappa, with a kappa of 0.210. The other has 40 synthetic films and 6 readers, which `tools/make_fleiss.mojo` writes. `assets/agreement/make_fleiss.py` writes the values. Kappa and Randolph's kappa agree to a relative 1e-14.
+
+No library gives the null error or the category kappas. They, z and the p value agree with their closed forms to 1e-13.
 
 The tests compare `calibration` with scikit-learn 1.9.1, statsmodels 0.15.0 and dcurves 1.1.7 on 300 synthetic patients. `tools/make_calibration.mojo` writes them, and `assets/calibration/make_calibration.py` writes the expected values.
 
