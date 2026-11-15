@@ -7,7 +7,9 @@
 and directly standardized rates.
 
 `assets/standardize/standardize_expected.txt` holds the values of scipy
-and statsmodels. See `assets/standardize/make_standardize.py`.
+and statsmodels. See `assets/standardize/make_standardize.py`. The
+directly standardized rate is checked by the closed form of Fay and Feuer
+(1997), on the gamma points that scipy checks.
 """
 
 from extensions.clinical.standardize import (
@@ -16,7 +18,7 @@ from extensions.clinical.standardize import (
     poisson_interval,
     standardized_ratio,
 )
-from std.math import inf, nan
+from std.math import inf, log, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -82,35 +84,65 @@ def test_ratios() raises:
     assert_equal(len(rows), 5)
     for row in rows:
         var found = standardized_ratio(Int(row[0]), row[1])
-        _close(found.ratio, row[2], 1e-15)
-        if row[3] == 0:
+        # The ratio is the observed count over the expected count.
+        _close(found.ratio, row[0] / row[1], 1e-15)
+        if row[2] == 0:
             assert_equal(found.lower, 0.0)
         else:
-            _close(found.lower, row[3], 1e-12)
-        _close(found.upper, row[4], 1e-12)
-        _close(found.p_value, row[5], 1e-11)
+            _close(found.lower, row[2], 1e-12)
+        _close(found.upper, row[3], 1e-12)
+        _close(found.p_value, row[4], 1e-11)
     # A ratio of exactly the expected count has a p value of 1.
     assert_equal(standardized_ratio(5, 5.0).p_value, 1.0)
 
 
 def test_direct() raises:
-    var events = List[Int]()
+    # Six age groups: events, person-years and standard shares.
+    var events: List[Int] = [2, 5, 11, 24, 41, 63]
+    var counts: List[Float64] = [
+        12000.0,
+        10500.0,
+        8200.0,
+        6100.0,
+        3900.0,
+        1800.0,
+    ]
+    var shares: List[Float64] = [0.28, 0.22, 0.19, 0.15, 0.10, 0.06]
     var years = List[Duration64]()
-    var shares = List[Float64]()
-    for row in _rows("group"):
-        events.append(Int(row[0]))
-        years.append(Duration64(row[1], YEAR64))
-        shares.append(row[2])
-    var expected = _rows("direct")[0].copy()
+    for at in range(6):
+        years.append(Duration64(counts[at], YEAR64))
+    # Fay and Feuer (1997): with y = w / T, the rate is R = sum y d, with
+    # the variance V = sum y^2 d. The interval runs from the 2.5 percent
+    # point of a chi-square of 2 R^2 / V degrees of freedom, times
+    # V / (2 R), to the 97.5 percent point with R + m and V + m^2, where m
+    # is the largest y. A chi-square point is 2 times the gamma point of
+    # half the degrees of freedom; scipy checks those in test_gamma.
+    var rate = 0.0
+    var variance = 0.0
+    var top = 0.0
+    for at in range(6):
+        var y = shares[at] / counts[at]
+        rate += y * Float64(events[at])
+        variance += y * y * Float64(events[at])
+        top = max(top, y)
+    var low = (
+        variance
+        / (2 * rate)
+        * (2 * gamma_quantile(0.025, rate * rate / variance))
+    )
+    var v = variance + top * top
+    var m = rate + top
+    var high = v / (2 * m) * (2 * gamma_quantile(0.975, m * m / v))
     var found = direct_rate(events, years, shares)
-    _close(found.rate.to(PER_YEAR64), expected[0], 1e-13)
-    _close(found.lower.to(PER_YEAR64), expected[1], 1e-11)
-    _close(found.upper.to(PER_YEAR64), expected[2], 1e-11)
-    var empty = _rows("empty")[0].copy()
+    _close(found.rate.to(PER_YEAR64), rate, 1e-13)
+    _close(found.lower.to(PER_YEAR64), low, 1e-11)
+    _close(found.upper.to(PER_YEAR64), high, 1e-11)
+    # With no event, the rate and the low end are 0. The high end is the
+    # 97.5 percent point of a gamma of shape 1 and scale m: -m ln(0.025).
     var none = direct_rate(List[Int](length=6, fill=0), years, shares)
     assert_equal(none.rate.to(PER_YEAR64), 0.0)
     assert_equal(none.lower.to(PER_YEAR64), 0.0)
-    _close(none.upper.to(PER_YEAR64), empty[2], 1e-12)
+    _close(none.upper.to(PER_YEAR64), -top * log(0.025), 1e-12)
     # The expected events at the rates of a reference population.
     var rates: List[Frequency64] = [
         Frequency64(0.001, PER_YEAR64),

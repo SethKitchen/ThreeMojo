@@ -96,7 +96,7 @@ The tests compare `standardize` with scipy 1.18.1 and statsmodels 0.15.0. `asset
 - The quantiles at probabilities from 1e-10 to `1 - 1e-10` agree with scipy's `gamma.ppf` to 5e-14 below a shape of 1000, and to 2e-12 above it.
 - The exact intervals of six counts from 0 to 250 agree with statsmodels' `confint_poisson` with `exact-c` to 1e-12.
 - Five standardized ratios agree with the intervals of `confint_poisson` to 1e-12. Their p values agree with `test_poisson` with `exact-c` to 1e-11. An observed count equal to the expected count has a p value of 1.
-- The direct rate of a synthetic cohort of six age groups agrees with numpy to 1e-13. Its interval of Fay and Feuer agrees with scipy's `chi2.ppf` to 1e-11. With no event, the rate and the low end are 0.
+- The direct rate of a synthetic cohort of six age groups agrees with the sum `R = sum y_i d_i` to 1e-13. Its interval agrees with the closed form of Fay and Feuer on the gamma points to 1e-11. With no event, the rate and the low end are 0, and the high end is `-m ln 0.025`.
 - A cohort of 1000 person-years at 0.001 a year and 500 at 0.004 a year expects 3 events.
 
 ## Errors
