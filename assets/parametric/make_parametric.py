@@ -6,14 +6,15 @@
 """Write exponential and Weibull fits of censored times, with mpmath, and
 check them against lifelines.
 
-    python3 make_parametric.py
+    mojo run -I . tools/make_parametric.mojo
+    cd assets/parametric && python3 make_parametric.py
 
-Run it with numpy 2.5.4, scipy 1.18.1, mpmath 1.4.1 and lifelines 0.30.3.
-It writes `parametric_data.txt` and `parametric_expected.txt` beside it.
-
-The groups are the 6-MP and placebo arms of the trial of Freireich and
-others (1963) in weeks, and two synthetic groups in days: a Weibull shape
-of 1.6 and of 0.7, with uniform censoring. A time with a `+` is censored.
+Run it with scipy 1.18.1, mpmath 1.4.1 and lifelines 0.30.3.
+`tools/make_parametric.mojo` writes the groups, `parametric_data.txt`: the
+6-MP and placebo arms of the trial of Freireich and others (1963) in
+weeks, and two synthetic groups in days, with a Weibull shape of 1.6 and
+of 0.7 and uniform censoring. A time with a `+` is censored. This script
+writes `parametric_expected.txt` beside it.
 
 mpmath finds each fit at 40 digits. The Weibull shape is the root of the
 profile score `d / rho + sum_e ln t - d sum t^rho ln t / sum t^rho`, and
@@ -43,7 +44,6 @@ of the group:
 import os
 
 import mpmath
-import numpy
 import scipy.stats
 from lifelines import ExponentialFitter, WeibullFitter
 
@@ -51,29 +51,17 @@ mpmath.mp.dps = 40
 HERE = os.path.dirname(os.path.abspath(__file__))
 Z = mpmath.sqrt(2) * mpmath.erfinv(mpmath.mpf("0.95"))
 
-DRUG = "6 6 6 6+ 7 9+ 10 10+ 11+ 13 16 17+ 19+ 20+ 22 23 25+ 32+ 32+ 34+ 35+"
-PLACEBO = "1 1 2 2 3 4 4 5 5 8 8 8 8 11 11 12 12 15 17 22 23"
-
-
-def synthetic(seed, n, scale, shape, follow):
-    rng = numpy.random.default_rng(seed)
-    times = scale * rng.weibull(shape, n)
-    censor = rng.uniform(0, follow, n)
-    words = []
-    for t, c in zip(times, censor):
-        if t <= c:
-            words.append("%.2f" % t)
-        else:
-            words.append("%.2f+" % c)
-    return " ".join(words)
-
-
-GROUPS = [
-    ("drug", "wk", DRUG, ["5", "10", "20", "40"]),
-    ("placebo", "wk", PLACEBO, ["1", "5", "10", "20"]),
-    ("rising", "d", synthetic(7, 60, 10.0, 1.6, 25.0), ["0.5", "5", "10", "30"]),
-    ("falling", "d", synthetic(11, 40, 8.0, 0.7, 30.0), ["0.1", "2", "10", "40"]),
-]
+PROBES = {
+    "drug": ["5", "10", "20", "40"],
+    "placebo": ["1", "5", "10", "20"],
+    "rising": ["0.5", "5", "10", "30"],
+    "falling": ["0.1", "2", "10", "40"],
+}
+GROUPS = []
+with open(os.path.join(HERE, "parametric_data.txt")) as data:
+    for line in data:
+        name, unit, text = line.rstrip("\n").split(" ", 2)
+        GROUPS.append((name, unit, text, PROBES[name]))
 
 
 def read(text):
@@ -140,10 +128,8 @@ def words(values):
     return " ".join(repr(float(v)) for v in values)
 
 
-data = []
 expected = []
 for name, unit, text, probes in GROUPS:
-    data.append("%s %s %s" % (name, unit, text))
     times, events = read(text)
     d = sum(events)
     total = sum(times)
@@ -187,7 +173,5 @@ for name, unit, text, probes in GROUPS:
         assert abs(float(point.survival_function_at_times(float(t)).iloc[0]) - float(s)) <= 1e-5
         expected.append("%s at %s" % (name, words([t, s, se_s, lower, upper, hazard])))
 
-with open(os.path.join(HERE, "parametric_data.txt"), "w") as out:
-    out.write("\n".join(data) + "\n")
 with open(os.path.join(HERE, "parametric_expected.txt"), "w") as out:
     out.write("\n".join(expected) + "\n")

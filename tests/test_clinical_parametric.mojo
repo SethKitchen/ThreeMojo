@@ -7,7 +7,7 @@
 
 `assets/parametric/parametric_expected.txt` holds mpmath fits of four
 groups, checked against lifelines. See
-`assets/parametric/make_parametric.py`.
+`tools/make_parametric.mojo` and `assets/parametric/make_parametric.py`.
 """
 
 from extensions.clinical.parametric import (
