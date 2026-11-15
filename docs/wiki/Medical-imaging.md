@@ -22,6 +22,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `dce` | `tofts_curve`, `fit_tofts`, `ToftsFit`, `tofts_maps`, `ToftsMaps`, `parker_aif`, `MINUTE64` and `PER_MINUTE64` |
 | `diffusion` | `fit_adc`, `AdcFit`, `fit_kurtosis`, `KurtosisFit`, `adc_maps`, `AdcMaps`, `kurtosis_maps`, `KurtosisMaps`, `computed_dwi`, `Diffusivity64`, `BValue64`, `SQUARE_MILLIMETER_PER_SECOND`, `SQUARE_MICROMETER_PER_SECOND` and `SECOND_PER_SQUARE_MILLIMETER` |
 | `relaxometry` | `fit_t2`, `T2Fit`, `fit_t1`, `T1Fit`, `t2_maps`, `t1_maps`, `RelaxationMaps` and `MILLISECOND64` |
+| `ivim` | `fit_ivim`, `IvimFit`, `ivim_maps` and `IvimMaps` |
 | `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
@@ -235,6 +236,31 @@ The kurtosis model of Jensen and others (2005) adds K, the departure of the wate
 `fit_kurtosis(b_values, signals)` fits ln S to a parabola in b by least squares. It needs three distinct b-values or more, and it refuses a D of 0 or less. `kurtosis_maps(series, b_values, threshold)` gives maps of D, K and S0. A voxel whose D is 0 or less has no fit. The model holds only below about b = 3 / (D K), where the parabola turns. So use b-values up to about 2000 to 2500 s/mm^2.
 
 A `Diffusivity64` is an area per second, and a `BValue64` is a time per area. Their product has no unit.
+
+## Separate diffusion from perfusion
+
+At low b-values, the blood in the capillaries adds a fast decay to the signal of the water in the tissue. The model of intravoxel incoherent motion (IVIM) of Le Bihan and others (1988) separates them:
+
+    S(b) = S0 (f exp(-b D*) + (1 - f) exp(-b D))
+
+D is the diffusion of the tissue, D* the pseudo-diffusion of the blood, and f the perfusion fraction. Research on the liver, the kidney and tumors maps them.
+
+```mojo
+var split = BValue64(200, SECOND_PER_SQUARE_MILLIMETER)
+var fit = fit_ivim(b, signals, split)
+print(fit.diffusion.to(SQUARE_MILLIMETER_PER_SECOND), fit.fraction)
+var maps = ivim_maps(series, b, split, 20.0)
+```
+
+`fit_ivim(b_values, signals, split)` fits the model in segments, as many studies do:
+
+1. D and the intercept come from the line of `ln S` on b over the b-values at or above `split`. At 200 s/mm^2 or more, the decay of the blood has died away.
+2. f is 1 less the intercept over the signal at b = 0.
+3. D* gives the least sum of squares of the model over the b-values below `split`, with D, f and S0 held. A golden-section search over `ln D*` from 3e-3 to 0.5 mm^2/s finds it.
+
+The b-values must start at 0 and rise. Two or more must be at or above the split, and one between 0 and it. Noise can put the intercept above the signal at b = 0, and then f is below 0.
+
+`ivim_maps(series, b_values, split, threshold)` fits each voxel whose signals are all above the threshold. The maps hold D and D* in 10^-6 mm^2/s, and f.
 
 ## Measure relaxation times
 
@@ -1043,6 +1069,8 @@ The tests check these results:
 - The maps agree with the fits to 1e-6, the rounding of a 32-bit value, and K to 1e-5. The computed image at b = 1500 s/mm^2 agrees with numpy to 1e-5.
 - Exact signals give back the ADC to 1e-13, and D and K to 1e-12 and 1e-11. Free diffusion has a K of 0. Half the signal at b = 1000 s/mm^2 gives an ADC of ln 2 / 1000 mm^2/s.
 - A voxel with a signal at the threshold, with no number or with an infinite signal has no fit.
+- numpy and scipy fit the IVIM model of 8 synthetic voxels with Rician noise, at 11 b-values, in the same segments. `assets/diffusion/make_ivim.py` makes the file. D and f agree to 1e-12 and 1e-11. scipy's bounded `minimize_scalar` finds D* to 1e-14 in its log. The search here agrees to 1e-6, because the sum of squares is flat at its least.
+- An exact model with a fast D* of 0.4 mm^2/s gives back D and f to 1e-12, and D* to 1e-6. The IVIM maps agree with the fits to the rounding of 32-bit values.
 - `numpy.polyfit` fits the T2 of 8 synthetic voxels with Rician noise, at 8 echo times. T2 and S0 agree to a relative 1e-12. `assets/relaxometry/make_relaxometry.py` makes the file.
 - scipy's `least_squares` fits the T1 of 8 synthetic voxels at 8 inversion times, for each count of negative signals, to 1e-15. T1, A and B agree to 1e-8, and the count of negative signals is the same.
 - An exact decay with a T2 of 50 ms gives it back to 1e-13. An exact recovery with a T1 of 800 ms, A 1000 and B 2000 gives them back to 1e-10. It has three negative signals before the null at 554.5 ms.
@@ -1161,6 +1189,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A computed b-value is below 0 or not finite, or the ADC and S0 maps have different grids | `computed_dwi` |
 | A relaxation fit has too few times, a time below 0 or not finite, times that do not rise, not one signal for each time, a signal below 0 or not finite, a T2 signal of 0, or T2 signals that do not fall | `fit_t2`, `fit_t1` |
 | A relaxation series has not one volume for each time, volumes on different grids, or a threshold below 0 or not finite | `t2_maps`, `t1_maps` |
+| An IVIM fit has fewer than four b-values, a first b-value that is not 0, b-values that are not finite or do not rise, a split that is not positive and finite, too few b-values on either side of the split, or a signal that is not positive and finite | `fit_ivim` |
+| An IVIM series has not one volume for each b-value, volumes on different grids, or a threshold below 0 or not finite | `ivim_maps` |
 | A tumor volume or the time between two scans is not positive and finite, or two volumes are equal for a doubling time | `doubling_time`, `growth_rate` |
 | A diameter has a bad label, the background or an empty label | `longest_diameter` |
 | A RECIST sum is out of its range, or a response is not valid | `recist_response`, `response_name` |
@@ -1191,6 +1221,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The RT Structure Set, RT Dose and DVH tools are for research. They are not a treatment planning system. Do not use them to plan, check or give a treatment.
 - The Tofts models take the plasma curve as linear between its samples. They take the tissue as one well-mixed compartment, and the extended model adds the vessels. They do not fit a delay of the bolus. A fit with `ve` above 1 does not suit the tissue.
 - The diffusion fits take one trace-weighted image for each b-value. They do not fit a tensor, the directions of diffusion, or the perfusion of IVIM at low b-values. They are least squares of ln S, without weights. A signal near the noise floor biases them, because Rician noise does not fall to 0.
+- The IVIM fit is segmented, not a joint fit of all four parameters. D* is uncertain with few low b-values or much noise, and the fit gives no error of its parameters.
 - The T2 fit is mono-exponential and unweighted in `ln S`, so stimulated echoes and the noise floor bias it. The T1 fit takes an ideal inversion recovery with a long repetition time. It does not fit a look-locker or variable flip angle series.
 - A longest diameter is between voxel centers in one slice of `k`. It does not measure across slices or along an oblique plane. The RECIST response covers target lesions only, by their sums. It does not judge new lesions, lymph nodes or non-target lesions.
 - Registration is rigid, with six parameters. It does not scale, shear or bend, so it does not follow breathing or soft tissue that changes shape. The simplex finds a nearby least point, so a start far from the answer can end at another one.
@@ -1218,6 +1249,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Jensen and others, "Diffusional kurtosis imaging: the quantification of non-Gaussian water diffusion by means of magnetic resonance imaging", Magnetic Resonance in Medicine, 2005.
 - Blackledge and others, on computed diffusion-weighted MR images for the detection of tumors, Radiology, 2011.
 - Barral and others, "A robust methodology for in vivo T1 mapping", Magnetic Resonance in Medicine, 2010.
+- Le Bihan and others, "Separation of diffusion and perfusion in intravoxel incoherent motion MR imaging", Radiology, 1988.
 - ICRU Report 83, "Prescribing, Recording, and Reporting Photon-Beam Intensity-Modulated Radiation Therapy (IMRT)", 2010.
 - Zwanenburg and others, "The Image Biomarker Standardization Initiative", Radiology, 2020.
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.
