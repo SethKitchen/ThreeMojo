@@ -3,26 +3,25 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Write the hydrophobic moments of four peptides with peptides and numpy.
+"""Write the hydrophobic moments of four peptides with peptides.
 
     python3 make_amphipathic.py > amphipathic_expected.txt
 
-Run it with numpy 2.5.4 and peptides 0.5.0, a Python port of the R
-package Peptides. The scale is the normalized consensus scale of
-Eisenberg and others (1984). Each line holds a sequence, then:
+Run it with peptides 0.5.0, a Python port of the R package Peptides. The
+scale is the normalized consensus scale of Eisenberg and others (1984).
+The first line, `scale`, holds each of the twenty amino acids and its
+value from `peptides.tables`. Each other line holds a sequence, then:
 
 - the mean hydrophobicity, from `Peptide.hydrophobicity("Eisenberg")`;
 - the moment of the whole sequence at 100 degrees a residue, from
-  `Peptide.hydrophobic_moment` with a window of the whole length, and its
-  direction in degrees from numpy, `atan2(sum h sin, sum h cos)`;
-- the largest moment of a window of 11 residues at 100 degrees, from
-  peptides, and the first window that gives it, from numpy;
+  `Peptide.hydrophobic_moment` with a window of the whole length;
+- the largest moment of a window of 11 residues at 100 degrees;
 - the moment of the whole sequence at 160 degrees, for a strand.
+
+The test builds the direction of each moment and the first window of the
+largest moment from the scale.
 """
 
-import math
-
-import numpy
 import peptides
 
 SEQUENCES = [
@@ -32,31 +31,9 @@ SEQUENCES = [
     "LKKLLKLLKKLLKLLKKLLKL",  # A designed amphipathic helix.
 ]
 scale = peptides.tables.HYDROPHOBICITY["Eisenberg"]
-
-
-def window_moments(values, angle, window):
-    n = numpy.arange(window)
-    s = numpy.sin(numpy.radians(angle * n))
-    c = numpy.cos(numpy.radians(angle * n))
-    best = -1.0
-    start = 0
-    for i in range(len(values) - window + 1):
-        part = values[i : i + window]
-        norm = numpy.sum(part * s) ** 2 + numpy.sum(part * c) ** 2
-        if norm > best:
-            best = norm
-            start = i
-    return start
-
-
+print("scale", " ".join(a + " " + repr(float(scale[a])) for a in sorted(scale)))
 for sequence in SEQUENCES:
     peptide = peptides.Peptide(sequence)
-    values = numpy.array([scale[a] for a in sequence])
-    n = numpy.arange(len(sequence))
-    angles = numpy.radians(100.0 * n)
-    direction = math.degrees(
-        math.atan2(numpy.sum(values * numpy.sin(angles)), numpy.sum(values * numpy.cos(angles)))
-    )
     print(
         sequence,
         " ".join(
@@ -64,9 +41,7 @@ for sequence in SEQUENCES:
             for v in [
                 peptide.hydrophobicity("Eisenberg"),
                 peptide.hydrophobic_moment(angle=100, window=len(sequence)),
-                direction,
                 peptide.hydrophobic_moment(angle=100, window=11),
-                window_moments(values, 100.0, 11),
                 peptide.hydrophobic_moment(angle=160, window=len(sequence)),
             ]
         ),

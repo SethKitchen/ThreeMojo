@@ -7,7 +7,8 @@
 
 `assets/amphipathic/amphipathic_expected.txt` holds the values of the
 Python package peptides for four peptides. See
-`assets/amphipathic/make_amphipathic.py`.
+`assets/amphipathic/make_amphipathic.py`. The test builds the direction
+of each moment and the first window of the largest one from the scale.
 """
 
 from extensions.imaging.overlay import draw_line
@@ -21,7 +22,7 @@ from extensions.molecule.amphipathic import (
     window_moment,
 )
 from render.framebuffer import Color, Framebuffer
-from std.math import cos, floor, inf, nan, sin, sqrt
+from std.math import atan2, cos, floor, inf, nan, pi, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -54,29 +55,74 @@ def _bytes(color: Rgba) raises -> Tuple[UInt8, UInt8, UInt8]:
     return (probe.pixels[0], probe.pixels[1], probe.pixels[2])
 
 
+def _turns(
+    values: List[Float64], start: Int, length: Int, angle: Float64
+) -> Tuple[Float64, Float64]:
+    """Return `sum h sin(n angle)` and `sum h cos(n angle)` of a window,
+    with n from 0 at its start and the angle in degrees."""
+    var s = 0.0
+    var c = 0.0
+    for n in range(length):
+        var turn = angle * Float64(n) * pi / 180.0
+        s += values[start + n] * sin(turn)
+        c += values[start + n] * cos(turn)
+    return (s, c)
+
+
 def test_against_peptides() raises:
-    var text = open("assets/amphipathic/amphipathic_expected.txt", "r").read()
-    var checked = 0
-    for line in text.splitlines():
-        var parts = line.split(" ")
+    var lines = (
+        open("assets/amphipathic/amphipathic_expected.txt", "r")
+        .read()
+        .splitlines()
+    )
+    # The scale of peptides, code by code.
+    var words = String(lines[0]).split(" ")
+    var scale = Dict[String, Float64]()
+    for at in range(1, len(words), 2):
+        var code = String(words[at])
+        var found = eisenberg_hydrophobicity(code)
+        assert_true(found[0])
+        assert_equal(found[1], atof(String(words[at + 1])))
+        scale[code] = found[1]
+    assert_equal(len(scale), 20)
+    for i in range(1, len(lines)):
+        var parts = String(lines[i]).split(" ")
+        var sequence = String(parts[0])
         var row = List[Float64]()
         for at in range(1, len(parts)):
             row.append(atof(String(parts[at])))
-        var values = sequence_hydrophobicity(String(parts[0]))
+        var values = sequence_hydrophobicity(sequence)
+        assert_equal(len(values), sequence.byte_length())
+        for r in range(len(values)):
+            assert_equal(values[r], scale[String(sequence[byte = r : r + 1])])
         var whole = hydrophobic_moment(values, _degrees(100.0))
         _close(whole.mean, row[0], 1e-13)
         _close(whole.moment, row[1], 1e-13)
-        assert_almost_equal(whole.direction.to(DEGREE64), row[2], atol=1e-11)
+        # The direction of the moment is atan2(sum h sin, sum h cos).
+        var turns = _turns(values, 0, len(values), 100.0)
+        assert_almost_equal(
+            whole.direction.to(DEGREE64),
+            atan2(turns[0], turns[1]) * 180.0 / pi,
+            atol=1e-11,
+        )
         assert_equal(whole.start, 0)
         assert_equal(whole.length, len(values))
         var window = window_moment(values, _degrees(100.0), 11)
-        _close(window.moment, row[3], 1e-13)
-        assert_equal(window.start, Int(row[4]))
+        _close(window.moment, row[2], 1e-13)
+        # The first window of 11 with the largest moment.
+        var best = -1.0
+        var start = 0
+        for first in range(len(values) - 10):
+            var part = _turns(values, first, 11, 100.0)
+            var norm = part[0] * part[0] + part[1] * part[1]
+            if norm > best:
+                best = norm
+                start = first
+        assert_equal(window.start, start)
         assert_equal(window.length, 11)
         var strand = hydrophobic_moment(values, _degrees(160.0))
-        _close(strand.moment, row[5], 1e-12)
-        checked += 1
-    assert_equal(checked, 4)
+        _close(strand.moment, row[3], 1e-12)
+    assert_equal(len(lines), 5)
 
 
 def test_by_hand() raises:

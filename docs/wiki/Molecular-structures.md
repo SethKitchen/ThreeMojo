@@ -757,8 +757,8 @@ The tests compare `phylogeny` with Biopython 1.88 and scipy 1.18.1 on eight synt
 
 The tests compare `amphipathic` with the Python package peptides 0.5.0, a port of the R package Peptides. The peptides are melittin, magainin 2, LL-37 and a designed peptide. `assets/amphipathic/make_amphipathic.py` writes them.
 
-- The mean hydrophobicity and the moment of each whole peptide at 100 degrees agree to a relative 1e-13. The direction agrees with numpy to 1e-11 degrees.
-- The largest moment of a window of 11 residues agrees to 1e-13, and its first residue is the one that numpy finds. The moment at 160 degrees agrees to 1e-12.
+- Each of the twenty values of the scale is that of peptides. The mean hydrophobicity and the moment of each whole peptide at 100 degrees agree to a relative 1e-13. The direction agrees with `atan2(sum h sin, sum h cos)` to 1e-11 degrees.
+- The largest moment of a window of 11 residues agrees to 1e-13. The test finds its first residue by a search of all windows. The moment at 160 degrees agrees to 1e-12.
 - One residue has its own value as its moment. Two equal residues 180 degrees apart cancel. A turn of four residues, two hydrophobic and two not, has the moment `sqrt(8) / 4` at 45 degrees.
 - The first disc of a wheel sits straight up, 12 percent of the side out. Leucine is orange and lysine blue, and the arrow leaves the center along the moment.
 
