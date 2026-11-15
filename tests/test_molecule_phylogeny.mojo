@@ -7,7 +7,7 @@
 Newick text and drawings.
 
 `assets/phylogeny/phylogeny_expected.txt` holds eight synthetic sequences
-with the trees of Biopython and scipy. See
+with the trees of Biopython and scipy. See `tools/make_phylogeny.mojo` and
 `assets/phylogeny/make_phylogeny.py`.
 """
 
@@ -25,7 +25,7 @@ from extensions.molecule.phylogeny import (
 )
 from extensions.numerics.dense import DenseMatrix
 from render.framebuffer import Color, Framebuffer
-from std.math import inf, nan
+from std.math import inf, log, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -92,8 +92,10 @@ def test_against_references() raises:
     for i in range(8):
         for j in range(8):
             assert_almost_equal(p.get(i, j), rows["p"][i][j], atol=1e-15)
+            # Kimura's protein distance, -ln(1 - p - 0.2 p^2).
+            var d = rows["p"][i][j]
             assert_almost_equal(
-                kimura.get(i, j), rows["kimura"][i][j], atol=1e-14
+                kimura.get(i, j), -log(1.0 - d - 0.2 * d * d), atol=1e-14
             )
             assert_almost_equal(
                 joined.path_length(i, j), rows["nj"][i][j], atol=1e-13

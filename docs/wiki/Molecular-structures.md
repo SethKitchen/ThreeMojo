@@ -747,9 +747,9 @@ The tests compare `protparam` with Biopython 1.88 and the Python package peptide
 - The average mass agrees with Biopython's `ProteinAnalysis` to 1e-13, and the extinction coefficients are the same numbers. The GRAVY, the aromaticity and peptides' aliphatic index agree to 1e-14.
 - Glycine alone has its isoelectric point at 6.1, halfway between the pK values of its ends. Far below every pK, each base and the N terminus carry a full charge.
 
-The tests compare `phylogeny` with Biopython 1.88 and scipy 1.18.1 on eight synthetic sequences of 120 residues. They evolve from one root along a known tree, by substitutions only. `assets/phylogeny/make_phylogeny.py` writes them.
+The tests compare `phylogeny` with Biopython 1.88 and scipy 1.18.1 on eight synthetic sequences of 120 residues. They evolve from one root along a known tree, by substitutions only. `tools/make_phylogeny.mojo` writes them, and `assets/phylogeny/make_phylogeny.py` writes the expected values.
 
-- The p-distances from the alignments agree with the share of sites that differ to 1e-15, and Kimura's distances with numpy to 1e-14.
+- The p-distances from the alignments agree with Biopython's `DistanceCalculator` with the `identity` model to 1e-15. Kimura's distances agree with their closed form to 1e-14, because no library gives them.
 - The path lengths between the leaves of the neighbor-joining tree agree with Biopython's `DistanceTreeConstructor.nj` to 1e-13. Rooted at the midpoint, each leaf is as deep as Biopython's `root_at_midpoint` puts it, to 1e-14.
 - The path lengths of the UPGMA tree are the cophenetic distances of scipy's average linkage, to 1e-14.
 - The distances of the tree `((A:1,B:2):3,(C:4,D:5))` give it back exactly, and its midpoint is the node over C and D. A clock tree writes the Newick text `((D:2.0,C:2.0):1.0,(B:1.0,A:1.0):2.0):0.0;`. Two sequences join half way.
