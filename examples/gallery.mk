@@ -298,6 +298,8 @@ $(call gallery,agreement,agreement)
 $(call gallery,forest,forest)
 # One SEIR epidemic with 0, 30 and 50 percent of the population vaccinated.
 $(call gallery,epidemic,epidemic)
+# 40 days of synthetic case counts with their fitted exponential growth.
+$(call gallery,incidence,incidence)
 # A bone segment from CT: RLE DICOM slices, two labels with smoothed
 # surfaces, and the two-material voxel mesh under a platen, colored by
 # von Mises stress.
