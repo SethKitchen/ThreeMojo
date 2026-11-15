@@ -16,6 +16,7 @@ A Cox model gives the placebo a hazard ratio of 4.82, with a 95 percent interval
 |---|---|
 | `survival` | `SurvivalCurve`, `kaplan_meier`, `LogRank`, `log_rank_test`, `survival_image`, `require_group`, `DAY64` and `WEEK64` |
 | `cox` | `CoxModel`, `cox_regression`, `chi_square_p_value` and `MAX_COVARIATES` |
+| `logrank` | `GroupLogRank`, `log_rank_groups` and `MAX_GROUPS` |
 | `rmst` | `CumulativeHazard`, `nelson_aalen`, `RestrictedMean`, `restricted_mean`, `RestrictedComparison` and `compare_restricted_means` |
 
 ## Make a survival curve
@@ -57,7 +58,7 @@ Once no patient is left, the survival is 0 and both ends of the interval are 0.
 
 `curve.median()` gives a flag and a time. The time is the first time of an event at which the survival is a half or less. When the survival stays above a half, the flag is `False`.
 
-## Compare two groups
+## Compare groups
 
 `log_rank_test(times_a, events_a, times_b, events_b)` asks whether two groups have one survival. At each time of an event in either group, each group expects its share at risk of the events. The statistic is `(O - E)^2 / V` of the first group. It has the chi-square distribution with one degree of freedom when the groups have one survival.
 
@@ -69,6 +70,10 @@ The result gives:
 - `expected`, the events that each group expects.
 
 A time at which one patient alone is at risk adds no variance.
+
+`log_rank_groups(times, events)` compares two groups or more, such as the arms of a trial. It takes the times and the event flags of each group. At each time of an event in any group, each group expects its share at risk of the events. The statistic is `(O - E)' V^-1 (O - E)` over all groups but the last, with V the covariance of the observed events. It has one degree of freedom less than the groups.
+
+The result gives the `statistic`, `freedom`, `p_value`, and the `observed` and `expected` events of each group. With two groups, it is the test of `log_rank_test`.
 
 ## Fit a Cox model
 
@@ -143,6 +148,7 @@ The tests compare the module with lifelines 0.30.3, a Python library, on the tri
 - The medians are 23 and 8 weeks, as lifelines gives.
 - The log-rank statistic agrees to a relative 1e-12, and its p value to a relative 1e-11.
 - The 6-MP group has 9 relapses, and the placebo group has 21.
+- The log-rank test of three synthetic arms with ties agrees with lifelines' `multivariate_logrank_test` to a relative 1e-12, and its p value to 1e-11. With two groups, it is the two-group test.
 - The Nelson-Aalen hazard of each group agrees with lifelines to a relative 1e-14, and the ends of its interval to 1e-13.
 - The restricted mean to 23 weeks agrees with lifelines' `restricted_mean_survival_time` to 1e-14. Its standard error agrees with the formula in numpy to 1e-13, and the test of the difference to 1e-11.
 
@@ -178,6 +184,7 @@ Every function raises `Error` for input it cannot use.
 | A time is negative or not finite | `kaplan_meier`, `log_rank_test`, `cox_regression` |
 | No event changes the risk of either group | `log_rank_test` |
 | A row index names no time | `SurvivalCurve.interval`, `CumulativeHazard.interval` |
+| There are not 2 to 100 groups, or the events do not change the risk of the groups | `log_rank_groups` |
 | The horizon is not positive and finite | `restricted_mean`, `compare_restricted_means` |
 | There is no event, the covariates are not one finite row of 1 to 32 values for each patient, the tolerance is not between 0 and 1, or the steps are not from 1 to 1000 | `cox_regression` |
 | The information matrix is not positive definite, because a covariate is constant, is collinear with others, or separates the patients | `cox_regression` |
@@ -188,7 +195,7 @@ Every function raises `Error` for input it cannot use.
 
 ## Limits
 
-- The log-rank test compares two groups only. It has no stratified test, no weighted test and no test of more than two groups.
+- The log-rank tests have no strata and no weights, such as those of Fleming and Harrington.
 - The Cox model takes covariates that do not change in time, one stratum and no weights. It does not test the proportional hazards assumption. Check that assumption before you use a hazard ratio.
 - A Cox fit holds the risk sets in one pass over the sorted times, and Harrell's C compares each pair of patients. A cohort of many thousands of patients is slow.
 - It takes right censoring only. A patient who enters the study late, or whose event happens between two visits, needs another method.
