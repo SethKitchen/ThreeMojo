@@ -181,7 +181,7 @@ The tests compare `tables` with scipy 1.18.1 and statsmodels 0.15.0. `assets/hyp
 The tests compare `strata` with the `StratifiedTable` of statsmodels 0.15.0 on four synthetic age groups. `assets/strata/make_strata.py` writes them.
 
 - The pooled odds ratio and risk ratio agree to a relative 1e-14. The standard error of the log odds ratio and the interval ends agree to 1e-13.
-- statsmodels gives no error of the pooled risk ratio. So the script finds it by the formula of Greenland and Robins in numpy, and it agrees to 1e-13.
+- statsmodels gives no error of the pooled risk ratio. So the test finds it by the closed form of Greenland and Robins, and it agrees to 1e-13.
 - The Cochran-Mantel-Haenszel statistics agree to 1e-13 with and without the correction. Their p values agree with scipy's `chi2.sf` to 1e-11.
 - The Breslow-Day statistic agrees to 1e-11 with and without Tarone's adjustment, and the p values to 1e-12. Two strata with a small pooled ratio take the other form of the root, and agree to 1e-12.
 

@@ -16,14 +16,16 @@ exposed and more often ill, so age confounds the crude ratios.
 - `odds`: the pooled odds ratio, the standard error of its log by Robins,
   Breslow and Greenland, and its interval, from statsmodels'
   `StratifiedTable`.
-- `risk`: the pooled risk ratio from statsmodels, the standard error of
-  its log by Greenland and Robins (1985) in numpy, and its interval.
+- `risk`: the pooled risk ratio from statsmodels. The test checks the
+  standard error of its log by the closed form of Greenland and Robins
+  (1985).
 - `cmh`: the Cochran-Mantel-Haenszel statistic and its p value, without
   and with the continuity correction. The p values are scipy's `chi2.sf`,
   because statsmodels takes `1 - cdf`.
 - `breslow`: the Breslow-Day statistic and its p value, and the same with
   Tarone's adjustment.
-- `crude`: the odds ratio and the risk ratio of the summed table.
+- `crude`: the odds ratio and the risk ratio of the summed table, from
+  statsmodels' `Table2x2`.
 - `odd`: two strata whose pooled odds ratio is small and whose first
   stratum has more exposed patients and cases than patients, then their
   Breslow-Day statistic and Tarone's. There, the expected cell takes the
@@ -32,7 +34,7 @@ exposed and more often ill, so age confounds the crude ratios.
 
 import numpy
 import scipy.stats
-from statsmodels.stats.contingency_tables import StratifiedTable
+from statsmodels.stats.contingency_tables import StratifiedTable, Table2x2
 
 tables = numpy.array(
     [
@@ -56,17 +58,7 @@ result = StratifiedTable(stack)
 low, high = result.oddsratio_pooled_confint()
 line("odds", [result.oddsratio_pooled, result.logodds_pooled_se, low, high])
 
-a, b, c, d = tables.T
-n = a + b + c + d
-exposed = a + b
-unexposed = c + d
-cases = a + c
-top = numpy.sum((exposed * unexposed * cases - a * c * n) / n**2)
-bottom = numpy.sum(a * unexposed / n) * numpy.sum(c * exposed / n)
-se = numpy.sqrt(top / bottom)
-rr = result.riskratio_pooled
-z = scipy.stats.norm.ppf(0.975)
-line("risk", [rr, se, rr * numpy.exp(-z * se), rr * numpy.exp(z * se)])
+line("risk", [result.riskratio_pooled])
 
 plain = result.test_null_odds(correction=False).statistic
 corrected = result.test_null_odds(correction=True).statistic
@@ -78,8 +70,8 @@ day = result.test_equal_odds(adjust=False).statistic
 tarone = result.test_equal_odds(adjust=True).statistic
 k = len(tables) - 1
 line("breslow", [day, scipy.stats.chi2.sf(day, k), tarone, scipy.stats.chi2.sf(tarone, k)])
-A, B, C, D = tables.sum(axis=0)
-line("crude", [A * D / (B * C), (A / (A + B)) / (C / (C + D))])
+crude = Table2x2(tables.sum(axis=0).reshape(2, 2))
+line("crude", [crude.oddsratio, crude.riskratio])
 
 odd = numpy.array([[20, 2, 1, 1], [1, 30, 30, 1]], dtype=float)
 pair = StratifiedTable(numpy.stack([t.reshape(2, 2) for t in odd], axis=2))

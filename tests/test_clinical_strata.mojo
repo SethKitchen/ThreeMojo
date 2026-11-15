@@ -7,7 +7,8 @@
 
 `assets/strata/strata_expected.txt` holds the values of statsmodels and
 scipy for a synthetic cohort in four age groups. See
-`assets/strata/make_strata.py`.
+`assets/strata/make_strata.py`. The test checks the standard error of the
+log risk ratio by the closed form of Greenland and Robins (1985).
 """
 
 from extensions.clinical.strata import (
@@ -17,7 +18,8 @@ from extensions.clinical.strata import (
     mantel_haenszel,
 )
 from extensions.clinical.tables import chi_square_test
-from std.math import sqrt
+from extensions.numerics.distributions import Z95
+from std.math import exp, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -63,11 +65,25 @@ def test_against_statsmodels() raises:
     _close(mh.log_odds_error, odds[1], 1e-13)
     _close(mh.odds_ratio.lower, odds[2], 1e-13)
     _close(mh.odds_ratio.upper, odds[3], 1e-13)
-    ref risk = rows["risk"][0]
-    _close(mh.risk_ratio.value, risk[0], 1e-14)
-    _close(mh.log_risk_error, risk[1], 1e-13)
-    _close(mh.risk_ratio.lower, risk[2], 1e-13)
-    _close(mh.risk_ratio.upper, risk[3], 1e-13)
+    var ratio = rows["risk"][0][0]
+    _close(mh.risk_ratio.value, ratio, 1e-14)
+    # Greenland and Robins (1985): the variance of the log of the pooled
+    # risk ratio is sum((n1 n0 m1 - a c n) / n^2) over the product of
+    # sum(a n0 / n) and sum(c n1 / n).
+    var top = 0.0
+    var left = 0.0
+    var right = 0.0
+    for t in rows["table"]:
+        var n = t[0] + t[1] + t[2] + t[3]
+        var exposed = t[0] + t[1]
+        var unexposed = t[2] + t[3]
+        top += (exposed * unexposed * (t[0] + t[2]) - t[0] * t[2] * n) / (n * n)
+        left += t[0] * unexposed / n
+        right += t[2] * exposed / n
+    var se = sqrt(top / (left * right))
+    _close(mh.log_risk_error, se, 1e-13)
+    _close(mh.risk_ratio.lower, ratio * exp(-Z95 * se), 1e-13)
+    _close(mh.risk_ratio.upper, ratio * exp(Z95 * se), 1e-13)
     ref cmh = rows["cmh"][0]
     _close(mh.test.statistic, cmh[0], 1e-13)
     _close(mh.test.p_value, cmh[1], 1e-11)
