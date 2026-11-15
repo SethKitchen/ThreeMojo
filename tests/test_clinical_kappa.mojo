@@ -8,7 +8,7 @@
 `assets/agreement/kappa_expected.txt` holds the results of statsmodels
 0.15.0. See `assets/agreement/make_kappa.py`.
 `assets/agreement/fleiss_expected.txt` holds Fleiss' kappa of two tables.
-See `assets/agreement/make_fleiss.py`.
+See `tools/make_fleiss.mojo` and `assets/agreement/make_fleiss.py`.
 """
 
 from extensions.clinical.kappa import (
@@ -19,7 +19,7 @@ from extensions.clinical.kappa import (
     linear_weighted_kappa,
     quadratic_weighted_kappa,
 )
-from std.math import isnan
+from std.math import erfc, isnan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -130,12 +130,43 @@ def test_fleiss_against_references() raises:
         var result = fleiss_kappa(table)
         assert_almost_equal(result.value, row[0], rtol=1e-14)
         assert_almost_equal(result.free_marginal, row[1], rtol=1e-14)
-        assert_almost_equal(result.null_error, row[2], rtol=1e-13)
-        assert_almost_equal(result.z, row[3], rtol=1e-13)
-        assert_almost_equal(result.p_value, row[4], rtol=1e-10)
-        assert_equal(len(result.categories), len(row) - 5)
-        for j in range(len(result.categories)):
-            assert_almost_equal(result.categories[j], row[5 + j], rtol=1e-13)
+        # The closed forms of Fleiss, Nee and Landis (1979) and of Fleiss
+        # (1971), with p_j the share of category j and q_j = 1 - p_j:
+        # se = sqrt(2) sqrt(PQ^2 - sum p q (q - p)) / (PQ sqrt(N m (m - 1))),
+        # PQ = sum p q, and kappa_j = 1 - sum_i n_ij (m - n_ij) /
+        # (N m (m - 1) p_j q_j).
+        var subjects = Float64(len(table))
+        var raters = 0.0
+        for c in table[0]:
+            raters += Float64(c)
+        var k = len(table[0])
+        var pq = 0.0
+        var skew = 0.0
+        var shares = List[Float64]()
+        for j in range(k):
+            var total = 0.0
+            for r in table:
+                total += Float64(r[j])
+            var p = total / (subjects * raters)
+            shares.append(p)
+            pq += p * (1.0 - p)
+            skew += p * (1.0 - p) * (1.0 - 2.0 * p)
+        var pairs = subjects * raters * (raters - 1.0)
+        var error = sqrt(2.0) * sqrt(pq * pq - skew) / (pq * sqrt(pairs))
+        var z = result.value / error
+        assert_almost_equal(result.null_error, error, rtol=1e-13)
+        assert_almost_equal(result.z, z, rtol=1e-13)
+        assert_almost_equal(
+            result.p_value, erfc(abs(z) / sqrt(2.0)), rtol=1e-13
+        )
+        assert_equal(len(result.categories), k)
+        for j in range(k):
+            var disagree = 0.0
+            for r in table:
+                disagree += Float64(r[j]) * (raters - Float64(r[j]))
+            var p = shares[j]
+            var each = 1.0 - disagree / (pairs * p * (1.0 - p))
+            assert_almost_equal(result.categories[j], each, rtol=1e-13)
         table = List[List[Int]]()
         checked += 1
     assert_equal(checked, 2)
