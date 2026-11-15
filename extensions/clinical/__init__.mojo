@@ -22,6 +22,7 @@
 - `multiple`: adjusted p values for many tests.
 - `correlation`: Pearson's, Spearman's and Kendall's correlations.
 - `anova`: one-way analysis of variance and the Kruskal-Wallis test.
+- `regression`: linear regression by least squares.
 - `distributions`: the t and F distributions.
 
 See the wiki pages Survival analysis, Diagnostic tests, Meta-analysis,

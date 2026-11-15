@@ -964,6 +964,7 @@ Medical images, macromolecules, solid mechanics and the statistics of clinical r
 - [x] [Many tests](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons#correct-for-many-tests): p values adjusted by Bonferroni, Holm, Benjamini-Hochberg and Benjamini-Yekutieli; they match statsmodels [#1102](https://github.com/SethKitchen/ThreeMojo/issues/1102)
 - [x] [Correlations](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons#measure-a-correlation): Pearson's r with Fisher's interval, Spearman's rho and Kendall's tau-b with their tests; they match scipy [#1103](https://github.com/SethKitchen/ThreeMojo/issues/1103)
 - [x] [Several groups](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons#compare-several-groups): one-way analysis of variance and the Kruskal-Wallis test with ties; they match scipy [#1104](https://github.com/SethKitchen/ThreeMojo/issues/1104)
+- [x] [Linear regression](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons#fit-a-linear-model): least squares with intervals, t tests, R^2, the F test and predictions; they match statsmodels [#1105](https://github.com/SethKitchen/ThreeMojo/issues/1105)
 
 ### Out of scope
 

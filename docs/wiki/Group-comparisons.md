@@ -2,7 +2,7 @@
 
 `extensions/clinical/hypothesis.mojo` compares two groups, or the two values of pairs, by two-sided tests. It gives Student's, Welch's and the paired t test, with the interval of the difference of the means. It gives the Mann-Whitney U test and the Wilcoxon signed-rank test, which use ranks. `tables.mojo` tests tables of counts by Fisher's exact test, chi-square and McNemar's test. `multiple.mojo` adjusts p values for many tests.
 
-`correlation.mojo` measures how two measures of the same subjects rise together. `anova.mojo` tests several groups at once. The results match scipy and statsmodels.
+`correlation.mojo` measures how two measures of the same subjects rise together. `anova.mojo` tests several groups at once. `regression.mojo` fits a linear model of an outcome on covariates. The results match scipy and statsmodels.
 
 It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
 
@@ -15,6 +15,7 @@ It is a library for research and teaching. Its results are not validated for a d
 | `multiple` | `bonferroni`, `holm`, `benjamini_hochberg` and `benjamini_yekutieli` |
 | `correlation` | `Correlation`, `pearson`, `spearman` and `kendall` |
 | `anova` | `GroupsTest`, `one_way_anova`, `kruskal_wallis` and `MAX_GROUPS` |
+| `regression` | `LinearModel` and `linear_regression` |
 
 ## Choose a test
 
@@ -98,6 +99,28 @@ A correlation runs from -1 to 1. It is 1 when one measure rises with the other, 
 
 The p value of r and of rho is `2 I_((1 - |r|) / 2)(n/2 - 1, n/2 - 1)`, from the beta distribution, as scipy computes it. A correlation does not show that one measure causes the other.
 
+## Fit a linear model
+
+`linear_regression(outcome, covariates)` fits an outcome, such as a blood pressure, as `b0 + x . b` by least squares. `b_i` is the change of the outcome for each unit of covariate `i`, with the others held. It takes one row of 1 to 32 covariates for each subject, and more subjects than coefficients.
+
+```mojo
+from extensions.clinical.regression import linear_regression
+
+var pressure: List[Float64] = [128.0, 141.0, 135.0, 152.0, 147.0]
+var rows: List[List[Float64]] = [[40.0], [55.0], [48.0], [70.0], [62.0]]
+var model = linear_regression(pressure, rows)
+print(model.coefficients[1], model.interval(1)[0], model.r_squared)
+```
+
+Index 0 of the model is the intercept, and index `i + 1` is covariate `i`. The model gives:
+
+- `coefficients` and `standard_errors`, and for each coefficient `t(i)`, `p_value(i)` and `interval(i)`, from the t distribution with `n - p` degrees of freedom.
+- `r_squared` and `adjusted_r_squared`: the share of the variance of the outcome that the fit explains.
+- `f` and `f_p_value`, the test of all the covariates against the intercept alone.
+- `residual_deviation`, the standard deviation of the residuals, and `predict(row)`.
+
+The fit solves the normal equations of the covariates less their means, by Cholesky's method, and then finds the intercept. Centering keeps the equations well conditioned, so the fit agrees with statsmodels' to 1e-12.
+
 ## Correct for many tests
 
 With many tests, such as one for each of 50 biomarkers, some find an effect by chance. An adjusted p value corrects for the count of tests. A test rejects at a level, such as 0.05, when its adjusted p value is at or below that level. Each function takes the p values and returns the adjusted values in the same order.
@@ -127,6 +150,8 @@ The tests take 30 synthetic pairs of glucose and HbA1c with ties. Their correlat
 
 F and H of three synthetic groups agree with scipy's `f_oneway` and `kruskal` to a relative 1e-13, and their p values to 1e-10 and 1e-11. `assets/hypothesis/make_anova.py` writes them.
 
+The tests fit a linear model of 80 synthetic patients with three covariates. Its coefficients, standard errors, t values and interval ends agree with statsmodels' `OLS` to a relative 1e-12. R^2 and the residual deviation agree to 1e-13, and the predictions to 1e-13. `assets/regression/make_regression.py` writes them.
+
 The adjusted p values of 12 p values, with a tie, agree with statsmodels' `multipletests` to a relative 1e-15 by each method. `assets/hypothesis/make_multiple.py` writes them.
 
 The tests also check cases by hand:
@@ -137,6 +162,7 @@ The tests also check cases by hand:
 - Pairs with two zero differences drop them, and the rest give the signed rank sum 3.
 - The most extreme table of three and three has a p value of 2 / 20. A table with a margin of 0 has a p value of 1.
 - With two groups, F is the square of Student's t, with the same p value. Groups of equal means give F = 0. The ranks 1 and 2 against 3 and 4 give H = 2.4.
+- A line `1 + 2x` with residuals of 1, -1, -1 and 1 keeps its slope and intercept. Its slope has the variance `2 / 5`.
 - A straight line has r = 1, a p value of 0 and an interval of no width. A cube that only rises has rho = 1. Two concordant pairs and one discordant pair give tau = 1/3. A negated measure mirrors r and its interval.
 - The p values 0.01, 0.04 and 0.03 become 0.03, 0.06 and 0.06 by Holm's method, and 0.03, 0.04 and 0.04 by Benjamini and Hochberg's.
 
@@ -155,6 +181,7 @@ Every function raises `Error` for input it cannot use.
 | A table is not a rectangle of 2 to 100 rows and columns, or a row or a column sums to 0 | `chi_square_test`, `yates_chi_square_test` |
 | There is no discordant pair | `mcnemar_chi_square` |
 | There is no p value, or one is not from 0 to 1 | `multiple` |
+| The rows and the outcome differ in count, a row is out of range or not finite, there are no more subjects than coefficients, a covariate is constant or collinear, or the fit leaves no residual | `linear_regression` |
 | There are not 2 to 1000 groups, a group is empty, a value is not finite, there are no more values than groups, or no group varies | `anova` |
 | The measures differ in length, have too few pairs or a value that is not finite, or a measure does not vary | `correlation` |
 
@@ -174,6 +201,7 @@ Every function raises `Error` for input it cannot use.
 - Yates, "Contingency tables involving small numbers and the chi-square test", Supplement to the Journal of the Royal Statistical Society, 1934.
 - Fisher, "Statistical Methods for Research Workers", 1925.
 - Kruskal and Wallis, "Use of ranks in one-criterion variance analysis", Journal of the American Statistical Association, 1952.
+- Draper and Smith, "Applied Regression Analysis", 3rd edition, 1998.
 - Pearson, "Notes on the history of correlation", Biometrika, 1920.
 - Spearman, "The proof and measurement of association between two things", American Journal of Psychology, 1904.
 - Kendall, "The treatment of ties in ranking problems", Biometrika, 1945.
