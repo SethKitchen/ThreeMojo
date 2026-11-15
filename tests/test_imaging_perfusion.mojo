@@ -6,7 +6,8 @@
 """Perfusion of CT and DSC-MRI by truncated SVD deconvolution.
 
 `assets/perfusion/perfusion_expected.txt` holds numpy deconvolutions of
-synthetic curves. See `assets/perfusion/make_perfusion.py`.
+synthetic curves. See
+`tools/make_perfusion.mojo` and `assets/perfusion/make_perfusion.py`.
 """
 
 from extensions.imaging.ids import LabelId
