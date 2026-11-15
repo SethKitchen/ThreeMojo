@@ -1,6 +1,6 @@
 # Group comparisons
 
-`extensions/clinical/hypothesis.mojo` compares two groups, or the two values of pairs, by two-sided tests. It gives Student's, Welch's and the paired t test, with the interval of the difference of the means. It gives the Mann-Whitney U test and the Wilcoxon signed-rank test, which use ranks. `tables.mojo` tests tables of counts by Fisher's exact test, chi-square and McNemar's test. `multiple.mojo` adjusts p values for many tests.
+`extensions/clinical/hypothesis.mojo` compares two groups, or the two values of pairs, by two-sided tests. It gives Student's, Welch's and the paired t test, with the interval of the difference of the means. It gives the Mann-Whitney U test and the Wilcoxon signed-rank test, which use ranks. `tables.mojo` tests tables of counts by Fisher's exact test, chi-square and McNemar's test. `strata.mojo` pools two-by-two tables over the strata of a confounder. `multiple.mojo` adjusts p values for many tests.
 
 `correlation.mojo` measures how two measures of the same subjects rise together. `anova.mojo` tests several groups at once. `regression.mojo` fits a linear model of an outcome on covariates. The results match scipy and statsmodels.
 
@@ -12,6 +12,7 @@ It is a library for research and teaching. Its results are not validated for a d
 |---|---|
 | `hypothesis` | `TTest`, `student_t_test`, `welch_t_test`, `paired_t_test`, `RankTest`, `mann_whitney`, `wilcoxon` and `midranks` |
 | `tables` | `FisherTest`, `fisher_exact`, `TableTest`, `chi_square_test`, `yates_chi_square_test`, `mcnemar_exact`, `mcnemar_chi_square` and `MAX_SIDE` |
+| `strata` | `Stratum`, `MantelHaenszel`, `mantel_haenszel`, `BreslowDay`, `breslow_day` and `MAX_STRATA` |
 | `multiple` | `bonferroni`, `holm`, `benjamini_hochberg` and `benjamini_yekutieli` |
 | `correlation` | `Correlation`, `pearson`, `spearman` and `kendall` |
 | `anova` | `GroupsTest`, `one_way_anova`, `kruskal_wallis` and `MAX_GROUPS` |
@@ -82,6 +83,37 @@ The probabilities come from the ratio of each table to the next, from the most l
 
 `chi_square_test(table)` tests whether the rows and the columns of a table are independent. It gives `sum((O - E)^2 / E)` with `(r - 1)(c - 1)` degrees of freedom, with no continuity correction. Each expected count E must be about 5 or more for the approximation to hold. `yates_chi_square_test(a, b, c, d)` tests a two-by-two table with Yates's correction: each count moves a half toward its expected count.
 
+## Adjust a table for a confounder
+
+A confounder, such as age, is linked to the exposure and to the outcome. It can make an exposure look more or less harmful than it is. Split the patients into strata of the confounder, with one two-by-two table each, and pool the tables by the method of Mantel and Haenszel.
+
+```mojo
+from extensions.clinical.strata import Stratum, breslow_day, mantel_haenszel
+
+var strata: List[Stratum] = [
+    Stratum(12, 188, 30, 770),
+    Stratum(35, 265, 42, 558),
+    Stratum(60, 340, 38, 362),
+    Stratum(96, 304, 30, 170),
+]
+var mh = mantel_haenszel(strata)
+print(mh.crude_odds_ratio, mh.odds_ratio.value, mh.test.p_value)
+print(breslow_day(strata).test.p_value)
+```
+
+Each `Stratum(a, b, c, d)` holds the exposed patients with and without the outcome, then the unexposed patients with and without it. These four synthetic age groups give a crude odds ratio of 2.46. The odds ratio pooled over the age groups is 1.73, from 1.35 to 2.20, so age explains part of the crude ratio.
+
+`mantel_haenszel(strata)` gives:
+
+- `odds_ratio`, the pooled odds ratio `sum(a d / n) / sum(b c / n)`, with its 95 percent interval. `log_odds_error` is the standard error of its log, by Robins, Breslow and Greenland (1986). It holds for few large strata and for many small ones.
+- `risk_ratio`, the pooled risk ratio `sum(a (c + d) / n) / sum(c (a + b) / n)`, with its interval. `log_risk_error` is the standard error of its log, by Greenland and Robins (1985).
+- `test`, the Cochran-Mantel-Haenszel test that the common odds ratio is 1, with 1 degree of freedom. `corrected` subtracts a half from `|O - E|` when it is a half or more, as R does.
+- `crude_odds_ratio` and `crude_risk_ratio`, the ratios of the summed table. A crude ratio far from the pooled one shows confounding.
+
+With one stratum, the pooled ratios are those of the table, with Woolf's variance and the usual variance of the log risk ratio.
+
+`breslow_day(strata)` tests that the strata share one odds ratio. For each stratum, the expected `a` gives the stratum the pooled odds ratio with its margins. The statistic sums `(a - E)^2 / V` with one degree of freedom less than the strata. `tarone` adds Tarone's adjustment. A stratum with a margin of 0 says nothing of its odds ratio, so the test leaves it out. When the ratios differ, report each stratum, not a pooled ratio.
+
 ## Test paired yes or no results
 
 McNemar's test compares paired results, such as two tests on each patient. Only the discordant pairs count: `b` pairs with yes first and no second, and `c` pairs with no first and yes second.
@@ -146,6 +178,13 @@ The tests compare `tables` with scipy 1.18.1 and statsmodels 0.15.0. `assets/hyp
 - The statistics of `chi2_contingency` agree to 1e-13 with and without Yates's correction, and the p values to 1e-11.
 - The exact p values of statsmodels' `mcnemar` agree to 1e-12, and the chi-square form to 1e-11.
 
+The tests compare `strata` with the `StratifiedTable` of statsmodels 0.15.0 on four synthetic age groups. `assets/strata/make_strata.py` writes them.
+
+- The pooled odds ratio and risk ratio agree to a relative 1e-14. The standard error of the log odds ratio and the interval ends agree to 1e-13.
+- statsmodels gives no error of the pooled risk ratio. So the script finds it by the formula of Greenland and Robins in numpy, and it agrees to 1e-13.
+- The Cochran-Mantel-Haenszel statistics agree to 1e-13 with and without the correction. Their p values agree with scipy's `chi2.sf` to 1e-11.
+- The Breslow-Day statistic agrees to 1e-11 with and without Tarone's adjustment, and the p values to 1e-12. Two strata with a small pooled ratio take the other form of the root, and agree to 1e-12.
+
 The tests take 30 synthetic pairs of glucose and HbA1c with ties. Their correlations agree with scipy's `pearsonr`, `spearmanr` and `kendalltau` to a relative 1e-14. The p values agree to 1e-11, and Pearson's interval to 1e-13. `assets/hypothesis/make_correlation.py` writes them.
 
 F and H of three synthetic groups agree with scipy's `f_oneway` and `kruskal` to a relative 1e-13, and their p values to 1e-10 and 1e-11. `assets/hypothesis/make_anova.py` writes them.
@@ -165,6 +204,9 @@ The tests also check cases by hand:
 - A line `1 + 2x` with residuals of 1, -1, -1 and 1 keeps its slope and intercept. Its slope has the variance `2 / 5`.
 - A straight line has r = 1, a p value of 0 and an interval of no width. A cube that only rises has rho = 1. Two concordant pairs and one discordant pair give tau = 1/3. A negated measure mirrors r and its interval.
 - The p values 0.01, 0.04 and 0.03 become 0.03, 0.06 and 0.06 by Holm's method, and 0.03, 0.04 and 0.04 by Benjamini and Hochberg's.
+- One stratum of 10, 20, 5 and 40 gives an odds ratio of 4 with Woolf's error. It gives a risk ratio of 3 with the error `sqrt(1/10 - 1/30 + 1/5 - 1/45)`. Its Cochran-Mantel-Haenszel statistic is Pearson's chi-square times `(n - 1) / n`.
+- The continuity correction takes a half from an `|O - E|` of 4, and nothing from one below a half.
+- Two strata of one odds ratio give a Breslow-Day statistic of 0. Strata with a margin of 0 change neither the pooled ratio nor the test.
 
 ## Errors
 
@@ -180,6 +222,9 @@ Every function raises `Error` for input it cannot use.
 | A cell is below 0 | `tables` |
 | A table is not a rectangle of 2 to 100 rows and columns, or a row or a column sums to 0 | `chi_square_test`, `yates_chi_square_test` |
 | There is no discordant pair | `mcnemar_chi_square` |
+| There are not 1 to 1000 strata, a cell is below 0, or a stratum has fewer than two patients | `strata` |
+| No stratum has `a` and `d` above 0, or none has `b` and `c` above 0 | `mantel_haenszel`, `breslow_day` |
+| Fewer than two strata have no margin of 0 | `breslow_day` |
 | There is no p value, or one is not from 0 to 1 | `multiple` |
 | The rows and the outcome differ in count, a row is out of range or not finite, there are no more subjects than coefficients, a covariate is constant or collinear, or the fit leaves no residual | `linear_regression` |
 | There are not 2 to 1000 groups, a group is empty, a value is not finite, there are no more values than groups, or no group varies | `anova` |
@@ -190,6 +235,7 @@ Every function raises `Error` for input it cannot use.
 - The tests are two-sided. The module has no one-sided tests, no exact rank tests for small groups, and no analysis of variance of more than one factor.
 - A p value is for one test. Many tests on one data set need a correction, such as those of `multiple`.
 - A test that finds no difference does not show that the groups are the same.
+- A pooled ratio adjusts for the strata only. It does not adjust for a confounder that the strata do not separate. Strata of a measure such as age leave some confounding in each stratum.
 
 ## References
 
@@ -198,6 +244,11 @@ Every function raises `Error` for input it cannot use.
 - Mann and Whitney, "On a test of whether one of two random variables is stochastically larger than the other", Annals of Mathematical Statistics, 1947.
 - Wilcoxon, "Individual comparisons by ranking methods", Biometrics Bulletin, 1945.
 - Fisher, "On the interpretation of chi-square from contingency tables, and the calculation of P", Journal of the Royal Statistical Society, 1922.
+- Mantel and Haenszel, "Statistical aspects of the analysis of data from retrospective studies of disease", Journal of the National Cancer Institute, 1959.
+- Robins, Breslow and Greenland, "Estimators of the Mantel-Haenszel variance consistent in both sparse data and large-strata limiting models", Biometrics, 1986.
+- Greenland and Robins, "Estimation of a common effect parameter from sparse follow-up data", Biometrics, 1985.
+- Breslow and Day, "Statistical Methods in Cancer Research, Volume 1: The Analysis of Case-Control Studies", IARC, 1980.
+- Tarone, "On heterogeneity tests based on efficient scores", Biometrika, 1985.
 - Yates, "Contingency tables involving small numbers and the chi-square test", Supplement to the Journal of the Royal Statistical Society, 1934.
 - Fisher, "Statistical Methods for Research Workers", 1925.
 - Kruskal and Wallis, "Use of ranks in one-criterion variance analysis", Journal of the American Statistical Association, 1952.
