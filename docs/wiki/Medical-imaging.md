@@ -21,6 +21,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `dvh` | `DoseVolumeHistogram`, `dose_volume_histogram`, `dvh_image` and `CUBIC_CENTIMETER64` |
 | `dce` | `tofts_curve`, `fit_tofts`, `ToftsFit`, `tofts_maps`, `ToftsMaps`, `parker_aif`, `MINUTE64` and `PER_MINUTE64` |
 | `diffusion` | `fit_adc`, `AdcFit`, `fit_kurtosis`, `KurtosisFit`, `adc_maps`, `AdcMaps`, `kurtosis_maps`, `KurtosisMaps`, `computed_dwi`, `Diffusivity64`, `BValue64`, `SQUARE_MILLIMETER_PER_SECOND`, `SQUARE_MICROMETER_PER_SECOND` and `SECOND_PER_SQUARE_MILLIMETER` |
+| `relaxometry` | `fit_t2`, `T2Fit`, `fit_t1`, `T1Fit`, `t2_maps`, `t1_maps`, `RelaxationMaps` and `MILLISECOND64` |
 | `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
@@ -234,6 +235,25 @@ The kurtosis model of Jensen and others (2005) adds K, the departure of the wate
 `fit_kurtosis(b_values, signals)` fits ln S to a parabola in b by least squares. It needs three distinct b-values or more, and it refuses a D of 0 or less. `kurtosis_maps(series, b_values, threshold)` gives maps of D, K and S0. A voxel whose D is 0 or less has no fit. The model holds only below about b = 3 / (D K), where the parabola turns. So use b-values up to about 2000 to 2500 s/mm^2.
 
 A `Diffusivity64` is an area per second, and a `BValue64` is a time per area. Their product has no unit.
+
+## Measure relaxation times
+
+T1 and T2 are the times in which tissue regains and loses its magnetization. They change with water, iron, fat and collagen. So research maps them: T2 of cartilage in osteoarthritis, T1 of the myocardium in fibrosis, and both in tumors and multiple sclerosis.
+
+```mojo
+var echoes = [Duration64(10, MILLISECOND64), Duration64(20, MILLISECOND64), Duration64(40, MILLISECOND64)]
+var decay = fit_t2(echoes, [850.0, 700.0, 470.0])
+print(decay.t2.to(MILLISECOND64), decay.s0)
+var maps = t1_maps(series, inversion_times, 20.0)
+```
+
+`fit_t2(echo_times, signals)` fits `ln S` to a line in the echo time, for a multi-echo spin echo: `S = S0 exp(-TE / T2)`. It refuses signals that do not fall with the echo time.
+
+`fit_t1(inversion_times, signals)` fits the magnitudes of an inversion recovery, `S = |A - B exp(-TI / T1)|`. B is about 2 A for a full inversion. The true signals before the null are negative, so the fit takes each count of first signals as negative, as Barral and others (2010) do. The result gives T1, A, B, the count of `flips` and the `residual`.
+
+For each count and each T1, A and B are linear least squares. A golden-section search over `log T1`, from 1 ms to 10 s, finds T1. Gauss-Newton steps on A, B and T1 then polish the best fit.
+
+`t2_maps(series, echo_times, threshold)` and `t1_maps(series, inversion_times, threshold)` fit each voxel of a series. A T2 voxel needs each signal above the threshold. The signals of an inversion recovery pass near 0 at the null. So a T1 voxel needs its signal at the longest inversion time above the threshold. The maps hold T1 or T2 in ms, and the amplitude: S0 or A. A voxel without a fit is 0.
 
 ## Read an RT Structure Set
 
@@ -1023,6 +1043,10 @@ The tests check these results:
 - The maps agree with the fits to 1e-6, the rounding of a 32-bit value, and K to 1e-5. The computed image at b = 1500 s/mm^2 agrees with numpy to 1e-5.
 - Exact signals give back the ADC to 1e-13, and D and K to 1e-12 and 1e-11. Free diffusion has a K of 0. Half the signal at b = 1000 s/mm^2 gives an ADC of ln 2 / 1000 mm^2/s.
 - A voxel with a signal at the threshold, with no number or with an infinite signal has no fit.
+- `numpy.polyfit` fits the T2 of 8 synthetic voxels with Rician noise, at 8 echo times. T2 and S0 agree to a relative 1e-12. `assets/relaxometry/make_relaxometry.py` makes the file.
+- scipy's `least_squares` fits the T1 of 8 synthetic voxels at 8 inversion times, for each count of negative signals, to 1e-15. T1, A and B agree to 1e-8, and the count of negative signals is the same.
+- An exact decay with a T2 of 50 ms gives it back to 1e-13. An exact recovery with a T1 of 800 ms, A 1000 and B 2000 gives them back to 1e-10. It has three negative signals before the null at 554.5 ms.
+- The maps agree with the fits to the rounding of 32-bit values. A voxel with a signal at the threshold, an infinite or negative signal, no number, or signals that rise has no fit.
 - A lung of 100 voxels from -1000 to -901 HU has an LAA-950 of a half and a Perc15 of -985.15 HU. Tissue areas count the pixels of each range on slices of each axis, with pixels of 0.4, 1.6 and 1 mm^2.
 - Two RT Dose files that pydicom 3.0.1 wrote read with pydicom's dose at each voxel, as 32-bit floats. One is explicit VR with 32-bit values and offsets from 0. The other is implicit VR with 16-bit values and frames from z = 9 mm down to 0. `assets/dicom/make_rtdose.py` makes them.
 - The tumor and the ring of the structure fixtures, filled on each dose grid, have the DVH that numpy 2.1.3 gives. The test compares the least, mean and largest dose, D98, D95, D50, D2, V20 and V40. It also compares D for 0.03 and 0.1 cm^3, and the gEUD at a = -10 and 5. Each agrees to 1e-12.
@@ -1135,6 +1159,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A diffusion fit has too few b-values or distinct b-values, a b-value below 0 or not finite, not one signal for each b-value, a signal that is not positive and finite, or a kurtosis D of 0 or less | `fit_adc`, `fit_kurtosis` |
 | A diffusion series has not one volume for each b-value, volumes on different grids, or a threshold below 0 or not finite | `adc_maps`, `kurtosis_maps` |
 | A computed b-value is below 0 or not finite, or the ADC and S0 maps have different grids | `computed_dwi` |
+| A relaxation fit has too few times, a time below 0 or not finite, times that do not rise, not one signal for each time, a signal below 0 or not finite, a T2 signal of 0, or T2 signals that do not fall | `fit_t2`, `fit_t1` |
+| A relaxation series has not one volume for each time, volumes on different grids, or a threshold below 0 or not finite | `t2_maps`, `t1_maps` |
 | A tumor volume or the time between two scans is not positive and finite, or two volumes are equal for a doubling time | `doubling_time`, `growth_rate` |
 | A diameter has a bad label, the background or an empty label | `longest_diameter` |
 | A RECIST sum is out of its range, or a response is not valid | `recist_response`, `response_name` |
@@ -1165,6 +1191,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The RT Structure Set, RT Dose and DVH tools are for research. They are not a treatment planning system. Do not use them to plan, check or give a treatment.
 - The Tofts models take the plasma curve as linear between its samples. They take the tissue as one well-mixed compartment, and the extended model adds the vessels. They do not fit a delay of the bolus. A fit with `ve` above 1 does not suit the tissue.
 - The diffusion fits take one trace-weighted image for each b-value. They do not fit a tensor, the directions of diffusion, or the perfusion of IVIM at low b-values. They are least squares of ln S, without weights. A signal near the noise floor biases them, because Rician noise does not fall to 0.
+- The T2 fit is mono-exponential and unweighted in `ln S`, so stimulated echoes and the noise floor bias it. The T1 fit takes an ideal inversion recovery with a long repetition time. It does not fit a look-locker or variable flip angle series.
 - A longest diameter is between voxel centers in one slice of `k`. It does not measure across slices or along an oblique plane. The RECIST response covers target lesions only, by their sums. It does not judge new lesions, lymph nodes or non-target lesions.
 - Registration is rigid, with six parameters. It does not scale, shear or bend, so it does not follow breathing or soft tissue that changes shape. The simplex finds a nearby least point, so a start far from the answer can end at another one.
 - The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
@@ -1190,6 +1217,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Padhani and others, "Diffusion-weighted magnetic resonance imaging as a cancer biomarker: consensus and recommendations", Neoplasia, 2009.
 - Jensen and others, "Diffusional kurtosis imaging: the quantification of non-Gaussian water diffusion by means of magnetic resonance imaging", Magnetic Resonance in Medicine, 2005.
 - Blackledge and others, on computed diffusion-weighted MR images for the detection of tumors, Radiology, 2011.
+- Barral and others, "A robust methodology for in vivo T1 mapping", Magnetic Resonance in Medicine, 2010.
 - ICRU Report 83, "Prescribing, Recording, and Reporting Photon-Beam Intensity-Modulated Radiation Therapy (IMRT)", 2010.
 - Zwanenburg and others, "The Image Biomarker Standardization Initiative", Radiology, 2020.
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.
