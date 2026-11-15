@@ -258,7 +258,7 @@ The tests compare the module with lifelines 0.30.3, a Python library, on the tri
 - The Nelson-Aalen hazard of each group agrees with lifelines to a relative 1e-14, and the ends of its interval to 1e-13.
 - The restricted mean to 23 weeks agrees with lifelines' `restricted_mean_survival_time` to 1e-14. Its standard error agrees with the formula in numpy to 1e-13, and the test of the difference to 1e-11.
 
-The tests compare `nnt` with lifelines on the 6-MP trial at 10, 15 and 20 weeks. `assets/survival/make_nnt.py` writes the values. Each survival agrees with lifelines' `KaplanMeierFitter` to 1e-14. The standard error, the interval and the NNT agree with the Greenwood formula in numpy to 1e-13.
+The tests compare `nnt` with statsmodels on the 6-MP trial at 10, 15 and 20 weeks. `assets/survival/make_nnt.py` writes the values. Each survival agrees with statsmodels' `SurvfuncRight` to 1e-14. The test builds the standard error of the difference from the Greenwood errors of statsmodels. The error, the interval and the NNT agree with it to 1e-13.
 
 The tests compare `parametric` with mpmath fits at 40 digits, on the two arms of the 6-MP trial and on two synthetic groups. One synthetic group has a rising hazard, and the other a falling hazard. `tools/make_parametric.mojo` writes the groups. `assets/parametric/make_parametric.py` writes the fits, and checks that lifelines' `ExponentialFitter` and `WeibullFitter` agree with them to a relative 1e-5.
 

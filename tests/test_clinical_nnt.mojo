@@ -6,12 +6,14 @@
 """The difference of two survival curves at a time, and the number needed
 to treat.
 
-`assets/survival/nnt_expected.txt` holds the values of lifelines and numpy
-for the 6-MP trial. See `assets/survival/make_nnt.py`.
+`assets/survival/nnt_expected.txt` holds the survival and the Greenwood
+error of statsmodels for each arm of the 6-MP trial. See
+`assets/survival/make_nnt.py`.
 """
 
 from extensions.clinical.nnt import SurvivalDifference, survival_difference
 from extensions.clinical.survival import kaplan_meier
+from extensions.numerics.distributions import Z95
 from std.math import inf, isinf, sqrt
 from std.testing import (
     TestSuite,
@@ -39,7 +41,7 @@ def _close(a: Float64, b: Float64, tolerance: Float64) raises:
     assert_almost_equal(a, b, atol=tolerance * abs(b), rtol=0)
 
 
-def test_against_lifelines() raises:
+def test_against_statsmodels() raises:
     var drug = _group(
         "6 6 6 6+ 7 9+ 10 10+ 11+ 13 16 17+ 19+ 20+ 22 23 25+ 32+ 32+ 34+ 35+"
     )
@@ -57,15 +59,22 @@ def test_against_lifelines() raises:
             treated, control, Duration64(row[0], WEEK64)
         )
         _close(result.treated, row[1], 1e-14)
-        _close(result.control, row[2], 1e-14)
-        _close(result.difference, row[3], 1e-14)
-        _close(result.standard_error, row[4], 1e-13)
-        _close(result.lower, row[5], 1e-13)
-        _close(result.upper, row[6], 1e-13)
-        _close(result.nnt(), row[7], 1e-14)
+        _close(result.control, row[3], 1e-14)
+        # The difference has the variance of the two Greenwood variances,
+        # and a normal interval. Its reciprocal is the number needed to
+        # treat of Altman and Andersen (1999).
+        var difference = row[1] - row[3]
+        var error = sqrt(row[2] * row[2] + row[4] * row[4])
+        var lower = difference - Z95 * error
+        var upper = difference + Z95 * error
+        _close(result.difference, difference, 1e-14)
+        _close(result.standard_error, error, 1e-13)
+        _close(result.lower, lower, 1e-13)
+        _close(result.upper, upper, 1e-13)
+        _close(result.nnt(), 1.0 / difference, 1e-14)
         var band = result.nnt_interval()
-        _close(band[0], 1.0 / row[6], 1e-13)
-        _close(band[1], 1.0 / row[5], 1e-12)
+        _close(band[0], 1.0 / upper, 1e-13)
+        _close(band[1], 1.0 / lower, 1e-12)
         checked += 1
     assert_equal(checked, 3)
 
