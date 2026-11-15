@@ -12,13 +12,14 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 
 | Module | What it gives |
 |---|---|
-| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity`, `LabelId`, `DicomNode`, `RegistrationMetric` and `ResponseCategory` |
+| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity`, `LabelId`, `DicomNode`, `RegistrationMetric`, `ResponseCategory` and `ToftsModel` |
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
 | `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL`, `MEGABECQUEREL`, and `parse_dicom_tree` and `read_dicom_tree`, which give a `DicomTree` |
 | `rtstruct` | `RtStructure`, `parse_rt_structures`, `read_rt_structures` and `structure_labels` |
 | `rtstruct_write` | `label_structure`, `encode_rt_structures` and `RT_STRUCTURE_SET_STORAGE` |
 | `rtdose` | `RtDose`, `parse_rt_dose`, `read_rt_dose`, `AbsorbedDose64`, `GRAY` and `CENTIGRAY` |
 | `dvh` | `DoseVolumeHistogram`, `dose_volume_histogram`, `dvh_image` and `CUBIC_CENTIMETER64` |
+| `dce` | `tofts_curve`, `fit_tofts`, `ToftsFit`, `tofts_maps`, `ToftsMaps`, `parker_aif`, `MINUTE64` and `PER_MINUTE64` |
 | `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
@@ -170,6 +171,32 @@ print(uptake.maximum.to(GRAM_PER_CUBIC_CENTIMETER), uptake.peak.to(GRAM_PER_CUBI
 A series time before the injection time means that midnight passed, so a day is added. With `ADMIN`, the image is corrected to the injection, and `A` is `A0`. The factor refuses `NONE`, other units, and an absent or zero weight, dose, half-life or time.
 
 `suv_volume(volume, factor)` multiplies each value in Bq/mL by the factor, which gives SUV in g/mL. `suv_statistics(suv, map, label)` gives the largest SUV of a label and its mean. It also gives SUVpeak, the largest mean of a sphere of 1 mL centered on a voxel of the label. The sphere holds every voxel whose center is within its radius of 6.2 mm, in the label or not. PERCIST, the PET Response Criteria in Solid Tumors, uses SUVpeak. `peak_voxel` is the center of that sphere.
+
+## Measure perfusion by DCE-MRI
+
+A dynamic contrast-enhanced (DCE) MRI scan follows a contrast agent from the blood into a tissue. The Tofts model gives the tissue concentration `Ct` from the plasma concentration `Cp`:
+
+    Ct(t) = Ktrans * integral of Cp(s) exp(-kep (t - s)) ds + vp Cp(t)
+
+`Ktrans` is the transfer constant from the plasma to the tissue. `ve` is the part of the tissue outside the cells and the vessels, and `kep = Ktrans / ve`. The extended model adds `vp`, the part of the tissue that is plasma. Tumors often have a high `Ktrans`, so oncology research maps it.
+
+```mojo
+var blood = parker_aif(times)
+var plasma = List[Float64]()
+for c in blood:
+    plasma.append(c / (1.0 - 0.42))
+var fit = fit_tofts(times, plasma, tumor_curve, EXTENDED_TOFTS)
+print(fit.ktrans.to(PER_MINUTE64), fit.ve, fit.vp)
+var maps = tofts_maps(series, times, plasma, map, LabelId(1), STANDARD_TOFTS)
+```
+
+`tofts_curve(times, plasma, ktrans, ve, vp)` gives `Ct`. The integral starts at the first time. It is exact for a plasma curve that is linear between its samples, as in Flouri and others (2016).
+
+`fit_tofts(times, plasma, tissue, model)` fits the parameters by least squares. For each `kep`, `Ktrans` and `vp` are the least squares of a linear problem, with neither below 0. The fit searches `kep` on a log grid of 81 values from 0.001 to 20 a minute. Then it takes 80 steps of the golden section around the best. A tissue that takes up nothing has a `Ktrans`, a `kep` and a `ve` of 0.
+
+`tofts_maps(series, times, plasma, map, label, model)` fits each voxel of a label, in a series of volumes of concentration. `parker_aif(times)` gives the population arterial input function of Parker and others (2006), in mM of blood. Divide it by `1 - Hct` for plasma.
+
+Concentrations are plain values in one unit, such as mM. The model is linear in concentration, so the unit cancels.
 
 ## Read an RT Structure Set
 
@@ -935,6 +962,10 @@ The tests check these results:
 - A volume that doubles in 100 days has a doubling time of 100 days, and one that halves has -100 days. Its growth rate is `ln 2 / 100` a day.
 - The longest diameter of an uneven blob on voxels of 0.5 by 0.8 mm matches a search of every pair of voxels. A bar of seven pixels is six pixels long, and a full slice runs corner to corner.
 - RECIST responses hold at their thresholds. A fall of exactly 30 percent is a partial response. A growth of 20 percent and 4 mm is not progression. Progression comes before a partial response, and 5 mm after a complete response is progression.
+- A plasma step and a plasma ramp give the closed forms of the Tofts model to 1e-13. A tiny `kep` takes the series of the integral, and gives its closed form to 1e-12.
+- dcmri 0.6.20 wrote a Parker input function and a standard and an extended tissue, with its exact convolution `expconv`. The tissues match to 1e-12. The input function matches to 1e-5, because dcmri rounds the heights of its Gaussians to six digits. `assets/dce/make_dce.py` makes the file.
+- The fits find `Ktrans`, `ve` and `vp` of the two tissues to 1e-6. On voxels of 32-bit values, the maps find them to 1e-4. A tissue of plasma alone is all `vp`, and a tissue of nothing has a `Ktrans` of 0.
+- scipy's `solve_ivp` integrates the same model on the same plasma to a tolerance of 1e-12. It agrees with the tissues to 1.4e-9 of their peak. That check is not part of the test suite.
 - Two RT Dose files that pydicom 3.0.1 wrote read with pydicom's dose at each voxel, as 32-bit floats. One is explicit VR with 32-bit values and offsets from 0. The other is implicit VR with 16-bit values and frames from z = 9 mm down to 0. `assets/dicom/make_rtdose.py` makes them.
 - The tumor and the ring of the structure fixtures, filled on each dose grid, have the DVH that numpy 2.1.3 gives. The test compares the least, mean and largest dose, D98, D95, D50, D2, V20 and V40. It also compares D for 0.03 and 0.1 cm^3, and the gEUD at a = -10 and 5. Each agrees to 1e-12.
 - Written files check signed and 32-bit values, one frame without offsets, frames that go down, offsets that are z, and sagittal frames. A malformed file is refused for each check of the reader.
@@ -1040,6 +1071,8 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels`, `label_overlaps` |
 | A label map and the volume that places it differ in grid or spacing | `resample_labels_onto`, `resample_labels_transformed` |
 | A rotation axis is zero or not finite, or an angle is not finite | `RigidTransform` |
+| DCE times do not rise or are not finite, a curve does not fit the times, a parameter is out of range, or a plasma curve has a value below 0 or none above 0 | `tofts_curve`, `fit_tofts`, `parker_aif` |
+| A DCE series has not one volume for each time, a volume on another grid, or a bad label | `tofts_maps` |
 | A tumor volume or the time between two scans is not positive and finite, or two volumes are equal for a doubling time | `doubling_time`, `growth_rate` |
 | A diameter has a bad label, the background or an empty label | `longest_diameter` |
 | A RECIST sum is out of its range, or a response is not valid | `recist_response`, `response_name` |
@@ -1068,6 +1101,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - An RT Dose must be native and in grays. The reader does not read a relative dose, compressed frames or the plan that the dose refers to.
 - A DVH counts each voxel whole, with the dose at its center. It does not split a voxel that the edge of a region cuts, and it does not interpolate the dose between planes.
 - The RT Structure Set, RT Dose and DVH tools are for research. They are not a treatment planning system. Do not use them to plan, check or give a treatment.
+- The Tofts models take the plasma curve as linear between its samples. They take the tissue as one well-mixed compartment, and the extended model adds the vessels. They do not fit a delay of the bolus. A fit with `ve` above 1 does not suit the tissue.
 - A longest diameter is between voxel centers in one slice of `k`. It does not measure across slices or along an oblique plane. The RECIST response covers target lesions only, by their sums. It does not judge new lesions, lymph nodes or non-target lesions.
 - Registration is rigid, with six parameters. It does not scale, shear or bend, so it does not follow breathing or soft tissue that changes shape. The simplex finds a nearby least point, so a start far from the answer can end at another one.
 - The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
@@ -1101,6 +1135,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Maes and others, "Multimodality image registration by maximization of mutual information", IEEE Transactions on Medical Imaging, 1997.
 - Eisenhauer and others, "New response evaluation criteria in solid tumours: Revised RECIST guideline (version 1.1)", European Journal of Cancer, 2009.
 - Schwartz, "A biomathematical approach to clinical tumor growth", Cancer, 1961.
+- Tofts and others, "Estimating kinetic parameters from dynamic contrast-enhanced T1-weighted MRI of a diffusable tracer", Journal of Magnetic Resonance Imaging, 1999.
+- Parker and others, "Experimentally-derived functional form for a population-averaged high-temporal-resolution arterial input function for dynamic contrast-enhanced MRI", Magnetic Resonance in Medicine, 2006.
+- Flouri and others, "Improved fitting of dynamic contrast-enhanced MRI data by numerical optimization", Magnetic Resonance in Medicine, 2016.
 - Hildebrand and Rüegsegger, "A new method for the model-independent assessment of thickness in three-dimensional images", 1997.
 - Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", 2012.
 - Shepp and Logan, "The Fourier reconstruction of a head section", 1974.

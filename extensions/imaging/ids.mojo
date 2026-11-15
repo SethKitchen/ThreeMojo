@@ -413,3 +413,38 @@ def require_response(response: ResponseCategory) raises:
         Error: If `response` is not valid.
     """
     require_valid(response.is_valid(), "A RECIST response must be from 0 to 3")
+
+
+@fieldwise_init
+struct ToftsModel(Equatable, ImplicitlyCopyable, Writable):
+    """Which Tofts model a DCE-MRI fit takes.
+
+    `STANDARD_TOFTS` has Ktrans and ve. `EXTENDED_TOFTS` adds vp, the
+    plasma volume fraction.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the two models.
+
+        Returns:
+            Whether the value is zero or one.
+        """
+        return ordinal_valid(self.value, 1)
+
+
+comptime STANDARD_TOFTS = ToftsModel(0)
+comptime EXTENDED_TOFTS = ToftsModel(1)
+
+
+def require_tofts_model(model: ToftsModel) raises:
+    """Refuse a Tofts model that is not one of the two.
+
+    Args:
+        model: The model to check.
+
+    Raises:
+        Error: If `model` is not valid.
+    """
+    require_valid(model.is_valid(), "A Tofts model must be 0 or 1")
