@@ -19,6 +19,7 @@ Marker A has an AUC of 0.820, with a 95 percent interval from 0.751 to 0.890. Ma
 | `logistic` | `LogisticModel` and `logistic_regression` |
 | `kappa` | `Kappa`, `cohens_kappa`, `linear_weighted_kappa`, `quadratic_weighted_kappa`, `FleissKappa`, `fleiss_kappa`, `MAX_CATEGORIES` and `MAX_SUBJECTS` |
 | `rates` | `RateModel`, `poisson_regression`, `YEAR64` and `PER_YEAR64` |
+| `negbin` | `NegativeBinomialModel` and `negative_binomial_regression` |
 | `calibration` | `brier_score`, `scaled_brier_score`, `RiskGroup`, `risk_groups`, `HosmerLemeshow`, `hosmer_lemeshow`, `CalibrationFit`, `calibration_fit`, `recalibrate`, `net_benefit`, `DecisionCurve`, `decision_curve`, `calibration_image`, `decision_curve_image`, `MAX_GROUPS` and `MAX_THRESHOLDS` |
 | `proportions` | `Estimate`, `wilson_interval`, `exact_interval`, `DiagnosticAccuracy`, `diagnostic_accuracy`, `RiskComparison` and `compare_risks` |
 | `distributions` | `beta_tails`, `beta_quantile`, `normal_quantile`, `student_t_upper`, `student_t_quantile`, `f_upper`, `f_quantile`, `precise_exp` and `MAX_DEGREES` |
@@ -121,7 +122,32 @@ The fit uses the log of the person-time as the offset. It uses iteratively rewei
 
 - `rate_ratio(i)`, `interval(i)`, `z(i)` and `p_value(i)` for covariate `i`, with `i` from 1.
 - `baseline_rate()`, the rate of a stratum with every covariate 0, and `rate(row)`, the fitted rate of a stratum. Rates are per year: `YEAR64` is the Julian year of 365.25 days.
-- `deviance` and `dispersion`. A dispersion above 1 means more spread than Poisson counts have. Then multiply the standard errors by its square root.
+- `deviance` and `dispersion`. A dispersion above 1 means more spread than Poisson counts have. Then use the negative binomial model.
+
+## Model rates that spread more than Poisson counts
+
+Events such as asthma attacks or falls cluster in some patients. Then the counts spread more than a Poisson model allows, and its standard errors are too small. The negative binomial model (NB2) takes the variance of a count as `mu + alpha mu^2`. With alpha 0, it is the Poisson model.
+
+```mojo
+from extensions.clinical.negbin import negative_binomial_regression
+
+var model = negative_binomial_regression(events, exposure, covariates)
+print(model.alpha, model.rates.rate_ratio(1), model.p_value())
+```
+
+`negative_binomial_regression(events, exposure, covariates)` takes the same strata as `poisson_regression`. It fits the coefficients and alpha by maximum likelihood:
+
+1. For each alpha, iteratively reweighted least squares gives the coefficients, with the weights `mu / (1 + alpha mu)`.
+2. A golden-section search finds the alpha of the largest profile likelihood, on a log scale from 1e-8 to 1e4.
+3. Three Newton steps on the coefficients and `log(alpha)` together polish the maximum.
+
+The `NegativeBinomialModel` gives:
+
+- `rates`, a `RateModel` with the coefficients and their standard errors, from the observed information. Its rate ratios, intervals, tests and rates work as for the Poisson model. Its `deviance` is the negative binomial deviance, and its `dispersion` is Pearson's chi-square over its degrees of freedom.
+- `alpha` and `alpha_error`.
+- `log_likelihood` and `poisson_log_likelihood`. `likelihood_ratio()` and `p_value()` test that alpha is 0. Alpha 0 is on the edge of its range, so the p value is half the tail of chi-square with 1 degree of freedom.
+
+The log-likelihood takes `lgamma(y + r) - lgamma(r)` and its derivatives, with `r = 1 / alpha`, as finite sums over each count. So it needs no digamma function. Counts that spread no more than Poisson counts have their largest likelihood at alpha 0, and the fit refuses them: use the Poisson model.
 
 ## Evaluate a risk model
 
@@ -268,6 +294,8 @@ The tests compare `proportions` with statsmodels 0.15.0. `assets/proportions/mak
 
 The tests compare `rates` with the Poisson `GLM` of statsmodels 0.15.0, with an offset, on 48 synthetic strata. `assets/rates/make_rates.py` writes them. The coefficients agree to a relative 1e-12. The standard errors, z values, interval ends, deviance, dispersion and rates agree to 1e-11.
 
+The tests compare `negbin` with the `NegativeBinomial` model of statsmodels 0.15.0 on 120 synthetic strata of gamma-Poisson counts, with alpha near 0.5. `assets/rates/make_negbin.py` writes them. The coefficients and alpha agree to a relative 1e-10, and their errors to 1e-9. The log-likelihoods agree to 1e-12, and the likelihood ratio to 1e-11. The deviance and the dispersion agree with statsmodels' `GLM` at the fitted alpha to 1e-9 and 1e-8.
+
 The tests compare `kappa` with `cohens_kappa` of statsmodels 0.15.0. The tables are four grades of 120 synthetic films, by each weighting, and two categories of 60 smears. `assets/agreement/make_kappa.py` writes them. Kappa agrees to a relative 1e-14, and its errors and interval ends to 1e-12.
 
 The tests compare `fleiss_kappa` with `fleiss_kappa` of statsmodels 0.15.0 on two tables. One is the example of 10 subjects and 14 raters on the Wikipedia page of Fleiss' kappa, with a kappa of 0.210. The other has 40 synthetic films and 6 readers. `assets/agreement/make_fleiss.py` writes them. Kappa and Randolph's kappa agree to a relative 1e-14. The null error, z and the category kappas agree with their formulas in numpy to 1e-13, and the p value with scipy to 1e-10.
@@ -297,6 +325,7 @@ The tests also check cases by hand:
 - With no success in 20 trials, the exact high end is `1 - 0.025^(1/20)`. The beta quantile of Beta(2, 1) is the square root, on both sides of a half.
 - The likelihood ratios of the test are 6 and 0.1 / 0.85. With no false positive, a half is added to each cell.
 - Equal risks need an infinite number to treat.
+- A negative binomial model of one flag fits the mean of each group. Counts with means of 4 and 12 a year give a rate ratio of 3. Counts that spread less than Poisson counts are refused.
 - Risks of 0.2 and 0.8, for outcomes of 0 and 1, give a Brier score of 0.04, scaled to 0.84.
 - Seven patients make groups of 3, 2 and 2, and patients of equal risk keep their order. Groups whose events are what the model expects give a Hosmer-Lemeshow statistic of 0 and a p value of 1.
 - Risks of 0.25 and 0.75, with a quarter and three quarters of events, are right. They give a slope of 1, intercepts of 0 and an E/O of 1, and recalibration changes no risk.
@@ -319,6 +348,7 @@ Every function raises `Error` for input it cannot use.
 | A proportion has no trial, or successes out of range | `wilson_interval`, `exact_interval`, `compare_risks` |
 | The strata are not one count of 0 or more, positive person-time and one finite row each, with an event in all and more strata than coefficients, or the tolerance or the steps are out of range | `poisson_regression` |
 | A covariate is constant or collinear with others, or an index names no covariate | `poisson_regression`, `RateModel` |
+| The strata are not valid, as for `poisson_regression`, the counts spread no more than Poisson counts, or the information is not positive definite at the maximum | `negative_binomial_regression` |
 | A kappa table is not square, has not 2 to 100 categories, has a count below 0 or no subject, or its raters agree by chance alone | `kappa` |
 | A table of many raters has not 1 to 100000 subjects of 2 to 100 categories, a count below 0, not one number of ratings of 2 or more, or every rating in one category | `fleiss_kappa` |
 | A cell of a diagnostic table is negative, or the table has no diseased, healthy, positive or negative patient | `diagnostic_accuracy` |

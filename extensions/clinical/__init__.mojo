@@ -16,6 +16,7 @@
 - `kappa`: Cohen's kappa, simple and weighted, and Fleiss' kappa.
 - `logistic`: logistic regression with odds ratios.
 - `rates`: Poisson regression of event rates over person-time.
+- `negbin`: negative binomial regression of overdispersed event rates.
 - `calibration`: the calibration and the decision curve of a risk model.
 - `proportions`: proportion intervals and two-by-two tables.
 - `meta`: meta-analysis of studies, with forest plots.
