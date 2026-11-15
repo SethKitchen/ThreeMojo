@@ -10,7 +10,6 @@ for the synthetic volume of `assets/vesselness/volume.txt`. See
 `tools/make_vesselness.mojo` and `assets/vesselness/make_vesselness.py`.
 """
 
-from extensions.numerics.elementary import precise_exp
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.vesselness import hessian_eigenvalues, vesselness
 from std.collections import Optional
