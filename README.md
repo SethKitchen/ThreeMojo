@@ -948,6 +948,7 @@ Medical images, macromolecules and solid mechanics, for research and teaching. A
 - [x] [Example: an ablation zone](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#thermal-dose): a needle heating perfused tissue in time, its dose map on a log scale and its ablated volume [#1074](https://github.com/SethKitchen/ThreeMojo/issues/1074)
 - [x] [Stress summary](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#summarize-the-stress-of-each-material): the peak and mean von Mises stress of each material, and its volume above a stress [#1050](https://github.com/SethKitchen/ThreeMojo/issues/1050)
 - [x] [Strain energy](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#summarize-the-stress-of-each-material): the energy stored in a solved model, exact for both element orders, and its apparent stiffness [#1054](https://github.com/SethKitchen/ThreeMojo/issues/1054)
+- [x] [Survival analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Survival-analysis): Kaplan-Meier curves, medians, the log-rank test and plots, which match lifelines on the 6-MP leukemia trial [#1089](https://github.com/SethKitchen/ThreeMojo/issues/1089)
 
 ### Out of scope
 

@@ -469,6 +469,8 @@ The tests check these results:
 - A linear field sampled at 12 points between the nodes of a box is exact on both orders. A quadratic field is exact on ten-node elements. At a node, the sample is the node's value. A point on a face lies in two elements, the lower one counts, and both give one value. Steady conduction from 300 K to 400 K samples to its straight line at every point.
 - Ten minutes at 43, 44, 42 and 37 C give doses of 10, 20 and 2.5 minutes, and `10 / 4^6`. An interval from 42 to 44 C counts at 43 C. A block held at 50 C through `solve_transient` for two minutes has a dose of 256 minutes at every node. Its dosed volume is the whole block, or one cube when only that cube's nodes reach the threshold.
 - On a dose map, a dose below the low end takes the scale's blue, and a dose past the high end its red. A mesh without nodes draws nothing.
+- A block of soft tissue of 10 kPa and a Poisson's ratio of 0.45 is held on three planes of symmetry. It is stretched by 30 percent. Its nodes move with the exact homogeneous field of the Neo-Hookean solid, to 1e-12 m. The pull on its face is the exact nominal stress times the area, to 1e-9. Each element has the exact `J` and Cauchy stress.
+- The exact nominal stress, as a dead load, stretches the block by 30 percent again, to 1e-11 m. A stretch of 1e-6 gives the linear solution, to 1e-14 m.
 - The VTK text of a one-element mesh is exact, and a pulled bar's file holds its stress and displacement.
 - A record of a history is the temperature file of its values, with its time in the title. A series file lists each name with its time, and names get a fifth digit past 10000 records.
 
@@ -493,8 +495,6 @@ Use quadratic elements for any part that bends. A four-node tetrahedron has a co
 | 40 by 4 by 4 | 3840 | 6.66 | 1.00 |
 
 Shear adds about 0.05 mm to the beam theory value. Check a result against a finer mesh.
-- A block of soft tissue of 10 kPa and a Poisson's ratio of 0.45 is held on three planes of symmetry. It is stretched by 30 percent. Its nodes move with the exact homogeneous field of the Neo-Hookean solid, to 1e-12 m. The pull on its face is the exact nominal stress times the area, to 1e-9. Each element has the exact `J` and Cauchy stress.
-- The exact nominal stress, as a dead load, stretches the block by 30 percent again, to 1e-11 m. A stretch of 1e-6 gives the linear solution, to 1e-14 m.
 
 ## Errors
 

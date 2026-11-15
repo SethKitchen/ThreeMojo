@@ -95,6 +95,7 @@ Look something up.
 - [Medical imaging](Medical-imaging)
 - [Molecular structures](Molecular-structures)
 - [Tetrahedral FEM](Tetrahedral-FEM)
+- [Survival analysis](Survival-analysis)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
   - [Anatomy validity](Anatomy-validity)

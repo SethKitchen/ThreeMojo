@@ -287,6 +287,9 @@ $(call gallery,tetrahedral-fem,tetrahedral_fem)
 # A soft block indented by two fifths of its thickness: the linear solve
 # beside the Neo-Hookean solve, colored by von Mises stress.
 $(call gallery,indentation,indentation)
+# The Kaplan-Meier curves of the 6-MP leukemia trial of 1963, drug and
+# placebo, with a tick at each censored patient.
+$(call gallery,survival,survival)
 # A bone segment from CT: RLE DICOM slices, two labels with smoothed
 # surfaces, and the two-material voxel mesh under a platen, colored by
 # von Mises stress.
