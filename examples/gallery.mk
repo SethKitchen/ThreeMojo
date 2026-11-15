@@ -302,6 +302,9 @@ $(call gallery,survival,survival)
 # The cumulative incidence of relapse and of death without relapse in a
 # synthetic cohort, beside one minus the Kaplan-Meier curve of relapse.
 $(call gallery,competing,competing)
+# The Kaplan-Meier curves of the 6-MP trial, with dashed Weibull fits of
+# each arm carried past the follow-up to 52 weeks.
+$(call gallery,parametric,parametric)
 # The ROC curves of two synthetic markers, with the chance diagonal.
 $(call gallery,roc,roc)
 # The calibration plot and the decision curve of an overfitted risk model,

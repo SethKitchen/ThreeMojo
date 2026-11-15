@@ -1,6 +1,6 @@
 # Survival analysis
 
-`extensions/clinical/` gives the survival of groups of patients. It makes Kaplan-Meier curves with 95 percent intervals and medians. It compares two groups by the log-rank test, and it plots the curves. It fits Cox models of survival on covariates, such as an age or a treatment. It gives the cumulative hazard and the restricted mean survival time. It gives the cumulative incidence of a cause when another cause can come first.
+`extensions/clinical/` gives the survival of groups of patients. It makes Kaplan-Meier curves with 95 percent intervals and medians, and it plots them. It compares groups by the log-rank test, and it fits Cox models of survival on covariates, such as an age or a treatment. It gives the cumulative hazard, the restricted mean survival time and the cumulative incidence of competing causes. It fits exponential and Weibull models, which carry a curve past the last follow-up.
 
 It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
 
@@ -20,6 +20,7 @@ A Cox model gives the placebo a hazard ratio of 4.82, with a 95 percent interval
 | `rmst` | `CumulativeHazard`, `nelson_aalen`, `RestrictedMean`, `restricted_mean`, `RestrictedComparison` and `compare_restricted_means` |
 | `competing` | `CumulativeIncidence`, `cumulative_incidence` and `incidence_image` |
 | `nnt` | `SurvivalDifference` and `survival_difference` |
+| `parametric` | `ParametricFit`, `fit_exponential`, `fit_weibull`, `constant_hazard_test`, `draw_fit` and `DurationUnit64` |
 
 ## Make a survival curve
 
@@ -182,6 +183,38 @@ print(gap.difference, gap.nnt(), gap.nnt_interval()[0], gap.nnt_interval()[1])
 
 In the 6-MP trial, 75 percent of the 6-MP group and 38 percent of the placebo group are in remission at 10 weeks. The difference is 0.37, so 2.7 children need 6-MP for one more to be in remission at 10 weeks.
 
+## Fit a parametric model
+
+A Kaplan-Meier curve stops at the last follow-up. A parametric model gives the survival at any time, as a health economic model or a trial plan needs it.
+
+```mojo
+from extensions.clinical.parametric import fit_weibull
+
+var fit = fit_weibull(times, events)
+print(fit.scale.to(WEEK64), fit.shape, fit.median().to(WEEK64))
+print(fit.survival(Duration64(52, WEEK64)))
+```
+
+A Weibull model has the survival `S(t) = exp(-(t / lambda)^rho)`. The scale lambda is the time at which 63 percent of a group has had the event. The hazard rises when the shape rho is above 1, and falls when rho is below 1. The exponential model holds rho at 1, so its hazard is constant.
+
+`fit_exponential(times, events)` gives the scale `sum t / d`, the total time over the d events. Its standard error is `lambda / sqrt(d)`. `fit_weibull(times, events)` gives the maximum likelihood scale and shape. The shape is the root of its profile score, which falls as the shape rises. A bisection finds it to the last place, and the scale follows in closed form.
+
+The standard errors and the covariance of the scale and the shape come from the inverse of the observed information. A `ParametricFit` gives these values at a time or a survival:
+
+- `survival(time)`, `cumulative_hazard(time)` and `hazard(time)`. The hazard is a `Frequency64`: the events for each unit of time of those still free of the event.
+- `survival_error(time)`: the delta-method standard error of the survival, as lifelines gives it. `S -+ 1.96` of it can fall outside 0 and 1.
+- `survival_interval(time)`: the 95 percent interval by the delta method on the log of the cumulative hazard. It stays in 0 to 1.
+- `quantile(survival)` and `median()`: the time at a survival, `lambda (-ln S)^(1 / rho)`. `quantile_interval(survival)` gives its interval on the log of the time.
+- `log_likelihood(unit)` and `aic(unit)`. The density of an event changes with the unit of time, so these values do too. Compare two models in one unit.
+
+`constant_hazard_test(times, events)` tests a shape of 1. Its statistic is twice the log-likelihood of the Weibull fit less that of the exponential fit. Its p value is on one degree of freedom.
+
+![The Kaplan-Meier curves of the 6-MP trial, with dashed Weibull fits carried to 52 weeks](out/parametric.png)
+
+`examples/parametric.mojo` makes this picture. The steps are the Kaplan-Meier curves of the 6-MP trial, and the dashed lines are the Weibull fits. `draw_fit(image, fit, color, top)` draws them on a plot from `survival_image`. Time runs from 0 to 52 weeks, with a gray line each 4 weeks. The trial follows no patient past 35 weeks. Past that time, the dashed lines show the model alone.
+
+The 6-MP group has a scale of 33.8 weeks and a shape of 1.35, with a median remission of 25.8 weeks. The placebo group has a scale of 9.5 weeks and a shape of 1.37, with a median of 7.3 weeks. Neither shape differs from 1 at the 5 percent level: the p values are 0.31 and 0.09. At 52 weeks, the model gives 17 percent of the 6-MP group in remission, from 1 to 49 percent.
+
 ## Draw the curves
 
 `survival_image(curves, colors, top, grid, width, height)` plots the curves as steps on a white image. Time runs from 0 at the left edge to `top` at the right edge. Survival runs from 0 at the bottom edge to 1 at the top edge. A light gray line marks each `grid` of time and each tenth of survival. A short vertical tick marks each censored patient on its curve.
@@ -199,6 +232,16 @@ The tests compare the module with lifelines 0.30.3, a Python library, on the tri
 - The restricted mean to 23 weeks agrees with lifelines' `restricted_mean_survival_time` to 1e-14. Its standard error agrees with the formula in numpy to 1e-13, and the test of the difference to 1e-11.
 
 The tests compare `nnt` with lifelines on the 6-MP trial at 10, 15 and 20 weeks. `assets/survival/make_nnt.py` writes the values. Each survival agrees with lifelines' `KaplanMeierFitter` to 1e-14. The standard error, the interval and the NNT agree with the Greenwood formula in numpy to 1e-13.
+
+The tests compare `parametric` with mpmath fits at 40 digits, on the two arms of the 6-MP trial and on two synthetic groups. One synthetic group has a rising hazard, and the other a falling hazard. `assets/parametric/make_parametric.py` writes the values, and checks that lifelines' `ExponentialFitter` and `WeibullFitter` agree with them to a relative 1e-5.
+
+- The exponential scale, its standard error and the log-likelihood agree to a relative 1e-14.
+- The Weibull scale and shape agree to a relative 1e-13, and their standard errors to 1e-12. The covariance agrees to 1e-11, and the log-likelihood to 1e-14.
+- The likelihood ratio test of a constant hazard agrees to a relative 1e-11, with its p value from scipy.
+- The median, the time at a survival of 0.2 and the ends of their intervals agree to a relative 1e-12 or better.
+- At four times in each group, the survival and the hazard agree to a relative 1e-13. The standard error of the survival and the ends of its interval agree to 1e-11.
+
+lifelines fits both models by a search that stops early. Its Weibull scale and shape are off by about 1e-6, relative, and its exponential scale by 5e-8. The exponential scale has the closed form `sum t / d`, so the module does not search for it.
 
 The tests compare `competing` with the `AalenJohansenFitter` of lifelines on a synthetic cohort of 80 patients with two causes. No two events tie, so lifelines does not jitter them. `assets/competing/make_competing.py` writes them.
 
@@ -232,6 +275,8 @@ The tests check competing risks by hand. Four patients have a relapse at 1 day, 
 
 The tests check the NNT by hand. Before any event, both groups survive whole, with no error, and the NNT is refused. After the last event of a group, its survival is 0 with no variance. A difference of -1/2 gives an NNT of -2, a number needed to harm of 2. An interval of the difference that holds 0 gives an NNT interval from a benefit to a harm.
 
+The tests check parametric fits by hand. Three events at 1, 2 and 3 weeks and one censoring at 4 weeks give an exponential scale of 10/3 weeks. The hazard is then 0.3 for each week at any time. At the scale, the survival is `1/e` and the cumulative hazard 1. The log-likelihoods in days and in weeks differ by `3 ln 7`. A patient censored at 0 changes neither fit.
+
 ## Errors
 
 Every function raises `Error` for input it cannot use.
@@ -254,6 +299,11 @@ Every function raises `Error` for input it cannot use.
 | A row index names no time | `CumulativeIncidence.interval` |
 | The time of a survival difference is below 0 or not finite, or the difference is 0 for an NNT | `survival_difference`, `SurvivalDifference.nnt` |
 | There is no curve, the colors are not one for each, a side is out of 64 to 4096 pixels, a time is out of range, or the ceiling is not above 0 and at most 1 | `incidence_image` |
+| A group has no event, or has an event at 0 | `fit_exponential`, `fit_weibull`, `constant_hazard_test` |
+| No event is before the largest time, so the shape has no finite estimate | `fit_weibull`, `constant_hazard_test` |
+| A time is below 0 or not finite | `ParametricFit` |
+| A survival is not above 0 and below 1 | `ParametricFit.quantile`, `ParametricFit.quantile_interval` |
+| The top time is not positive and finite | `draw_fit` |
 
 ## Limits
 
@@ -262,6 +312,7 @@ Every function raises `Error` for input it cannot use.
 - A Cox fit holds the risk sets in one pass over the sorted times, and Harrell's C compares each pair of patients. A cohort of many thousands of patients is slow.
 - It takes right censoring only. A patient who enters the study late, or whose event happens between two visits, needs another method.
 - The p value is for one test. Many tests on one data set need a correction.
+- The parametric models are exponential and Weibull only, with no covariates. A curve past the last follow-up holds only if the model holds there. Check the fit against the Kaplan-Meier curve first.
 - The cumulative incidence takes independent censoring. The module has no test of Gray to compare incidences, and no Fine-Gray model of the subdistribution hazard.
 
 ## References
@@ -273,6 +324,7 @@ Every function raises `Error` for input it cannot use.
 - Gehan, "A generalized Wilcoxon test for comparing arbitrarily singly-censored samples", Biometrika, 1965.
 - Cox, "Regression models and life-tables", Journal of the Royal Statistical Society, Series B, 1972.
 - Efron, "The efficiency of Cox's likelihood function for censored data", Journal of the American Statistical Association, 1977.
+- Klein and Moeschberger, "Survival Analysis: Techniques for Censored and Truncated Data", second edition, Springer, 2003.
 - Breslow, "Covariance analysis of censored survival data", Biometrics, 1974.
 - Harrell and others, "Evaluating the yield of medical tests", Journal of the American Medical Association, 1982.
 - Nelson, "Theory and applications of hazard plotting for censored failure data", Technometrics, 1972.
