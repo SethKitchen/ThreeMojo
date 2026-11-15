@@ -83,10 +83,17 @@ def test_pydicom_fixtures() raises:
         assert_almost_equal(pet.injection_time.to(SECOND), atof(words[5]))
         assert_almost_equal(pet.injected_dose.to(BECQUEREL), atof(words[6]))
         assert_almost_equal(pet.half_life.to(SECOND), atof(words[7]))
+        # The body-weight SUV factor of a decay-corrected image: the weight
+        # in grams over the dose decayed from the injection to the series,
+        # weight / (dose 2^(-(series - injection) / half-life)).
+        var elapsed = atof(words[4]) - atof(words[5])
+        var decayed = atof(words[6]) * 2.0 ** (-elapsed / atof(words[7]))
         var factor = suv_factor(pet).to(GRAM_PER_BECQUEREL)
-        assert_almost_equal(factor, atof(words[8]), rtol=1e-14)
+        assert_almost_equal(
+            factor, atof(words[3]) * 1000.0 / decayed, rtol=1e-14
+        )
         for v in range(12):
-            assert_equal(Float64(image.values[v]), atof(words[9 + v]))
+            assert_equal(Float64(image.values[v]), atof(words[8 + v]))
 
 
 def _file(

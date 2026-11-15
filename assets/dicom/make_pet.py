@@ -12,11 +12,14 @@ with the elements that standardized uptake values need. `pet.dcm` is
 explicit VR, with the Radiopharmaceutical Information Sequence of
 undefined length. `pet_implicit.dcm` is implicit VR, with the sequence of
 defined length. Each line of the output gives a file, the elements as
-pydicom reads them, the SUV factor in g/Bq, and the rescaled values.
+pydicom reads them, with the times in seconds after midnight, and the
+rescaled values.
 
-The factor is the body-weight SUV of the decay-corrected image:
-    weight in grams / (dose * 2 ** (-(series - injection) / half-life))
+The test builds the body-weight SUV factor of the decay-corrected image
+from these elements.
 """
+
+import datetime
 
 import numpy
 import pydicom
@@ -30,10 +33,9 @@ from pydicom.uid import (
 
 
 def seconds(tm):
-    """Return the seconds after midnight of a DICOM time."""
-    whole, _, fraction = tm.partition(".")
-    value = int(whole[0:2]) * 3600 + int(whole[2:4]) * 60 + int(whole[4:6])
-    return value + (float("0." + fraction) if fraction else 0.0)
+    """Return the seconds after midnight of a time that pydicom read."""
+    day = datetime.datetime.combine(datetime.date.min, tm)
+    return (day - datetime.datetime.min).total_seconds()
 
 
 def pet_slice(syntax, defined):
@@ -89,14 +91,10 @@ pet_slice(ExplicitVRLittleEndian, False).save_as(
 pet_slice(ImplicitVRLittleEndian, True).save_as(
     "pet_implicit.dcm", enforce_file_format=True
 )
+pydicom.config.datetime_conversion = True
 for name in ["pet.dcm", "pet_implicit.dcm"]:
     read = pydicom.dcmread(name)
     item = read.RadiopharmaceuticalInformationSequence[0]
-    elapsed = seconds(read.SeriesTime) - seconds(item.RadiopharmaceuticalStartTime)
-    dose = float(item.RadionuclideTotalDose)
-    half = float(item.RadionuclideHalfLife)
-    decayed = dose * 2.0 ** (-elapsed / half)
-    factor = float(read.PatientWeight) * 1000.0 / decayed
     values = read.pixel_array.astype(float) * float(read.RescaleSlope)
     print(
         name,
@@ -105,8 +103,7 @@ for name in ["pet.dcm", "pet_implicit.dcm"]:
         float(read.PatientWeight),
         seconds(read.SeriesTime),
         seconds(item.RadiopharmaceuticalStartTime),
-        dose,
-        half,
-        repr(factor),
+        float(item.RadionuclideTotalDose),
+        float(item.RadionuclideHalfLife),
         " ".join(repr(float(v)) for v in values.flatten()),
     )
