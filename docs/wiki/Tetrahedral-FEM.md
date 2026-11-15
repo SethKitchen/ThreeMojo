@@ -15,7 +15,7 @@
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of`, `von_mises`, `principal_stresses` and `PrincipalStress` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
 | `hyperelastic` | `solve_neo_hookean` and `HyperelasticResult` |
-| `post` | `stress_geometry`, `stress_color`, `mode_geometry`, `temperature_geometry` and `dose_geometry` |
+| `post` | `stress_geometry`, `deformed_geometry`, `stress_color`, `mode_geometry`, `temperature_geometry` and `dose_geometry` |
 | `summary` | `stress_summary`, `MaterialStress` and `strain_energy` |
 | `quality` | `element_quality`, `ElementQuality`, `mesh_quality` and `MeshQuality` |
 | `probe` | `locate_point`, `MeshPoint`, `sample_field`, `sample_temperature` and `sample_displacement` |
@@ -191,6 +191,14 @@ The loads and the prescribed displacements grow in `steps` equal steps. Each ste
 | `newton_steps`, `converged` | How the solve ended |
 
 A load is a dead load: it keeps its size and direction as the mesh moves. The solve takes four-node tetrahedra and no thermal load. A step that turns an element inside out raises an error, and more steps can avoid it.
+
+`deformed_geometry(mesh, displacements, von_mises, scale, low, high)` draws the result of any solve, as `stress_geometry` draws a linear one.
+
+![A soft block indented by two fifths of its thickness, linear on the left and Neo-Hookean on the right, colored by von Mises stress](out/indentation.png)
+
+`examples/indentation.mojo` makes this picture. A block of soft tissue, 40 by 40 by 20 mm, of 5 kPa and a Poisson's ratio of 0.45, sits on a held base. A square indenter 10 mm wide is bonded to the middle of its top and pressed 8 mm down. The left block is the linear solve, and the right block is the Neo-Hookean solve in 16 load steps.
+
+The linear indenter presses with 1.36 N, and the Neo-Hookean one with 1.95 N, in 64 Newton steps. A Neo-Hookean solid is stiffer in large compression: at a stretch of 0.6, an incompressible one carries 1.8 times the linear stress. The least `J` of an element is 0.61.
 
 ### Summarize the stress of each material
 

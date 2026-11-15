@@ -284,6 +284,9 @@ $(call gallery,predicted,predicted)
 # A steel cantilever of tetrahedra bent by a tip load, drawn 40 times its
 # deflection and colored by von Mises stress.
 $(call gallery,tetrahedral-fem,tetrahedral_fem)
+# A soft block indented by two fifths of its thickness: the linear solve
+# beside the Neo-Hookean solve, colored by von Mises stress.
+$(call gallery,indentation,indentation)
 # A bone segment from CT: RLE DICOM slices, two labels with smoothed
 # surfaces, and the two-material voxel mesh under a platen, colored by
 # von Mises stress.

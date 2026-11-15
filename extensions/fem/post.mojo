@@ -103,9 +103,44 @@ def stress_geometry(
         Error: If the result is not for this mesh, the scale is not
             finite, or `high` is not above `low`.
     """
-    if len(result.displacements) != 3 * mesh.node_count():
+    return deformed_geometry(
+        mesh, result.displacements, result.von_mises, scale, low, high
+    )
+
+
+def deformed_geometry(
+    mesh: TetMesh,
+    displacements: List[Float64],
+    von_mises: List[Pressure64],
+    scale: Float64,
+    low: Pressure64,
+    high: Pressure64,
+) raises -> BufferGeometry:
+    """Return an outer surface moved by displacements, colored by stress.
+
+    Use it for the result of any solve, such as `solve_neo_hookean`. Each
+    face has its own three vertices, so each face has one color and one
+    flat normal.
+
+    Args:
+        mesh: The mesh that was solved.
+        displacements: Three per node, in meters.
+        von_mises: The von Mises stress of each element.
+        scale: How many times the displacements are drawn. Finite.
+        low: The stress at blue.
+        high: The stress at red. Above `low`.
+
+    Returns:
+        A triangle mesh in meters with `position`, `normal`, `uv` and
+        `color` attributes.
+
+    Raises:
+        Error: If the lists are not for this mesh, the scale is not
+            finite, or `high` is not above `low`.
+    """
+    if len(displacements) != 3 * mesh.node_count():
         raise Error("The result is not for this mesh")
-    if len(result.von_mises) != mesh.element_count():
+    if len(von_mises) != mesh.element_count():
         raise Error("The result is not for this mesh")
     if not isfinite(scale):
         raise Error("A displacement scale must be finite")
@@ -124,9 +159,9 @@ def stress_geometry(
             var moved = (
                 mesh.nodes[n]
                 + v3(
-                    result.displacements[3 * n],
-                    result.displacements[3 * n + 1],
-                    result.displacements[3 * n + 2],
+                    displacements[3 * n],
+                    displacements[3 * n + 1],
+                    displacements[3 * n + 2],
                 )
                 * scale
             )
@@ -134,9 +169,7 @@ def stress_geometry(
         var normal = normalize(
             cross(corners[1] - corners[0], corners[2] - corners[0])
         )
-        var color = stress_color(
-            result.von_mises[faces[4 * face + 3]], low, high
-        )
+        var color = stress_color(von_mises[faces[4 * face + 3]], low, high)
         for k in range(3):
             indices.append(len(positions) // 3)
             positions.append(Float32(corners[k].x))
