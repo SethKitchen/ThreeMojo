@@ -23,6 +23,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `diffusion` | `fit_adc`, `AdcFit`, `fit_kurtosis`, `KurtosisFit`, `adc_maps`, `AdcMaps`, `kurtosis_maps`, `KurtosisMaps`, `computed_dwi`, `Diffusivity64`, `BValue64`, `SQUARE_MILLIMETER_PER_SECOND`, `SQUARE_MICROMETER_PER_SECOND` and `SECOND_PER_SQUARE_MILLIMETER` |
 | `relaxometry` | `fit_t2`, `T2Fit`, `fit_t1`, `T1Fit`, `t2_maps`, `t1_maps`, `RelaxationMaps` and `MILLISECOND64` |
 | `ivim` | `fit_ivim`, `IvimFit`, `ivim_maps` and `IvimMaps` |
+| `vesselness` | `hessian_eigenvalues`, `vesselness` and `MAX_SIGMA_VOXELS` |
 | `perfusion` | `Deconvolution`, `PerfusionFit`, `ct_concentration`, `dsc_concentration`, `ct_concentration_series`, `perfusion_maps`, `PerfusionMaps`, `perfusion_mismatch`, `PerfusionMismatch`, `BloodFlow64`, `BloodVolume64`, `MILLILITER_PER_100_GRAM_PER_MINUTE`, `MILLILITER_PER_100_GRAM`, `CUBIC_METER_PER_KILOGRAM`, `BRAIN_DENSITY`, `HEMATOCRIT_FACTOR` and `MAX_FRAMES` |
 | `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
@@ -236,6 +237,27 @@ The tissue concentration is the arterial concentration convolved with `k(t) = F 
 `examples/perfusion.mojo` makes this picture. It makes a synthetic CT perfusion of 40 frames of the head phantom, with a stroke in the left hemisphere. The left panel is the CBF map from 0 to 80 mL/100 g/min. The middle panel is the Tmax map from 0 to 12 s. The right panel is the scan at the arterial peak. The core is red and the rest of the tissue at risk green.
 
 The truncation lowers the CBF of fast flows most, so the reference is 31 mL/100 g/min, not 55. The core is 1.6 mL, and 4.9 mL has a Tmax above 6 s. The mismatch ratio is 3.1.
+
+## Find vessels
+
+A vessel in an angiogram is a bright tube. The Hessian of the smoothed volume, its matrix of second derivatives, tells a tube from a blob and from a plate. Vessel research uses this vesselness to find and measure the vessels of the brain, the heart and the lungs.
+
+```mojo
+from extensions.imaging.vesselness import vesselness
+
+var scales: List[Length64] = [Length64(1.5, MILLIMETER64), Length64(2.5, MILLIMETER64)]
+var found = vesselness(angiogram, scales, 0.5, 0.5, None)
+```
+
+`hessian_eigenvalues(volume, sigma)` gives the three eigenvalues of the Hessian of each voxel at a scale, sorted by magnitude: `|l1| <= |l2| <= |l3|`. Inside a bright tube, l1 is near 0 along the tube, and l2 and l3 are large and negative across it. The values are in the unit of the volume per square millimeter.
+
+The Hessian is that of scikit-image's `hessian_matrix` with Gaussian derivatives. Two first derivatives of a Gaussian of `sigma / sqrt(2)` follow each other, as scipy's `gaussian_filter` makes them. The values reflect past each edge. Each kernel reaches 8 of its sigmas, or 100 when a sigma is 1 voxel or less. A scale is a length, so voxels that are not cubes take their own sigma in voxels along each axis.
+
+`vesselness(volume, sigmas, alpha, beta, gamma)` gives the measure of Frangi and others (1998) for bright tubes, from 0 to 1. With `Ra = l2 / l3`, `Rb = |l1| / sqrt(l2 l3)` and S the norm of the eigenvalues, it is `(1 - exp(-Ra^2 / (2 alpha^2))) exp(-Rb^2 / (2 beta^2)) (1 - exp(-S^2 / (2 gamma^2)))`. Ra is small for a plate, and Rb is large for a blob. The eigenvalues are those of the negated volume, and l2 and l3 are held at 1e-10 or more. The result is the largest value over the scales. Without a gamma, gamma is half the largest S at the first scale, as in scikit-image's `frangi`.
+
+![A synthetic angiogram with a vessel tree, a blob and a plate, and its vesselness](out/vesselness.png)
+
+`examples/vesselness.mojo` makes this picture. A trunk and three branches of 1.2 to 3 mm radius lie among a blob, a plate and noise. The left panel is the maximum intensity projection of the volume, and the right panel that of the vesselness on the hot scale. The tree stays bright, with a mean of 0.47 on the axis of the trunk. The blob falls to 0.04 and the inside of the plate to 0.003. The edges of the plate are thin ridges, so the measure takes them as tubes too.
 
 ## Measure diffusion
 
@@ -1111,6 +1133,9 @@ The tests check these results:
 - A well conditioned arterial curve, `0.5^j`, gives back an exact residue to 1e-15 with every singular value kept. A tissue curve delayed by 3 frames keeps its circular flow to 1e-11 and moves Tmax by 4.5 s. The lower triangular flow falls by 0.4 percent.
 - A flow of 0.01 a second gives a CBF of `0.01 x 6000 x 0.7333 / 1.04` mL/100 g/min, to 1e-14. The maps agree with the fits to the rounding of 32-bit values. A curve with no enhancement has no MTT.
 - The mismatch of six voxels of 8 mm^3 counts two of core and three at risk: a ratio of 1.5.
+- scikit-image 0.26 gives the Hessian eigenvalues of a synthetic volume with a tube, a blob and a plate. It gives them at 62 voxels, at scales of 1 and 2 voxels. `assets/vesselness/make_vesselness.py` writes them. They agree to 1e-10 of the largest eigenvalue of each voxel. On voxels of 1, 1 and 2 mm, the eigenvalues in mm^-2 agree to the same tolerance.
+- The vesselness at scales of 1, 2 and 3 mm agrees with `frangi` with `black_ridges=False` to 2e-7, the rounding of a 32-bit value. Its sum agrees to a relative 1e-6.
+- A ridge `-x^2` has the eigenvalues 0, 0 and -2, and a saddle `-(x^2 + x y)` has 0 and `-1 -+ sqrt(2)`, to 1e-8. A flat volume has no vesselness.
 - `numpy.polyfit` fits the T2 of 8 synthetic voxels with Rician noise, at 8 echo times. T2 and S0 agree to a relative 1e-12. `assets/relaxometry/make_relaxometry.py` makes the file.
 - scipy's `least_squares` fits the T1 of 8 synthetic voxels at 8 inversion times, for each count of negative signals, to 1e-15. T1, A and B agree to 1e-8, and the count of negative signals is the same.
 - An exact decay with a T2 of 50 ms gives it back to 1e-13. An exact recovery with a T1 of 800 ms, A 1000 and B 2000 gives them back to 1e-10. It has three negative signals before the null at 554.5 ms.
@@ -1237,6 +1262,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | The flow is not above 0 for an MTT, or the density or the hematocrit factor is not positive and finite | `PerfusionFit` |
 | A perfusion series has not one volume for each frame, volumes on different grids, or a bad label | `ct_concentration_series`, `perfusion_maps` |
 | A mismatch has a bad label, maps on another grid, a reference CBF or a Tmax that is not positive and finite, or a share that is not above 0 and below 1, or a ratio has a core of 0 | `perfusion_mismatch`, `PerfusionMismatch.ratio` |
+| A Hessian scale is not positive and finite or is more than 100 voxels along an axis, a vesselness has no scale, or alpha, beta or gamma is not positive and finite | `hessian_eigenvalues`, `vesselness` |
 | A tumor volume or the time between two scans is not positive and finite, or two volumes are equal for a doubling time | `doubling_time`, `growth_rate` |
 | A diameter has a bad label, the background or an empty label | `longest_diameter` |
 | A RECIST sum is out of its range, or a response is not valid | `recist_response`, `response_name` |
@@ -1269,6 +1295,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - The diffusion fits take one trace-weighted image for each b-value. They do not fit a tensor, the directions of diffusion, or the perfusion of IVIM at low b-values. They are least squares of ln S, without weights. A signal near the noise floor biases them, because Rician noise does not fall to 0.
 - The IVIM fit is segmented, not a joint fit of all four parameters. D* is uncertain with few low b-values or much noise, and the fit gives no error of its parameters.
 - The perfusion deconvolution truncates at one fixed threshold. It does not choose a threshold for each voxel by its oscillation, as oSVD does. The truncation lowers the CBF of fast flows most, so compare a CBF with a reference from the same scan. The arterial curve is one curve, chosen by the user, with no correction of partial volume. The DSC change of R2* takes no correction of the leakage of contrast. The core and Tmax thresholds come from trials of research. They are not a treatment decision.
+- Vesselness finds bright tubes only; negate a volume for dark ones. It also takes the edges of plates and the rims of blobs as tubes, and two vessels that touch as one. It is a measure for research, not a segmentation or a diagnosis.
 - The T2 fit is mono-exponential and unweighted in `ln S`, so stimulated echoes and the noise floor bias it. The T1 fit takes an ideal inversion recovery with a long repetition time. It does not fit a look-locker or variable flip angle series.
 - A longest diameter is between voxel centers in one slice of `k`. It does not measure across slices or along an oblique plane. The RECIST response covers target lesions only, by their sums. It does not judge new lesions, lymph nodes or non-target lesions.
 - Registration is rigid, with six parameters. It does not scale, shear or bend, so it does not follow breathing or soft tissue that changes shape. The simplex finds a nearby least point, so a start far from the answer can end at another one.
@@ -1300,6 +1327,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Ostergaard and others, "High resolution measurement of cerebral blood flow using intravascular tracer bolus passages. Part I: Mathematical approach and statistical analysis", Magnetic Resonance in Medicine, 1996.
 - Wu and others, on SVD with a block-circulant deconvolution matrix, insensitive to the arrival time of the tracer, Magnetic Resonance in Medicine, 2003.
 - Albers and others, "Thrombectomy for stroke at 6 to 16 hours with selection by perfusion imaging", New England Journal of Medicine, 2018.
+- Frangi, Niessen, Vincken and Viergever, "Multiscale vessel enhancement filtering", MICCAI, 1998.
 - ICRU Report 83, "Prescribing, Recording, and Reporting Photon-Beam Intensity-Modulated Radiation Therapy (IMRT)", 2010.
 - Zwanenburg and others, "The Image Biomarker Standardization Initiative", Radiology, 2020.
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.

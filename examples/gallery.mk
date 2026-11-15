@@ -275,6 +275,9 @@ $(call gallery,diffusion,diffusion)
 # A synthetic CT perfusion of a stroke in the head phantom: the CBF and
 # Tmax maps, and the ischemic core and the tissue at risk over the scan.
 $(call gallery,perfusion,perfusion)
+# A synthetic angiogram of a vessel tree, a blob and a plate, projected,
+# beside the projection of its Frangi vesselness.
+$(call gallery,vesselness,vesselness)
 # A synthetic five-beam dose over the head phantom CT, with isodose lines,
 # and the dose-volume histograms of a target and an organ at risk.
 $(call gallery,radiotherapy,radiotherapy)
