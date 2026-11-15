@@ -11,7 +11,6 @@ groups, checked against lifelines. See
 """
 
 from extensions.clinical.parametric import (
-    DurationUnit64,
     ParametricFit,
     constant_hazard_test,
     draw_fit,
@@ -19,9 +18,7 @@ from extensions.clinical.parametric import (
     fit_weibull,
 )
 from extensions.clinical.survival import (
-    DAY64,
     SurvivalCurve,
-    WEEK64,
     kaplan_meier,
     survival_image,
 )
@@ -36,7 +33,14 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64, PER_SECOND, SECOND
+from units.si import (
+    DAY64,
+    PER_SECOND,
+    SECOND,
+    WEEK64,
+    Duration64,
+    DurationUnit64,
+)
 
 
 def _close(a: Float64, b: Float64, tolerance: Float64) raises:

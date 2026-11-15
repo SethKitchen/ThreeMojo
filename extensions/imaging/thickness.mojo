@@ -25,10 +25,10 @@ the mean and the largest thickness of a label as lengths.
 """
 
 from extensions.imaging.ids import LabelId, require_label
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
 from std.math import ceil, floor, inf, max, min, sqrt
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 # A squared distance larger than any grid holds.
 comptime FAR = 1.0e30

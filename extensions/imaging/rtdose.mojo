@@ -41,11 +41,11 @@ from extensions.imaging.dicom import (
     read_dicom_tree,
 )
 from extensions.imaging.ids import DATA_SET
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.sdf.vector import V3, cross, dot, length, v3
 from std.math import floor
 from units.quantity import Quantity, Unit
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 # An absorbed dose: energy per mass. The gray is one joule per kilogram.
 comptime AbsorbedDose64 = Quantity[2, 0, -2, 0, 0, DType.float64]

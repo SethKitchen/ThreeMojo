@@ -19,7 +19,7 @@ from extensions.imaging.ids import (
     LabelId,
     SliceAxis,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.overlay import draw_line, render_slice, zoom_image
 from extensions.imaging.transfer import Rgba
@@ -33,7 +33,7 @@ from std.testing import (
     assert_true,
 )
 from extensions.sdf.vector import V3
-from units.si import Area64, Length64, METER, SQUARE_METER
+from units.si import METER, MILLIMETER64, SQUARE_METER, Area64, Length64
 
 comptime SQUARE_MM = 1e-6
 

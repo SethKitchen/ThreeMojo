@@ -43,7 +43,6 @@ from extensions.imaging.ids import (
     require_representation,
     require_syntax,
 )
-from extensions.imaging.image_volume import MILLIMETER64
 from extensions.sdf.vector import v3
 from std.pathlib import Path
 from std.testing import (
@@ -55,7 +54,7 @@ from std.testing import (
     assert_true,
 )
 from tests.test_scratch import TestScratch, temporary_path
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _sample() raises -> DicomSlice:

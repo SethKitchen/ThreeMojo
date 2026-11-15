@@ -26,7 +26,7 @@ diagnosis.
 from extensions.imaging.contour import draw_outlines, slice_outlines
 from extensions.imaging.curved import curved_reformat
 from extensions.imaging.ids import CORNERS, K_AXIS, LabelId, SLAB_MAXIMUM
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import keep_largest, threshold
 from extensions.imaging.overlay import render_slice, zoom_image
 from extensions.imaging.path import label_path, resample_path, smooth_path
@@ -39,7 +39,7 @@ from render.png import encode
 from std.math import cos, exp, pi, sin
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 comptime DEFAULT_OUTPUT = "out/vessel.png"
 comptime NX = 80

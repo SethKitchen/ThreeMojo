@@ -12,7 +12,7 @@ from extensions.imaging.ids import (
     FACES,
     LabelId,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import (
     LabelMap,
     keep_largest,
@@ -20,7 +20,7 @@ from extensions.imaging.labels import (
     region_grow,
 )
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _volume(n: Int) raises -> ImageVolume:

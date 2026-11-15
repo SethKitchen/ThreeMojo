@@ -7,7 +7,7 @@
 
 from extensions.imaging.fusion import hot_color, overlay_values
 from extensions.imaging.ids import I_AXIS, J_AXIS, K_AXIS, SliceAxis
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from render.framebuffer import Color, Framebuffer
 from std.math import inf, nan
 from std.testing import (
@@ -16,7 +16,7 @@ from std.testing import (
     assert_equal,
     assert_raises,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _mm() -> Length64:

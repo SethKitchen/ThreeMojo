@@ -10,9 +10,8 @@ synthetic curves. See `assets/perfusion/make_perfusion.py`.
 """
 
 from extensions.imaging.ids import LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
-from extensions.imaging.relaxometry import MILLISECOND64
 from extensions.imaging.perfusion import (
     BRAIN_DENSITY,
     BloodFlow64,
@@ -38,13 +37,15 @@ from std.testing import (
 )
 from units.si import (
     CUBIC_METER,
+    GRAM_PER_CUBIC_CENTIMETER,
+    MILLIMETER64,
+    MILLISECOND64,
+    PER_SECOND,
+    SECOND,
     Density64,
     Duration64,
     Frequency64,
-    GRAM_PER_CUBIC_CENTIMETER,
     Length64,
-    PER_SECOND,
-    SECOND,
 )
 
 

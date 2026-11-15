@@ -6,7 +6,7 @@
 """Curved planar reformats along a path."""
 
 from extensions.imaging.curved import curved_reformat
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.sdf.vector import V3, v3
 from std.math import inf
 from std.testing import (
@@ -15,7 +15,7 @@ from std.testing import (
     assert_equal,
     assert_raises,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 comptime MM = 0.001
 

@@ -6,7 +6,7 @@
 """NIfTI-1 volumes and label maps, read against nibabel's own files."""
 
 from extensions.imaging.ids import LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, threshold
 from extensions.imaging.nifti import (
     encode_nifti,
@@ -25,7 +25,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 
 def _mm(p: V3) -> V3:

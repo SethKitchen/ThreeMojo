@@ -29,15 +29,15 @@ maps them.
 """
 
 from extensions.imaging.diffusion import (
-    BValue64,
-    Diffusivity64,
     SECOND_PER_SQUARE_MILLIMETER,
     SQUARE_MICROMETER_PER_SECOND,
     SQUARE_MILLIMETER_PER_SECOND,
+    BValue64,
 )
 from extensions.imaging.image_volume import ImageVolume
 from std.math import exp, expm1, isfinite, log
 from extensions.numerics.elementary import precise_exp
+from units.si import Diffusivity64
 
 # The search of ln D* in mm^2/s, and its steps.
 comptime _LEAST_LOG_STAR = -5.809142990314028

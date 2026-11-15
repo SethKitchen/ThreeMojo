@@ -29,12 +29,11 @@ The periods are durations. The models mix the population evenly, with no
 age, place, birth or death.
 """
 
-from extensions.clinical.survival import DAY64
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Color, Framebuffer
 from std.math import exp, floor, isfinite, log
-from units.si import Duration64
+from units.si import DAY64, Duration64
 
 # The most steps of one epidemic.
 comptime MAX_STEPS = 1000000

@@ -25,7 +25,7 @@ the placement as sform rows, in millimeters.
 """
 
 from extensions.imaging.ids import LabelId, require_label
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
 from extensions.sdf.vector import V3, dot, length, v3
 from loaders.bytes import bytes_match
@@ -35,7 +35,7 @@ from render.deflate import deflate
 from std.math import floor, isfinite, max, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 comptime HEADER_SIZE = 348
 comptime DATA_OFFSET = 352

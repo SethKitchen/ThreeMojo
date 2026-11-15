@@ -13,7 +13,6 @@
 from extensions.clinical.survival import (
     LogRank,
     SurvivalCurve,
-    WEEK64,
     kaplan_meier,
     log_rank_test,
     survival_image,
@@ -29,7 +28,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64, SECOND
+from units.si import SECOND, WEEK64, Duration64
 
 comptime DRUG = (
     "6 6 6 6+ 7 9+ 10 10+ 11+ 13 16 17+ 19+ 20+ 22 23 25+ 32+ 32+ 34+ 35+"

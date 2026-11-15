@@ -18,8 +18,6 @@ from std.math import floor, isfinite, max, min
 from units.quantity import Unit
 from units.si import Length64, METER
 
-# A millimeter with a Float64 scale, so a DICOM length keeps every digit.
-comptime MILLIMETER64 = Unit[1, 0, 0, 0, 0, DType.float64](0.001, "mm")
 
 # The most voxels one volume can hold: 2^28, a 640 by 640 by 655 volume.
 comptime MAX_VOXELS = 268435456

@@ -18,7 +18,7 @@ Marker A has an AUC of 0.820, with a 95 percent interval from 0.751 to 0.890. Ma
 | `agreement` | `BlandAltman`, `bland_altman`, `bland_altman_image`, `Icc`, `IccTable`, `intraclass_correlation` and `LIMIT_FACTOR` |
 | `logistic` | `LogisticModel` and `logistic_regression` |
 | `kappa` | `Kappa`, `cohens_kappa`, `linear_weighted_kappa`, `quadratic_weighted_kappa`, `FleissKappa`, `fleiss_kappa`, `MAX_CATEGORIES` and `MAX_SUBJECTS` |
-| `rates` | `RateModel`, `poisson_regression`, `YEAR64` and `PER_YEAR64` |
+| `rates` | `RateModel` and `poisson_regression`. Rates are per `YEAR64`, from `units.si` |
 | `negbin` | `NegativeBinomialModel` and `negative_binomial_regression` |
 | `calibration` | `brier_score`, `scaled_brier_score`, `RiskGroup`, `risk_groups`, `HosmerLemeshow`, `hosmer_lemeshow`, `CalibrationFit`, `calibration_fit`, `recalibrate`, `net_benefit`, `DecisionCurve`, `decision_curve`, `calibration_image`, `decision_curve_image`, `MAX_GROUPS` and `MAX_THRESHOLDS` |
 | `proportions` | `Estimate`, `wilson_interval`, `exact_interval`, `DiagnosticAccuracy`, `diagnostic_accuracy`, `RiskComparison` and `compare_risks` |

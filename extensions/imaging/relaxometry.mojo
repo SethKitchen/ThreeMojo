@@ -30,11 +30,9 @@ from extensions.numerics.dense import (
 )
 from std.math import exp, expm1, isfinite, log
 from units.quantity import Unit
-from units.si import Duration64
+from units.si import MILLISECOND64, Duration64
 from extensions.numerics.elementary import precise_exp
 
-comptime MILLISECOND64 = Unit[0, 0, 1, 0, 0, DType.float64](1.0e-3, "ms")
-"""The millisecond, for 64-bit times."""
 # The search of log T1 in ms, and its steps.
 comptime _LEAST_LOG_T1 = 0.0
 comptime _MOST_LOG_T1 = 9.210340371976184

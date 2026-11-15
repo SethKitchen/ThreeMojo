@@ -10,19 +10,18 @@ signals. See `assets/diffusion/make_diffusion.py`.
 """
 
 from extensions.imaging.diffusion import (
-    AdcMaps,
-    BValue64,
-    Diffusivity64,
     SECOND_PER_SQUARE_MILLIMETER,
     SQUARE_MICROMETER_PER_SECOND,
     SQUARE_MILLIMETER_PER_SECOND,
+    AdcMaps,
+    BValue64,
     adc_maps,
     computed_dwi,
     fit_adc,
     fit_kurtosis,
     kurtosis_maps,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.sdf.vector import v3
 from std.math import expm1, inf, log, nan
 from std.testing import (
@@ -32,7 +31,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Diffusivity64, Length64
 
 
 struct _Rows(Movable):

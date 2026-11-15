@@ -34,10 +34,8 @@ from extensions.imaging.transfer import Rgba
 from render.framebuffer import Framebuffer
 from std.math import floor, inf, isfinite, log, sqrt
 from units.quantity import Unit
-from units.si import Duration64, Frequency64, PER_SECOND, SECOND
+from units.si import PER_SECOND, SECOND, Duration64, DurationUnit64, Frequency64
 
-comptime DurationUnit64 = Unit[0, 0, 1, 0, 0, DType.float64]
-"""A unit of a 64-bit time, such as `WEEK64`."""
 
 # The bisections of the Weibull shape, and the dash of a drawn model.
 comptime _BISECTIONS = 120

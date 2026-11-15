@@ -15,8 +15,7 @@ from extensions.clinical.competing import (
     cumulative_incidence,
     incidence_image,
 )
-from extensions.clinical.rates import YEAR64
-from extensions.clinical.survival import DAY64, kaplan_meier
+from extensions.clinical.survival import kaplan_meier
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Color, Framebuffer
@@ -29,7 +28,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64
+from units.si import DAY64, YEAR64, Duration64
 
 comptime BLUE = Rgba(0.2, 0.4, 0.8, 1)
 comptime RED = Rgba(0.8, 0.2, 0.2, 1)

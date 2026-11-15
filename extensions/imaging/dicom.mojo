@@ -58,9 +58,16 @@ from extensions.sdf.vector import V3, cross, dot, length, v3
 from std.collections import Dict
 from std.math import isfinite, max
 from std.pathlib import Path
-from extensions.imaging.image_volume import MILLIMETER64
 from units.quantity import Unit
-from units.si import Duration64, Frequency64, KILOGRAM, Length64, Mass64, SECOND
+from units.si import (
+    KILOGRAM,
+    MILLIMETER64,
+    SECOND,
+    Duration64,
+    Frequency64,
+    Length64,
+    Mass64,
+)
 
 # An activity: decays per second.
 comptime Activity64 = Frequency64

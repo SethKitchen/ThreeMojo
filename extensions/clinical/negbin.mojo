@@ -31,14 +31,14 @@ digamma function.
 
 from extensions.clinical.cox import chi_square_p_value
 from extensions.numerics.elementary import precise_exp
-from extensions.clinical.rates import RateModel, YEAR64, poisson_regression
+from extensions.clinical.rates import RateModel, poisson_regression
 from extensions.numerics.dense import (
     DenseMatrix,
     cholesky_inverse,
     cholesky_solve,
 )
 from std.math import lgamma, log, log1p, sqrt
-from units.si import Duration64
+from units.si import YEAR64, Duration64
 
 # The ends of the search of log(alpha), and its steps.
 comptime _LEAST_LOG_ALPHA = -18.420680743952367

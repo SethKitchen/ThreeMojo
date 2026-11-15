@@ -37,13 +37,9 @@ from extensions.imaging.transfer import Rgba
 from render.framebuffer import Color, Framebuffer
 from std.math import ceil, floor, isfinite, isinf, log, max
 from units.quantity import Unit
-from units.si import CUBIC_METER, METER, Volume64
+from units.si import CUBIC_CENTIMETER64, CUBIC_METER, METER, Volume64
 from extensions.numerics.elementary import precise_power
 
-# The cubic centimeter, or milliliter, of 64-bit volumes. The
-# `CUBIC_CENTIMETER` of `units.si` is 32-bit, so its scale is 1e-6 to 3e-9
-# only.
-comptime CUBIC_CENTIMETER64 = Unit[3, 0, 0, 0, 0, DType.float64](1.0e-6, "cm^3")
 
 # A count of voxels is rounded up past this part of a voxel only.
 comptime ROUNDING = 1.0e-9

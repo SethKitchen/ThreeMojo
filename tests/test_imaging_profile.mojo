@@ -5,7 +5,7 @@
 
 """Line profiles through a volume, and their full width at half maximum."""
 
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.measure import (
     LineProfile,
     full_width_half_maximum,
@@ -20,7 +20,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 
 def _mm(value: Float64) -> Length64:

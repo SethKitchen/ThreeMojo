@@ -38,11 +38,11 @@ from extensions.imaging.ids import (
     LabelId,
     TransferSyntax,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
 from extensions.imaging.rtstruct import RtStructure
 from extensions.sdf.vector import V3
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 comptime RT_STRUCTURE_SET_STORAGE = "1.2.840.10008.5.1.4.1.1.481.3"
 # The longest value of an explicit VR text element, in bytes.

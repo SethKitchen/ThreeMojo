@@ -10,8 +10,6 @@
 """
 
 from extensions.imaging.dce import (
-    MINUTE64,
-    PER_MINUTE64,
     ToftsFit,
     fit_tofts,
     parker_aif,
@@ -26,7 +24,7 @@ from extensions.imaging.ids import (
     ToftsModel,
     require_tofts_model,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from std.math import expm1, inf, nan
 from std.testing import (
@@ -36,7 +34,15 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64, Frequency64, Length64, SECOND
+from units.si import (
+    MILLIMETER64,
+    MINUTE64,
+    PER_MINUTE64,
+    SECOND,
+    Duration64,
+    Frequency64,
+    Length64,
+)
 
 
 def _curves() raises -> List[List[Float64]]:

@@ -36,7 +36,7 @@ from extensions.imaging.diffusion import (
     computed_dwi,
 )
 from extensions.imaging.ids import K_AXIS, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.measure import label_statistics
 from extensions.imaging.overlay import render_slice, zoom_image
@@ -46,7 +46,7 @@ from render.png import encode
 from std.math import cos, expm1, log, pi, sqrt
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 comptime DEFAULT_OUTPUT = "out/diffusion.png"
 comptime SIZE = 128

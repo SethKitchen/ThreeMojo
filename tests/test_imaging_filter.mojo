@@ -10,7 +10,7 @@ from extensions.imaging.filter import (
     gaussian_kernel,
     median_filter,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from std.math import exp, inf
 from std.testing import (
     TestSuite,
@@ -19,7 +19,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _mm(value: Float64) -> Length64:

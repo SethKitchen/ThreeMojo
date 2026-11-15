@@ -37,7 +37,7 @@ from extensions.fem.static import StaticProblem, solve_static
 from extensions.imaging.dicom import DicomSlice, parse_dicom
 from extensions.imaging.dicom_write import encode_dicom
 from extensions.imaging.ids import LabelId, RLE_LOSSLESS
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, label_surface, threshold
 from extensions.imaging.measure import label_statistics
 from extensions.imaging.series import stack_slices, volume_slices
@@ -56,15 +56,16 @@ from tools._example_output import (
     gallery_renderer,
 )
 from units.si import (
-    Angle,
     CUBIC_METER,
     DEGREE,
     GIGAPASCAL,
-    Length,
-    Length64,
     MEGAPASCAL,
     METER,
+    MILLIMETER64,
     PASCAL,
+    Angle,
+    Length,
+    Length64,
     Pressure64,
 )
 

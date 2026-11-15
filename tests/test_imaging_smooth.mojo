@@ -8,7 +8,7 @@
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from extensions.imaging.ids import LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, label_surface
 from extensions.imaging.smooth import (
     enclosed_volume,
@@ -25,7 +25,14 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import CUBIC_METER, Length, Length64, METER, SQUARE_METER
+from units.si import (
+    CUBIC_METER,
+    METER,
+    MILLIMETER64,
+    SQUARE_METER,
+    Length,
+    Length64,
+)
 
 
 comptime RADIUS = 5.0

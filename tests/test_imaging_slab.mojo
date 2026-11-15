@@ -12,7 +12,7 @@ from extensions.imaging.ids import (
     SlabMode,
     require_slab_mode,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.reformat import slab_projection
 from extensions.sdf.vector import V3, v3
 from std.math import inf
@@ -23,7 +23,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _mm(value: Float64) -> Length64:

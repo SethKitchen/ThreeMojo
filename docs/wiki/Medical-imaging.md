@@ -13,15 +13,15 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | Module | What it gives |
 |---|---|
 | `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity`, `LabelId`, `DicomNode`, `RegistrationMetric`, `ResponseCategory` and `ToftsModel` |
-| `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes, and `MILLIMETER64` |
+| `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes |
 | `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL`, `MEGABECQUEREL`, and `parse_dicom_tree` and `read_dicom_tree`, which give a `DicomTree` |
 | `rtstruct` | `RtStructure`, `parse_rt_structures`, `read_rt_structures` and `structure_labels` |
 | `rtstruct_write` | `label_structure`, `encode_rt_structures` and `RT_STRUCTURE_SET_STORAGE` |
 | `rtdose` | `RtDose`, `parse_rt_dose`, `read_rt_dose`, `AbsorbedDose64`, `GRAY` and `CENTIGRAY` |
-| `dvh` | `DoseVolumeHistogram`, `dose_volume_histogram`, `dvh_image` and `CUBIC_CENTIMETER64` |
-| `dce` | `tofts_curve`, `fit_tofts`, `ToftsFit`, `tofts_maps`, `ToftsMaps`, `parker_aif`, `MINUTE64` and `PER_MINUTE64` |
-| `diffusion` | `fit_adc`, `AdcFit`, `fit_kurtosis`, `KurtosisFit`, `adc_maps`, `AdcMaps`, `kurtosis_maps`, `KurtosisMaps`, `computed_dwi`, `Diffusivity64`, `BValue64`, `SQUARE_MILLIMETER_PER_SECOND`, `SQUARE_MICROMETER_PER_SECOND` and `SECOND_PER_SQUARE_MILLIMETER` |
-| `relaxometry` | `fit_t2`, `T2Fit`, `fit_t1`, `T1Fit`, `t2_maps`, `t1_maps`, `RelaxationMaps` and `MILLISECOND64` |
+| `dvh` | `DoseVolumeHistogram`, `dose_volume_histogram`, and `dvh_image` |
+| `dce` | `tofts_curve`, `fit_tofts`, `ToftsFit`, `tofts_maps`, `ToftsMaps`, and `parker_aif` |
+| `diffusion` | `fit_adc`, `AdcFit`, `fit_kurtosis`, `KurtosisFit`, `adc_maps`, `AdcMaps`, `kurtosis_maps`, `KurtosisMaps`, `computed_dwi`, `BValue64`, `SQUARE_MILLIMETER_PER_SECOND`, `SQUARE_MICROMETER_PER_SECOND` and `SECOND_PER_SQUARE_MILLIMETER` |
+| `relaxometry` | `fit_t2`, `T2Fit`, `fit_t1`, `T1Fit`, `t2_maps`, `t1_maps` and `RelaxationMaps` |
 | `ivim` | `fit_ivim`, `IvimFit`, `ivim_maps` and `IvimMaps` |
 | `vesselness` | `hessian_eigenvalues`, `vesselness` and `MAX_SIGMA_VOXELS` |
 | `perfusion` | `Deconvolution`, `PerfusionFit`, `ct_concentration`, `dsc_concentration`, `ct_concentration_series`, `perfusion_maps`, `PerfusionMaps`, `perfusion_mismatch`, `PerfusionMismatch`, `BloodFlow64`, `BloodVolume64`, `MILLILITER_PER_100_GRAM_PER_MINUTE`, `MILLILITER_PER_100_GRAM`, `CUBIC_METER_PER_KILOGRAM`, `BRAIN_DENSITY`, `HEMATOCRIT_FACTOR` and `MAX_FRAMES` |
@@ -35,7 +35,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `labels` | `LabelMap`, `threshold`, `region_grow`, `keep_largest`, `label_pieces`, `LabelPieces` and `label_surface` |
 | `measure` | `label_statistics`, `voxel_distance`, `line_profile`, `LineProfile` and `full_width_half_maximum` |
 | `shape` | `label_shape`, `LabelShape` and `slice_areas` |
-| `growth` | `doubling_time`, `growth_rate`, `longest_diameter`, `LongestDiameter`, `recist_response`, `response_name`, `DAY64` and `PER_DAY64` |
+| `growth` | `doubling_time`, `growth_rate`, `longest_diameter`, `LongestDiameter`, `recist_response`, and `response_name` |
 | `compare` | `compare_labels`, `LabelComparison`, `label_overlaps`, `LabelOverlap`, `mean_dice`, `surface_voxels` and `percentile` |
 | `roi` | `circle_statistics` and `RegionStatistics` |
 | `texture` | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` and `TextureFeatures` |

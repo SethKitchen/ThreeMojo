@@ -19,7 +19,7 @@ from extensions.imaging.ids import (
     RegistrationMetric,
     require_metric,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, threshold
 from extensions.imaging.phantom import shepp_logan
 from extensions.imaging.register import (
@@ -40,7 +40,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle64, DEGREE64, Length64, METER
+from units.si import DEGREE64, METER, MILLIMETER64, Angle64, Length64
 
 
 def _grid(

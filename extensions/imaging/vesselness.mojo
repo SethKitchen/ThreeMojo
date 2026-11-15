@@ -33,11 +33,11 @@ The scales are lengths, so a volume of voxels that are not cubes has its
 sigma in voxels along each axis.
 """
 
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.numerics.dense import DenseMatrix, symmetric_eigen
 from std.collections import Optional
 from std.math import expm1, isfinite, sqrt
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 from extensions.numerics.elementary import precise_exp
 
 comptime MAX_SIGMA_VOXELS = 100.0

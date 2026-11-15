@@ -20,11 +20,11 @@ less, by about one voxel.
 """
 
 from extensions.imaging.ids import BACKGROUND, LabelId, require_label
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.thickness import seed_distances
 from std.math import isfinite, sqrt
-from units.si import CUBIC_METER, Length64, METER, Volume64
+from units.si import CUBIC_METER, METER, MILLIMETER64, Length64, Volume64
 
 # Distances equal to the limit count as within it, to this relative
 # rounding.

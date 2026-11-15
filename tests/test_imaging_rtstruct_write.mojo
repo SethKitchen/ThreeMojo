@@ -15,7 +15,7 @@ from extensions.imaging.ids import (
     RLE_LOSSLESS,
     TransferSyntax,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.rtstruct import (
     RtStructure,
@@ -37,7 +37,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 
 def _volume() raises -> ImageVolume:

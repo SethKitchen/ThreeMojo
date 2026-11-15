@@ -29,7 +29,6 @@ from extensions.clinical.parametric import (
 )
 from extensions.clinical.survival import (
     SurvivalCurve,
-    WEEK64,
     kaplan_meier,
     survival_image,
 )
@@ -37,7 +36,7 @@ from extensions.imaging.transfer import Rgba
 from render.png import encode
 from std.pathlib import Path
 from tools._example_output import example_destination
-from units.si import Duration64
+from units.si import WEEK64, Duration64
 
 comptime DEFAULT_OUTPUT = "out/parametric.png"
 comptime DRUG = (

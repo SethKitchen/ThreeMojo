@@ -31,7 +31,6 @@ from extensions.imaging.ids import (
     TransferSyntax,
     UNSIGNED_PIXELS,
 )
-from extensions.imaging.image_volume import MILLIMETER64
 from extensions.sdf.vector import v3
 from std.testing import (
     TestSuite,
@@ -40,7 +39,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _expected(name: String) raises -> List[Float32]:

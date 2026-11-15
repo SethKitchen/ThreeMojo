@@ -6,7 +6,7 @@
 """The connected pieces of a label, numbered by size."""
 
 from extensions.imaging.ids import BACKGROUND, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, keep_largest, label_pieces
 from std.testing import (
     TestSuite,
@@ -15,7 +15,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import CUBIC_METER, Length64
+from units.si import CUBIC_METER, MILLIMETER64, Length64
 
 
 def _mm(value: Float64) -> Length64:

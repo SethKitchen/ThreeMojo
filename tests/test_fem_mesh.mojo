@@ -40,7 +40,7 @@ from extensions.fem.mesh import (
     voxel_mesh_labels,
 )
 from extensions.imaging.ids import BACKGROUND, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.sdf.vector import V3, cross, length, v3
 from std.math import inf, nan, sqrt
@@ -52,7 +52,14 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import GIGAPASCAL, Length64, METER, PASCAL, Pressure64
+from units.si import (
+    GIGAPASCAL,
+    METER,
+    MILLIMETER64,
+    PASCAL,
+    Length64,
+    Pressure64,
+)
 
 
 def _m(value: Float64) -> Length64:

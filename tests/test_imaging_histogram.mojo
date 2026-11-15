@@ -14,7 +14,7 @@ from extensions.imaging.histogram import (
     volume_histogram,
 )
 from extensions.imaging.ids import BACKGROUND, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, threshold
 from std.math import inf, nan
 from std.testing import (
@@ -24,7 +24,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _row(values: List[Float32]) raises -> ImageVolume:

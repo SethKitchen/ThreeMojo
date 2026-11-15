@@ -17,7 +17,6 @@ labels and one measurement over it.
 from extensions.imaging.dicom import DicomSlice, parse_dicom
 from extensions.imaging.dicom_write import encode_dicom
 from extensions.imaging.ids import COMPOSITE, ISOSURFACE, K_AXIS, LabelId
-from extensions.imaging.image_volume import MILLIMETER64
 from extensions.imaging.labels import (
     LabelMap,
     keep_largest,
@@ -44,7 +43,7 @@ from render.framebuffer import Color, Framebuffer
 from render.png import encode
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
-from units.si import Angle64, DEGREE64, Length64
+from units.si import DEGREE64, MILLIMETER64, Angle64, Length64
 
 comptime DEFAULT_OUTPUT = "out/medical-imaging.png"
 comptime SIZE = 128

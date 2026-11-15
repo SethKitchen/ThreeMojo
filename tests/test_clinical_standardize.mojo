@@ -10,7 +10,6 @@ and directly standardized rates.
 and statsmodels. See `assets/standardize/make_standardize.py`.
 """
 
-from extensions.clinical.rates import PER_YEAR64, YEAR64
 from extensions.clinical.standardize import (
     direct_rate,
     expected_events,
@@ -26,7 +25,7 @@ from std.testing import (
     assert_equal,
     assert_raises,
 )
-from units.si import Duration64, Frequency64
+from units.si import PER_YEAR64, YEAR64, Duration64, Frequency64
 
 
 def _close(a: Float64, b: Float64, tolerance: Float64) raises:

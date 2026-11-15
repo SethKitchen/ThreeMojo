@@ -32,7 +32,7 @@ from extensions.imaging.dicom import MEGABECQUEREL, PetDose
 from extensions.imaging.filter import gaussian_filter
 from extensions.imaging.fusion import overlay_values
 from extensions.imaging.ids import K_AXIS, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import keep_largest, threshold
 from extensions.imaging.overlay import render_slice, zoom_image
 from extensions.imaging.phantom import phantom_value, shepp_logan
@@ -50,13 +50,14 @@ from render.png import encode
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
 from units.si import (
-    Duration64,
     GRAM_PER_CUBIC_CENTIMETER,
     KILOGRAM,
+    METER,
+    MILLIMETER64,
+    SECOND,
+    Duration64,
     Length64,
     Mass64,
-    METER,
-    SECOND,
 )
 
 comptime DEFAULT_OUTPUT = "out/fusion.png"

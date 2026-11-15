@@ -14,7 +14,7 @@ from extensions.imaging.diffusion import (
     SECOND_PER_SQUARE_MILLIMETER,
     SQUARE_MILLIMETER_PER_SECOND,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.ivim import fit_ivim, ivim_maps
 from std.math import expm1, inf, nan
 from std.testing import (
@@ -23,7 +23,7 @@ from std.testing import (
     assert_equal,
     assert_raises,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _b(values: List[Float64]) -> List[BValue64]:

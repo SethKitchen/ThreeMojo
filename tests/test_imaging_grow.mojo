@@ -7,10 +7,10 @@
 
 from extensions.imaging.grow import confidence_connected
 from extensions.imaging.ids import BACKGROUND, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from std.math import inf, nan, sin
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _volume(n: Int) raises -> ImageVolume:

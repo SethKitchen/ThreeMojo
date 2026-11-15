@@ -10,12 +10,7 @@ on the synthetic strata of `assets/rates/strata.txt`. See
 `assets/rates/make_rates.py`.
 """
 
-from extensions.clinical.rates import (
-    PER_YEAR64,
-    RateModel,
-    YEAR64,
-    poisson_regression,
-)
+from extensions.clinical.rates import RateModel, poisson_regression
 from std.math import exp, inf, log, nan
 from std.testing import (
     TestSuite,
@@ -25,7 +20,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64
+from units.si import PER_YEAR64, YEAR64, Duration64
 
 
 def _numbers(line: String) raises -> List[Float64]:

@@ -19,13 +19,13 @@
 """
 
 from std.math import erfc, exp, isfinite, log, pi, sqrt
-from extensions.chemistry.kinetics import Diffusivity64
 from extensions.chemistry.quantities import GAS_CONSTANT, MolarMass64
 from extensions.chemistry.reaction import Reaction, product, reactant
 from extensions.chemistry.thermo import Substance
 from units.quantity import Quantity
 from units.si import (
     Area64,
+    Diffusivity64,
     Duration64,
     Length64,
     Mass64,

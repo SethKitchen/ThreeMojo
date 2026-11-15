@@ -15,15 +15,17 @@ The pound per square foot, the kip and the other units of
 """
 
 from units.quantity import Unit
+from units.si import (
+    AreaUnit64,
+    ForceUnit64,
+    InertiaUnit64,
+    LineLoadUnit64,
+    MomentUnit64,
+    PressureUnit64,
+    VelocityUnit64,
+    VolumeUnit64,
+)
 
-comptime ForceUnit64 = Unit[1, 1, -2, 0, 0, DType.float64]
-comptime MomentUnit64 = Unit[2, 1, -2, 0, 0, DType.float64]
-comptime PressureUnit64 = Unit[-1, 1, -2, 0, 0, DType.float64]
-comptime AreaUnit64 = Unit[2, 0, 0, 0, 0, DType.float64]
-comptime VolumeUnit64 = Unit[3, 0, 0, 0, 0, DType.float64]
-comptime InertiaUnit64 = Unit[4, 0, 0, 0, 0, DType.float64]
-comptime VelocityUnit64 = Unit[1, 0, -1, 0, 0, DType.float64]
-comptime LineLoadUnit64 = Unit[0, 1, -2, 0, 0, DType.float64]
 
 # The pound force.
 comptime POUND64 = ForceUnit64(4.4482216152605, "lb")

@@ -9,14 +9,8 @@
 synthetic signals. See `assets/relaxometry/make_relaxometry.py`.
 """
 
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
-from extensions.imaging.relaxometry import (
-    MILLISECOND64,
-    fit_t1,
-    fit_t2,
-    t1_maps,
-    t2_maps,
-)
+from extensions.imaging.image_volume import ImageVolume
+from extensions.imaging.relaxometry import fit_t1, fit_t2, t1_maps, t2_maps
 from std.math import exp, expm1, inf, nan
 from std.testing import (
     TestSuite,
@@ -25,7 +19,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64, Length64
+from units.si import MILLIMETER64, MILLISECOND64, Duration64, Length64
 
 
 struct _Rows(Movable):

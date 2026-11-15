@@ -17,7 +17,6 @@ from extensions.clinical.epidemic import (
     seir,
     sir,
 )
-from extensions.clinical.survival import DAY64
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Framebuffer
 from std.math import inf, nan
@@ -28,7 +27,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64
+from units.si import DAY64, Duration64
 
 
 def _days(value: Float64) -> Duration64:

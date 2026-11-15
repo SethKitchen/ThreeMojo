@@ -38,12 +38,12 @@ from extensions.imaging.ids import (
     LabelId,
     require_label,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.sdf.vector import V3, v3
 from std.collections import Dict
 from std.math import ceil, floor, max, min
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 
 struct RtStructure(Copyable, Movable):

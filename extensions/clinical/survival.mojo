@@ -34,9 +34,6 @@ from std.math import erfc, exp, floor, inf, isfinite, log, sqrt
 from units.quantity import Unit
 from units.si import Duration64, SECOND
 
-# The day and the week, for 64-bit times.
-comptime DAY64 = Unit[0, 0, 1, 0, 0, DType.float64](86400.0, "d")
-comptime WEEK64 = Unit[0, 0, 1, 0, 0, DType.float64](604800.0, "wk")
 # The normal quantile of a two-sided 95 percent interval.
 comptime Z95 = 1.959963984540054
 

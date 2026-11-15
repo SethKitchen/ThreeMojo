@@ -45,12 +45,9 @@ from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
 from std.math import exp, expm1, isfinite, log, max, min, pi, sqrt
 from units.quantity import Unit
-from units.si import Duration64, Frequency64
+from units.si import MINUTE64, PER_MINUTE64, Duration64, Frequency64
 from extensions.numerics.elementary import precise_exp
 
-# The minute, and one each minute, for 64-bit times and rates.
-comptime MINUTE64 = Unit[0, 0, 1, 0, 0, DType.float64](60.0, "min")
-comptime PER_MINUTE64 = Unit[0, 0, -1, 0, 0, DType.float64](1.0 / 60.0, "1/min")
 # Below this `kep` times a step, the convolution takes a series.
 comptime SMALL = 1.0e-3
 # The search of `kep`, a minute.

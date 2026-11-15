@@ -25,16 +25,14 @@ counts often show. Then multiply the standard errors by its square root.
 """
 
 from extensions.numerics.elementary import precise_exp
-from extensions.clinical.survival import DAY64, Z95
+from extensions.clinical.survival import Z95
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Color, Framebuffer
 from std.math import floor, isfinite, log, sqrt
 from units.quantity import Unit
-from units.si import Duration64, Frequency64
+from units.si import DAY64, PER_DAY64, Duration64, Frequency64
 
-# A rate per day, for 64-bit rates.
-comptime PER_DAY64 = Unit[0, 0, -1, 0, 0, DType.float64](1.0 / 86400.0, "1/d")
 # The most counts of one fit.
 comptime MAX_COUNTS = 100000
 

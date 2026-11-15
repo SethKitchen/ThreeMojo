@@ -14,7 +14,7 @@ from extensions.imaging.compare import (
     surface_voxels,
 )
 from extensions.imaging.ids import BACKGROUND, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from std.math import inf, nan, sqrt
 from std.testing import (
@@ -24,7 +24,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import CUBIC_METER, Length64, METER
+from units.si import CUBIC_METER, METER, MILLIMETER64, Length64
 
 comptime MM = 0.001
 

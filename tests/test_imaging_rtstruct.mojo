@@ -23,7 +23,7 @@ from extensions.imaging.ids import (
     RLE_LOSSLESS,
     TransferSyntax,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.rtstruct import (
     RtStructure,
     parse_rt_structures,
@@ -40,7 +40,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _expected() raises -> List[List[String]]:

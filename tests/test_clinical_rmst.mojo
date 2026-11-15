@@ -16,7 +16,7 @@ from extensions.clinical.rmst import (
     nelson_aalen,
     restricted_mean,
 )
-from extensions.clinical.survival import WEEK64, kaplan_meier
+from extensions.clinical.survival import kaplan_meier
 from std.math import inf, nan, sqrt
 from std.testing import (
     TestSuite,
@@ -24,7 +24,7 @@ from std.testing import (
     assert_equal,
     assert_raises,
 )
-from units.si import Duration64
+from units.si import WEEK64, Duration64
 
 comptime DRUG = (
     "6 6 6 6+ 7 9+ 10 10+ 11+ 13 16 17+ 19+ 20+ 22 23 25+ 32+ 32+ 34+ 35+"

@@ -6,7 +6,7 @@
 """The values inside a circle on a slice."""
 
 from extensions.imaging.ids import I_AXIS, J_AXIS, K_AXIS, SliceAxis
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.roi import circle_statistics
 from std.math import inf, nan, sqrt
 from std.testing import (
@@ -15,7 +15,7 @@ from std.testing import (
     assert_equal,
     assert_raises,
 )
-from units.si import Length64, SQUARE_METER
+from units.si import MILLIMETER64, SQUARE_METER, Length64
 
 comptime MM = 0.001
 

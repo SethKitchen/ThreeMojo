@@ -29,7 +29,7 @@ without them.
 
 from extensions.clinical.cox import MAX_COVARIATES, chi_square_p_value
 from extensions.numerics.elementary import LN2, precise_exp
-from extensions.clinical.parametric import DurationUnit64, fit_weibull
+from extensions.clinical.parametric import fit_weibull
 from extensions.clinical.survival import Z95, require_group
 from extensions.numerics.dense import (
     DenseMatrix,
@@ -37,7 +37,7 @@ from extensions.numerics.dense import (
     cholesky_solve,
 )
 from std.math import erfc, inf, isfinite, log, sqrt
-from units.si import Duration64, SECOND
+from units.si import SECOND, Duration64, DurationUnit64
 
 # The most halvings of one Newton step, and the log-likelihood that a step
 # may lose, relative, to roundoff.

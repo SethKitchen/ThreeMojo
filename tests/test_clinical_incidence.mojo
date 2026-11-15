@@ -11,13 +11,11 @@ statsmodels 0.15.0 on the synthetic counts of
 """
 
 from extensions.clinical.incidence import (
-    PER_DAY64,
     GrowthFit,
     growth_rate,
     incidence_image,
     reproduction_number,
 )
-from extensions.clinical.survival import DAY64
 from render.framebuffer import Framebuffer
 from std.math import inf, log, nan
 from std.testing import (
@@ -28,7 +26,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64, Frequency64
+from units.si import DAY64, PER_DAY64, Duration64, Frequency64
 
 
 def _days(value: Float64) -> Duration64:

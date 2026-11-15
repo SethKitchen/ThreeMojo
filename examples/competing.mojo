@@ -28,13 +28,12 @@ from extensions.clinical.competing import (
     cumulative_incidence,
     incidence_image,
 )
-from extensions.clinical.rates import YEAR64
 from extensions.imaging.transfer import Rgba
 from render.png import encode
 from std.math import log
 from std.pathlib import Path
 from tools._example_output import example_destination
-from units.si import Duration64
+from units.si import YEAR64, Duration64
 
 comptime DEFAULT_OUTPUT = "out/competing.png"
 comptime PATIENTS = 400

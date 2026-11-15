@@ -13,7 +13,7 @@ With no vaccination, 14.4 percent of the population is infectious at the peak, o
 | Module | What it gives |
 |---|---|
 | `epidemic` | `EpidemicCurve`, `seir`, `sir`, `final_susceptible`, `herd_immunity`, `epidemic_image` and `MAX_STEPS` |
-| `incidence` | `GrowthFit`, `growth_rate`, `reproduction_number`, `incidence_image`, `PER_DAY64` and `MAX_COUNTS` |
+| `incidence` | `GrowthFit`, `growth_rate`, `reproduction_number`, `incidence_image` and `MAX_COUNTS` |
 
 ## The models
 

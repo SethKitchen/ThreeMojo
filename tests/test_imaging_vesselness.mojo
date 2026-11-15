@@ -11,7 +11,7 @@ for a synthetic volume, which `_volume` makes again. See
 """
 
 from extensions.numerics.elementary import precise_exp
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.vesselness import hessian_eigenvalues, vesselness
 from std.collections import Optional
 from std.math import inf, nan, sqrt
@@ -22,7 +22,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 comptime NX = 20
 comptime NY = 18

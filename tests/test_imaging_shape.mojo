@@ -13,7 +13,7 @@ from extensions.imaging.ids import (
     LabelId,
     SliceAxis,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.shape import label_shape, slice_areas
 from extensions.sdf.vector import dot, v3
@@ -25,7 +25,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import CUBIC_METER, Length64, METER, SQUARE_METER
+from units.si import CUBIC_METER, METER, MILLIMETER64, SQUARE_METER, Length64
 
 comptime MM = 0.001
 

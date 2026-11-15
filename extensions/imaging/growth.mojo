@@ -44,24 +44,22 @@ from extensions.imaging.ids import (
     require_label,
     require_response,
 )
-from extensions.imaging.image_volume import MILLIMETER64
 from extensions.imaging.labels import LabelMap
 from std.math import isfinite, log, sqrt
 from units.quantity import Unit
 from units.si import (
     CUBIC_METER,
+    METER,
+    MILLIMETER64,
+    PER_DAY64,
+    PER_SECOND64,
+    SECOND,
     Duration64,
     Frequency64,
     Length64,
-    METER,
-    SECOND,
     Volume64,
 )
 
-# The day, and the rate of one each day, for 64-bit times and rates.
-comptime DAY64 = Unit[0, 0, 1, 0, 0, DType.float64](86400.0, "d")
-comptime PER_DAY64 = Unit[0, 0, -1, 0, 0, DType.float64](1.0 / 86400.0, "1/d")
-comptime PER_SECOND64 = Unit[0, 0, -1, 0, 0, DType.float64](1.0, "1/s")
 # The RECIST thresholds hold to this part of the sums.
 comptime ROUNDING = 1.0e-9
 

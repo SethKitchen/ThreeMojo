@@ -27,7 +27,7 @@ from extensions.fem.modal import natural_modes
 from extensions.fem.post import mode_geometry
 from extensions.fem.static import StaticProblem
 from extensions.imaging.ids import LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from materials.material import Material, PHONG
 from math.vector3 import Vector3
@@ -43,15 +43,16 @@ from tools._example_output import (
     gallery_renderer,
 )
 from units.si import (
-    Angle,
     DEGREE,
-    Density64,
     GIGAPASCAL,
     KILOGRAM_PER_CUBIC_METER,
+    METER,
+    MILLIMETER64,
+    PER_SECOND,
+    Angle,
+    Density64,
     Length,
     Length64,
-    METER,
-    PER_SECOND,
     Pressure64,
 )
 

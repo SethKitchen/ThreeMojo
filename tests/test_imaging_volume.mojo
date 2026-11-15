@@ -9,9 +9,8 @@ from extensions.imaging.dicom import DicomSlice, parse_dicom
 from extensions.imaging.dicom_write import encode_dicom
 from extensions.imaging.ids import MONOCHROME1
 from extensions.imaging.image_volume import (
-    ImageVolume,
     MAX_VOXELS,
-    MILLIMETER64,
+    ImageVolume,
     require_grid,
     require_spacing,
 )
@@ -31,7 +30,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 
 def _mm(value: Float64) -> Length64:

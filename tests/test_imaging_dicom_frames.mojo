@@ -30,7 +30,7 @@ from extensions.imaging.ids import (
     SIGNED_PIXELS,
     TransferSyntax,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.series import stack_slices, volume_slices
 from extensions.sdf.vector import v3
 from std.pathlib import Path
@@ -42,7 +42,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _expected(name: String) raises -> List[Float32]:

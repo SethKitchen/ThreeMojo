@@ -7,7 +7,7 @@
 
 from extensions.imaging.gap import distance_from_label, label_gap, volume_within
 from extensions.imaging.ids import BACKGROUND, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.measure import label_statistics
 from std.math import inf, sqrt
@@ -17,7 +17,7 @@ from std.testing import (
     assert_equal,
     assert_raises,
 )
-from units.si import CUBIC_METER, Length64, METER
+from units.si import CUBIC_METER, METER, MILLIMETER64, Length64
 
 
 def _map() raises -> LabelMap:

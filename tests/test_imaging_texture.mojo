@@ -13,7 +13,7 @@ from extensions.imaging.ids import (
     LabelId,
     SliceAxis,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.texture import (
     cooccurrence_matrix,
@@ -27,7 +27,7 @@ from std.testing import (
     assert_equal,
     assert_raises,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _checker() raises -> Tuple[ImageVolume, LabelMap]:

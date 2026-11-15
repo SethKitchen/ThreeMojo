@@ -6,7 +6,7 @@
 """Oblique multiplanar reformats of image volumes."""
 
 from extensions.imaging.ids import K_AXIS, MONOCHROME1
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.overlay import render_slice
 from extensions.imaging.reformat import oblique_slice
 from extensions.sdf.vector import V3, normalize, v3
@@ -18,7 +18,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 
 def _field(p: V3) -> Float64:

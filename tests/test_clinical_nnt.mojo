@@ -11,7 +11,7 @@ for the 6-MP trial. See `assets/survival/make_nnt.py`.
 """
 
 from extensions.clinical.nnt import SurvivalDifference, survival_difference
-from extensions.clinical.survival import WEEK64, kaplan_meier
+from extensions.clinical.survival import kaplan_meier
 from std.math import inf, isinf, sqrt
 from std.testing import (
     TestSuite,
@@ -20,7 +20,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64
+from units.si import WEEK64, Duration64
 
 
 def _group(text: String) raises -> Tuple[List[Duration64], List[Bool]]:

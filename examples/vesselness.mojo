@@ -25,7 +25,7 @@ center of the blob and in the plate.
 
 from extensions.imaging.fusion import hot_color
 from extensions.imaging.ids import K_AXIS
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.overlay import render_slice, zoom_image
 from extensions.imaging.vesselness import vesselness
 from render.framebuffer import Color, Framebuffer
@@ -34,7 +34,7 @@ from std.collections import Optional
 from std.math import cos, expm1, log, pi, sqrt
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 from extensions.numerics.elementary import precise_exp
 
 comptime DEFAULT_OUTPUT = "out/vesselness.png"

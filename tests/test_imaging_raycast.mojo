@@ -12,7 +12,7 @@ from extensions.imaging.ids import (
     MONOCHROME1,
     RenderMode,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.raycast import (
     VolumeCamera,
     _crossing,
@@ -39,7 +39,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle64, DEGREE64, Length64
+from units.si import DEGREE64, MILLIMETER64, Angle64, Length64
 
 
 def test_window_level() raises:

@@ -11,7 +11,6 @@ values of statsmodels. See `assets/rates/make_negbin.py`.
 
 from extensions.numerics.elementary import precise_exp
 from extensions.clinical.negbin import negative_binomial_regression
-from extensions.clinical.rates import PER_YEAR64, YEAR64
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -19,7 +18,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64
+from units.si import PER_YEAR64, YEAR64, Duration64
 
 
 def _close(a: Float64, b: Float64, tolerance: Float64) raises:

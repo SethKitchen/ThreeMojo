@@ -24,12 +24,11 @@ from extensions.clinical.epidemic import (
     herd_immunity,
     seir,
 )
-from extensions.clinical.survival import DAY64
 from extensions.imaging.transfer import Rgba
 from render.png import encode
 from std.pathlib import Path
 from tools._example_output import example_destination
-from units.si import Duration64
+from units.si import DAY64, Duration64
 
 comptime DEFAULT_OUTPUT = "out/epidemic.png"
 comptime R0 = 2.5

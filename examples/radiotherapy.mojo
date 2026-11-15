@@ -37,7 +37,6 @@ from extensions.imaging.contour import (
 )
 from extensions.imaging.dicom_write import DicomWriter
 from extensions.imaging.dvh import (
-    CUBIC_CENTIMETER64,
     DoseVolumeHistogram,
     dose_volume_histogram,
     dvh_image,
@@ -48,7 +47,7 @@ from extensions.imaging.ids import (
     K_AXIS,
     LabelId,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.overlay import render_slice, zoom_image
 from extensions.imaging.phantom import phantom_value, shepp_logan
@@ -62,7 +61,7 @@ from render.png import encode
 from std.math import cos, exp, pi, sin, sqrt
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
-from units.si import Length64, Volume64
+from units.si import CUBIC_CENTIMETER64, MILLIMETER64, Length64, Volume64
 
 comptime DEFAULT_OUTPUT = "out/radiotherapy.png"
 comptime SIZE = 128

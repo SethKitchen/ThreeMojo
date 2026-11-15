@@ -35,9 +35,8 @@ from extensions.imaging.image_volume import ImageVolume
 from std.math import expm1, isfinite, log
 from units.quantity import Quantity, Unit
 from extensions.numerics.elementary import precise_exp
+from units.si import Diffusivity64
 
-comptime Diffusivity64 = Quantity[2, 0, -1, 0, 0, DType.float64]
-"""An area each second: a diffusion coefficient."""
 comptime BValue64 = Quantity[-2, 0, 1, 0, 0, DType.float64]
 """A time over an area: the diffusion weighting of an image."""
 comptime SQUARE_MILLIMETER_PER_SECOND = Unit[2, 0, -1, 0, 0, DType.float64](

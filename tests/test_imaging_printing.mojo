@@ -7,7 +7,7 @@
 
 from core.buffer_geometry import BufferGeometry
 from extensions.imaging.ids import BACKGROUND, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.printing import label_stl, printable_stl
 from extensions.imaging.smooth import enclosed_volume, smooth_surface
@@ -21,7 +21,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import CUBIC_METER, Length, Length64, METER
+from units.si import CUBIC_METER, METER, MILLIMETER64, Length, Length64
 
 
 def test_a_box_prints_in_millimeters() raises:

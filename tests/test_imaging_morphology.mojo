@@ -6,7 +6,7 @@
 """Dilation, erosion, opening and closing of labels by a ball."""
 
 from extensions.imaging.ids import BACKGROUND, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.morphology import (
     close_label,
@@ -23,7 +23,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64, METER
+from units.si import METER, MILLIMETER64, Length64
 
 
 def _mm(value: Float64) -> Length64:

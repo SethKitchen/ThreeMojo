@@ -30,10 +30,8 @@ diagnosis.
 """
 
 from extensions.imaging.contour import draw_outlines, slice_outlines
-from extensions.imaging.dvh import CUBIC_CENTIMETER64
 from extensions.imaging.filter import gaussian_filter
 from extensions.imaging.growth import (
-    DAY64,
     LongestDiameter,
     doubling_time,
     longest_diameter,
@@ -41,7 +39,7 @@ from extensions.imaging.growth import (
     response_name,
 )
 from extensions.imaging.ids import K_AXIS, LabelId, MEAN_SQUARES
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, region_grow
 from extensions.imaging.overlay import (
     draw_measurement,
@@ -63,7 +61,16 @@ from render.png import encode
 from std.math import cos, max, min, sin
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
-from units.si import Angle64, DEGREE64, Duration64, Length64, METER
+from units.si import (
+    CUBIC_CENTIMETER64,
+    DAY64,
+    DEGREE64,
+    METER,
+    MILLIMETER64,
+    Angle64,
+    Duration64,
+    Length64,
+)
 
 comptime DEFAULT_OUTPUT = "out/longitudinal.png"
 comptime SIZE = 128

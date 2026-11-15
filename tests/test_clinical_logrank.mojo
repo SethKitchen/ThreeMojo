@@ -11,14 +11,14 @@ See `assets/survival/make_groups.py`.
 """
 
 from extensions.clinical.logrank import GroupLogRank, log_rank_groups
-from extensions.clinical.survival import WEEK64, log_rank_test
+from extensions.clinical.survival import log_rank_test
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
     assert_raises,
 )
-from units.si import Duration64
+from units.si import WEEK64, Duration64
 
 
 def _arm(text: String) raises -> Tuple[List[Duration64], List[Bool]]:

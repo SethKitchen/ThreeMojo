@@ -44,7 +44,7 @@ diagnosis, and it does not give a treatment decision.
 
 from extensions.imaging.fusion import hot_color
 from extensions.imaging.ids import K_AXIS, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.overlay import overlay_labels, render_slice, zoom_image
 from extensions.imaging.perfusion import (
@@ -65,11 +65,13 @@ from std.math import cos, expm1, log, pi, sqrt
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
 from units.si import (
+    CUBIC_CENTIMETER64,
+    GRAM_PER_CUBIC_CENTIMETER,
+    MILLIMETER64,
+    SECOND,
     Density64,
     Duration64,
-    GRAM_PER_CUBIC_CENTIMETER,
     Length64,
-    SECOND,
 )
 from units.quantity import Unit
 from extensions.numerics.elementary import precise_exp
@@ -98,7 +100,6 @@ comptime BRAIN = 4
 comptime RISK = 5
 comptime CORE = 6
 comptime TISSUES = 7
-comptime MILLILITER = Unit[3, 0, 0, 0, 0, DType.float64](1.0e-6, "mL")
 
 
 struct _Noise(Movable):
@@ -302,16 +303,16 @@ def main() raises:
     )
     print(
         "Core (CBF below 30 percent):",
-        found.core.to(MILLILITER),
+        found.core.to(CUBIC_CENTIMETER64),
         "mL; Tmax above 6 s:",
-        found.hypoperfused.to(MILLILITER),
+        found.hypoperfused.to(CUBIC_CENTIMETER64),
         "mL",
     )
     print(
         "Mismatch ratio",
         found.ratio(),
         "; mismatch volume",
-        found.difference().to(MILLILITER),
+        found.difference().to(CUBIC_CENTIMETER64),
         "mL",
     )
     print("Wrote", destination)

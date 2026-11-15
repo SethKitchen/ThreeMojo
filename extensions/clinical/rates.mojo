@@ -33,13 +33,8 @@ from extensions.numerics.dense import (
 )
 from std.math import erfc, isfinite, log, sqrt
 from units.quantity import Unit
-from units.si import Duration64, Frequency64
+from units.si import PER_YEAR64, YEAR64, Duration64, Frequency64
 
-# The Julian year of 365.25 days, and a rate per year.
-comptime YEAR64 = Unit[0, 0, 1, 0, 0, DType.float64](31557600.0, "yr")
-comptime PER_YEAR64 = Unit[0, 0, -1, 0, 0, DType.float64](
-    1.0 / 31557600.0, "1/yr"
-)
 comptime _SQRT_TWO = 1.4142135623730951
 
 

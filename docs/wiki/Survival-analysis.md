@@ -14,14 +14,14 @@ A Cox model gives the placebo a hazard ratio of 4.82, with a 95 percent interval
 
 | Module | What it gives |
 |---|---|
-| `survival` | `SurvivalCurve`, `kaplan_meier`, `LogRank`, `log_rank_test`, `survival_image`, `require_group`, `DAY64` and `WEEK64` |
+| `survival` | `SurvivalCurve`, `kaplan_meier`, `LogRank`, `log_rank_test`, `survival_image` and `require_group` |
 | `cox` | `CoxModel`, `cox_regression`, `chi_square_p_value` and `MAX_COVARIATES` |
 | `logrank` | `GroupLogRank`, `log_rank_groups` and `MAX_GROUPS` |
 | `rmst` | `CumulativeHazard`, `nelson_aalen`, `RestrictedMean`, `restricted_mean`, `RestrictedComparison` and `compare_restricted_means` |
 | `competing` | `CumulativeIncidence`, `cumulative_incidence` and `incidence_image` |
 | `nnt` | `SurvivalDifference` and `survival_difference` |
 | `aft` | `WeibullRegression` and `weibull_regression` |
-| `parametric` | `ParametricFit`, `fit_exponential`, `fit_weibull`, `constant_hazard_test`, `draw_fit` and `DurationUnit64` |
+| `parametric` | `ParametricFit`, `fit_exponential`, `fit_weibull`, `constant_hazard_test`, and `draw_fit` |
 
 ## Make a survival curve
 

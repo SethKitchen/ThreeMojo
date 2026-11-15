@@ -36,6 +36,7 @@ from extensions.chemistry.requirement import Constraint
 from loaders.js_number import js_to_fixed
 from units.quantity import Unit
 from units.si import (
+    Diffusivity64,
     Duration64,
     Frequency64,
     Length64,
@@ -45,11 +46,6 @@ from units.si import (
 from units.quantity import Quantity
 from units.temperature import Temperature64
 
-# A diffusivity: square meters per second.
-comptime Diffusivity64 = Quantity[2, 0, -1, 0, 0, DType.float64]
-comptime SQUARE_METER_PER_SECOND = Unit[2, 0, -1, 0, 0, DType.float64](
-    1.0, "m^2/s"
-)
 # Bisection steps for a conversion.
 comptime _BISECTIONS = 60
 

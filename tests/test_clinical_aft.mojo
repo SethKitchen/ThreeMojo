@@ -10,8 +10,6 @@ against lifelines. See `assets/aft/make_aft.py`.
 """
 
 from extensions.clinical.aft import WeibullRegression, weibull_regression
-from extensions.clinical.parametric import DurationUnit64
-from extensions.clinical.survival import DAY64, WEEK64
 from extensions.numerics.elementary import precise_exp
 from std.math import inf, log, nan
 from std.testing import (
@@ -22,7 +20,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Duration64, SECOND
+from units.si import DAY64, SECOND, WEEK64, Duration64, DurationUnit64
 
 
 def _close(a: Float64, b: Float64, tolerance: Float64) raises:

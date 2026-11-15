@@ -7,7 +7,7 @@
 
 from extensions.imaging.curved import curved_reformat
 from extensions.imaging.ids import BACKGROUND, LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.path import label_path, resample_path, smooth_path
 from extensions.sdf.vector import V3, distance, v3
@@ -19,7 +19,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 comptime MM = 0.001
 

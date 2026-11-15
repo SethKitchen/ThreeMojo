@@ -17,16 +17,14 @@ period of 3 days and an infectious period of 5 days.
 """
 
 from extensions.clinical.incidence import (
-    PER_DAY64,
     growth_rate,
     incidence_image,
     reproduction_number,
 )
-from extensions.clinical.survival import DAY64
 from render.png import encode
 from std.pathlib import Path
 from tools._example_output import example_destination
-from units.si import Duration64
+from units.si import DAY64, PER_DAY64, Duration64
 
 comptime DEFAULT_OUTPUT = "out/incidence.png"
 

@@ -12,7 +12,6 @@ pydicom 3.0.1. See `assets/dicom/make_rtdose.py` and
 
 from extensions.imaging.dicom_write import DicomWriter
 from extensions.imaging.dvh import (
-    CUBIC_CENTIMETER64,
     DoseVolumeHistogram,
     dose_volume_histogram,
     dvh_image,
@@ -25,7 +24,7 @@ from extensions.imaging.ids import (
     RLE_LOSSLESS,
     TransferSyntax,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.rtdose import (
     AbsorbedDose64,
@@ -48,7 +47,14 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import CUBIC_METER, Length64, METER, Volume64
+from units.si import (
+    CUBIC_CENTIMETER64,
+    CUBIC_METER,
+    METER,
+    MILLIMETER64,
+    Length64,
+    Volume64,
+)
 
 
 def _lines() raises -> List[List[String]]:

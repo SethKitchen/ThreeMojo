@@ -25,7 +25,7 @@ from extensions.imaging.ids import (
     LabelId,
     TransferSyntax,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from extensions.imaging.suv import (
     GRAM_PER_BECQUEREL,
@@ -44,12 +44,13 @@ from std.testing import (
     assert_true,
 )
 from units.si import (
-    Duration64,
     GRAM_PER_CUBIC_CENTIMETER,
     KILOGRAM,
+    MILLIMETER64,
+    SECOND,
+    Duration64,
     Length64,
     Mass64,
-    SECOND,
 )
 
 comptime F18_HALF_LIFE = 6586.2

@@ -38,7 +38,7 @@ from extensions.imaging.ids import (
 from loaders.js_number import js_to_fixed
 from render.deflate import deflate
 from std.math import max, min, round
-from extensions.imaging.image_volume import MILLIMETER64
+from units.si import MILLIMETER64
 
 # The SOP class of a CT image.
 comptime CT_IMAGE_STORAGE = "1.2.840.10008.5.1.4.1.1.2"

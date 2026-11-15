@@ -15,7 +15,7 @@ from extensions.fem.ids import DOF_X, DOF_Y, DOF_Z
 from extensions.fem.mesh import TetMesh, box_mesh, voxel_mesh
 from extensions.fem.static import StaticProblem, solve_static
 from extensions.imaging.ids import LabelId
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import threshold
 from std.math import inf, nan
 from std.testing import (
@@ -26,12 +26,13 @@ from std.testing import (
     assert_true,
 )
 from units.si import (
-    Density64,
     GRAM_PER_CUBIC_CENTIMETER,
-    Length64,
     MEGAPASCAL,
     METER,
+    MILLIMETER64,
     PASCAL,
+    Density64,
+    Length64,
     Pressure64,
 )
 

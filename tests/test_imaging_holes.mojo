@@ -18,10 +18,10 @@ from extensions.imaging.ids import (
     LabelId,
     SliceAxis,
 )
-from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
-from units.si import Length64
+from units.si import MILLIMETER64, Length64
 
 
 def _map(n: Int) raises -> LabelMap:
