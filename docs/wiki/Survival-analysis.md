@@ -256,7 +256,7 @@ The tests compare the module with lifelines 0.30.3, a Python library, on the tri
 - The 6-MP group has 9 relapses, and the placebo group has 21.
 - The log-rank test of three synthetic arms with ties agrees with lifelines' `multivariate_logrank_test` to a relative 1e-12, and its p value to 1e-11. `tools/make_survival_groups.mojo` writes the arms. With two groups, it is the two-group test.
 - The Nelson-Aalen hazard of each group agrees with lifelines to a relative 1e-14, and the ends of its interval to 1e-13.
-- The restricted mean to 23 weeks agrees with lifelines' `restricted_mean_survival_time` to 1e-14. Its standard error agrees with the formula in numpy to 1e-13, and the test of the difference to 1e-11.
+- The restricted mean to 23 weeks agrees with lifelines' `restricted_mean_survival_time` to 1e-14. lifelines gives no standard error of the mean. So the test builds it from lifelines' Kaplan-Meier curve by the formula of Klein and Moeschberger. The error agrees to 1e-13, and the test of the difference to 1e-11.
 
 The tests compare `nnt` with statsmodels on the 6-MP trial at 10, 15 and 20 weeks. `assets/survival/make_nnt.py` writes the values. Each survival agrees with statsmodels' `SurvfuncRight` to 1e-14. The test builds the standard error of the difference from the Greenwood errors of statsmodels. The error, the interval and the NNT agree with it to 1e-13.
 

@@ -6,8 +6,9 @@
 """Nelson-Aalen hazards and restricted mean survival times.
 
 `assets/survival/rmst_expected.txt` holds the results of lifelines 0.30.3
-and numpy on the trial of Freireich and others (1963). See
-`assets/survival/make_rmst.py`.
+on the trial of Freireich and others (1963). See
+`assets/survival/make_rmst.py`. The test builds the standard error of
+Klein and Moeschberger from lifelines' Kaplan-Meier curve.
 """
 
 from extensions.clinical.rmst import (
@@ -17,6 +18,7 @@ from extensions.clinical.rmst import (
     restricted_mean,
 )
 from extensions.clinical.survival import kaplan_meier
+from extensions.numerics.distributions import Z95, normal_two_sided
 from std.math import inf, nan, sqrt
 from std.testing import (
     TestSuite,
@@ -64,17 +66,47 @@ def _weeks(values: List[Float64]) -> List[Duration64]:
     return out^
 
 
+def _klein_variance(row: List[Float64], horizon: Float64) -> Float64:
+    """Return the variance of a restricted mean by Klein and Moeschberger:
+    `sum A_j^2 d_j / (n_j (n_j - d_j))`, with `A_j` the area under the
+    curve from the event time `t_j` to the horizon. A row holds the count
+    of event times, then each time, the patients at risk, the events and
+    the survival."""
+    var count = Int(row[0])
+    var variance = 0.0
+    for j in range(count):
+        var t = row[1 + 4 * j]
+        var n = row[2 + 4 * j]
+        var d = row[3 + 4 * j]
+        if t > horizon or d == n:
+            continue
+        # The curve is flat between event times.
+        var area = 0.0
+        for m in range(j, count):
+            var start = row[1 + 4 * m]
+            if start >= horizon:
+                break
+            var end = horizon
+            if m + 1 < count:
+                end = min(row[1 + 4 * (m + 1)], horizon)
+            area += row[4 + 4 * m] * (end - start)
+        variance += area * area * d / (n * (n - d))
+    return variance
+
+
 def test_freireich() raises:
     var lines = (
         open("assets/survival/rmst_expected.txt", "r").read().splitlines()
     )
     var texts: List[String] = [DRUG, PLACEBO]
     var horizon = Duration64(23, WEEK64)
+    var means = List[Float64]()
+    var variances = List[Float64]()
     for g in range(2):
         var group = _group(texts[g])
         var curve = kaplan_meier(group[0], group[1])
         var hazard = nelson_aalen(curve)
-        var row = _numbers(String(lines[2 * g]))
+        var row = _numbers(String(lines[3 * g]))
         var count = Int(row[0])
         assert_equal(len(hazard.times), count)
         for i in range(count):
@@ -83,18 +115,25 @@ def test_freireich() raises:
             var band = hazard.interval(i)
             assert_almost_equal(band[0], row[3 + 4 * i], rtol=1e-13)
             assert_almost_equal(band[1], row[4 + 4 * i], rtol=1e-13)
+        var steps = _numbers(String(lines[3 * g + 1]))
+        assert_equal(Int(steps[0]), len(curve.times))
+        for i in range(len(curve.times)):
+            assert_almost_equal(curve.survival[i], steps[4 + 4 * i], rtol=1e-14)
         var mean = restricted_mean(curve, horizon)
-        var expected = _numbers(String(lines[2 * g + 1]))
-        assert_almost_equal(mean.mean.to(WEEK64), expected[0], rtol=1e-14)
+        var expected = _numbers(String(lines[3 * g + 2]))[0]
+        var variance = _klein_variance(steps, 23.0)
+        assert_almost_equal(mean.mean.to(WEEK64), expected, rtol=1e-14)
         assert_almost_equal(
-            mean.standard_error.to(WEEK64), expected[1], rtol=1e-13
+            mean.standard_error.to(WEEK64), sqrt(variance), rtol=1e-13
         )
         var band = mean.interval()
         assert_almost_equal(
             band[1].to(WEEK64) - band[0].to(WEEK64),
-            2 * 1.959963984540054 * expected[1],
+            2 * Z95 * sqrt(variance),
             rtol=1e-13,
         )
+        means.append(expected)
+        variances.append(variance)
     var drug = _group(DRUG)
     var placebo = _group(PLACEBO)
     var test = compare_restricted_means(
@@ -102,15 +141,19 @@ def test_freireich() raises:
         kaplan_meier(placebo[0], placebo[1]),
         horizon,
     )
-    var gap = _numbers(String(lines[4]))
+    # The difference of two independent means, with a normal test.
+    var gap: List[Float64] = [
+        means[0] - means[1],
+        sqrt(variances[0] + variances[1]),
+    ]
+    gap.append(gap[0] / gap[1])
+    gap.append(normal_two_sided(gap[2]))
     assert_almost_equal(test.difference.to(WEEK64), gap[0], rtol=1e-14)
     assert_almost_equal(test.standard_error.to(WEEK64), gap[1], rtol=1e-13)
     assert_almost_equal(test.z, gap[2], rtol=1e-13)
     assert_almost_equal(test.p_value, gap[3], rtol=1e-11)
     var band = test.interval()
-    assert_almost_equal(
-        band[0].to(WEEK64), gap[0] - 1.959963984540054 * gap[1], rtol=1e-13
-    )
+    assert_almost_equal(band[0].to(WEEK64), gap[0] - Z95 * gap[1], rtol=1e-13)
 
 
 def test_by_hand() raises:
