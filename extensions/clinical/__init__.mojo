@@ -11,6 +11,7 @@
 - `roc`: ROC curves of diagnostic tests, their AUC and DeLong's test.
 - `agreement`: Bland-Altman agreement and intraclass correlations.
 - `logistic`: logistic regression with odds ratios.
+- `proportions`: proportion intervals and two-by-two tables.
 - `meta`: meta-analysis of studies, with forest plots.
 - `epidemic`: SIR and SEIR models of an epidemic.
 - `distributions`: the t and F distributions.

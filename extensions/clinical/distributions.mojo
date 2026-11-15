@@ -9,7 +9,7 @@ function.
 - `beta_tails(x, a, b)` gives both tails of the beta distribution. The
   smaller tail comes from the continued fraction of Numerical Recipes,
   section 6.4, with the modified Lentz method, so it keeps its relative
-  accuracy far out.
+  accuracy far out. `beta_quantile` inverts it.
 - `student_t_upper` and `student_t_quantile` give the upper tail and the
   quantile of Student's t.
 - `f_upper` and `f_quantile` give the upper tail and the quantile of the F
@@ -159,6 +159,28 @@ def _invert(target: Float64, a: Float64, b: Float64) -> Tuple[Float64, Float64]:
             break
         x = next
     return (x, 1.0 - x)
+
+
+def beta_quantile(p: Float64, a: Float64, b: Float64) raises -> Float64:
+    """Return the quantile of the beta distribution.
+
+    Args:
+        p: The probability. Between 0 and 1.
+        a: The first shape. Positive, at most 2e8.
+        b: The second shape. Positive, at most 2e8.
+
+    Returns:
+        The x with I_x(a, b) = p. Above a half, the search runs on the
+        upper tail, so an x near 1 keeps its accuracy.
+
+    Raises:
+        Error: If the probability or a shape is out of range.
+    """
+    _require_shape(a, b)
+    _require_probability(p)
+    if p <= 0.5:
+        return _invert(p, a, b)[0]
+    return _invert(1.0 - p, b, a)[1]
 
 
 def _require_probability(p: Float64) raises:

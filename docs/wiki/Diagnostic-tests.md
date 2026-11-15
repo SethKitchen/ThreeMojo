@@ -1,6 +1,8 @@
 # Diagnostic tests
 
-`extensions/clinical/` measures diagnostic tests and the methods that measure patients. `roc` gives the ROC curve of a test, its area (AUC) with a 95 percent interval, the best threshold, and DeLong's comparison of two tests. `agreement` gives the Bland-Altman agreement of two methods and the intraclass correlations of several raters. `logistic` models the risk of an outcome from covariates. It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
+`extensions/clinical/` measures diagnostic tests and the methods that measure patients. `roc` gives the ROC curve of a test, its area (AUC) with a 95 percent interval, the best threshold, and DeLong's comparison of two tests. `agreement` gives the Bland-Altman agreement of two methods and the intraclass correlations of several raters. `logistic` models the risk of an outcome from covariates. `proportions` measures a test from its two-by-two table, and compares the risks of two groups.
+
+It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
 
 ![The ROC curves of two synthetic markers, with the chance diagonal](out/roc.png)
 
@@ -15,7 +17,8 @@ Marker A has an AUC of 0.820, with a 95 percent interval from 0.751 to 0.890. Ma
 | `roc` | `RocCurve`, `roc_curve`, `RocComparison`, `compare_roc` and `roc_image` |
 | `agreement` | `BlandAltman`, `bland_altman`, `bland_altman_image`, `Icc`, `IccTable`, `intraclass_correlation` and `LIMIT_FACTOR` |
 | `logistic` | `LogisticModel` and `logistic_regression` |
-| `distributions` | `beta_tails`, `student_t_upper`, `student_t_quantile`, `f_upper`, `f_quantile`, `precise_exp` and `MAX_DEGREES` |
+| `proportions` | `Estimate`, `wilson_interval`, `exact_interval`, `DiagnosticAccuracy`, `diagnostic_accuracy`, `RiskComparison` and `compare_risks` |
+| `distributions` | `beta_tails`, `beta_quantile`, `student_t_upper`, `student_t_quantile`, `f_upper`, `f_quantile`, `precise_exp` and `MAX_DEGREES` |
 
 ## Make a ROC curve
 
@@ -61,6 +64,28 @@ Two equal tests give a difference of 0, a z of 0 and a p value of 1.
 ## Draw the curves
 
 `roc_image(curves, colors, size)` plots the curves on a white square. The false positive rate runs from 0 at the left edge to 1 at the right edge. The sensitivity runs from 0 at the bottom edge to 1 at the top edge. Light gray lines mark each tenth, and a darker gray diagonal marks a test no better than chance.
+
+## Measure a test from its table
+
+Compare a test with a yes or no result against a reference standard. That gives a two-by-two table of true and false positives, and true and false negatives. `diagnostic_accuracy(true_positive, false_positive, false_negative, true_negative)` gives its measures. Each is an `Estimate` with a `value` and a 95 percent interval from `lower` to `upper`:
+
+- `sensitivity` and `specificity`.
+- `positive_predictive` and `negative_predictive`, the fractions of positive and negative results that are right. They depend on the prevalence of the patients in the table.
+- `accuracy` and `prevalence`.
+- `positive_likelihood`, `sensitivity / (1 - specificity)`, and `negative_likelihood`, `(1 - sensitivity) / specificity`. A likelihood ratio multiplies the odds of disease before the test, to give the odds after it.
+
+The proportions have the exact intervals of Clopper and Pearson. The likelihood ratios have log intervals, with a half added to each cell when one is 0.
+
+`exact_interval(successes, trials)` and `wilson_interval(successes, trials)` give the interval of any proportion. The exact interval uses the beta quantiles. Wilson's score interval is narrower, and it stays inside 0 and 1.
+
+## Compare the risks of two groups
+
+`compare_risks(events_a, total_a, events_b, total_b)` compares the risk of an event in two groups, such as a treatment and a control. It gives:
+
+- `first` and `second`, the two risks, with exact intervals.
+- `difference`, the first risk less the second, with the Wald interval.
+- `ratio` and `odds_ratio`, with log intervals.
+- `number_needed`, `1 / |difference|`: the patients to treat for one event more or less. It is infinite when the risks are equal.
 
 ## Model the risk of an outcome
 
@@ -160,6 +185,12 @@ The tests compare `logistic` with the `Logit` model of statsmodels 0.15.0 on a s
 
 statsmodels fits its own null model with a looser tolerance, which leaves its null log-likelihood 2e-8 below the maximum. So the script fits the null model to 1e-12 too, and then the null log-likelihood agrees exactly.
 
+The tests compare `proportions` with statsmodels 0.15.0. `assets/proportions/make_proportions.py` writes the expected values.
+
+- Wilson's interval agrees with `proportion_confint` to a relative 1e-13, and the exact interval to 1e-12. The cases include no success, all successes and one trial.
+- The six proportions of a test of 90, 30, 10 and 170 patients, and their exact intervals, agree to 1e-12. Its likelihood ratios and their intervals agree with `Table2x2` to 1e-12.
+- The risk difference of 30 of 100 against 15 of 100 agrees with the Wald interval of `confint_proportions_2indep`. Its risk ratio and odds ratio agree with `Table2x2`, all to 1e-12.
+
 The tests also check cases by hand:
 
 - Three diseased scores of 3, 2 and 2 against healthy scores of 2, 1 and 0 give an AUC of 8/9. The standard error is from the variances 1/108 and 1/27 of the components. The best threshold is 2.
@@ -172,6 +203,9 @@ The tests also check cases by hand:
 - Two raters who differ by a constant leave no residual, and the ICC refuses them.
 - A two-by-two table of 10 and 20 exposed patients, and 5 and 40 others, gives an odds ratio of 4. Its standard error is Woolf's `sqrt(1/10 + 1/20 + 1/5 + 1/40)`. The intercept is the log odds 5/40.
 - A covariate that separates the outcomes does not converge.
+- With no success in 20 trials, the exact high end is `1 - 0.025^(1/20)`. The beta quantile of Beta(2, 1) is the square root, on both sides of a half.
+- The likelihood ratios of the test are 6 and 0.1 / 0.85. With no false positive, a half is added to each cell.
+- Equal risks need an infinite number to treat.
 
 ## Errors
 
@@ -186,6 +220,8 @@ Every function raises `Error` for input it cannot use.
 | The methods do not give one finite value each for two subjects or more | `bland_altman`, `bland_altman_image` |
 | The result is not that of the data, the means or the differences do not vary, or a side is out of 64 to 4096 pixels | `bland_altman_image` |
 | The ratings are not a finite table of two subjects and two raters or more, or they have no residual variation | `intraclass_correlation` |
+| A proportion has no trial, or successes out of range | `wilson_interval`, `exact_interval`, `compare_risks` |
+| A cell of a diagnostic table is negative, or the table has no diseased, healthy, positive or negative patient | `diagnostic_accuracy` |
 | The covariates are not one finite row of 1 to 32 values for each patient, all outcomes are the same, the tolerance is not between 0 and 1, or the steps are not from 1 to 1000 | `logistic_regression` |
 | The information matrix is not positive definite, because a covariate is constant, is collinear with others, or separates the outcomes | `logistic_regression` |
 | An index names no coefficient, or a row does not have one finite value for each covariate | `LogisticModel` |
@@ -214,6 +250,10 @@ Every function raises `Error` for input it cannot use.
 - Shrout and Fleiss, "Intraclass correlations: uses in assessing rater reliability", Psychological Bulletin, 1979.
 - McGraw and Wong, "Forming inferences about some intraclass correlation coefficients", Psychological Methods, 1996.
 - Koo and Li, "A guideline of selecting and reporting intraclass correlation coefficients for reliability research", Journal of Chiropractic Medicine, 2016.
+- Clopper and Pearson, "The use of confidence or fiducial limits illustrated in the case of the binomial", Biometrika, 1934.
+- Wilson, "Probable inference, the law of succession, and statistical inference", Journal of the American Statistical Association, 1927.
+- Simel, Samsa and Matchar, "Likelihood ratios with confidence: sample size estimation for diagnostic test studies", Journal of Clinical Epidemiology, 1991.
+- Laupacis, Sackett and Roberts, "An assessment of clinically useful measures of the consequences of treatment", New England Journal of Medicine, 1988.
 - Hosmer, Lemeshow and Sturdivant, "Applied Logistic Regression", 3rd edition, 2013.
 - Woolf, "On estimating the relation between blood group and disease", Annals of Human Genetics, 1955.
 - Press and others, "Numerical Recipes", 3rd edition, 2007, section 6.4.

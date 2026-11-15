@@ -955,6 +955,7 @@ Medical images, macromolecules and solid mechanics, for research and teaching. A
 - [x] [Logistic regression](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests#model-the-risk-of-an-outcome): odds ratios with intervals, Wald and likelihood ratio tests, and predicted risks; they match statsmodels [#1093](https://github.com/SethKitchen/ThreeMojo/issues/1093)
 - [x] [Meta-analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Meta-analysis): fixed and random effects, Q, I^2, tau^2, prediction intervals and forest plots of the BCG trials; they match statsmodels [#1094](https://github.com/SethKitchen/ThreeMojo/issues/1094)
 - [x] [Epidemic models](https://github.com/SethKitchen/ThreeMojo/wiki/Epidemic-models): SIR and SEIR epidemics with vaccination, peaks, final sizes and herd immunity, with plots; they match scipy [#1095](https://github.com/SethKitchen/ThreeMojo/issues/1095)
+- [x] [Two-by-two tables](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests#measure-a-test-from-its-table): sensitivity, specificity, predictive values and likelihood ratios, risk ratios and the number needed to treat; they match statsmodels [#1096](https://github.com/SethKitchen/ThreeMojo/issues/1096)
 
 ### Out of scope
 
