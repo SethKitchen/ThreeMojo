@@ -5,15 +5,14 @@
 
 """Write two-group tests by scipy, a Python library.
 
-    python3 make_hypothesis.py
+    mojo run -I . tools/make_hypothesis.mojo
+    cd assets/hypothesis && python3 make_hypothesis.py
 
-Run it with numpy and scipy 1.18.1. It writes two files:
-
-- `groups.txt` holds synthetic falls of blood pressure in mmHg, whole
-  numbers so that many tie: a first line of 25 values of a treated group, a
-  second of 30 values of a control group, then two lines of 20 values of
-  one group before and after a treatment.
-- `hypothesis_expected.txt` holds the results, all two-sided:
+Run it with scipy 1.18.1. `tools/make_hypothesis.mojo` writes the
+synthetic inputs, `groups.txt`: falls of blood pressure in mmHg, whole
+numbers so that many tie. Its lines are a treated group of 25, a control
+group of 30, and one group of 20 before and after a treatment. This
+script reads them and writes `hypothesis_expected.txt`, all two-sided:
 
   - `student` and `welch`: t, the degrees of freedom, the p value, and the
     95 percent interval of the treated mean less the control mean, by
@@ -27,17 +26,12 @@ Run it with numpy and scipy 1.18.1. It writes two files:
     the tie correction, and no continuity correction.
 """
 
-import numpy as np
 from scipy import stats
 
-rng = np.random.default_rng(20261115)
-treated = np.round(rng.normal(12.0, 6.0, 25))
-control = np.round(rng.normal(7.0, 9.0, 30))
-before = np.round(rng.normal(150.0, 12.0, 20))
-after = before - np.round(rng.normal(4.0, 5.0, 20))
-with open("groups.txt", "w") as out:
-    for row in [treated, control, before, after]:
-        out.write(" ".join("%d" % v for v in row) + "\n")
+with open("groups.txt") as data:
+    treated, control, before, after = [
+        [float(v) for v in line.split()] for line in data if line.strip()
+    ]
 
 
 def line(name, values):

@@ -166,7 +166,7 @@ Bonferroni's and Holm's methods control the chance of any false finding. The met
 
 ## Verification
 
-The tests compare the module with scipy 1.18.1 on synthetic falls of blood pressure in whole mmHg, so that many tie. `assets/hypothesis/make_hypothesis.py` writes the data and the expected values.
+The tests compare the module with scipy 1.18.1 on synthetic falls of blood pressure in whole mmHg, so that many tie. `tools/make_hypothesis.mojo` writes the data, and `assets/hypothesis/make_hypothesis.py` writes the expected values.
 
 - t and the degrees of freedom of `ttest_ind` and `ttest_rel` agree to a relative 1e-13. The p values agree to 1e-11, and the interval ends to 1e-12.
 - U of `mannwhitneyu` is the same, and its p value agrees to 1e-12.
@@ -185,7 +185,7 @@ The tests compare `strata` with the `StratifiedTable` of statsmodels 0.15.0 on f
 - The Cochran-Mantel-Haenszel statistics agree to 1e-13 with and without the correction. Their p values agree with scipy's `chi2.sf` to 1e-11.
 - The Breslow-Day statistic agrees to 1e-11 with and without Tarone's adjustment, and the p values to 1e-12. Two strata with a small pooled ratio take the other form of the root, and agree to 1e-12.
 
-The tests take 30 synthetic pairs of glucose and HbA1c with ties. Their correlations agree with scipy's `pearsonr`, `spearmanr` and `kendalltau` to a relative 1e-14. The p values agree to 1e-11, and Pearson's interval to 1e-13. `assets/hypothesis/make_correlation.py` writes them.
+The tests take 30 synthetic pairs of glucose and HbA1c with ties. Their correlations agree with scipy's `pearsonr`, `spearmanr` and `kendalltau` to a relative 1e-14. The p values agree to 1e-11, and Pearson's interval to 1e-13. `tools/make_correlation.mojo` writes the pairs, and `assets/hypothesis/make_correlation.py` writes the expected values.
 
 F and H of three synthetic groups agree with scipy's `f_oneway` and `kruskal` to a relative 1e-13, and their p values to 1e-10 and 1e-11. `tools/make_anova.mojo` writes the groups, and `assets/hypothesis/make_anova.py` writes the results of scipy.
 

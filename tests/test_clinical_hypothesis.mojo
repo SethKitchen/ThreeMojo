@@ -7,7 +7,7 @@
 
 `assets/hypothesis/hypothesis_expected.txt` holds the results of scipy
 1.18.1 on the synthetic groups of `assets/hypothesis/groups.txt`. See
-`assets/hypothesis/make_hypothesis.py`.
+`tools/make_hypothesis.mojo` and `assets/hypothesis/make_hypothesis.py`.
 """
 
 from extensions.clinical.hypothesis import (

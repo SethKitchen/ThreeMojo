@@ -7,7 +7,7 @@
 
 `assets/hypothesis/correlation_expected.txt` holds the results of scipy
 1.18.1 on the synthetic pairs of `assets/hypothesis/pairs.txt`. See
-`assets/hypothesis/make_correlation.py`.
+`tools/make_correlation.mojo` and `assets/hypothesis/make_correlation.py`.
 """
 
 from extensions.clinical.correlation import kendall, pearson, spearman

@@ -5,14 +5,13 @@
 
 """Write correlations by scipy, a Python library.
 
-    python3 make_correlation.py
+    mojo run -I . tools/make_correlation.mojo
+    cd assets/hypothesis && python3 make_correlation.py
 
-Run it with numpy and scipy 1.18.1. It writes two files:
-
-- `pairs.txt` holds two lines of 30 synthetic values each: a fasting
-  glucose in mmol/L to 0.1, and an HbA1c in percent to 0.1, so that some
-  tie.
-- `correlation_expected.txt` holds the results:
+Run it with scipy 1.18.1. `tools/make_correlation.mojo` writes the
+synthetic inputs, `pairs.txt`: two lines of 30 values, a fasting glucose
+in mmol/L to 0.1 and an HbA1c in percent to 0.1, so that some tie. This
+script reads them and writes `correlation_expected.txt`:
 
   - `pearson`: r, the two-sided p value, and the 95 percent interval of
     `pearsonr` by Fisher's z.
@@ -21,15 +20,10 @@ Run it with numpy and scipy 1.18.1. It writes two files:
     approximation.
 """
 
-import numpy as np
 from scipy import stats
 
-rng = np.random.default_rng(20261115)
-glucose = np.round(rng.normal(6.5, 1.2, 30), 1)
-hba1c = np.round(4.0 + 0.4 * glucose + rng.normal(0.0, 0.35, 30), 1)
-with open("pairs.txt", "w") as out:
-    out.write(" ".join("%.1f" % v for v in glucose) + "\n")
-    out.write(" ".join("%.1f" % v for v in hba1c) + "\n")
+with open("pairs.txt") as data:
+    glucose, hba1c = [[float(v) for v in line.split()] for line in data if line.strip()]
 
 p = stats.pearsonr(glucose, hba1c)
 ci = p.confidence_interval(0.95)
