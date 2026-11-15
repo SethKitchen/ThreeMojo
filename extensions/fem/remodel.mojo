@@ -34,7 +34,7 @@ from extensions.fem.elasticity import IsotropicMaterial
 from extensions.fem.ids import LINEAR, MaterialId, require_id
 from extensions.fem.static import StaticProblem, solve_static
 from extensions.numerics.iterative import CONVERGED
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from std.math import isfinite, log
 from units.quantity import Quantity, Unit
 from units.si import (

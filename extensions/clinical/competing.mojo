@@ -25,7 +25,7 @@ With no competing event, F is `1 - S` of `survival.kaplan_meier`, and its
 variance is Greenwood's.
 """
 
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.survival import Z95, require_group
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba

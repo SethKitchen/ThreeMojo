@@ -27,7 +27,7 @@ past the last time that a group has, but the model alone holds it there.
 """
 
 from extensions.clinical.cox import chi_square_p_value
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import LN2, precise_exp, precise_power
 from extensions.clinical.survival import Z95, require_group
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
@@ -42,18 +42,6 @@ comptime DurationUnit64 = Unit[0, 0, 1, 0, 0, DType.float64]
 # The bisections of the Weibull shape, and the dash of a drawn model.
 comptime _BISECTIONS = 120
 comptime _DASH = 6
-
-
-def _power(x: Float64, p: Float64) -> Float64:
-    """Return `x^p` for an x of 0 or more, to about one unit in the last
-    place."""
-    if x == 0:
-        if p > 0:
-            return 0.0
-        if p == 0:
-            return 1.0
-        return inf[DType.float64]()
-    return precise_exp(p * log(x))
 
 
 struct ParametricFit(Copyable, Movable):
@@ -132,7 +120,7 @@ struct ParametricFit(Copyable, Movable):
         Raises:
             Error: If the time is below 0 or not finite.
         """
-        return _power(self._ratio(time), self.shape)
+        return precise_power(self._ratio(time), self.shape)
 
     def survival(self, time: Duration64) raises -> Float64:
         """Return the survival at a time.
@@ -164,7 +152,9 @@ struct ParametricFit(Copyable, Movable):
         """
         var x = self._ratio(time)
         var rate = (
-            self.shape / self.scale.to(SECOND) * _power(x, self.shape - 1.0)
+            self.shape
+            / self.scale.to(SECOND)
+            * precise_power(x, self.shape - 1.0)
         )
         return Frequency64(rate, PER_SECOND)
 
@@ -185,7 +175,7 @@ struct ParametricFit(Copyable, Movable):
             Error: If the time is below 0 or not finite.
         """
         var x = self._ratio(time)
-        var h = _power(x, self.shape)
+        var h = precise_power(x, self.shape)
         if h == 0:
             return 0.0
         var s = precise_exp(-h)
@@ -221,7 +211,7 @@ struct ParametricFit(Copyable, Movable):
             Error: If the time is below 0 or not finite.
         """
         var x = self._ratio(time)
-        var h = _power(x, self.shape)
+        var h = precise_power(x, self.shape)
         if h == 0:
             return (1.0, 1.0)
         var lam = self.scale.to(SECOND)
@@ -246,7 +236,7 @@ struct ParametricFit(Copyable, Movable):
         """
         var q = _quantile_log(survival)
         return Duration64(
-            self.scale.to(SECOND) * _power(q, 1.0 / self.shape), SECOND
+            self.scale.to(SECOND) * precise_power(q, 1.0 / self.shape), SECOND
         )
 
     def median(self) -> Duration64:
@@ -255,9 +245,8 @@ struct ParametricFit(Copyable, Movable):
         Returns:
             `lambda (ln 2)^(1 / rho)`.
         """
-        var ln2 = 0.6931471805599453
         return Duration64(
-            self.scale.to(SECOND) * _power(ln2, 1.0 / self.shape), SECOND
+            self.scale.to(SECOND) * precise_power(LN2, 1.0 / self.shape), SECOND
         )
 
     def quantile_interval(

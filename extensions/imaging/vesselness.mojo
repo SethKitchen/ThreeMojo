@@ -34,22 +34,16 @@ sigma in voxels along each axis.
 """
 
 from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
+from extensions.numerics.dense import DenseMatrix, symmetric_eigen
 from std.collections import Optional
 from std.math import expm1, isfinite, sqrt
 from units.si import Length64
+from extensions.numerics.elementary import precise_exp
 
 comptime MAX_SIGMA_VOXELS = 100.0
 """The largest scale, in voxels along an axis."""
 comptime _LEAST = 1e-10
-comptime _JACOBI_SWEEPS = 50
 comptime _SQRT_HALF = 0.7071067811865476
-
-
-def _exp(x: Float64) -> Float64:
-    """Return `e^x` from `expm1`, to a few units in the last place."""
-    if x >= -1.0:
-        return 1.0 + expm1(x)
-    return 1.0 / (1.0 + expm1(-x))
 
 
 def _kernel(sigma: Float64, order: Int, radius: Int) -> List[Float64]:
@@ -59,7 +53,7 @@ def _kernel(sigma: Float64, order: Int, radius: Int) -> List[Float64]:
     var total = 0.0
     for t in range(-radius, radius + 1):  # pragma: no branch
         var x = Float64(t)
-        var w = _exp(-0.5 * x * x / (sigma * sigma))
+        var w = precise_exp(-0.5 * x * x / (sigma * sigma))
         weights.append(w)
         total += w
     for at in range(len(weights)):  # pragma: no branch
@@ -139,47 +133,17 @@ def _gaussian(
 
 def _eigen(
     a: Float64, b: Float64, c: Float64, d: Float64, e: Float64, f: Float64
-) -> Tuple[Float64, Float64, Float64]:
-    """Return the eigenvalues of `[[a, d, e], [d, b, f], [e, f, c]]` by
-    Jacobi rotations, sorted by magnitude."""
-    var m = List[Float64](length=9, fill=0.0)
-    m[0] = a
-    m[4] = b
-    m[8] = c
-    m[1] = d
-    m[3] = d
-    m[2] = e
-    m[6] = e
-    m[5] = f
-    m[7] = f
-    for _ in range(_JACOBI_SWEEPS):  # pragma: no branch
-        var off = m[1] * m[1] + m[2] * m[2] + m[5] * m[5]
-        var diagonal = m[0] * m[0] + m[4] * m[4] + m[8] * m[8]
-        if not (off > 1e-36 * diagonal):
-            break
-        for p in range(2):  # pragma: no branch
-            for q in range(p + 1, 3):  # pragma: no branch
-                var apq = m[3 * p + q]
-                if apq == 0:
-                    continue
-                var theta = (m[3 * q + q] - m[3 * p + p]) / (2.0 * apq)
-                var sign = 1.0 if theta >= 0 else -1.0
-                var t = sign / (abs(theta) + sqrt(theta * theta + 1.0))
-                var cs = 1.0 / sqrt(t * t + 1.0)
-                var sn = t * cs
-                for k in range(3):  # pragma: no branch
-                    var akp = m[3 * k + p]
-                    var akq = m[3 * k + q]
-                    m[3 * k + p] = cs * akp - sn * akq
-                    m[3 * k + q] = sn * akp + cs * akq
-                for k in range(3):  # pragma: no branch
-                    var apk = m[3 * p + k]
-                    var aqk = m[3 * q + k]
-                    m[3 * p + k] = cs * apk - sn * aqk
-                    m[3 * q + k] = sn * apk + cs * aqk
-    var l1 = m[0]
-    var l2 = m[4]
-    var l3 = m[8]
+) raises -> Tuple[Float64, Float64, Float64]:
+    """Return the eigenvalues of `[[a, d, e], [d, b, f], [e, f, c]]`,
+    sorted by magnitude."""
+    var m = DenseMatrix(3, 3)
+    var entries: List[Float64] = [a, d, e, d, b, f, e, f, c]
+    for at in range(9):  # pragma: no branch
+        m.data[at] = entries[at]
+    var values = symmetric_eigen(m).values.copy()
+    var l1 = values[0]
+    var l2 = values[1]
+    var l3 = values[2]
     # Three compare-and-swaps sort them by magnitude.
     if abs(l2) < abs(l1):
         l1, l2 = l2, l1
@@ -339,9 +303,9 @@ def vesselness(
             var ra = l2 / l3
             var rb2 = l1 * l1 / (l2 * l3)
             var v = (
-                (1.0 - _exp(-ra * ra / (2.0 * alpha * alpha)))
-                * _exp(-rb2 / (2.0 * beta * beta))
-                * (1.0 - _exp(-s2 / (2.0 * g * g)))
+                (1.0 - precise_exp(-ra * ra / (2.0 * alpha * alpha)))
+                * precise_exp(-rb2 / (2.0 * beta * beta))
+                * (1.0 - precise_exp(-s2 / (2.0 * g * g)))
             )
             best[at] = max(best[at], v)
     var out = volume.copy()

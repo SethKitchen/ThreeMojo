@@ -30,13 +30,12 @@ digamma function.
 """
 
 from extensions.clinical.cox import chi_square_p_value
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.rates import RateModel, YEAR64, poisson_regression
 from extensions.numerics.dense import (
     DenseMatrix,
-    cholesky,
-    solve_lower,
-    solve_lower_transposed,
+    cholesky_inverse,
+    cholesky_solve,
 )
 from std.math import lgamma, log, log1p, sqrt
 from units.si import Duration64
@@ -152,12 +151,6 @@ def _log_likelihood(data: _Data, mu: List[Float64], r: Float64) -> Float64:
     return total
 
 
-def _solve(matrix: DenseMatrix, right: List[Float64]) raises -> List[Float64]:
-    """Solve a positive definite system by its Cholesky factor."""
-    var factor = cholesky(matrix)
-    return solve_lower_transposed(factor, solve_lower(factor, right))
-
-
 def _fit_beta(
     data: _Data, alpha: Float64, var beta: List[Float64]
 ) raises -> List[Float64]:
@@ -174,7 +167,7 @@ def _fit_beta(
                 right[a] += w * data.rows[i][a] * z
                 for b in range(a + 1):  # pragma: no branch
                     gram.add(a, b, w * data.rows[i][a] * data.rows[i][b])
-        var next = _solve(gram, right)
+        var next = cholesky_solve(gram, right)
         var change = 0.0
         for a in range(p):  # pragma: no branch
             change = max(change, abs(next[a] - beta[a]))
@@ -293,23 +286,18 @@ def negative_binomial_regression(
     # Newton steps on the coefficients and log(alpha) together.
     for _ in range(_POLISH_STEPS):  # pragma: no branch
         var step = _information(data, beta, log_alpha)
-        var change = _solve(step[0], step[1])
+        var change = cholesky_solve(step[0], step[1])
         for a in range(p):  # pragma: no branch
             beta[a] += change[a]
         log_alpha += change[p]
     var last = _information(data, beta, log_alpha)
-    var factor = cholesky(last[0])
+    var covariance = cholesky_inverse(last[0])
     var rates = RateModel(p)
-    for a in range(p + 1):  # pragma: no branch
-        var unit = List[Float64](length=p + 1, fill=0.0)
-        unit[a] = 1.0
-        var column = solve_lower_transposed(factor, solve_lower(factor, unit))
-        if a < p:
-            rates.coefficients[a] = beta[a]
-            rates.standard_errors[a] = sqrt(column[a])
-        else:
-            rates.steps = _SEARCH_STEPS + _POLISH_STEPS
-            rates.converged = True
+    for a in range(p):  # pragma: no branch
+        rates.coefficients[a] = beta[a]
+        rates.standard_errors[a] = sqrt(covariance.get(a, a))
+    rates.steps = _SEARCH_STEPS + _POLISH_STEPS
+    rates.converged = True
     var alpha = precise_exp(log_alpha)
     var mu = data.means(beta)
     var r = 1.0 / alpha
@@ -325,10 +313,7 @@ def negative_binomial_regression(
     rates.dispersion = pearson / Float64(len(data.y) - p)
     var out = NegativeBinomialModel(rates^)
     out.alpha = alpha
-    var unit = List[Float64](length=p + 1, fill=0.0)
-    unit[p] = 1.0
-    var column = solve_lower_transposed(factor, solve_lower(factor, unit))
-    out.alpha_error = alpha * sqrt(column[p])
+    out.alpha_error = alpha * sqrt(covariance.get(p, p))
     out.log_likelihood = _log_likelihood(data, mu, r)
     out.poisson_log_likelihood = poisson_ll
     return out^

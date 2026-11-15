@@ -24,7 +24,7 @@ A dispersion above 1 means more spread than Poisson counts have, as real
 counts often show. Then multiply the standard errors by its square root.
 """
 
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.survival import DAY64, Z95
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba

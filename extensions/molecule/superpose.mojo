@@ -21,14 +21,12 @@ number, insertion code and atom name, such as the CA atoms.
 """
 
 from extensions.molecule.ids import ModelId
+from extensions.numerics.dense import DenseMatrix, symmetric_eigen
 from extensions.molecule.structure import Structure
 from extensions.sdf.vector import V3, dot, v3
 from std.collections import Dict
 from std.math import isfinite, sqrt
 from units.si import Length64, METER
-
-# Cyclic Jacobi sweeps of a symmetric 4 by 4 matrix.
-comptime JACOBI_SWEEPS_4 = 16
 
 
 struct Superposition(Copyable, Movable):
@@ -105,34 +103,6 @@ def _centroid(points: List[V3]) -> V3:
     return sum * (1.0 / Float64(len(points)))
 
 
-def _jacobi_rotate(mut a: List[Float64], mut r: List[Float64], p: Int, q: Int):
-    """Zero `a[p][q]` of a 4 by 4 matrix, and keep the rotation in `r`."""
-    var apq = a[4 * p + q]
-    if apq == 0:
-        return
-    var theta = (a[4 * q + q] - a[4 * p + p]) / (2.0 * apq)
-    var t = 1.0 / (abs(theta) + sqrt(theta * theta + 1.0))
-    if theta < 0:
-        t = -t
-    var c = 1.0 / sqrt(t * t + 1.0)
-    var s = t * c
-    for k in range(4):  # pragma: no branch
-        var akp = a[4 * k + p]
-        var akq = a[4 * k + q]
-        a[4 * k + p] = c * akp - s * akq
-        a[4 * k + q] = s * akp + c * akq
-    for k in range(4):  # pragma: no branch
-        var apk = a[4 * p + k]
-        var aqk = a[4 * q + k]
-        a[4 * p + k] = c * apk - s * aqk
-        a[4 * q + k] = s * apk + c * aqk
-    for k in range(4):  # pragma: no branch
-        var rkp = r[4 * k + p]
-        var rkq = r[4 * k + q]
-        r[4 * k + p] = c * rkp - s * rkq
-        r[4 * k + q] = s * rkp + c * rkq
-
-
 def superpose(fixed: List[V3], moving: List[V3]) raises -> Superposition:
     """Return the move that puts `moving` on `fixed` with the least RMSD.
 
@@ -194,42 +164,16 @@ def superpose(fixed: List[V3], moving: List[V3]) raises -> Superposition:
         yz + zy,
         -xx - yy + zz,
     ]
-    var vectors: List[Float64] = [
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-    ]
-    for _ in range(JACOBI_SWEEPS_4):  # pragma: no branch
-        for pair in [  # pragma: no branch
-            (0, 1),
-            (0, 2),
-            (0, 3),
-            (1, 2),
-            (1, 3),
-            (2, 3),
-        ]:
-            _jacobi_rotate(n, vectors, pair[0], pair[1])
-    var best = 0
-    for k in range(1, 4):  # pragma: no branch
-        if n[5 * k] > n[5 * best]:
-            best = k
-    var w = vectors[best]
-    var x = vectors[4 + best]
-    var y = vectors[8 + best]
-    var z = vectors[12 + best]
+    # The unit quaternion of the best rotation is the eigenvector of the
+    # largest eigenvalue, the last of `symmetric_eigen`.
+    var matrix = DenseMatrix(4, 4)
+    for at in range(16):  # pragma: no branch
+        matrix.data[at] = n[at]
+    var pairs = symmetric_eigen(matrix)
+    var w = pairs.vectors.get(0, 3)
+    var x = pairs.vectors.get(1, 3)
+    var y = pairs.vectors.get(2, 3)
+    var z = pairs.vectors.get(3, 3)
     var rotation: List[Float64] = [
         1 - 2 * (y * y + z * z),
         2 * (x * y - w * z),

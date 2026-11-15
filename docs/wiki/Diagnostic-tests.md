@@ -22,7 +22,7 @@ Marker A has an AUC of 0.820, with a 95 percent interval from 0.751 to 0.890. Ma
 | `negbin` | `NegativeBinomialModel` and `negative_binomial_regression` |
 | `calibration` | `brier_score`, `scaled_brier_score`, `RiskGroup`, `risk_groups`, `HosmerLemeshow`, `hosmer_lemeshow`, `CalibrationFit`, `calibration_fit`, `recalibrate`, `net_benefit`, `DecisionCurve`, `decision_curve`, `calibration_image`, `decision_curve_image`, `MAX_GROUPS` and `MAX_THRESHOLDS` |
 | `proportions` | `Estimate`, `wilson_interval`, `exact_interval`, `DiagnosticAccuracy`, `diagnostic_accuracy`, `RiskComparison` and `compare_risks` |
-| `distributions` | `beta_tails`, `beta_quantile`, `normal_quantile`, `student_t_upper`, `student_t_quantile`, `f_upper`, `f_quantile`, `precise_exp` and `MAX_DEGREES` |
+| `distributions` | `beta_tails`, `beta_quantile`, `normal_quantile`, `student_t_upper`, `student_t_quantile`, `f_upper`, `f_quantile` and `MAX_DEGREES` |
 
 ## Make a ROC curve
 
@@ -255,11 +255,10 @@ With two raters, Fleiss' kappa is Scott's pi, not Cohen's kappa.
 - `beta_tails(x, a, b)` gives both tails of the beta distribution. The smaller tail comes from a continued fraction, so it keeps its relative accuracy far out.
 - `student_t_upper(t, df)` and `student_t_quantile(p, df)` give the upper tail and the quantile of Student's t.
 - `f_upper(x, d1, d2)` and `f_quantile(p, d1, d2)` give the upper tail and the quantile of the F distribution.
-- `precise_exp(x)` gives `e^x` to about one unit in the last place, from `expm1` and `ldexp`.
 
 The degrees of freedom are real numbers from more than 0 to 1e8. A quantile comes from Newton steps on the tail, held in a bracket by bisection.
 
-The `exp` of Mojo 1.2 is off by about 3e-11 near -70, and a p value is an `exp`. So the distributions use `precise_exp`. It gives 0 below -708, where the result is no longer a normal number.
+The `exp` of Mojo 1.2 is off by about 3e-11 near -70, and a p value is an `exp`. So the distributions use `precise_exp` of the [Numerics](Numerics#use-accurate-elementary-functions) extension.
 
 ## Verification
 
@@ -314,7 +313,6 @@ The tests also check cases by hand:
 - A test against itself gives a p value of 1. A perfect test against a reversed one has a difference with no variance, and the comparison refuses it.
 - A perfect curve runs up the left edge and along the top edge of its plot.
 - The beta tails of `I_x(1, 1) = x`, `I_x(3, 1) = x^3` and `I_x(1, 2) = 1 - (1 - x)^2` are exact. Student's t with 1 degree of freedom is Cauchy's, and with 2 degrees it has a closed form. F with 2 and 2 degrees has the tail `1 / (1 + x)`.
-- `precise_exp` gives e, and `e^-70`, to the last place.
 - Differences of 1, 0, 1 and 0 give a bias of 1/2 and a deviation of `sqrt(1/3)`. Their plot has the bias and the zero line in the right rows.
 - Two raters who differ by a constant leave no residual, and the ICC refuses them.
 - A two-by-two table of 10 and 20 exposed patients, and 5 and 40 others, gives an odds ratio of 4. Its standard error is Woolf's `sqrt(1/10 + 1/20 + 1/5 + 1/40)`. The intercept is the log odds 5/40.

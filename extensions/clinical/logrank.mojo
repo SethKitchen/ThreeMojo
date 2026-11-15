@@ -18,9 +18,7 @@ from extensions.clinical.cox import chi_square_p_value
 from extensions.clinical.survival import kaplan_meier, require_group
 from extensions.numerics.dense import (
     DenseMatrix,
-    cholesky,
-    solve_lower,
-    solve_lower_transposed,
+    cholesky_solve,
 )
 from math.sort_utils import stable_sort
 from units.si import Duration64, SECOND
@@ -138,12 +136,11 @@ def log_rank_groups(
         gap.append(Float64(observed[a]) - expected[a])
         for b in range(m):  # pragma: no branch
             reduced.set(a, b, covariance.get(a, b))
-    var factor: DenseMatrix
+    var solved: List[Float64]
     try:
-        factor = cholesky(reduced)
+        solved = cholesky_solve(reduced, gap)
     except:
         raise Error("A log-rank test needs events that change the risk")
-    var solved = solve_lower_transposed(factor, solve_lower(factor, gap))
     var statistic = 0.0
     for a in range(m):  # pragma: no branch
         statistic += gap[a] * solved[a]

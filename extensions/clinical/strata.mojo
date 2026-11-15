@@ -24,7 +24,7 @@ Each stratum holds `a` and `b`, the exposed patients with and without the
 outcome, and `c` and `d`, the unexposed patients with and without it.
 """
 
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.proportions import Estimate
 from extensions.clinical.survival import Z95
 from extensions.clinical.tables import TableTest

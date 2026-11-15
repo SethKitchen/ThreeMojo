@@ -28,9 +28,8 @@ from extensions.clinical.distributions import (
 )
 from extensions.numerics.dense import (
     DenseMatrix,
-    cholesky,
-    solve_lower,
-    solve_lower_transposed,
+    cholesky_inverse,
+    cholesky_solve,
 )
 from std.math import isfinite, sqrt
 
@@ -208,14 +207,15 @@ def linear_regression(
             right[a] += xa * dy
             for b in range(a + 1):  # pragma: no branch
                 gram.add(a, b, xa * (covariates[i][b] - means[b]))
-    var factor: DenseMatrix
+    # The slopes by triangular solves, so an exact fit leaves no residual.
+    var slopes: List[Float64]
     try:
-        factor = cholesky(gram)
+        slopes = cholesky_solve(gram, right)
     except:
         raise Error(
             "A covariate of a linear model is constant or collinear with others"
         )
-    var slopes = solve_lower_transposed(factor, solve_lower(factor, right))
+    var inverse = cholesky_inverse(gram)
     var model = LinearModel(k + 1)
     var intercept = mean_y
     for a in range(k):  # pragma: no branch
@@ -234,16 +234,10 @@ def linear_regression(
     var scale = residual / Float64(df)
     model.freedom = df
     model.residual_deviation = sqrt(scale)
-    # The inverse of the centered normal matrix, column by column. The
-    # intercept's variance adds that of the mean of the outcome.
-    var inverse = DenseMatrix(k, k)
+    # The inverse of the centered normal matrix. The intercept's variance
+    # adds that of the mean of the outcome.
     for a in range(k):  # pragma: no branch
-        var unit = List[Float64](length=k, fill=0.0)
-        unit[a] = 1.0
-        var column = solve_lower_transposed(factor, solve_lower(factor, unit))
-        for b in range(k):  # pragma: no branch
-            inverse.set(b, a, column[b])
-        model.standard_errors[a + 1] = sqrt(scale * column[a])
+        model.standard_errors[a + 1] = sqrt(scale * inverse.get(a, a))
     var spread = 1.0 / Float64(n)
     for a in range(k):  # pragma: no branch
         for b in range(k):  # pragma: no branch

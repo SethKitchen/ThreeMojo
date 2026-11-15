@@ -32,7 +32,8 @@ from extensions.imaging.ids import (
 )
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
-from extensions.numerics.dense import DenseMatrix, symmetric_eigen
+from extensions.numerics.dense import symmetric_eigen
+from extensions.numerics.spread import PointSpread, descending
 from extensions.sdf.vector import V3, v3
 from std.math import max, sqrt
 from units.si import (
@@ -109,45 +110,33 @@ def label_shape(
     var sx = volume.spacing_x.to(METER)
     var sy = volume.spacing_y.to(METER)
     var sz = volume.spacing_z.to(METER)
-    # Sums of the grid-frame centers and their products, in meters.
+    # The spread of the grid-frame centers, in meters.
     var count = 0
-    var s = List[Float64](length=3, fill=0)
-    var ss = List[Float64](length=9, fill=0)
+    var spread = PointSpread()
     for k in range(map.nz):  # pragma: no branch
         for j in range(map.ny):  # pragma: no branch
             for i in range(map.nx):  # pragma: no branch
                 if map.labels[map.index(i, j, k)] != mark:
                     continue
                 count += 1
-                var p: List[Float64] = [
-                    Float64(i) * sx,
-                    Float64(j) * sy,
-                    Float64(k) * sz,
-                ]
-                for a in range(3):  # pragma: no branch
-                    s[a] += p[a]
-                    for b in range(3):  # pragma: no branch
-                        ss[3 * a + b] += p[a] * p[b]
+                spread.add(
+                    Float64(i) * sx, Float64(j) * sy, Float64(k) * sz, 1.0
+                )
     if count == 0:
         raise Error("The label has no voxels")
     var n = Float64(count)
-    var mean: List[Float64] = [s[0] / n, s[1] / n, s[2] / n]
+    ref mean = spread.mean
     # Each voxel is a box: it adds s^2 / 12 along each of its sides.
-    var own: List[Float64] = [sx * sx / 12, sy * sy / 12, sz * sz / 12]
-    var covariance = DenseMatrix(3, 3)
-    for a in range(3):  # pragma: no branch
-        for b in range(3):  # pragma: no branch
-            var value = ss[3 * a + b] / n - mean[a] * mean[b]
-            if a == b:
-                value += own[a]
-            covariance.set(a, b, value)
-    var pairs = symmetric_eigen(covariance)
+    var covariance = spread.covariance()
+    covariance.add(0, 0, sx * sx / 12)
+    covariance.add(1, 1, sy * sy / 12)
+    covariance.add(2, 2, sz * sz / 12)
+    var pairs = descending(symmetric_eigen(covariance))
     var out = LabelShape()
     out.voxels = count
     out.volume = Volume64(n * sx * sy * sz, CUBIC_METER)
     out.center = volume.patient_point(mean[0] / sx, mean[1] / sy, mean[2] / sz)
-    # The eigenvalues come in ascending order: take them from the last.
-    for k in range(2, -1, -1):  # pragma: no branch
+    for k in range(3):  # pragma: no branch
         var along = (
             volume.axis_x * pairs.vectors.get(0, k)
             + volume.axis_y * pairs.vectors.get(1, k)

@@ -18,7 +18,8 @@ intervals.
 All intervals are 95 percent.
 """
 
-from extensions.clinical.distributions import beta_quantile, precise_exp
+from extensions.clinical.distributions import beta_quantile
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.meta import log_odds_ratio, log_risk_ratio
 from extensions.clinical.survival import Z95
 from std.math import inf, sqrt

@@ -24,13 +24,12 @@ multiply the standard errors by its square root.
 """
 
 from extensions.clinical.cox import MAX_COVARIATES
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.survival import Z95
 from extensions.numerics.dense import (
     DenseMatrix,
-    cholesky,
-    solve_lower,
-    solve_lower_transposed,
+    cholesky_inverse,
+    cholesky_solve,
 )
 from std.math import erfc, isfinite, log, sqrt
 from units.quantity import Unit
@@ -247,7 +246,6 @@ def poisson_regression(
         mu.append((Float64(events[i]) + mean) / 2.0)
     var model = RateModel(p)
     var beta = List[Float64](length=p, fill=0.0)
-    var factor = DenseMatrix(p, p)
     while model.steps < max_steps:
         # Weighted least squares of the working response on (1, x).
         var gram = DenseMatrix(p, p)
@@ -262,14 +260,14 @@ def poisson_regression(
                 for b in range(a + 1):  # pragma: no branch
                     var xb = 1.0 if b == 0 else covariates[i][b - 1]
                     gram.add(a, b, mu[i] * xa * xb)
+        var next: List[Float64]
         try:
-            factor = cholesky(gram)
+            next = cholesky_solve(gram, right)
         except:
             raise Error(
                 "A covariate of a rate model is constant or collinear with"
                 " others"
             )
-        var next = solve_lower_transposed(factor, solve_lower(factor, right))
         var change = 0.0
         for a in range(p):  # pragma: no branch
             change = max(change, abs(next[a] - beta[a]))
@@ -298,12 +296,9 @@ def poisson_regression(
         deviance -= y - mu[i]
         if events[i] > 0:
             deviance += y * log(y / mu[i])
-    factor = cholesky(gram)
+    var covariance = cholesky_inverse(gram)
     for a in range(p):  # pragma: no branch
-        var unit = List[Float64](length=p, fill=0.0)
-        unit[a] = 1.0
-        var column = solve_lower_transposed(factor, solve_lower(factor, unit))
-        model.standard_errors[a] = sqrt(column[a])
+        model.standard_errors[a] = sqrt(covariance.get(a, a))
         model.coefficients[a] = beta[a]
     model.deviance = 2.0 * deviance
     model.dispersion = pearson / Float64(n - p)

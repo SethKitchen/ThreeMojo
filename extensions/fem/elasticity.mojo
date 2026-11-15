@@ -21,6 +21,8 @@ parts.
 """
 
 from extensions.fem.mesh import edge_pairs, signed_volume
+from extensions.numerics.dense import DenseMatrix, symmetric_eigen
+from extensions.numerics.spread import descending
 from extensions.sdf.vector import V3, cross, dot, v3
 from std.math import isfinite, sqrt
 from units.si import Pressure64, PASCAL
@@ -208,11 +210,6 @@ def von_mises(stress: List[Float64]) -> Pressure64:
     )
 
 
-# Cyclic Jacobi sweeps of a symmetric 3 by 3 matrix. The method converges
-# quadratically, and 3 by 3 doubles reach rounding within five sweeps.
-comptime JACOBI_SWEEPS = 10
-
-
 struct PrincipalStress(Copyable, Movable):
     """The principal stresses of a stress, and their directions."""
 
@@ -256,63 +253,24 @@ def principal_stresses(stress: List[Float64]) raises -> PrincipalStress:
     for part in stress:  # pragma: no branch
         if not isfinite(part):
             raise Error("A stress must be finite")
-    # The tensor row by row, and the rotation so far.
-    var a: List[Float64] = [
-        stress[0],
-        stress[5],
-        stress[4],
-        stress[5],
-        stress[1],
-        stress[3],
-        stress[4],
-        stress[3],
-        stress[2],
-    ]
-    var r: List[Float64] = [1, 0, 0, 0, 1, 0, 0, 0, 1]
-    for _ in range(JACOBI_SWEEPS):  # pragma: no branch
-        for pair in [(0, 1), (0, 2), (1, 2)]:  # pragma: no branch
-            _rotate(a, r, pair[0], pair[1])
-    # Order the three by value, the largest first.
-    var order: List[Int] = [0, 1, 2]
-    for i in range(2):  # pragma: no branch
-        for j in range(2 - i):  # pragma: no branch
-            if a[4 * order[j]] < a[4 * order[j + 1]]:
-                order.swap_elements(j, j + 1)
+    # The tensor, and its eigenpairs from the largest stress.
+    var tensor = DenseMatrix(3, 3)
+    var parts: List[Int] = [0, 5, 4, 5, 1, 3, 4, 3, 2]
+    for at in range(9):  # pragma: no branch
+        tensor.data[at] = stress[parts[at]]
+    var pairs = descending(symmetric_eigen(tensor))
     var values = List[Pressure64]()
     var directions = List[V3]()
-    for k in order:  # pragma: no branch
-        values.append(Pressure64(a[4 * k], PASCAL))
-        directions.append(v3(r[k], r[3 + k], r[6 + k]))
+    for k in range(3):  # pragma: no branch
+        values.append(Pressure64(pairs.values[k], PASCAL))
+        directions.append(
+            v3(
+                pairs.vectors.get(0, k),
+                pairs.vectors.get(1, k),
+                pairs.vectors.get(2, k),
+            )
+        )
     return PrincipalStress(values, directions)
-
-
-def _rotate(mut a: List[Float64], mut r: List[Float64], p: Int, q: Int):
-    """Zero `a[p][q]` by one Jacobi rotation, and keep the rotation in `r`."""
-    var apq = a[3 * p + q]
-    if apq == 0:
-        return
-    var theta = (a[3 * q + q] - a[3 * p + p]) / (2.0 * apq)
-    var t = 1.0 / (abs(theta) + sqrt(theta * theta + 1.0))
-    if theta < 0:
-        t = -t
-    var c = 1.0 / sqrt(t * t + 1.0)
-    var s = t * c
-    # A = J^T A J and R = R J, with J the rotation in the plane p-q.
-    for k in range(3):  # pragma: no branch
-        var akp = a[3 * k + p]
-        var akq = a[3 * k + q]
-        a[3 * k + p] = c * akp - s * akq
-        a[3 * k + q] = s * akp + c * akq
-    for k in range(3):  # pragma: no branch
-        var apk = a[3 * p + k]
-        var aqk = a[3 * q + k]
-        a[3 * p + k] = c * apk - s * aqk
-        a[3 * q + k] = s * apk + c * aqk
-    for k in range(3):  # pragma: no branch
-        var rkp = r[3 * k + p]
-        var rkq = r[3 * k + q]
-        r[3 * k + p] = c * rkp - s * rkq
-        r[3 * k + q] = s * rkp + c * rkq
 
 
 def quadratic_gradients(linear: List[V3], weights: List[Float64]) -> List[V3]:

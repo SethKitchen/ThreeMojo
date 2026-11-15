@@ -34,6 +34,7 @@ the unit that scanners store, so free water at 37 C is near 3000.
 from extensions.imaging.image_volume import ImageVolume
 from std.math import expm1, isfinite, log
 from units.quantity import Quantity, Unit
+from extensions.numerics.elementary import precise_exp
 
 comptime Diffusivity64 = Quantity[2, 0, -1, 0, 0, DType.float64]
 """An area each second: a diffusion coefficient."""
@@ -55,13 +56,6 @@ comptime _MILLISECOND_PER_SQUARE_MICROMETER = Unit[
 comptime _SQUARE_MICROMETER_PER_MILLISECOND = Unit[
     2, 0, -1, 0, 0, DType.float64
 ](1.0e-9, "um^2/ms")
-
-
-def _exp(x: Float64) -> Float64:
-    """Return `e^x` from `expm1`, to a few units in the last place."""
-    if x >= -1.0:
-        return 1.0 + expm1(x)
-    return 1.0 / (1.0 + expm1(-x))
 
 
 struct AdcFit(Copyable, Movable):
@@ -275,7 +269,7 @@ def fit_adc(b_values: List[BValue64], signals: List[Float64]) raises -> AdcFit:
     var design = _Design(b_values, 2)
     design.require_line()
     var fit = design.line(_log_signals(signals, design.count))
-    return AdcFit(_diffusivity(fit[0]), _exp(fit[1]))
+    return AdcFit(_diffusivity(fit[0]), precise_exp(fit[1]))
 
 
 def fit_kurtosis(
@@ -305,7 +299,9 @@ def fit_kurtosis(
     var d = -fit[1]
     if not (d > 0):
         raise Error("A kurtosis fit needs signals that fall with b")
-    return KurtosisFit(_diffusivity(d), 6.0 * fit[2] / (d * d), _exp(fit[0]))
+    return KurtosisFit(
+        _diffusivity(d), 6.0 * fit[2] / (d * d), precise_exp(fit[0])
+    )
 
 
 struct AdcMaps(Copyable, Movable):
@@ -427,7 +423,7 @@ def adc_maps(
         adc.values[at] = Float32(
             _diffusivity(fit[0]).to(SQUARE_MICROMETER_PER_SECOND)
         )
-        s0.values[at] = Float32(_exp(fit[1]))
+        s0.values[at] = Float32(precise_exp(fit[1]))
     adc.fit_window()
     s0.fit_window()
     return AdcMaps(adc^, s0^)
@@ -473,7 +469,7 @@ def kurtosis_maps(
             _diffusivity(d).to(SQUARE_MICROMETER_PER_SECOND)
         )
         kurtosis.values[at] = Float32(6.0 * fit[2] / (d * d))
-        s0.values[at] = Float32(_exp(fit[0]))
+        s0.values[at] = Float32(precise_exp(fit[0]))
     diffusivity.fit_window()
     kurtosis.fit_window()
     s0.fit_window()
@@ -515,6 +511,6 @@ def computed_dwi(maps: AdcMaps, b_value: BValue64) raises -> ImageVolume:
         var adc = Diffusivity64(
             Float64(maps.adc.values[at]), SQUARE_MICROMETER_PER_SECOND
         ).to(SQUARE_MILLIMETER_PER_SECOND)
-        out.values[at] = Float32(s0 * _exp(-b * adc))
+        out.values[at] = Float32(s0 * precise_exp(-b * adc))
     out.fit_window()
     return out^

@@ -24,13 +24,11 @@ coefficient is per that unit.
 """
 
 from extensions.clinical.cox import MAX_COVARIATES, chi_square_p_value
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.survival import Z95
 from extensions.numerics.dense import (
     DenseMatrix,
-    cholesky,
-    solve_lower,
-    solve_lower_transposed,
+    cholesky_inverse,
 )
 from std.math import erfc, isfinite, log, log1p, sqrt
 
@@ -239,10 +237,10 @@ def _moved(beta: List[Float64], step: List[Float64]) -> List[Float64]:
     return out^
 
 
-def _factor(information: DenseMatrix) raises -> DenseMatrix:
-    """Factor the information matrix, or say why it cannot be."""
+def _inverse(information: DenseMatrix) raises -> DenseMatrix:
+    """Invert the information matrix, or say why it cannot be."""
     try:
-        return cholesky(information)
+        return cholesky_inverse(information)
     except:
         raise Error(
             "The information of a logistic model is not positive definite:"
@@ -308,9 +306,8 @@ def logistic_regression(
     var beta = List[Float64](length=k + 1, fill=0.0)
     var current = _evaluate(outcomes, covariates, beta)
     while model.steps < max_steps:
-        var factor = _factor(current.information)
-        var step = solve_lower_transposed(
-            factor, solve_lower(factor, current.gradient)
+        var step = _inverse(current.information).multiply_vector(
+            current.gradient
         )
         model.steps += 1
         var size = 0.0
@@ -322,11 +319,8 @@ def logistic_regression(
             model.converged = True
             break
     model.log_likelihood = current.log_likelihood
-    var factor = _factor(current.information)
+    var covariance = _inverse(current.information)
     for a in range(k + 1):  # pragma: no branch
-        var unit = List[Float64](length=k + 1, fill=0.0)
-        unit[a] = 1.0
-        var column = solve_lower_transposed(factor, solve_lower(factor, unit))
-        model.standard_errors[a] = sqrt(column[a])
+        model.standard_errors[a] = sqrt(covariance.get(a, a))
         model.coefficients[a] = beta[a]
     return model^

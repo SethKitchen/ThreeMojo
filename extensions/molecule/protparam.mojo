@@ -31,6 +31,7 @@ from extensions.chemistry.quantities import (
 from extensions.molecule.coloring import kyte_doolittle
 from extensions.molecule.peptide import three_letter
 from std.math import expm1, isfinite
+from extensions.numerics.elementary import precise_power10
 
 comptime MolarArea64 = Molar[2, 0, 0, 0]
 """An area for each mole: the unit of a molar extinction coefficient."""
@@ -41,7 +42,6 @@ comptime PER_MOLAR_CENTIMETER = MolarAreaUnit(0.1, "M^-1 cm^-1")
 coefficient."""
 
 comptime _CODES = "ACDEFGHIKLMNPQRSTVWY"
-comptime _LN10 = 2.302585092994046
 comptime _WATER = 18.0153
 comptime _BISECTIONS = 200
 
@@ -59,14 +59,6 @@ def _codes(sequence: String) raises -> List[Int]:
             raise Error("A sequence holds only the twenty one-letter codes")
         out.append(at)
     return out^
-
-
-def _power10(x: Float64) -> Float64:
-    """Return `10^x` from `expm1`, to a few units in the last place."""
-    var y = x * _LN10
-    if y >= -1.0:
-        return 1.0 + expm1(y)
-    return 1.0 / (1.0 + expm1(-y))
 
 
 def _charge(codes: List[Int], ph: Float64) -> Float64:
@@ -117,12 +109,12 @@ def _charge(codes: List[Int], ph: Float64) -> Float64:
         0.0,
         -1.0,
     ]
-    var total = 1.0 / (1.0 + _power10(ph - 8.6)) - 1.0 / (
-        1.0 + _power10(3.6 - ph)
+    var total = 1.0 / (1.0 + precise_power10(ph - 8.6)) - 1.0 / (
+        1.0 + precise_power10(3.6 - ph)
     )
     for k in codes:  # pragma: no branch
         var s = sign[k]
-        total += s / (1.0 + _power10(s * (ph - pk[k])))
+        total += s / (1.0 + precise_power10(s * (ph - pk[k])))
     return total
 
 

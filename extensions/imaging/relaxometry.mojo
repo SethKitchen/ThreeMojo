@@ -26,13 +26,12 @@ fibrosis, and both in tumors and multiple sclerosis.
 from extensions.imaging.image_volume import ImageVolume
 from extensions.numerics.dense import (
     DenseMatrix,
-    cholesky,
-    solve_lower,
-    solve_lower_transposed,
+    cholesky_solve,
 )
 from std.math import exp, expm1, isfinite, log
 from units.quantity import Unit
 from units.si import Duration64
+from extensions.numerics.elementary import precise_exp
 
 comptime MILLISECOND64 = Unit[0, 0, 1, 0, 0, DType.float64](1.0e-3, "ms")
 """The millisecond, for 64-bit times."""
@@ -42,13 +41,6 @@ comptime _MOST_LOG_T1 = 9.210340371976184
 comptime _GOLDEN = 0.6180339887498949
 comptime _SEARCH_STEPS = 100
 comptime _POLISH_STEPS = 4
-
-
-def _exp(x: Float64) -> Float64:
-    """Return `e^x` from `expm1`, to a few units in the last place."""
-    if x >= -1.0:
-        return 1.0 + expm1(x)
-    return 1.0 / (1.0 + expm1(-x))
 
 
 def _times(times: List[Duration64], least: Int) raises -> List[Float64]:
@@ -140,7 +132,7 @@ def fit_t2(
     var fit = _line(x, y)
     if not (fit[0] < 0):
         raise Error("A T2 fit needs signals that fall with the echo time")
-    return T2Fit(Duration64(-1.0 / fit[0], MILLISECOND64), _exp(fit[1]))
+    return T2Fit(Duration64(-1.0 / fit[0], MILLISECOND64), precise_exp(fit[1]))
 
 
 struct T1Fit(Copyable, Movable):
@@ -191,7 +183,7 @@ def _linear(
     var my = 0.0
     var e = List[Float64]()
     for i in range(len(x)):  # pragma: no branch
-        var v = _exp(-x[i] / t1)
+        var v = precise_exp(-x[i] / t1)
         e.append(v)
         me += v / n
         my += y[i] / n
@@ -215,21 +207,21 @@ def _search(x: List[Float64], y: List[Float64]) -> Float64:
     var high = _MOST_LOG_T1
     var c = high - _GOLDEN * (high - low)
     var d = low + _GOLDEN * (high - low)
-    var fc = _linear(x, y, exp(c))[2]
-    var fd = _linear(x, y, exp(d))[2]
+    var fc = _linear(x, y, precise_exp(c))[2]
+    var fd = _linear(x, y, precise_exp(d))[2]
     for _ in range(_SEARCH_STEPS):  # pragma: no branch
         if fc < fd:
             high = d
             d = c
             fd = fc
             c = high - _GOLDEN * (high - low)
-            fc = _linear(x, y, exp(c))[2]
+            fc = _linear(x, y, precise_exp(c))[2]
         else:
             low = c
             c = d
             fc = fd
             d = low + _GOLDEN * (high - low)
-            fd = _linear(x, y, exp(d))[2]
+            fd = _linear(x, y, precise_exp(d))[2]
     return (low + high) / 2.0
 
 
@@ -245,15 +237,14 @@ def _polish(
         var gram = DenseMatrix(3, 3)
         var right = List[Float64](length=3, fill=0.0)
         for i in range(len(x)):  # pragma: no branch
-            var e = _exp(-x[i] / t1)
+            var e = precise_exp(-x[i] / t1)
             var r = y[i] - (a - b * e)
             var j: List[Float64] = [1.0, -e, -b * e * x[i] / (t1 * t1)]
             for p in range(3):  # pragma: no branch
                 right[p] += j[p] * r
                 for q in range(p + 1):  # pragma: no branch
                     gram.add(p, q, j[p] * j[q])
-        var factor = cholesky(gram)
-        var step = solve_lower_transposed(factor, solve_lower(factor, right))
+        var step = cholesky_solve(gram, right)
         a += step[0]
         b += step[1]
         t1 += step[2]
@@ -267,7 +258,7 @@ def _t1(x: List[Float64], signals: List[Float64]) raises -> T1Fit:
         var y = List[Float64]()
         for i in range(len(x)):  # pragma: no branch
             y.append(-signals[i] if i < flips else signals[i])
-        var t1 = exp(_search(x, y))
+        var t1 = precise_exp(_search(x, y))
         var fit = _linear(x, y, t1)
         if best.residual < 0 or fit[2] < best.residual:
             best = T1Fit(
@@ -279,7 +270,7 @@ def _t1(x: List[Float64], signals: List[Float64]) raises -> T1Fit:
     var done = _polish(x, y, best.t1.to(MILLISECOND64))
     var residual = 0.0
     for i in range(len(x)):  # pragma: no branch
-        var r = y[i] - (done[0] - done[1] * _exp(-x[i] / done[2]))
+        var r = y[i] - (done[0] - done[1] * precise_exp(-x[i] / done[2]))
         residual += r * r
     return T1Fit(
         Duration64(done[2], MILLISECOND64),
@@ -389,7 +380,7 @@ def t2_maps(
         if not (fit[0] < 0):
             continue
         time.values[at] = Float32(-1.0 / fit[0])
-        amplitude.values[at] = Float32(_exp(fit[1]))
+        amplitude.values[at] = Float32(precise_exp(fit[1]))
     time.fit_window()
     amplitude.fit_window()
     return RelaxationMaps(time^, amplitude^)

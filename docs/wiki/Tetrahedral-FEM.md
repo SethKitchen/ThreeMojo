@@ -274,7 +274,7 @@ print(principal.values[0].to(MEGAPASCAL), principal.values[2].to(MEGAPASCAL))
 var along = principal.directions[0]
 ```
 
-The three `values` run from the largest to the smallest. Each of the `directions` is a unit vector, and the three are square to each other. A direction has an arbitrary sign. When two principal stresses are equal, any two square directions in their plane are correct. The cyclic Jacobi method finds the values and the directions. It runs ten sweeps, and a 3 by 3 tensor reaches rounding within five.
+The three `values` run from the largest to the smallest. Each of the `directions` is a unit vector, and the three are square to each other. A direction has an arbitrary sign. When two principal stresses are equal, any two square directions in their plane are correct. The cyclic Jacobi method of `symmetric_eigen`, in the [Numerics](Numerics) extension, finds the values and the directions. It sweeps until the off-diagonal part is at rounding.
 
 ## Natural frequencies
 

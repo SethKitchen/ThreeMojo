@@ -21,7 +21,7 @@ from extensions.chemistry.elements import element_from_symbol
 from extensions.chemistry.quantities import GRAM_PER_MOLE, MolarMass64
 from extensions.molecule.ids import ModelId
 from extensions.molecule.structure import Structure
-from extensions.numerics.dense import DenseMatrix, symmetric_eigen
+from extensions.numerics.spread import PointSpread
 from extensions.sdf.vector import V3, v3
 from std.math import max, sqrt
 from units.si import Length64, METER
@@ -67,9 +67,7 @@ def molecular_shape(
             standard atomic weight.
     """
     var span = structure.model_atoms(model)
-    var masses = List[Float64]()
-    var total = 0.0
-    var center = v3(0, 0, 0)
+    var spread = PointSpread()
     for index in range(span[0], span[0] + span[1]):  # pragma: no branch
         ref atom = structure.atoms[index]
         var weight: Float64
@@ -83,28 +81,13 @@ def molecular_shape(
             raise Error(
                 "The element '" + atom.element + "' has no standard weight"
             )
-        masses.append(weight)
-        total += weight
-        center = center + atom.position * weight
-    center = center * (1.0 / total)
-    var tensor = DenseMatrix(3, 3)
-    for k in range(span[1]):  # pragma: no branch
-        var d = structure.atoms[span[0] + k].position - center
-        var parts = [d.x, d.y, d.z]
-        for i in range(3):  # pragma: no branch
-            for j in range(3):  # pragma: no branch
-                tensor.set(
-                    i,
-                    j,
-                    tensor.get(i, j) + masses[k] * parts[i] * parts[j] / total,
-                )
-    var pairs = symmetric_eigen(tensor)
+        spread.add(atom.position.x, atom.position.y, atom.position.z, weight)
+    var pairs = spread.principal()
     var out = MolecularShape()
-    out.mass = MolarMass64(total, GRAM_PER_MOLE)
-    out.center = center
+    out.mass = MolarMass64(spread.weight, GRAM_PER_MOLE)
+    out.center = v3(spread.mean[0], spread.mean[1], spread.mean[2])
     var sum = 0.0
-    # The eigenvalues come in ascending order: take them from the last.
-    for k in range(2, -1, -1):  # pragma: no branch
+    for k in range(3):  # pragma: no branch
         var value = max(pairs.values[k], 0.0)
         sum += value
         out.extents.append(Length64(sqrt(value), METER))

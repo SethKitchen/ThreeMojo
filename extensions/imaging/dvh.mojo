@@ -38,6 +38,7 @@ from render.framebuffer import Color, Framebuffer
 from std.math import ceil, floor, isfinite, isinf, log, max
 from units.quantity import Unit
 from units.si import CUBIC_METER, METER, Volume64
+from extensions.numerics.elementary import precise_power
 
 # The cubic centimeter, or milliliter, of 64-bit volumes. The
 # `CUBIC_CENTIMETER` of `units.si` is 32-bit, so its scale is 1e-6 to 3e-9
@@ -50,19 +51,6 @@ comptime ROUNDING = 1.0e-9
 comptime MOST_POINTS = 100000
 # The most grid lines of dose on a plot.
 comptime MOST_GRID_LINES = 100
-
-
-def _power(x: Float64, y: Float64) -> Float64:
-    """Return `x^y` for an `x` of 0 or more, to about 1e-15.
-
-    The Float64 `exp` of Mojo 1.2 is off by up to about 1e-11, and so is a
-    fractional power. One Newton step on `log`, which is exact, refines
-    the power.
-    """
-    var t = x**y
-    if not (t > 0) or isinf(t):
-        return t
-    return t * (1.0 + (y * log(x) - log(t)))
 
 
 struct DoseVolumeHistogram(Copyable, Movable):
@@ -266,9 +254,9 @@ struct DoseVolumeHistogram(Copyable, Movable):
             raise Error("A gEUD needs doses that are not negative")
         var sum = 0.0
         for d in self.doses:  # pragma: no branch
-            sum += _power(d, a)
+            sum += precise_power(d, a)
         return AbsorbedDose64(
-            _power(sum / Float64(len(self.doses)), 1.0 / a), GRAY
+            precise_power(sum / Float64(len(self.doses)), 1.0 / a), GRAY
         )
 
     def curve(self, step: AbsorbedDose64) raises -> List[Float64]:

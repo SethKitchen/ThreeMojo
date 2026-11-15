@@ -22,6 +22,7 @@ voxel inside it.
 from extensions.imaging.image_volume import ImageVolume
 from std.math import ceil, exp, isfinite, max, min
 from units.si import Length64, METER
+from extensions.numerics.elementary import precise_exp
 
 # The most voxels a Gaussian kernel reaches on each side of its center.
 comptime MAX_KERNEL_RADIUS = 128
@@ -54,7 +55,7 @@ def gaussian_kernel(sigma_voxels: Float64) raises -> List[Float64]:
     var total = 0.0
     for t in range(-radius, radius + 1):  # pragma: no branch
         var x = Float64(t) / sigma_voxels
-        var w = exp(-0.5 * x * x)
+        var w = precise_exp(-0.5 * x * x)
         weights.append(w)
         total += w
     for index in range(len(weights)):  # pragma: no branch

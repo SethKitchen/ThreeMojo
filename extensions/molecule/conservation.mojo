@@ -34,12 +34,11 @@ from extensions.molecule.sequence import ORDER, chain_sequence, one_letter
 from extensions.molecule.structure import SQUARE_ANGSTROM, Structure
 from std.math import isfinite, log
 from units.si import Area64
+from extensions.numerics.elementary import INVERSE_LN2
 
 # The gap codes, and the largest error of a background's sum.
 comptime _GAPS = "-."
 comptime _SUM_SLACK = 1e-6
-# 1 / ln 2. `log` is exact to the last place, and `log2` is not.
-comptime _INVERSE_LN2 = 1.4426950408889634
 
 
 struct FastaRecords(Copyable, Movable):
@@ -212,7 +211,7 @@ def _plogq(p: Float64, q: Float64) -> Float64:
     """Return `p log2(p / q)`, 0 when p is 0."""
     if p == 0:
         return 0.0
-    return p * log(p / q) * _INVERSE_LN2
+    return p * log(p / q) * INVERSE_LN2
 
 
 def column_conservation(

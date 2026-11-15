@@ -28,7 +28,7 @@ Each risk must be between 0 and 1, and not at either end.
 """
 
 from extensions.clinical.cox import chi_square_p_value
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.logistic import logistic_regression
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba

@@ -21,7 +21,6 @@ from extensions.clinical.distributions import (
     beta_tails,
     f_quantile,
     f_upper,
-    precise_exp,
     student_t_quantile,
     student_t_upper,
 )
@@ -192,13 +191,6 @@ def test_by_hand() raises:
     assert_almost_equal(f_quantile(0.75, 2.0, 2.0), 3.0, rtol=1e-13)
     assert_almost_equal(f_quantile(0.01, 2.0, 2.0), 1.0 / 99.0, rtol=1e-12)
     assert_equal(f_upper(0.0, 3.0, 4.0), 1.0)
-    # The exponential, to the last place.
-    assert_equal(precise_exp(0.0), 1.0)
-    assert_almost_equal(precise_exp(1.0), 2.718281828459045, rtol=2e-16)
-    assert_almost_equal(precise_exp(-70.0), 3.975449735908647e-31, rtol=3e-16)
-    assert_equal(precise_exp(-709.0), 0.0)
-    assert_equal(precise_exp(nan[DType.float64]()), 0.0)
-    assert_true(isinf(precise_exp(710.0)))
     # Bland-Altman: differences 1, 0, 1, 0, so a bias of 1/2 and a
     # deviation of sqrt(1/3).
     var small = bland_altman([1.0, 2.0, 3.0, 4.0], [0.0, 2.0, 2.0, 4.0])

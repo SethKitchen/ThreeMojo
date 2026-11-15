@@ -35,6 +35,7 @@ from std.math import cos, expm1, log, pi, sqrt
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
 from units.si import Length64
+from extensions.numerics.elementary import precise_exp
 
 comptime DEFAULT_OUTPUT = "out/vesselness.png"
 comptime NX = 80
@@ -65,11 +66,6 @@ struct _Noise(Movable):
         return sqrt(-2.0 * log(u)) * cos(2.0 * pi * v)
 
 
-def _exp(x: Float64) -> Float64:
-    """Return `e^x` for an x of 0 or less."""
-    return 1.0 / (1.0 + expm1(-x))
-
-
 def _segment(
     p: List[Float64], a: List[Float64], b: List[Float64], radius: Float64
 ) -> Float64:
@@ -84,7 +80,7 @@ def _segment(
     for c in range(3):
         var q = a[c] + t * (b[c] - a[c]) - p[c]
         d2 += q * q
-    return 100.0 * _exp(-d2 / (2.0 * radius * radius))
+    return 100.0 * precise_exp(-d2 / (2.0 * radius * radius))
 
 
 def _projection(volume: ImageVolume) raises -> ImageVolume:
@@ -149,10 +145,12 @@ def main() raises:
                 var bx = Float64(i) - 20.0
                 var by = Float64(j) - 64.0
                 var bz = Float64(k) - 20.0
-                v = max(v, 90.0 * _exp(-(bx * bx + by * by + bz * bz) / 50.0))
+                v = max(
+                    v, 90.0 * precise_exp(-(bx * bx + by * by + bz * bz) / 50.0)
+                )
                 if i >= 8 and i < 28 and j >= 6 and j < 26:
                     var pz = Float64(k) - 28.0
-                    v = max(v, 80.0 * _exp(-pz * pz / 4.5))
+                    v = max(v, 80.0 * precise_exp(-pz * pz / 4.5))
                 volume.set(i, j, k, Float32(v + NOISE * noise.normal()))
     var sigmas: List[Length64] = [
         Length64(1.5, MILLIMETER64),

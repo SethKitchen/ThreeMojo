@@ -28,7 +28,7 @@ The exact intervals come from the gamma distribution:
   the mean of a Poisson count, of Garwood (1936).
 """
 
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.survival import require_group
 from std.math import inf, isfinite, lgamma, log
 from units.si import Duration64, Frequency64, PER_SECOND, SECOND

@@ -30,11 +30,11 @@ the treatment.
 The weights remove the confounding of the measured covariates only.
 """
 
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.logistic import logistic_regression
 from extensions.clinical.proportions import Estimate
 from extensions.clinical.survival import Z95
-from extensions.numerics.dense import DenseMatrix, solve
+from extensions.numerics.dense import DenseMatrix, inverse
 from std.math import erfc, isfinite, sqrt
 
 comptime _SQRT_TWO = 1.4142135623730951
@@ -221,32 +221,15 @@ def ipw_effect(
         for a in range(m):  # pragma: no branch
             for b in range(m):  # pragma: no branch
                 spread.add(a, b, g[a] * g[b] / size)
-    # V = J^-1 S J^-T / n: solve for each column, then again on the rows.
-    var half = DenseMatrix(m, m)
-    for b in range(m):  # pragma: no branch
-        var column = List[Float64]()
-        for a in range(m):  # pragma: no branch
-            column.append(spread.get(a, b))
-        var x = solve(jacobian, column)
-        for a in range(m):  # pragma: no branch
-            half.set(b, a, x[a])
-    var first = solve(jacobian, _column(half, 0))
-    var second = solve(jacobian, _column(half, 1))
-    var var_tau = first[0] / size
-    var var_mu0 = second[1] / size
-    var cov = first[1] / size
+    # V = J^-1 S J^-T / n, as T^T S T with T = J^-T.
+    var v = inverse(jacobian).transposed().triple_product(spread)
+    var var_tau = v.get(0, 0) / size
+    var var_mu0 = v.get(1, 1) / size
+    var cov = v.get(0, 1) / size
     out.difference_error = sqrt(var_tau)
     out.control_error = sqrt(var_mu0)
     out.treated_error = sqrt(var_tau + var_mu0 + 2.0 * cov)
     out.covariance = cov + var_mu0
-    return out^
-
-
-def _column(matrix: DenseMatrix, index: Int) -> List[Float64]:
-    """Return one column of a matrix."""
-    var out = List[Float64]()
-    for a in range(matrix.rows):  # pragma: no branch
-        out.append(matrix.get(a, index))
     return out^
 
 

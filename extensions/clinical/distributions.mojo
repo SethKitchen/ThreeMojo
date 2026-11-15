@@ -16,7 +16,7 @@ function.
   distribution.
 - `normal_quantile` gives the quantile of the standard normal
   distribution.
-- `precise_exp` is `exp` to about one unit in the last place. The `exp`
+- Each exponential is `precise_exp` of `numerics.elementary`. The `exp`
   of Mojo 1.2 is off by about 3e-11 near -70, and a p value is an `exp`.
 
 A quantile comes from Newton steps on the tail, kept inside a bracket by
@@ -24,39 +24,17 @@ bisection. The degrees of freedom are real numbers, as the interval of an
 ICC needs.
 """
 
+from extensions.numerics.elementary import precise_exp
 from std.math import erfc, expm1, floor, inf, isfinite, ldexp, lgamma, log
 from std.math import log1p
 from std.math import sqrt
 
 # The most degrees of freedom of a distribution here.
 comptime MAX_DEGREES = 1e8
-# ln 2 in two parts, for an exact reduction (Cody and Waite).
-comptime _LN2_HI = 6.93147180369123816490e-01
-comptime _LN2_LO = 1.90821492927058770002e-10
-comptime _INVERSE_LN2 = 1.4426950408889634
 # The most terms of a continued fraction, and of a quantile search.
 comptime _TERMS = 10000
 comptime _SEARCH = 200
 comptime _EPSILON = 1e-16
-
-
-def precise_exp(x: Float64) -> Float64:
-    """Return `e^x` to about one unit in the last place.
-
-    Args:
-        x: The exponent.
-
-    Returns:
-        `e^x`. 0 below -708, where the result is no longer a normal
-        number, and infinity above 709.
-    """
-    if not (x >= -708.0):
-        return 0.0
-    if x > 709.0:
-        return inf[DType.float64]()
-    var n = floor(x * _INVERSE_LN2 + 0.5)
-    var r = (x - n * _LN2_HI) - n * _LN2_LO
-    return ldexp(1.0 + expm1(r), Int32(Int(n)))
 
 
 def _fraction(x: Float64, a: Float64, b: Float64) -> Float64:

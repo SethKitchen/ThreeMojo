@@ -12,7 +12,7 @@ against lifelines. See `assets/aft/make_aft.py`.
 from extensions.clinical.aft import WeibullRegression, weibull_regression
 from extensions.clinical.parametric import DurationUnit64
 from extensions.clinical.survival import DAY64, WEEK64
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from std.math import inf, log, nan
 from std.testing import (
     TestSuite,

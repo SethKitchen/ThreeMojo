@@ -72,6 +72,7 @@ from units.si import (
     SECOND,
 )
 from units.quantity import Unit
+from extensions.numerics.elementary import precise_exp
 
 comptime DEFAULT_OUTPUT = "out/perfusion.png"
 comptime SIZE = 96
@@ -141,18 +142,13 @@ def _tissue(x: Float64, y: Float64) -> Int:
     return BRAIN
 
 
-def _exp(x: Float64) -> Float64:
-    """Return `e^x` from `expm1`, for x of 0 or less."""
-    return 1.0 + expm1(x)
-
-
 def _arterial_fine() -> List[Float64]:
     """Return the arterial enhancement on the fine grid, peaking at 300."""
     var out = List[Float64]()
     var top = 0.0
     for at in range(FRAMES * FINE):
         var s = max(Float64(at) * STEP / Float64(FINE) - 6.0, 0.0)
-        var v = s * s * s * _exp(-s / 1.5)
+        var v = s * s * s * precise_exp(-s / 1.5)
         out.append(v)
         top = max(top, v)
     for at in range(len(out)):
@@ -174,7 +170,9 @@ def _curves(arterial: List[Float64]) -> List[List[Float64]]:
         var residue = List[Float64]()
         for at in range(FRAMES * FINE):
             var t = Float64(at) * dt - delay[tissue]
-            residue.append(flow * _exp(-t / mtt[tissue]) if t >= 0 else 0.0)
+            residue.append(
+                flow * precise_exp(-t / mtt[tissue]) if t >= 0 else 0.0
+            )
         var frames = List[Float64]()
         for frame in range(FRAMES):
             var j = frame * FINE

@@ -10,7 +10,7 @@ every element, so its equilibrium density has a closed form:
 `rho^(gamma + 1) = sigma^2 rho0^gamma / (2 C k)`.
 """
 
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.fem.elasticity import IsotropicMaterial
 from extensions.fem.ids import DOF_X, DOF_Y, DOF_Z, ElementId, MaterialId
 from extensions.fem.mesh import box_mesh, quadratic_mesh

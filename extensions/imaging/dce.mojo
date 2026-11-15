@@ -46,6 +46,7 @@ from extensions.imaging.labels import LabelMap, require_same_grid
 from std.math import exp, expm1, isfinite, log, max, min, pi, sqrt
 from units.quantity import Unit
 from units.si import Duration64, Frequency64
+from extensions.numerics.elementary import precise_exp
 
 # The minute, and one each minute, for 64-bit times and rates.
 comptime MINUTE64 = Unit[0, 0, 1, 0, 0, DType.float64](60.0, "min")
@@ -254,7 +255,7 @@ def _at(
     extended: Bool,
 ) -> Tuple[Float64, Float64, Float64]:
     """Return the least squares at `kep = exp(u)` a minute."""
-    var kep = exp(u)
+    var kep = precise_exp(u)
     var g = _convolve(t, plasma, kep)
     # The integral of Cp exp(-kep (t - s)), which Ktrans multiplies.
     var c1 = List[Float64]()
@@ -330,7 +331,7 @@ def fit_tofts(
             f2 = _at(t, plasma, tissue, x2, extended)[2]
     var u = 0.5 * (a + b)
     var found = _at(t, plasma, tissue, u, extended)
-    var kep = exp(u)
+    var kep = precise_exp(u)
     var k = found[0]
     var ve = k / kep
     var rate = kep
@@ -453,8 +454,10 @@ def parker_aif(times: List[Duration64]) raises -> List[Float64]:
         var d1 = (t - 0.17046) / 0.0563
         var d2 = (t - 0.365) / 0.132
         out.append(
-            0.809 / (0.0563 * root) * exp(-0.5 * d1 * d1)
-            + 0.330 / (0.132 * root) * exp(-0.5 * d2 * d2)
-            + 1.050 * exp(-0.1685 * t) / (1.0 + exp(-38.078 * (t - 0.483)))
+            0.809 / (0.0563 * root) * precise_exp(-0.5 * d1 * d1)
+            + 0.330 / (0.132 * root) * precise_exp(-0.5 * d2 * d2)
+            + 1.050
+            * precise_exp(-0.1685 * t)
+            / (1.0 + precise_exp(-38.078 * (t - 0.483)))
         )
     return out^

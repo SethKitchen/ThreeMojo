@@ -19,7 +19,7 @@ Kaplan-Meier curve.
 The RMST does not need proportional hazards, and it is in units of time.
 """
 
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.survival import SurvivalCurve, Z95
 from std.math import erfc, isfinite, sqrt
 from units.si import Duration64, SECOND

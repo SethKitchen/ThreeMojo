@@ -31,13 +31,12 @@ mean of each covariate first, which does not change `b`.
 See Cox (1972), Efron (1977), Breslow (1974) and Harrell and others (1982).
 """
 
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.clinical.survival import Z95, require_group
 from extensions.numerics.dense import (
     DenseMatrix,
-    cholesky,
-    solve_lower,
-    solve_lower_transposed,
+    cholesky_inverse,
+    cholesky_solve,
 )
 from math.sort_utils import stable_sort
 from std.math import erfc, exp, isfinite, log, sqrt
@@ -356,16 +355,14 @@ def _efron(
 
 def _newton_step(current: _Pass) raises -> List[Float64]:
     """Solve the information matrix against the gradient by Cholesky."""
-    var factor: DenseMatrix
     try:
-        factor = cholesky(current.information)
+        return cholesky_solve(current.information, current.gradient)
     except:
         raise Error(
             "The information of a Cox model is not positive definite: a"
             " covariate may be constant, collinear with others, or"
             " separate the patients"
         )
-    return solve_lower_transposed(factor, solve_lower(factor, current.gradient))
 
 
 def _moved(
@@ -514,12 +511,9 @@ def cox_regression(
         current = trial^
     model.log_likelihood = current.log_likelihood
     # The covariance is the inverse of the information matrix.
-    var factor = cholesky(current.information)
+    var covariance = cholesky_inverse(current.information)
     for a in range(k):  # pragma: no branch
-        var unit = List[Float64](length=k, fill=0.0)
-        unit[a] = 1.0
-        var column = solve_lower_transposed(factor, solve_lower(factor, unit))
-        model.standard_errors[a] = sqrt(column[a])
+        model.standard_errors[a] = sqrt(covariance.get(a, a))
         model.coefficients[a] = beta[a]
     var risk = List[Float64]()
     for i in range(n):  # pragma: no branch

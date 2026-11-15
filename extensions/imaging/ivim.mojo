@@ -37,19 +37,13 @@ from extensions.imaging.diffusion import (
 )
 from extensions.imaging.image_volume import ImageVolume
 from std.math import exp, expm1, isfinite, log
+from extensions.numerics.elementary import precise_exp
 
 # The search of ln D* in mm^2/s, and its steps.
 comptime _LEAST_LOG_STAR = -5.809142990314028
 comptime _MOST_LOG_STAR = -0.6931471805599453
 comptime _GOLDEN = 0.6180339887498949
 comptime _SEARCH_STEPS = 120
-
-
-def _exp(x: Float64) -> Float64:
-    """Return `e^x` from `expm1`, to a few units in the last place."""
-    if x >= -1.0:
-        return 1.0 + expm1(x)
-    return 1.0 / (1.0 + expm1(-x))
 
 
 struct IvimFit(Copyable, Movable):
@@ -152,7 +146,7 @@ struct _Plan(Movable):
                 xx += (self.b[i] - mx) * (self.b[i] - mx)
                 xy += (self.b[i] - mx) * (log(s[i]) - my)
         var d = -xy / xx
-        var f = 1.0 - _exp(my + d * mx) / s[0]
+        var f = 1.0 - precise_exp(my + d * mx) / s[0]
         var low = _LEAST_LOG_STAR
         var high = _MOST_LOG_STAR
         var c = high - _GOLDEN * (high - low)
@@ -175,7 +169,7 @@ struct _Plan(Movable):
         return IvimFit(
             Diffusivity64(d, SQUARE_MILLIMETER_PER_SECOND),
             Diffusivity64(
-                exp((low + high) / 2.0), SQUARE_MILLIMETER_PER_SECOND
+                precise_exp((low + high) / 2.0), SQUARE_MILLIMETER_PER_SECOND
             ),
             f,
             s[0],
@@ -185,13 +179,13 @@ struct _Plan(Movable):
         self, s: List[Float64], d: Float64, f: Float64, log_star: Float64
     ) -> Float64:
         """Return the sum of squares of the model below the split."""
-        var star = exp(log_star)
+        var star = precise_exp(log_star)
         var total = 0.0
         for i in range(len(self.b)):  # pragma: no branch
             if self.b[i] < self.split:
                 var model = s[0] * (
-                    f * _exp(-self.b[i] * star)
-                    + (1.0 - f) * _exp(-self.b[i] * d)
+                    f * precise_exp(-self.b[i] * star)
+                    + (1.0 - f) * precise_exp(-self.b[i] * d)
                 )
                 total += (model - s[i]) * (model - s[i])
         return total

@@ -28,14 +28,13 @@ without them.
 """
 
 from extensions.clinical.cox import MAX_COVARIATES, chi_square_p_value
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import LN2, precise_exp
 from extensions.clinical.parametric import DurationUnit64, fit_weibull
 from extensions.clinical.survival import Z95, require_group
 from extensions.numerics.dense import (
     DenseMatrix,
-    cholesky,
-    solve_lower,
-    solve_lower_transposed,
+    cholesky_inverse,
+    cholesky_solve,
 )
 from std.math import erfc, inf, isfinite, log, sqrt
 from units.si import Duration64, SECOND
@@ -44,7 +43,6 @@ from units.si import Duration64, SECOND
 # may lose, relative, to roundoff.
 comptime _HALVINGS = 30
 comptime _SLACK = 1e-10
-comptime _LN2 = 0.6931471805599453
 
 
 struct WeibullRegression(Copyable, Movable):
@@ -244,7 +242,7 @@ struct WeibullRegression(Copyable, Movable):
                 covariate.
         """
         var eta = self._eta(row)
-        return Duration64(precise_exp(eta + log(_LN2) / self.shape), SECOND)
+        return Duration64(precise_exp(eta + log(LN2) / self.shape), SECOND)
 
     def survival(self, row: List[Float64], time: Duration64) raises -> Float64:
         """Return the survival of a patient at a time.
@@ -387,20 +385,6 @@ struct _Data(Movable):
         return (h^, grad^)
 
 
-def _inverse(a: DenseMatrix) raises -> DenseMatrix:
-    """Return the inverse of a positive definite matrix."""
-    var n = a.rows
-    var factor = cholesky(a)
-    var out = DenseMatrix(n, n)
-    for c in range(n):  # pragma: no branch
-        var unit = List[Float64](length=n, fill=0.0)
-        unit[c] = 1.0
-        var column = solve_lower_transposed(factor, solve_lower(factor, unit))
-        for r in range(n):  # pragma: no branch
-            out.data[r * n + c] = column[r]
-    return out^
-
-
 def weibull_regression(
     times: List[Duration64],
     events: List[Bool],
@@ -450,8 +434,7 @@ def weibull_regression(
     var n = k + 2
     while model.steps < max_steps:
         var found = data.information(g, rho)
-        var factor = cholesky(found[0])
-        var step = solve_lower_transposed(factor, solve_lower(factor, found[1]))
+        var step = cholesky_solve(found[0], found[1])
         model.steps += 1
         var size = 0.0
         for a in range(n):  # pragma: no branch
@@ -487,24 +470,15 @@ def weibull_regression(
     for i in range(len(information.x)):  # pragma: no branch
         for a in range(k):  # pragma: no branch
             information.x[i][a + 1] += data.means[a]
-    var variance = _inverse(information.information(uncentered, rho)[0])
+    var variance = cholesky_inverse(information.information(uncentered, rho)[0])
     # The Jacobian of `(b, ln rho)` in `(g, rho)`: b = -g / rho.
     var jacobian = DenseMatrix(n, n)
     for a in range(k + 1):  # pragma: no branch
         jacobian.data[a * n + a] = -1.0 / rho
         jacobian.data[a * n + n - 1] = uncentered[a] / (rho * rho)
     jacobian.data[n * n - 1] = 1.0 / rho
-    for r in range(n):  # pragma: no branch
-        for c in range(n):  # pragma: no branch
-            var sum = 0.0
-            for p in range(n):  # pragma: no branch
-                for q in range(n):  # pragma: no branch
-                    sum += (
-                        jacobian.data[r * n + p]
-                        * variance.data[p * n + q]
-                        * jacobian.data[c * n + q]
-                    )
-            model.covariance.data[r * n + c] = sum
+    # J V J^T, as T^T A T with T = J^T.
+    model.covariance = jacobian.transposed().triple_product(variance)
     model.shape = rho
     model.intercept_in_seconds = -uncentered[0] / rho + log(data.top)
     model.intercept_error = sqrt(model.covariance.data[0])

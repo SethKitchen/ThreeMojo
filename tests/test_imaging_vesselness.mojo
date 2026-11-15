@@ -10,7 +10,7 @@ for a synthetic volume, which `_volume` makes again. See
 `assets/vesselness/make_vesselness.py`.
 """
 
-from extensions.clinical.distributions import precise_exp
+from extensions.numerics.elementary import precise_exp
 from extensions.imaging.image_volume import ImageVolume, MILLIMETER64
 from extensions.imaging.vesselness import hessian_eigenvalues, vesselness
 from std.collections import Optional
