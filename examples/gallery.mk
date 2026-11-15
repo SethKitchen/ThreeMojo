@@ -293,6 +293,9 @@ $(call gallery,indentation,indentation)
 # The Kaplan-Meier curves of the 6-MP leukemia trial of 1963, drug and
 # placebo, with a tick at each censored patient.
 $(call gallery,survival,survival)
+# The cumulative incidence of relapse and of death without relapse in a
+# synthetic cohort, beside one minus the Kaplan-Meier curve of relapse.
+$(call gallery,competing,competing)
 # The ROC curves of two synthetic markers, with the chance diagonal.
 $(call gallery,roc,roc)
 # The calibration plot and the decision curve of an overfitted risk model,

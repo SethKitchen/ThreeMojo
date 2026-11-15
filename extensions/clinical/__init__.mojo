@@ -10,6 +10,7 @@
 - `cox`: Cox proportional hazards regression.
 - `logrank`: the log-rank test of two groups or more.
 - `rmst`: the Nelson-Aalen hazard and the restricted mean survival time.
+- `competing`: the cumulative incidence of competing causes.
 - `roc`: ROC curves of diagnostic tests, their AUC and DeLong's test.
 - `agreement`: Bland-Altman agreement and intraclass correlations.
 - `kappa`: Cohen's kappa, simple and weighted.

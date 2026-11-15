@@ -1,6 +1,6 @@
 # Survival analysis
 
-`extensions/clinical/` gives the survival of groups of patients. It makes Kaplan-Meier curves with 95 percent intervals and medians. It compares two groups by the log-rank test, and it plots the curves. It fits Cox models of survival on covariates, such as an age or a treatment. It gives the cumulative hazard and the restricted mean survival time.
+`extensions/clinical/` gives the survival of groups of patients. It makes Kaplan-Meier curves with 95 percent intervals and medians. It compares two groups by the log-rank test, and it plots the curves. It fits Cox models of survival on covariates, such as an age or a treatment. It gives the cumulative hazard and the restricted mean survival time. It gives the cumulative incidence of a cause when another cause can come first.
 
 It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
 
@@ -18,6 +18,7 @@ A Cox model gives the placebo a hazard ratio of 4.82, with a 95 percent interval
 | `cox` | `CoxModel`, `cox_regression`, `chi_square_p_value` and `MAX_COVARIATES` |
 | `logrank` | `GroupLogRank`, `log_rank_groups` and `MAX_GROUPS` |
 | `rmst` | `CumulativeHazard`, `nelson_aalen`, `RestrictedMean`, `restricted_mean`, `RestrictedComparison` and `compare_restricted_means` |
+| `competing` | `CumulativeIncidence`, `cumulative_incidence` and `incidence_image` |
 
 ## Make a survival curve
 
@@ -136,6 +137,33 @@ The standard error is that of Klein and Moeschberger, as R's survRM2 gives. It s
 
 `compare_restricted_means(first, second, horizon)` gives the difference of two restricted means, first less second, with its standard error, z, two-sided p value and 95 percent interval.
 
+## Account for competing risks
+
+A patient who dies of another cause can no longer relapse. The Kaplan-Meier curve of relapse, with the deaths censored, takes the dead as if they could still relapse. So `1 - S` overstates the risk of relapse. Use the cumulative incidence of Aalen and Johansen when another cause can come first.
+
+![The cumulative incidence of relapse and of death without relapse, beside one minus the Kaplan-Meier curve of relapse](out/competing.png)
+
+`examples/competing.mojo` makes this picture from 400 synthetic patients. Each has a relapse at a rate of 0.15 a year and a death without relapse at 0.10 a year. The blue steps are the incidence of relapse, and the gray steps that of death without relapse. The red steps are `1 - S`, with the deaths censored. At 5 years, `1 - S` gives 0.58, but the incidence of relapse is only 0.45.
+
+```mojo
+from extensions.clinical.competing import cumulative_incidence
+
+var relapse_curve = cumulative_incidence(times, relapse, death)
+print(relapse_curve.at(Duration64(5, YEAR64)), relapse_curve.interval(0)[1])
+```
+
+`cumulative_incidence(times, events, competing)` takes the time of each patient to the first event or to the censoring. `events` marks the patients whose first event is the cause of interest, and `competing` those whose first event is another cause. A patient has one first event at most. At each time of an event of either cause:
+
+    F(t) = F(t-) + S(t-) d / n
+
+`S` is the Kaplan-Meier survival from every cause, `d` the events of the cause of interest and `n` the patients at risk.
+
+The result gives `times`, `incidence`, `at_risk`, `events` and `competing` at each time of an event of either cause. `variance` is the delta-method variance of Collett, as lifelines gives it. `interval(i)` is symmetric for `log(-log F)`, so it stays between 0 and 1. `at(time)` gives the incidence at any time. With no competing event, the incidence is `1 - S` and its variance is Greenwood's.
+
+Events of both causes at one time count at once. lifelines jitters such ties apart at random instead.
+
+`incidence_image(curves, colors, top, grid, ceiling, width, height)` draws the curves as rising steps. The incidence runs from 0 at the bottom edge to `ceiling` at the top edge.
+
 ## Draw the curves
 
 `survival_image(curves, colors, top, grid, width, height)` plots the curves as steps on a white image. Time runs from 0 at the left edge to `top` at the right edge. Survival runs from 0 at the bottom edge to 1 at the top edge. A light gray line marks each `grid` of time and each tenth of survival. A short vertical tick marks each censored patient on its curve.
@@ -151,6 +179,12 @@ The tests compare the module with lifelines 0.30.3, a Python library, on the tri
 - The log-rank test of three synthetic arms with ties agrees with lifelines' `multivariate_logrank_test` to a relative 1e-12, and its p value to 1e-11. With two groups, it is the two-group test.
 - The Nelson-Aalen hazard of each group agrees with lifelines to a relative 1e-14, and the ends of its interval to 1e-13.
 - The restricted mean to 23 weeks agrees with lifelines' `restricted_mean_survival_time` to 1e-14. Its standard error agrees with the formula in numpy to 1e-13, and the test of the difference to 1e-11.
+
+The tests compare `competing` with the `AalenJohansenFitter` of lifelines on a synthetic cohort of 80 patients with two causes. No two events tie, so lifelines does not jitter them. `assets/competing/make_competing.py` writes them.
+
+- At the 42 times of an event, the incidence of each cause agrees to a relative 1e-14, and its variance to 1e-12.
+- The ends of the interval agree to 1e-12. lifelines names its two interval columns the other way round, so the script takes the smaller end as the low end.
+- With no competing event, the incidence is `1 - S` of `kaplan_meier` to 1e-14, and its variance is `S^2` times Greenwood's sum to 1e-12.
 
 The tests compare the Cox model with lifelines on a synthetic cohort of 120 patients with three covariates. The cohort has 70 events and 32 tied times. `assets/survival/make_cox.py` makes it.
 
@@ -174,6 +208,8 @@ The tests check Cox models by hand:
 
 The tests check the cumulative hazard and the restricted mean by hand. Three patients have events at 1 and 2 weeks, and one is censored at 3 weeks. To 4 weeks, the area is `1 + 2/3 + 2 x 1/3 = 7/3`, and its variance is `(16/9) / 6 + (4/9) / 2`. A group with no event has a restricted mean of the whole horizon, with no error.
 
+The tests check competing risks by hand. Four patients have a relapse at 1 day, a death at 2, a censoring at 3 and a relapse at 4. The incidence of relapse is 0.25, then 0.25, then 0.75, and that of death is 0.25. Once no patient is left, the two incidences sum to 1. The first variance is `p (1 - p) / n`, or 3/64. A relapse and a death at one time of three patients give each cause an incidence of 1/3.
+
 ## Errors
 
 Every function raises `Error` for input it cannot use.
@@ -192,6 +228,9 @@ Every function raises `Error` for input it cannot use.
 | The freedom is not from 1 to 1000, or the statistic is negative or not a number | `chi_square_p_value` |
 | The colors are not one for each curve, or there is no curve | `survival_image` |
 | A side is out of 64 to 4096 pixels, the top time is not positive and finite, or the grid gives more than 100 lines | `survival_image` |
+| The competing events are not one for each patient, or a patient has both first events | `cumulative_incidence` |
+| A row index names no time | `CumulativeIncidence.interval` |
+| There is no curve, the colors are not one for each, a side is out of 64 to 4096 pixels, a time is out of range, or the ceiling is not above 0 and at most 1 | `incidence_image` |
 
 ## Limits
 
@@ -200,6 +239,7 @@ Every function raises `Error` for input it cannot use.
 - A Cox fit holds the risk sets in one pass over the sorted times, and Harrell's C compares each pair of patients. A cohort of many thousands of patients is slow.
 - It takes right censoring only. A patient who enters the study late, or whose event happens between two visits, needs another method.
 - The p value is for one test. Many tests on one data set need a correction.
+- The cumulative incidence takes independent censoring. The module has no test of Gray to compare incidences, and no Fine-Gray model of the subdistribution hazard.
 
 ## References
 
@@ -213,6 +253,9 @@ Every function raises `Error` for input it cannot use.
 - Breslow, "Covariance analysis of censored survival data", Biometrics, 1974.
 - Harrell and others, "Evaluating the yield of medical tests", Journal of the American Medical Association, 1982.
 - Nelson, "Theory and applications of hazard plotting for censored failure data", Technometrics, 1972.
+- Aalen and Johansen, "An empirical transition matrix for non-homogeneous Markov chains based on censored observations", Scandinavian Journal of Statistics, 1978.
+- Collett, a textbook on the survival data of medical research, third edition, CRC Press, 2015.
+- Putter, Fiocco and Geskus, "Tutorial in biostatistics: competing risks and multi-state models", Statistics in Medicine, 2007.
 - Aalen, "Nonparametric inference for a family of counting processes", Annals of Statistics, 1978.
 - Royston and Parmar, "Restricted mean survival time: an alternative to the hazard ratio", BMC Medical Research Methodology, 2013.
 - Klein and Moeschberger, "Survival Analysis: Techniques for Censored and Truncated Data", 2nd edition, 2003.
