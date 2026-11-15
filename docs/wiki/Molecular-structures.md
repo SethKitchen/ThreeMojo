@@ -39,6 +39,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `dihedral` | `backbone_angles`, `BackboneAngles`, `dihedral`, `ramachandran_image`, `ramachandran_color` and `plot_pixel` |
 | `amphipathic` | `eisenberg_hydrophobicity`, `sequence_hydrophobicity`, `HydrophobicMoment`, `hydrophobic_moment`, `window_moment`, `HelicalWheel`, `helical_wheel` and `MAX_WHEEL` |
 | `phylogeny` | `alignment_distances`, `kimura_distances`, `neighbor_joining`, `upgma`, `midpoint_root`, `PhyloTree`, `tree_image`, `TreeDrawing` and `MAX_TAXA` |
+| `conservation` | `parse_fasta`, `FastaRecords`, `henikoff_weights`, `uniform_background`, `column_conservation`, `ColumnConservation` and `conservation_b_factors` |
 | `protparam` | `net_charge`, `isoelectric_point`, `average_mass`, `extinction_coefficients`, `gravy`, `aromaticity`, `aliphatic_index`, `MolarArea64` and `PER_MOLAR_CENTIMETER` |
 
 ## Read an mmCIF file
@@ -437,6 +438,38 @@ A `PhyloTree` holds its leaves as nodes 0 to `n - 1`, in the order of the names.
 
 `tree_image(tree, width, height, label)` draws the tree with the root at the left and the leaves in rows. It keeps `label` pixels at the right, and gives the place of each leaf's name so the caller can write it.
 
+## Measure the conservation of an alignment
+
+A residue that evolution keeps the same across a protein family often matters to the fold or to the function. A missense variant at such a site is more often harmful. Variant studies therefore read the conservation of each site in an alignment of the family.
+
+```mojo
+from extensions.molecule.conservation import column_conservation, conservation_b_factors, henikoff_weights, parse_fasta, uniform_background
+
+var rows = parse_fasta(open("family.fasta", "r").read()).sequences.copy()
+var columns = column_conservation(rows, henikoff_weights(rows), uniform_background())
+var scores = List[Float64]()
+for column in columns:
+    scores.append(100.0 * column.score)
+conservation_b_factors(structure, ChainId(0), rows[0], scores)
+```
+
+- `parse_fasta(text)` reads the names and the sequences of a FASTA text. The rows of an alignment hold the twenty one-letter codes, and `-` or `.` for a gap.
+- `henikoff_weights(rows)` gives the weights of Henikoff and Henikoff (1994). In each column, a row with a residue gets `1 / (r n)`. Here r is the count of residue types in the column, and n the count of its own type. Near copies of one sequence share their weight, so they do not make a column look more conserved.
+- `column_conservation(rows, weights, background)` gives a `ColumnConservation` for each column. The background holds the share of each amino acid in the order ARNDCQEGHILKMFPSTWYV, such as `uniform_background()` or the mean composition of the family.
+- `conservation_b_factors(structure, chain, row, values)` writes the value of each column into the B-factors of the residues of a chain. The row without its gaps must be the sequence of the chain. Then the colors of a B-factor show the conservation on a ribbon or a surface.
+
+A `ColumnConservation` has these fields, with the residues weighted and the gaps left out of the shares:
+
+| Field | Meaning |
+|---|---|
+| `gaps` | The weighted share of the rows with a gap |
+| `entropy` | The Shannon entropy of the shares, in bits: 0 when one residue fills the column, and at most `log2(20)`, or 4.32 |
+| `relative_entropy` | The relative entropy of the shares to the background, in bits |
+| `divergence` | The Jensen-Shannon divergence of the shares and the background, in bits, from 0 to 1 |
+| `score` | The divergence times one less the share of gaps, after Capra and Singh (2007) |
+
+A column of gaps only has 0 for each value but `gaps`.
+
 ## Measure the parameters of a protein
 
 The sequence of a protein gives its charge, its mass and how it absorbs light. A laboratory uses them to purify a protein, to measure its concentration, and to choose a buffer.
@@ -701,6 +734,13 @@ The tests check these results:
 - Variants read as `R175H`, `p.R175H` and `p.Arg175His`. Each malformed form is refused, as are a stop, a number of 0 and a change to the same amino acid.
 - Four variants on an ideal helix give their residues, their charge, hydropathy and BLOSUM62 changes, their mean B-factors and their RSA. Their contacts match a search of every pair of atoms. A wrong wild type and a missing number are refused.
 
+The tests compare `conservation` with scipy 1.18.1 and Biopython 1.88 on a synthetic alignment of 12 rows and 48 columns. Some columns are held, some change at rising rates, some are free, and some have gaps. `assets/conservation/make_conservation.py` writes them.
+
+- The Henikoff weights agree with the formula in numpy to 1e-16.
+- With uniform weights and with the Henikoff weights, the share of gaps agrees to 1e-15. The entropy agrees with scipy's `entropy` to 1e-14, and the Jensen-Shannon divergence with the square of scipy's `jensenshannon` to 1e-14.
+- The relative entropy agrees with Biopython's `motifs.Motif.relative_entropy`, from the weighted counts, to 1e-13.
+- A held column has no entropy, and its relative entropy to a uniform background is `log2(20)`. Two copies of one row share the weight of a third row that differs. The B-factors of a chain take the values of its columns past the gaps of its row.
+
 The tests compare `protparam` with Biopython 1.88 and the Python package peptides 0.5.0 on five sequences. They are ubiquitin, magainin 2, melittin, LL-37 and a short peptide of each charged residue. `assets/protparam/make_protparam.py` writes them.
 
 - The net charge at pH 7 and 7.4 agrees with peptides on the scale of EMBOSS to 1e-13. The isoelectric point agrees to 1e-8, because peptides stops its bisection when its ends agree to 1e-9.
@@ -738,6 +778,10 @@ Every function raises `Error` for input it cannot use.
 | A p-distance is below 0, not finite or too large for Kimura's formula | `kimura_distances` |
 | A leaf index names no leaf, or a tree has no root | `PhyloTree.path_length`, `midpoint_root` |
 | A side of a tree image is out of 64 to 4096 pixels, or its label space is out of 0 to half its width | `tree_image` |
+| A FASTA text has no record, a sequence before a name, or a record with no sequence | `parse_fasta` |
+| Alignment rows are none, empty, of two lengths, or hold another code, or hold gaps only for weights | `henikoff_weights`, `column_conservation`, `conservation_b_factors` |
+| The weights are not one for each row, 0 or more and finite, with a sum above 0, or the background is not twenty shares above 0 that sum to 1 | `column_conservation` |
+| A row is not of the chain's sequence, or the values are not one finite value for each column | `conservation_b_factors` |
 | A sequence is empty or holds a code that is not one of the twenty, or a pH is not finite | `protparam` |
 | A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, an alignment mode is not valid, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
@@ -775,6 +819,7 @@ Every function raises `Error` for input it cannot use.
 - A variant is found by its author number in the file. A file numbered another way, or a residue with an insertion code, needs its numbers mapped first. A site's measures are of the wild-type structure; the variant's own shape is not modeled.
 - The Coulomb potential uses formal charges at pH 7 and the dielectric `4 r`. It is not a Poisson-Boltzmann solution. It leaves out a charged histidine, other protonation states and the ions of the solvent.
 - A hydrophobic moment takes the sequence as one ideal helix or strand. It does not find where a helix starts or ends, and it does not predict the activity or the toxicity of a peptide.
+- Conservation reads one alignment as it is given. It does not align the sequences, and a poor alignment gives poor scores. It has no pseudocounts and does not average over a window of columns. A conserved site is a clue for research, not a prediction that a variant causes disease.
 - The parameters of a sequence take each residue as free in water. They do not see a residue buried in the fold, a modified residue, a bound metal or the shift of a pK in the protein.
 - The trees are distance trees. They do not fit a model of evolution by likelihood, give no bootstrap support, and take the gaps of an alignment out of its identity. A tree of a few sequences is not a study of an outbreak.
 
@@ -793,6 +838,8 @@ Every function raises `Error` for input it cannot use.
 - Varadi and others, "AlphaFold Protein Structure Database", Nucleic Acids Research, 2022.
 - Gotoh, "An improved algorithm for matching biological sequences", 1982.
 - Henikoff and Henikoff, "Amino acid substitution matrices from protein blocks", 1992.
+- Henikoff and Henikoff, "Position-based sequence weights", Journal of Molecular Biology, 1994.
+- Capra and Singh, "Predicting functionally important residues from sequence conservation", Bioinformatics, 2007.
 - Tien, Meyer, Sydykova, Spielman and Wilke, "Maximum allowed solvent accessibilities of residues in proteins", 2013.
 - Engh and Huber, "Accurate bond and angle parameters for X-ray protein structure refinement", 1991.
 - Parsons and others, "Practical conversion from torsion space to Cartesian space for in silico protein synthesis", 2005.
