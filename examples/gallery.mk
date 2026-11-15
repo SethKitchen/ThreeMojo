@@ -296,6 +296,8 @@ $(call gallery,roc,roc)
 $(call gallery,agreement,agreement)
 # A forest plot of the 13 trials of the BCG vaccine against tuberculosis.
 $(call gallery,forest,forest)
+# One SEIR epidemic with 0, 30 and 50 percent of the population vaccinated.
+$(call gallery,epidemic,epidemic)
 # A bone segment from CT: RLE DICOM slices, two labels with smoothed
 # surfaces, and the two-material voxel mesh under a platen, colored by
 # von Mises stress.

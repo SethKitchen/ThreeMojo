@@ -98,6 +98,7 @@ Look something up.
 - [Survival analysis](Survival-analysis)
 - [Diagnostic tests](Diagnostic-tests)
 - [Meta-analysis](Meta-analysis)
+- [Epidemic models](Epidemic-models)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
   - [Anatomy validity](Anatomy-validity)

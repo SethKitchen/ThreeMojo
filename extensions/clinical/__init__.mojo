@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Statistics of clinical research: survival and diagnostic tests.
+"""Clinical research: survival, diagnostic tests, evidence and epidemics.
 
 - `survival`: Kaplan-Meier curves with their intervals, medians, the
   log-rank test of two groups, and a picture of the curves.
@@ -12,8 +12,9 @@
 - `agreement`: Bland-Altman agreement and intraclass correlations.
 - `logistic`: logistic regression with odds ratios.
 - `meta`: meta-analysis of studies, with forest plots.
+- `epidemic`: SIR and SEIR models of an epidemic.
 - `distributions`: the t and F distributions.
 
-See the wiki pages Survival analysis, Diagnostic tests and
-Meta-analysis.
+See the wiki pages Survival analysis, Diagnostic tests, Meta-analysis
+and Epidemic models.
 """

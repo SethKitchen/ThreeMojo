@@ -179,6 +179,7 @@
 - [Survival analysis](Survival-analysis)
 - [Diagnostic tests](Diagnostic-tests)
 - [Meta-analysis](Meta-analysis)
+- [Epidemic models](Epidemic-models)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)
