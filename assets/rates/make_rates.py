@@ -21,7 +21,8 @@ pollution index. This script reads them.
   - `intercept` with the log of the baseline rate per year, its standard
     error, and one line `covariate` for each covariate with the
     coefficient, its standard error, z, the p value, and the low and high
-    ends of the 95 percent interval of its rate ratio.
+    ends of its 95 percent interval. The test raises e to these ends for
+    the interval of the rate ratio.
   - `fit` with the deviance and the Pearson dispersion.
   - `predict` with the rate per year of two strata.
 """
@@ -39,7 +40,7 @@ fit = sm.GLM(events, x, family=sm.families.Poisson(), offset=np.log(years)).fit(
 ci = fit.conf_int(0.05)
 lines = ["intercept %r %r" % (float(fit.params[0]), float(fit.bse[0]))]
 for j in range(1, 4):
-    values = [fit.params[j], fit.bse[j], fit.tvalues[j], fit.pvalues[j], np.exp(ci[j, 0]), np.exp(ci[j, 1])]
+    values = [fit.params[j], fit.bse[j], fit.tvalues[j], fit.pvalues[j], ci[j, 0], ci[j, 1]]
     lines.append("covariate " + " ".join(repr(float(v)) for v in values))
 lines.append("fit %r %r" % (float(fit.deviance), float(fit.pearson_chi2 / fit.df_resid)))
 rows = sm.add_constant(np.array([[5.0, 0, 2.0], [7.5, 1, 4.0]]), has_constant="add")

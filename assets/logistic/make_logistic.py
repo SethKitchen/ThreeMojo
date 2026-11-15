@@ -24,7 +24,8 @@ The expected file has these lines:
 
 - `intercept` and then one line `covariate` for each covariate, with the
   coefficient, its standard error, z, the p value, and the low and high
-  ends of the 95 percent interval of the odds ratio.
+  ends of its 95 percent interval. The test raises e to these ends for
+  the interval of the odds ratio.
 - `fit` with the log-likelihood, the null log-likelihood, the likelihood
   ratio statistic and its p value. statsmodels fits its own null model
   with a looser default, which leaves its `llnull` 2e-8 below the
@@ -52,8 +53,8 @@ for j, name in enumerate(["intercept", "covariate", "covariate", "covariate"]):
         fit.bse[j],
         fit.tvalues[j],
         fit.pvalues[j],
-        np.exp(ci[j, 0]),
-        np.exp(ci[j, 1]),
+        ci[j, 0],
+        ci[j, 1],
     ]
     lines.append(name + " " + " ".join(repr(float(v)) for v in values))
 null = sm.Logit(disease, np.ones(n)).fit(

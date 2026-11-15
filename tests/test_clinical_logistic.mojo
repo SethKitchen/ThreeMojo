@@ -11,6 +11,7 @@
 """
 
 from extensions.clinical.logistic import LogisticModel, logistic_regression
+from extensions.numerics.elementary import precise_exp
 from std.math import exp, inf, log, nan, sqrt
 from std.testing import (
     TestSuite,
@@ -60,8 +61,9 @@ def test_cohort() raises:
         assert_almost_equal(model.z(a), row[2], rtol=1e-12)
         assert_almost_equal(model.p_value(a), row[3], rtol=1e-10)
         var band = model.interval(a)
-        assert_almost_equal(band[0], row[4], rtol=1e-12)
-        assert_almost_equal(band[1], row[5], rtol=1e-12)
+        # The interval of the ratio is that of the coefficient, raised.
+        assert_almost_equal(band[0], precise_exp(row[4]), rtol=1e-12)
+        assert_almost_equal(band[1], precise_exp(row[5]), rtol=1e-12)
         assert_almost_equal(model.odds_ratio(a), exp(row[0]), rtol=1e-12)
     ref fit = expected[4]
     assert_almost_equal(model.log_likelihood, fit[0], rtol=1e-14)
