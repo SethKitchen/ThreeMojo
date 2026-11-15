@@ -2,7 +2,7 @@
 
 `extensions/clinical/hypothesis.mojo` compares two groups, or the two values of pairs, by two-sided tests. It gives Student's, Welch's and the paired t test, with the interval of the difference of the means. It gives the Mann-Whitney U test and the Wilcoxon signed-rank test, which use ranks. `tables.mojo` tests tables of counts by Fisher's exact test, chi-square and McNemar's test. `multiple.mojo` adjusts p values for many tests.
 
-`correlation.mojo` measures how two measures of the same subjects rise together. The results match scipy and statsmodels.
+`correlation.mojo` measures how two measures of the same subjects rise together. `anova.mojo` tests several groups at once. The results match scipy and statsmodels.
 
 It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
 
@@ -14,6 +14,7 @@ It is a library for research and teaching. Its results are not validated for a d
 | `tables` | `FisherTest`, `fisher_exact`, `TableTest`, `chi_square_test`, `yates_chi_square_test`, `mcnemar_exact`, `mcnemar_chi_square` and `MAX_SIDE` |
 | `multiple` | `bonferroni`, `holm`, `benjamini_hochberg` and `benjamini_yekutieli` |
 | `correlation` | `Correlation`, `pearson`, `spearman` and `kendall` |
+| `anova` | `GroupsTest`, `one_way_anova`, `kruskal_wallis` and `MAX_GROUPS` |
 
 ## Choose a test
 
@@ -24,6 +25,8 @@ It is a library for research and teaching. Its results are not validated for a d
 | Two groups, any shape, or ranks only | `mann_whitney` |
 | Pairs, differences near normal | `paired_t_test` |
 | Pairs, any shape | `wilcoxon` |
+| Three groups or more, values near normal | `one_way_anova` |
+| Three groups or more, any shape | `kruskal_wallis` |
 | A two-by-two table of counts | `fisher_exact` |
 | A larger table of counts | `chi_square_test` |
 | Paired yes or no results | `mcnemar_exact` |
@@ -60,6 +63,15 @@ The paired test takes the two values of each pair, such as before and after a tr
 - The Wilcoxon statistic is the smaller of the sums of the ranks of the positive and the negative differences. Zero differences drop out, and the variance has the tie correction. There is no continuity correction.
 
 `midranks(values)` gives the rank of each value from 1. Tied values take their mean rank.
+
+## Compare several groups
+
+`one_way_anova(groups)` and `kruskal_wallis(groups)` take the values of each group, and test whether any group differs. Each gives a `GroupsTest` with the `statistic`, the degrees of freedom `freedom` and `residual`, and the `p_value`.
+
+- The one-way analysis of variance gives F: the variance between the group means over the variance within the groups. F has `k - 1` and `n - k` degrees of freedom. With two groups, F is the square of Student's t.
+- The Kruskal-Wallis test gives H from the ranks of all the values, with the tie correction, against chi-square with `k - 1` degrees of freedom.
+
+A test that finds a difference does not say which groups differ. Compare the pairs next, and correct their p values for many tests.
 
 ## Test a table of counts
 
@@ -113,6 +125,8 @@ The tests compare `tables` with scipy 1.18.1 and statsmodels 0.15.0. `assets/hyp
 
 The tests take 30 synthetic pairs of glucose and HbA1c with ties. Their correlations agree with scipy's `pearsonr`, `spearmanr` and `kendalltau` to a relative 1e-14. The p values agree to 1e-11, and Pearson's interval to 1e-13. `assets/hypothesis/make_correlation.py` writes them.
 
+F and H of three synthetic groups agree with scipy's `f_oneway` and `kruskal` to a relative 1e-13, and their p values to 1e-10 and 1e-11. `assets/hypothesis/make_anova.py` writes them.
+
 The adjusted p values of 12 p values, with a tie, agree with statsmodels' `multipletests` to a relative 1e-15 by each method. `assets/hypothesis/make_multiple.py` writes them.
 
 The tests also check cases by hand:
@@ -122,6 +136,7 @@ The tests also check cases by hand:
 - Two groups apart give U = 0. A U at its mean gives z = 0 and p = 1.
 - Pairs with two zero differences drop them, and the rest give the signed rank sum 3.
 - The most extreme table of three and three has a p value of 2 / 20. A table with a margin of 0 has a p value of 1.
+- With two groups, F is the square of Student's t, with the same p value. Groups of equal means give F = 0. The ranks 1 and 2 against 3 and 4 give H = 2.4.
 - A straight line has r = 1, a p value of 0 and an interval of no width. A cube that only rises has rho = 1. Two concordant pairs and one discordant pair give tau = 1/3. A negated measure mirrors r and its interval.
 - The p values 0.01, 0.04 and 0.03 become 0.03, 0.06 and 0.06 by Holm's method, and 0.03, 0.04 and 0.04 by Benjamini and Hochberg's.
 
@@ -140,11 +155,12 @@ Every function raises `Error` for input it cannot use.
 | A table is not a rectangle of 2 to 100 rows and columns, or a row or a column sums to 0 | `chi_square_test`, `yates_chi_square_test` |
 | There is no discordant pair | `mcnemar_chi_square` |
 | There is no p value, or one is not from 0 to 1 | `multiple` |
+| There are not 2 to 1000 groups, a group is empty, a value is not finite, there are no more values than groups, or no group varies | `anova` |
 | The measures differ in length, have too few pairs or a value that is not finite, or a measure does not vary | `correlation` |
 
 ## Limits
 
-- Each test is two-sided and compares two groups. The module has no one-sided tests, no analysis of variance, and no exact rank tests for small groups.
+- The tests are two-sided. The module has no one-sided tests, no exact rank tests for small groups, and no analysis of variance of more than one factor.
 - A p value is for one test. Many tests on one data set need a correction, such as those of `multiple`.
 - A test that finds no difference does not show that the groups are the same.
 
@@ -156,6 +172,8 @@ Every function raises `Error` for input it cannot use.
 - Wilcoxon, "Individual comparisons by ranking methods", Biometrics Bulletin, 1945.
 - Fisher, "On the interpretation of chi-square from contingency tables, and the calculation of P", Journal of the Royal Statistical Society, 1922.
 - Yates, "Contingency tables involving small numbers and the chi-square test", Supplement to the Journal of the Royal Statistical Society, 1934.
+- Fisher, "Statistical Methods for Research Workers", 1925.
+- Kruskal and Wallis, "Use of ranks in one-criterion variance analysis", Journal of the American Statistical Association, 1952.
 - Pearson, "Notes on the history of correlation", Biometrika, 1920.
 - Spearman, "The proof and measurement of association between two things", American Journal of Psychology, 1904.
 - Kendall, "The treatment of ties in ranking problems", Biometrika, 1945.

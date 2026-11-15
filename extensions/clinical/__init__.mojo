@@ -21,6 +21,7 @@
 - `tables`: Fisher's exact test, chi-square tests and McNemar's test.
 - `multiple`: adjusted p values for many tests.
 - `correlation`: Pearson's, Spearman's and Kendall's correlations.
+- `anova`: one-way analysis of variance and the Kruskal-Wallis test.
 - `distributions`: the t and F distributions.
 
 See the wiki pages Survival analysis, Diagnostic tests, Meta-analysis,
