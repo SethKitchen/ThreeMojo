@@ -20,6 +20,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `rtdose` | `RtDose`, `parse_rt_dose`, `read_rt_dose`, `AbsorbedDose64`, `GRAY` and `CENTIGRAY` |
 | `dvh` | `DoseVolumeHistogram`, `dose_volume_histogram`, `dvh_image` and `CUBIC_CENTIMETER64` |
 | `dce` | `tofts_curve`, `fit_tofts`, `ToftsFit`, `tofts_maps`, `ToftsMaps`, `parker_aif`, `MINUTE64` and `PER_MINUTE64` |
+| `diffusion` | `fit_adc`, `AdcFit`, `fit_kurtosis`, `KurtosisFit`, `adc_maps`, `AdcMaps`, `kurtosis_maps`, `KurtosisMaps`, `computed_dwi`, `Diffusivity64`, `BValue64`, `SQUARE_MILLIMETER_PER_SECOND`, `SQUARE_MICROMETER_PER_SECOND` and `SECOND_PER_SQUARE_MILLIMETER` |
 | `suv` | `suv_factor`, `SuvFactor64`, `GRAM_PER_BECQUEREL`, `suv_volume`, `suv_statistics` and `SuvStatistics` |
 | `dicom_write` | `DicomWriter`, `encode_dicom`, `encode_dicom_frames`, `encode_rle_frame`, `pack_bits` and `ds_text` |
 | `series` | `stack_slices` and `volume_slices` |
@@ -198,6 +199,41 @@ var maps = tofts_maps(series, times, plasma, map, LabelId(1), STANDARD_TOFTS)
 `tofts_maps(series, times, plasma, map, label, model)` fits each voxel of a label, in a series of volumes of concentration. `parker_aif(times)` gives the population arterial input function of Parker and others (2006), in mM of blood. Divide it by `1 - Hct` for plasma.
 
 Concentrations are plain values in one unit, such as mM. The model is linear in concentration, so the unit cancels.
+
+## Measure diffusion
+
+A diffusion-weighted MRI scan takes one image at each b-value. Water that moves freely loses more signal at a high b-value than water that cells hold in. Many tumors have dense cells and a low apparent diffusion coefficient (ADC), so oncology research maps it.
+
+![Diffusion MRI of the head phantom: a scan at b = 1000, the ADC map and a computed image at b = 2000](out/diffusion.png)
+
+`examples/diffusion.mojo` makes this picture from one slice of the head phantom. Each tissue has a signal S0 and an ADC. A lesion of 8 mm radius has dense cells and an ADC of 0.45 x 10^-3 mm^2/s. The left panel is the scan at b = 1000 s/mm^2, where the lesion is bright. The middle panel is the ADC map, where the lesion is dark and the fluid is bright. The right panel is the image at b = 2000 s/mm^2, computed from the maps.
+
+The mono-exponential model gives the signal at each b-value:
+
+    S(b) = S0 exp(-b ADC)
+
+```mojo
+var unit = SECOND_PER_SQUARE_MILLIMETER
+var b: List[BValue64] = [BValue64(0, unit), BValue64(500, unit), BValue64(1000, unit)]
+var fit = fit_adc(b, [1000.0, 690.0, 470.0])
+print(fit.adc.to(SQUARE_MILLIMETER_PER_SECOND), fit.s0)
+var maps = adc_maps(series, b, 40.0)
+var high = computed_dwi(maps, BValue64(2000, unit))
+```
+
+`fit_adc(b_values, signals)` fits ln S to a line in b by least squares. It needs two distinct b-values or more. With two, the ADC is `ln(S1 / S2) / (b2 - b1)`. A signal that rises with b gives an ADC below 0.
+
+`adc_maps(series, b_values, threshold)` fits each voxel of a series, with one volume for each b-value. A voxel gets a fit only when each of its signals is above the threshold. Set the threshold above the noise of the background, such as four times its standard deviation. The ADC map holds 10^-6 mm^2/s, the unit that scanners store, so free water at 37 C is near 3000. The S0 map holds the fitted signal at b = 0, and a voxel without a fit is 0 in each map.
+
+`computed_dwi(maps, b_value)` makes the image `S0 exp(-b ADC)` at a b-value that was not scanned. A computed image at a high b-value can show a lesion of low ADC with less noise than a scan.
+
+The kurtosis model of Jensen and others (2005) adds K, the departure of the water from free diffusion:
+
+    S(b) = S0 exp(-b D + b^2 D^2 K / 6)
+
+`fit_kurtosis(b_values, signals)` fits ln S to a parabola in b by least squares. It needs three distinct b-values or more, and it refuses a D of 0 or less. `kurtosis_maps(series, b_values, threshold)` gives maps of D, K and S0. A voxel whose D is 0 or less has no fit. The model holds only below about b = 3 / (D K), where the parabola turns. So use b-values up to about 2000 to 2500 s/mm^2.
+
+A `Diffusivity64` is an area per second, and a `BValue64` is a time per area. Their product has no unit.
 
 ## Read an RT Structure Set
 
@@ -982,6 +1018,11 @@ The tests check these results:
 - dcmri 0.6.20 wrote a Parker input function and a standard and an extended tissue, with its exact convolution `expconv`. The tissues match to 1e-12. The input function matches to 1e-5, because dcmri rounds the heights of its Gaussians to six digits. `assets/dce/make_dce.py` makes the file.
 - The fits find `Ktrans`, `ve` and `vp` of the two tissues to 1e-6. On voxels of 32-bit values, the maps find them to 1e-4. A tissue of plasma alone is all `vp`, and a tissue of nothing has a `Ktrans` of 0.
 - scipy's `solve_ivp` integrates the same model on the same plasma to a tolerance of 1e-12. It agrees with the tissues to 1.4e-9 of their peak. That check is not part of the test suite.
+- numpy 2.5.4 `polyfit` fits ln S of synthetic signals with Rician noise. The signals are whole numbers, as a scanner stores them. `assets/diffusion/make_diffusion.py` makes the file.
+- The ADC and S0 of 12 voxels at five b-values agree with numpy to 1e-12. D, K and S0 of 8 voxels at six b-values agree to 1e-11, 1e-10 and 1e-12.
+- The maps agree with the fits to 1e-6, the rounding of a 32-bit value, and K to 1e-5. The computed image at b = 1500 s/mm^2 agrees with numpy to 1e-5.
+- Exact signals give back the ADC to 1e-13, and D and K to 1e-12 and 1e-11. Free diffusion has a K of 0. Half the signal at b = 1000 s/mm^2 gives an ADC of ln 2 / 1000 mm^2/s.
+- A voxel with a signal at the threshold, with no number or with an infinite signal has no fit.
 - A lung of 100 voxels from -1000 to -901 HU has an LAA-950 of a half and a Perc15 of -985.15 HU. Tissue areas count the pixels of each range on slices of each axis, with pixels of 0.4, 1.6 and 1 mm^2.
 - Two RT Dose files that pydicom 3.0.1 wrote read with pydicom's dose at each voxel, as 32-bit floats. One is explicit VR with 32-bit values and offsets from 0. The other is implicit VR with 16-bit values and frames from z = 9 mm down to 0. `assets/dicom/make_rtdose.py` makes them.
 - The tumor and the ring of the structure fixtures, filled on each dose grid, have the DVH that numpy 2.1.3 gives. The test compares the least, mean and largest dose, D98, D95, D50, D2, V20 and V40. It also compares D for 0.03 and 0.1 cm^3, and the gEUD at a = -10 and 5. Each agrees to 1e-12.
@@ -1091,6 +1132,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A rotation axis is zero or not finite, or an angle is not finite | `RigidTransform` |
 | DCE times do not rise or are not finite, a curve does not fit the times, a parameter is out of range, or a plasma curve has a value below 0 or none above 0 | `tofts_curve`, `fit_tofts`, `parker_aif` |
 | A DCE series has not one volume for each time, a volume on another grid, or a bad label | `tofts_maps` |
+| A diffusion fit has too few b-values or distinct b-values, a b-value below 0 or not finite, not one signal for each b-value, a signal that is not positive and finite, or a kurtosis D of 0 or less | `fit_adc`, `fit_kurtosis` |
+| A diffusion series has not one volume for each b-value, volumes on different grids, or a threshold below 0 or not finite | `adc_maps`, `kurtosis_maps` |
+| A computed b-value is below 0 or not finite, or the ADC and S0 maps have different grids | `computed_dwi` |
 | A tumor volume or the time between two scans is not positive and finite, or two volumes are equal for a doubling time | `doubling_time`, `growth_rate` |
 | A diameter has a bad label, the background or an empty label | `longest_diameter` |
 | A RECIST sum is out of its range, or a response is not valid | `recist_response`, `response_name` |
@@ -1120,6 +1164,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - A DVH counts each voxel whole, with the dose at its center. It does not split a voxel that the edge of a region cuts, and it does not interpolate the dose between planes.
 - The RT Structure Set, RT Dose and DVH tools are for research. They are not a treatment planning system. Do not use them to plan, check or give a treatment.
 - The Tofts models take the plasma curve as linear between its samples. They take the tissue as one well-mixed compartment, and the extended model adds the vessels. They do not fit a delay of the bolus. A fit with `ve` above 1 does not suit the tissue.
+- The diffusion fits take one trace-weighted image for each b-value. They do not fit a tensor, the directions of diffusion, or the perfusion of IVIM at low b-values. They are least squares of ln S, without weights. A signal near the noise floor biases them, because Rician noise does not fall to 0.
 - A longest diameter is between voxel centers in one slice of `k`. It does not measure across slices or along an oblique plane. The RECIST response covers target lesions only, by their sums. It does not judge new lesions, lymph nodes or non-target lesions.
 - Registration is rigid, with six parameters. It does not scale, shear or bend, so it does not follow breathing or soft tissue that changes shape. The simplex finds a nearby least point, so a start far from the answer can end at another one.
 - The NIfTI reader does not read NIfTI-2, a header and image pair, complex or color voxels, or sheared axes.
@@ -1142,6 +1187,9 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - NEMA PS3.3, "Information Object Definitions", sections C.8.8.5 and C.8.8.6, the Structure Set and ROI Contour modules.
 - NEMA PS3.3, "Information Object Definitions", section C.8.8.3, the RT Dose module.
 - Niemierko, "A generalized concept of equivalent uniform dose (EUD)", Medical Physics, 1999.
+- Padhani and others, "Diffusion-weighted magnetic resonance imaging as a cancer biomarker: consensus and recommendations", Neoplasia, 2009.
+- Jensen and others, "Diffusional kurtosis imaging: the quantification of non-Gaussian water diffusion by means of magnetic resonance imaging", Magnetic Resonance in Medicine, 2005.
+- Blackledge and others, on computed diffusion-weighted MR images for the detection of tumors, Radiology, 2011.
 - ICRU Report 83, "Prescribing, Recording, and Reporting Photon-Beam Intensity-Modulated Radiation Therapy (IMRT)", 2010.
 - Zwanenburg and others, "The Image Biomarker Standardization Initiative", Radiology, 2020.
 - NEMA PS3.5, "Data Structures and Encoding", sections 7.1 and 7.5, and annexes A and G.

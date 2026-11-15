@@ -269,6 +269,9 @@ $(call gallery,medical-imaging,medical_imaging)
 # A synthetic PET in SUV fused over the head phantom CT, with a lesion
 # labeled, measured and outlined.
 $(call gallery,fusion,fusion)
+# A synthetic diffusion MRI of the head phantom: a scan at b = 1000, the ADC
+# map with a lesion of restricted diffusion, and a computed image at b = 2000.
+$(call gallery,diffusion,diffusion)
 # A synthetic five-beam dose over the head phantom CT, with isodose lines,
 # and the dose-volume histograms of a target and an organ at risk.
 $(call gallery,radiotherapy,radiotherapy)
