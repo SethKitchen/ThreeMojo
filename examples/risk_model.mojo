@@ -45,40 +45,16 @@ from extensions.clinical.roc import roc_curve
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Color, Framebuffer
 from render.png import encode
-from std.math import cos, expm1, log, pi, sqrt
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
+from extensions.numerics.noise import Xorshift64
+from extensions.numerics.elementary import logistic
 
 comptime DEFAULT_OUTPUT = "out/risk-model.png"
 comptime PATIENTS = 2000
 comptime SIDE = 480
 comptime ORANGE = Rgba(0.9, 0.45, 0.1, 1)
 comptime BLUE = Rgba(0.16, 0.38, 0.73, 1)
-
-
-struct _Noise(Movable):
-    """A seeded source of uniform and normal numbers, by xorshift."""
-
-    var state: UInt64
-
-    def __init__(out self, seed: UInt64):
-        self.state = seed
-
-    def uniform(mut self) -> Float64:
-        self.state ^= self.state << 13
-        self.state ^= self.state >> 7
-        self.state ^= self.state << 17
-        return (Float64(self.state >> 11) + 0.5) / 9007199254740992.0
-
-    def normal(mut self) -> Float64:
-        var u = self.uniform()
-        var v = self.uniform()
-        return sqrt(-2.0 * log(u)) * cos(2.0 * pi * v)
-
-
-def _risk(eta: Float64) -> Float64:
-    """Return `1 / (1 + e^-eta)`."""
-    return 1.0 / (2.0 + expm1(-eta))
 
 
 def _report(name: String, risks: List[Float64], outcomes: List[Bool]) raises:
@@ -113,15 +89,15 @@ def _report(name: String, risks: List[Float64], outcomes: List[Bool]) raises:
 
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
-    var noise = _Noise(20261115)
+    var noise = Xorshift64(20261115)
     var risks = List[Float64]()
     var outcomes = List[Bool]()
     for _ in range(PATIENTS):
         var x = noise.normal()
         var z = 1.0 if noise.uniform() < 0.5 else 0.0
-        var truth = _risk(-1.2 + 1.1 * x + 0.8 * z)
+        var truth = logistic(-1.2 + 1.1 * x + 0.8 * z)
         outcomes.append(noise.uniform() < truth)
-        risks.append(_risk(-0.9 + 1.5 * x + 1.0 * z))
+        risks.append(logistic(-0.9 + 1.5 * x + 1.0 * z))
     var fixed = recalibrate(risks, calibration_fit(risks, outcomes))
     var thresholds = List[Float64]()
     for k in range(2, 81):

@@ -31,11 +31,11 @@ from extensions.imaging.vesselness import vesselness
 from render.framebuffer import Color, Framebuffer
 from render.png import encode
 from std.collections import Optional
-from std.math import cos, expm1, log, pi, sqrt
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
 from units.si import MILLIMETER64, Length64
 from extensions.numerics.elementary import precise_exp
+from extensions.numerics.noise import Xorshift64
 
 comptime DEFAULT_OUTPUT = "out/vesselness.png"
 comptime NX = 80
@@ -44,26 +44,6 @@ comptime NZ = 40
 comptime ZOOM = 5
 comptime PANEL = NX * ZOOM
 comptime NOISE = 8.0
-
-
-struct _Noise(Movable):
-    """A seeded source of normal numbers, by xorshift and Box-Muller."""
-
-    var state: UInt64
-
-    def __init__(out self, seed: UInt64):
-        self.state = seed
-
-    def uniform(mut self) -> Float64:
-        self.state ^= self.state << 13
-        self.state ^= self.state >> 7
-        self.state ^= self.state << 17
-        return (Float64(self.state >> 11) + 0.5) / 9007199254740992.0
-
-    def normal(mut self) -> Float64:
-        var u = self.uniform()
-        var v = self.uniform()
-        return sqrt(-2.0 * log(u)) * cos(2.0 * pi * v)
 
 
 def _segment(
@@ -124,7 +104,7 @@ def main() raises:
         [48.0, 40.0, 20.0, 70.0, 68.0, 14.0, 1.5],
         [58.0, 22.0, 24.0, 76.0, 26.0, 30.0, 1.2],
     ]
-    var noise = _Noise(20261115)
+    var noise = Xorshift64(20261115)
     for k in range(NZ):
         for j in range(NY):
             for i in range(NX):

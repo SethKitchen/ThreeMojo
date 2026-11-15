@@ -34,29 +34,15 @@ from std.math import log
 from std.pathlib import Path
 from tools._example_output import example_destination
 from units.si import YEAR64, Duration64
+from extensions.numerics.noise import Xorshift64
 
 comptime DEFAULT_OUTPUT = "out/competing.png"
 comptime PATIENTS = 400
 
 
-struct _Noise(Movable):
-    """A seeded source of uniform numbers, by xorshift."""
-
-    var state: UInt64
-
-    def __init__(out self, seed: UInt64):
-        self.state = seed
-
-    def uniform(mut self) -> Float64:
-        self.state ^= self.state << 13
-        self.state ^= self.state >> 7
-        self.state ^= self.state << 17
-        return (Float64(self.state >> 11) + 0.5) / 9007199254740992.0
-
-
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
-    var noise = _Noise(20261115)
+    var noise = Xorshift64(20261115)
     var times = List[Duration64]()
     var relapse = List[Bool]()
     var death = List[Bool]()

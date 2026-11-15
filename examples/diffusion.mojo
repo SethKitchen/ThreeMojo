@@ -43,10 +43,11 @@ from extensions.imaging.overlay import render_slice, zoom_image
 from extensions.imaging.phantom import phantom_value, shepp_logan_table
 from render.framebuffer import Color, Framebuffer
 from render.png import encode
-from std.math import cos, expm1, log, pi, sqrt
+from std.math import expm1, sqrt
 from std.pathlib import Path
 from tools._example_output import blit, example_destination
 from units.si import MILLIMETER64, Length64
+from extensions.numerics.noise import Xorshift64
 
 comptime DEFAULT_OUTPUT = "out/diffusion.png"
 comptime SIZE = 128
@@ -65,26 +66,6 @@ comptime FLUID = 2
 comptime FEATURE = 3
 comptime BRAIN = 4
 comptime LESION = 5
-
-
-struct _Noise(Movable):
-    """A seeded source of normal numbers, by xorshift and Box-Muller."""
-
-    var state: UInt64
-
-    def __init__(out self, seed: UInt64):
-        self.state = seed
-
-    def uniform(mut self) -> Float64:
-        self.state ^= self.state << 13
-        self.state ^= self.state >> 7
-        self.state ^= self.state << 17
-        return (Float64(self.state >> 11) + 0.5) / 9007199254740992.0
-
-    def normal(mut self) -> Float64:
-        var u = self.uniform()
-        var v = self.uniform()
-        return sqrt(-2.0 * log(u)) * cos(2.0 * pi * v)
 
 
 def _tissue(x: Float64, y: Float64) -> Int:
@@ -136,7 +117,7 @@ def main() raises:
     var series = List[ImageVolume]()
     for _ in b_values:
         series.append(grid.copy())
-    var noise = _Noise(20261115)
+    var noise = Xorshift64(20261115)
     for j in range(SIZE):
         for i in range(SIZE):
             var sums = List[Float64](length=len(b_values), fill=0.0)

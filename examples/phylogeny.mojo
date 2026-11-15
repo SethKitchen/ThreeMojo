@@ -34,32 +34,20 @@ from extensions.village.hud import Rgb, TextStyle, draw_styled
 from render.png import encode
 from std.pathlib import Path
 from tools._example_output import example_destination
+from extensions.numerics.noise import Xorshift64
 
 comptime DEFAULT_OUTPUT = "out/phylogeny.png"
 comptime AMINO = "ARNDCQEGHILKMFPSTWYV"
 comptime LENGTH = 300
 
 
-struct _Noise(Movable):
-    """A seeded source of uniform numbers, by xorshift."""
-
-    var state: UInt64
-
-    def __init__(out self, seed: UInt64):
-        self.state = seed
-
-    def uniform(mut self) -> Float64:
-        self.state ^= self.state << 13
-        self.state ^= self.state >> 7
-        self.state ^= self.state << 17
-        return (Float64(self.state >> 11) + 0.5) / 9007199254740992.0
-
-    def residue(mut self) -> Int:
-        return Int(self.uniform() * 20.0) % 20
+def _residue(mut noise: Xorshift64) -> Int:
+    """Return a residue from 0 to 19, each as likely."""
+    return Int(noise.uniform() * 20.0) % 20
 
 
 def _evolve(
-    mut noise: _Noise, sequence: List[Int], branch: Float64
+    mut noise: Xorshift64, sequence: List[Int], branch: Float64
 ) -> List[Int]:
     """Change each site with the chance of the branch length."""
     var out = sequence.copy()
@@ -79,10 +67,10 @@ def _text(sequence: List[Int]) -> String:
 
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
-    var noise = _Noise(20261115)
+    var noise = Xorshift64(20261115)
     var source = List[Int]()
     for _ in range(LENGTH):
-        source.append(noise.residue())
+        source.append(_residue(noise))
     var names = List[String]()
     var sequences = List[String]()
     var wards: List[String] = ["A", "B", "C"]
