@@ -33,10 +33,12 @@ The scales are lengths, so a volume of voxels that are not cubes has its
 sigma in voxels along each axis.
 """
 
+from extensions.imaging.ids import EDGE_REFLECT
 from extensions.imaging.image_volume import ImageVolume
+from extensions.imaging.separable import GaussianKernel, convolve_axis
 from extensions.numerics.dense import DenseMatrix, symmetric_eigen
 from std.collections import Optional
-from std.math import expm1, isfinite, sqrt
+from std.math import isfinite, sqrt
 from units.si import MILLIMETER64, Length64
 from extensions.numerics.elementary import precise_exp
 
@@ -46,88 +48,21 @@ comptime _LEAST = 1e-10
 comptime _SQRT_HALF = 0.7071067811865476
 
 
-def _kernel(sigma: Float64, order: Int, radius: Int) -> List[Float64]:
-    """Return scipy's Gaussian kernel of an order 0 or 1, from -radius to
-    radius."""
-    var weights = List[Float64]()
-    var total = 0.0
-    for t in range(-radius, radius + 1):  # pragma: no branch
-        var x = Float64(t)
-        var w = precise_exp(-0.5 * x * x / (sigma * sigma))
-        weights.append(w)
-        total += w
-    for at in range(len(weights)):  # pragma: no branch
-        weights[at] /= total
-        if order == 1:
-            weights[at] *= -Float64(at - radius) / (sigma * sigma)
-    return weights^
-
-
-def _reflect(i: Int, n: Int) -> Int:
-    """Return the index of a point past an edge, reflected about the edge:
-    `d c b a | a b c d | d c b a`."""
-    # The modulo of a positive divisor is 0 or more in Mojo, as in Python.
-    var m = i % (2 * n)
-    if m >= n:
-        m = 2 * n - 1 - m
-    return m
-
-
-def _convolve(
-    values: List[Float64],
-    shape: List[Int],
-    axis: Int,
-    sigma: Float64,
-    order: Int,
-    truncate: Float64,
-) -> List[Float64]:
-    """Convolve the values along one axis of `(nx, ny, nz)` with scipy's
-    Gaussian kernel, with the values reflected past each edge."""
-    var radius = Int(truncate * sigma + 0.5)
-    var kernel = _kernel(sigma, order, radius)
-    var n = shape[axis]
-    var stride = 1
-    for a in range(axis):
-        stride *= shape[a]
-    # The source index of each offset from each place along the axis.
-    var source = List[Int]()
-    for i in range(n):  # pragma: no branch
-        for t in range(-radius, radius + 1):  # pragma: no branch
-            source.append(_reflect(i - t, n))
-    var width = 2 * radius + 1
-    var out = List[Float64](length=len(values), fill=0.0)
-    for start in range(len(values)):  # pragma: no branch
-        # Only the first place of each line starts it.
-        if (start // stride) % n != 0:
-            continue
-        for i in range(n):  # pragma: no branch
-            # Mirrored pairs, as scipy's `correlate1d` sums a symmetric or
-            # an antisymmetric kernel: `k(t) (f[i - t] +- f[i + t])`.
-            var row = i * width
-            var total = (
-                kernel[radius] * values[start + source[row + radius] * stride]
-            )
-            var sign = 1.0 if order == 0 else -1.0
-            for t in range(1, radius + 1):  # pragma: no branch
-                var before = values[start + source[row + radius + t] * stride]
-                var after = values[start + source[row + radius - t] * stride]
-                total += kernel[radius + t] * (before + sign * after)
-            out[start + i * stride] = total
-    return out^
-
-
 def _gaussian(
     values: List[Float64],
     shape: List[Int],
     sigmas: List[Float64],
-    orders: List[Int],
+    derivative: Int,
     truncate: Float64,
-) -> List[Float64]:
+) raises -> List[Float64]:
     """Filter along z, then y, then x, as scipy's `gaussian_filter` does
-    along the axes of a `(z, y, x)` array."""
+    along the axes of a `(z, y, x)` array, with the first derivative along
+    the axis `derivative`, and the values reflected past each edge."""
     var out = values.copy()
     for axis in range(2, -1, -1):  # pragma: no branch
-        out = _convolve(out, shape, axis, sigmas[axis], orders[axis], truncate)
+        var radius = Int(truncate * sigmas[axis] + 0.5)
+        var kernel = GaussianKernel(sigmas[axis], radius, axis == derivative)
+        out = convolve_axis(out, shape, axis, kernel, EDGE_REFLECT)
     return out^
 
 
@@ -194,9 +129,7 @@ def hessian_eigenvalues(
         values.append(Float64(v))
     var gradients = List[List[Float64]]()
     for a in range(3):  # pragma: no branch
-        var orders = List[Int](length=3, fill=0)
-        orders[a] = 1
-        gradients.append(_gaussian(values, shape, voxels, orders, truncate))
+        gradients.append(_gaussian(values, shape, voxels, a, truncate))
     # The six parts, in mm^-2: xx, yy, zz, xy, xz, yz. With the values
     # reflected past the edges, the two passes do not commute there. Each
     # cross part takes its gradient along the later axis of x, y and z,
@@ -211,10 +144,8 @@ def hessian_eigenvalues(
     ]
     var parts = List[List[Float64]]()
     for pair in pairs:  # pragma: no branch
-        var orders = List[Int](length=3, fill=0)
-        orders[pair[1]] = 1
         var part = _gaussian(
-            gradients[pair[0]], shape, voxels, orders, truncate
+            gradients[pair[0]], shape, voxels, pair[1], truncate
         )
         var scale = 1.0 / (spacing[pair[0]] * spacing[pair[1]])
         for at in range(len(part)):  # pragma: no branch

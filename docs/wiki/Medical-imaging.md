@@ -12,7 +12,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 
 | Module | What it gives |
 |---|---|
-| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity`, `LabelId`, `DicomNode`, `RegistrationMetric`, `ResponseCategory` and `ToftsModel` |
+| `ids` | `TransferSyntax`, `Photometric`, `PixelRepresentation`, `SliceAxis`, `RenderMode`, `SlabMode`, `Connectivity`, `LabelId`, `DicomNode`, `RegistrationMetric`, `ResponseCategory`, `ToftsModel` and `EdgeMode` |
 | `image_volume` | `ImageVolume`, a scalar grid with spacing, origin and axes |
 | `dicom` | `parse_dicom`, `read_dicom`, `parse_dicom_frames` and `read_dicom_frames`, which give `DicomSlice` values, `decode_rle_frame`, `PetDose`, `Activity64`, `BECQUEREL`, `MEGABECQUEREL`, and `parse_dicom_tree` and `read_dicom_tree`, which give a `DicomTree` |
 | `rtstruct` | `RtStructure`, `parse_rt_structures`, `read_rt_structures` and `structure_labels` |
@@ -43,6 +43,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `densitometry` | `low_attenuation_fraction`, `attenuation_percentile` and `tissue_area` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram`, `otsu_threshold`, `multi_otsu_thresholds` and `label_classes` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
+| `separable` | `GaussianKernel` and `convolve_axis`, the separable Gaussian of both filters |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
 | `gap` | `distance_from_label`, `label_gap`, `LabelGap` and `volume_within` |
 | `morphology` | `dilate_label`, `erode_label`, `open_label` and `close_label` |
@@ -647,6 +648,8 @@ var smooth = gaussian_filter(quiet, Length64(0.8, MILLIMETER64))
 `gaussian_filter(volume, sigma)` blurs with a Gaussian whose standard deviation is a length. The spacing of each axis turns it into voxels, so a volume with thick slices gets a narrower kernel along `k`. The filter runs one pass along each axis. Each kernel stops at three standard deviations, and its weights sum to one. `gaussian_kernel(sigma_voxels)` gives the weights.
 
 At the edge of the grid, both filters take the value of the nearest voxel inside it. Both give a volume on the same grid, with the same placement and window.
+
+`separable` holds the pass of the Gaussian filter and of the Hessian. `GaussianKernel.smoothing(sigma, radius)` gives the weights of a Gaussian, and `GaussianKernel.derivative(sigma, radius)` those of its first derivative. `convolve_axis(values, shape, axis, kernel, edge)` convolves one axis. The `EdgeMode` says which values it reads past each edge: `EDGE_NEAREST` repeats the edge value, and `EDGE_REFLECT` mirrors the values about the edge.
 
 ## Clean a label
 
@@ -1279,6 +1282,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A histogram has fewer than 2 bins or a bad range, or Otsu's method finds one full bin only | `Histogram`, `otsu_threshold` |
 | A split has classes out of 2 to 8, more than 4096 bins or too few full bins, or thresholds that are not finite and rising | `multi_otsu_thresholds`, `label_classes` |
 | A Gaussian width is not positive or reaches past 128 voxels, or a median radius is not from 1 to 3 | `gaussian_filter`, `median_filter` |
+| A kernel width is not positive and finite or its radius is negative, an edge mode or an axis is not valid, or the sizes do not hold the values | `GaussianKernel`, `convolve_axis` |
 
 ## Limits
 

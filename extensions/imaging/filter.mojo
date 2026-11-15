@@ -19,15 +19,28 @@ At the edge of the grid, both filters take the value of the nearest
 voxel inside it.
 """
 
+from extensions.imaging.ids import EDGE_NEAREST
 from extensions.imaging.image_volume import ImageVolume
-from std.math import ceil, exp, isfinite, max, min
+from extensions.imaging.separable import GaussianKernel, convolve_axis
+from std.math import ceil, isfinite, max, min
 from units.si import Length64, METER
-from extensions.numerics.elementary import precise_exp
 
 # The most voxels a Gaussian kernel reaches on each side of its center.
 comptime MAX_KERNEL_RADIUS = 128
 # The most voxels a median reaches on each side of its center.
 comptime MAX_MEDIAN_RADIUS = 3
+
+
+def _kernel(sigma_voxels: Float64) raises -> GaussianKernel:
+    """Return a Gaussian that reaches three standard deviations, rounded
+    up, or refuse a width that is not positive and finite or a kernel past
+    128 voxels."""
+    if not (sigma_voxels > 0) or not isfinite(sigma_voxels):
+        raise Error("A Gaussian width must be positive and finite")
+    var radius = ceil(3.0 * sigma_voxels)
+    if radius > Float64(MAX_KERNEL_RADIUS):
+        raise Error("A Gaussian kernel reaches at most 128 voxels")
+    return GaussianKernel.smoothing(sigma_voxels, Int(radius))
 
 
 def gaussian_kernel(sigma_voxels: Float64) raises -> List[Float64]:
@@ -45,49 +58,13 @@ def gaussian_kernel(sigma_voxels: Float64) raises -> List[Float64]:
         Error: If the width is not positive and finite, or `r` is above
             128 voxels.
     """
-    if not (sigma_voxels > 0) or not isfinite(sigma_voxels):
-        raise Error("A Gaussian width must be positive and finite")
-    var radius_float = ceil(3.0 * sigma_voxels)
-    if radius_float > Float64(MAX_KERNEL_RADIUS):
-        raise Error("A Gaussian kernel reaches at most 128 voxels")
-    var radius = Int(radius_float)
-    var weights = List[Float64]()
-    var total = 0.0
-    for t in range(-radius, radius + 1):  # pragma: no branch
-        var x = Float64(t) / sigma_voxels
-        var w = precise_exp(-0.5 * x * x)
-        weights.append(w)
-        total += w
-    for index in range(len(weights)):  # pragma: no branch
-        weights[index] /= total
-    return weights^
-
-
-def _pass(
-    volume: ImageVolume,
-    values: List[Float32],
-    axis: Int,
-    weights: List[Float64],
-) -> List[Float32]:
-    """Convolve along one axis, with the nearest voxel past the edges."""
-    var sizes = [volume.nx, volume.ny, volume.nz]
-    var strides = [1, volume.nx, volume.nx * volume.ny]
-    var size = sizes[axis]
-    var stride = strides[axis]
-    var radius = len(weights) // 2
-    var out = List[Float32](length=len(values), fill=0)
-    for index in range(len(values)):  # pragma: no branch
-        var at = (index // stride) % size
-        var sum = 0.0
-        for t in range(len(weights)):  # pragma: no branch
-            var c = min(max(at + t - radius, 0), size - 1)
-            sum += weights[t] * Float64(values[index + (c - at) * stride])
-        out[index] = Float32(sum)
-    return out^
+    return _kernel(sigma_voxels).weights.copy()
 
 
 def gaussian_filter(volume: ImageVolume, sigma: Length64) raises -> ImageVolume:
     """Return a volume blurred by a Gaussian.
+
+    Each axis has its own kernel, with the nearest voxel past each edge.
 
     Args:
         volume: The volume.
@@ -108,14 +85,18 @@ def gaussian_filter(volume: ImageVolume, sigma: Length64) raises -> ImageVolume:
     var width = sigma.to(METER)
     if not (width > 0) or not isfinite(width):
         raise Error("A Gaussian width must be positive and finite")
-    var kernels = List[List[Float64]]()
+    var kernels = List[GaussianKernel]()
     for axis in range(3):  # pragma: no branch
-        kernels.append(gaussian_kernel(width / spacings[axis]))
-    var values = volume.values.copy()
+        kernels.append(_kernel(width / spacings[axis]))
+    var values = List[Float64](capacity=len(volume.values))
+    for v in volume.values:  # pragma: no branch
+        values.append(Float64(v))
+    var shape: List[Int] = [volume.nx, volume.ny, volume.nz]
     for axis in range(3):  # pragma: no branch
-        values = _pass(volume, values, axis, kernels[axis])
+        values = convolve_axis(values, shape, axis, kernels[axis], EDGE_NEAREST)
     var out = volume.copy()
-    out.values = values^
+    for index in range(len(values)):  # pragma: no branch
+        out.values[index] = Float32(values[index])
     return out^
 
 

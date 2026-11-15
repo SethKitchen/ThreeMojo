@@ -448,3 +448,40 @@ def require_tofts_model(model: ToftsModel) raises:
         Error: If `model` is not valid.
     """
     require_valid(model.is_valid(), "A Tofts model must be 0 or 1")
+
+
+@fieldwise_init
+struct EdgeMode(Equatable, ImplicitlyCopyable, Writable):
+    """Which values a filter reads past the edge of a volume.
+
+    `EDGE_NEAREST` repeats the edge value: `a a a | a b c d | d d d`.
+    `EDGE_REFLECT` mirrors the values about the edge, with the edge value
+    once more: `c b a | a b c d | d c b`. These are the `nearest` and
+    `reflect` modes of scipy.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the two edge modes.
+
+        Returns:
+            Whether the value is zero or one.
+        """
+        return ordinal_valid(self.value, 1)
+
+
+comptime EDGE_NEAREST = EdgeMode(0)
+comptime EDGE_REFLECT = EdgeMode(1)
+
+
+def require_edge_mode(mode: EdgeMode) raises:
+    """Refuse an edge mode that is not one of the two.
+
+    Args:
+        mode: The edge mode to check.
+
+    Raises:
+        Error: If `mode` is not valid.
+    """
+    require_valid(mode.is_valid(), "An edge mode must be 0 or 1")
