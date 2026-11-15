@@ -20,15 +20,21 @@ Each gives kappa with the large-sample standard error of Fleiss, Cohen
 and Everitt (1969), its 95 percent interval, and the test that kappa is
 0, with the standard error under no agreement beyond chance, as
 statsmodels gives them.
+
+`fleiss_kappa(table)` measures the agreement of many raters, such as six
+pathologists who each grade every slide. Its table holds, for each
+subject, how many raters put it in each category.
 """
 
 from extensions.clinical.survival import Z95
 from extensions.numerics.dense import DenseMatrix
-from std.math import erfc, sqrt
+from std.math import erfc, nan, sqrt
 
 comptime _SQRT_TWO = 1.4142135623730951
 # The most categories of one table.
 comptime MAX_CATEGORIES = 100
+# The most subjects of a table of many raters.
+comptime MAX_SUBJECTS = 100000
 
 
 struct Kappa(Copyable, Movable):
@@ -197,3 +203,119 @@ def quadratic_weighted_kappa(table: List[List[Int]]) raises -> Kappa:
             var d = Float64(i - j) / Float64(k - 1)
             weights.set(i, j, 1.0 - d * d)
     return _kappa(table, weights)
+
+
+struct FleissKappa(Copyable, Movable):
+    """Fleiss' kappa of many raters, with its test."""
+
+    var value: Float64
+    """Kappa: 1 for full agreement, 0 for chance agreement."""
+    var null_error: Float64
+    """The standard error of kappa when the agreement is chance only, by
+    Fleiss, Nee and Landis (1979)."""
+    var z: Float64
+    """Kappa over its null standard error."""
+    var p_value: Float64
+    """The two-sided chance of a z this far from 0 under chance agreement."""
+    var free_marginal: Float64
+    """Randolph's free-marginal kappa, with chance agreement 1 over the
+    categories."""
+    var categories: List[Float64]
+    """The kappa of each category, by Fleiss (1971). Not a number for a
+    category that no rater chose."""
+
+    def __init__(out self):
+        """Create an empty result."""
+        self.value = 0.0
+        self.null_error = 0.0
+        self.z = 0.0
+        self.p_value = 1.0
+        self.free_marginal = 0.0
+        self.categories = List[Float64]()
+
+
+def fleiss_kappa(table: List[List[Int]]) raises -> FleissKappa:
+    """Return Fleiss' kappa of many raters on categories.
+
+    Each subject has the same number of ratings, from two raters or more.
+    Each rater can be another person for each subject.
+
+    Args:
+        table: One row for each subject, of the number of raters who put
+            it in each category.
+
+    Returns:
+        Kappa, `(P - Pe) / (1 - Pe)`, with its null error, z, p value, the
+        free-marginal kappa and the kappa of each category.
+
+    Raises:
+        Error: If there are not 1 to 100000 subjects of 2 to 100
+            categories, a count is below 0, the subjects have not one
+            number of ratings of 2 or more, or every rating is in one
+            category.
+    """
+    var subjects = len(table)
+    if subjects < 1 or subjects > MAX_SUBJECTS:
+        raise Error("A table of many raters has from 1 to 100000 subjects")
+    var k = len(table[0])
+    if k < 2 or k > MAX_CATEGORIES:
+        raise Error("A table of many raters has from 2 to 100 categories")
+    var raters = -1
+    var totals = List[Float64](length=k, fill=0.0)
+    var agree = 0.0
+    for row in table:  # pragma: no branch
+        if len(row) != k:
+            raise Error("Each subject needs a count for each category")
+        var count = 0
+        var pairs = 0.0
+        for j in range(k):  # pragma: no branch
+            if row[j] < 0:
+                raise Error("The counts of a table must be 0 or more")
+            count += row[j]
+            pairs += Float64(row[j]) * Float64(row[j] - 1)
+            totals[j] += Float64(row[j])
+        if raters < 0:
+            raters = count
+        if count != raters or count < 2:
+            raise Error(
+                "Each subject needs the same number of ratings, 2 or more"
+            )
+        agree += pairs
+    var n = Float64(raters)
+    var ratings = Float64(subjects) * n
+    var observed = agree / (ratings * (n - 1.0))
+    var expected = 0.0
+    var spread = 0.0
+    var skew = 0.0
+    var shares = List[Float64]()
+    for j in range(k):  # pragma: no branch
+        var p = totals[j] / ratings
+        shares.append(p)
+        expected += p * p
+        spread += p * (1.0 - p)
+        skew += p * (1.0 - p) * (1.0 - 2.0 * p)
+    if not (expected < 1):
+        raise Error("A kappa of many raters needs ratings in two categories")
+    var out = FleissKappa()
+    out.value = (observed - expected) / (1.0 - expected)
+    var chance = 1.0 / Float64(k)
+    out.free_marginal = (observed - chance) / (1.0 - chance)
+    out.null_error = (
+        sqrt(2.0)
+        / (spread * sqrt(ratings * (n - 1.0)))
+        * sqrt(spread * spread - skew)
+    )
+    out.z = out.value / out.null_error
+    out.p_value = erfc(abs(out.z) / _SQRT_TWO)
+    for j in range(k):  # pragma: no branch
+        var p = shares[j]
+        if not (p > 0):
+            out.categories.append(nan[DType.float64]())
+            continue
+        var apart = 0.0
+        for row in table:  # pragma: no branch
+            apart += Float64(row[j]) * Float64(raters - row[j])
+        out.categories.append(
+            1.0 - apart / (ratings * (n - 1.0) * p * (1.0 - p))
+        )
+    return out^

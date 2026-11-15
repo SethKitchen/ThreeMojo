@@ -13,7 +13,7 @@
 - `competing`: the cumulative incidence of competing causes.
 - `roc`: ROC curves of diagnostic tests, their AUC and DeLong's test.
 - `agreement`: Bland-Altman agreement and intraclass correlations.
-- `kappa`: Cohen's kappa, simple and weighted.
+- `kappa`: Cohen's kappa, simple and weighted, and Fleiss' kappa.
 - `logistic`: logistic regression with odds ratios.
 - `rates`: Poisson regression of event rates over person-time.
 - `calibration`: the calibration and the decision curve of a risk model.

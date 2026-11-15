@@ -17,7 +17,7 @@ Marker A has an AUC of 0.820, with a 95 percent interval from 0.751 to 0.890. Ma
 | `roc` | `RocCurve`, `roc_curve`, `RocComparison`, `compare_roc` and `roc_image` |
 | `agreement` | `BlandAltman`, `bland_altman`, `bland_altman_image`, `Icc`, `IccTable`, `intraclass_correlation` and `LIMIT_FACTOR` |
 | `logistic` | `LogisticModel` and `logistic_regression` |
-| `kappa` | `Kappa`, `cohens_kappa`, `linear_weighted_kappa`, `quadratic_weighted_kappa` and `MAX_CATEGORIES` |
+| `kappa` | `Kappa`, `cohens_kappa`, `linear_weighted_kappa`, `quadratic_weighted_kappa`, `FleissKappa`, `fleiss_kappa`, `MAX_CATEGORIES` and `MAX_SUBJECTS` |
 | `rates` | `RateModel`, `poisson_regression`, `YEAR64` and `PER_YEAR64` |
 | `calibration` | `brier_score`, `scaled_brier_score`, `RiskGroup`, `risk_groups`, `HosmerLemeshow`, `hosmer_lemeshow`, `CalibrationFit`, `calibration_fit`, `recalibrate`, `net_benefit`, `DecisionCurve`, `decision_curve`, `calibration_image`, `decision_curve_image`, `MAX_GROUPS` and `MAX_THRESHOLDS` |
 | `proportions` | `Estimate`, `wilson_interval`, `exact_interval`, `DiagnosticAccuracy`, `diagnostic_accuracy`, `RiskComparison` and `compare_risks` |
@@ -204,6 +204,24 @@ Two raters, such as two radiologists, put each subject in one of k categories. T
 
 Each gives a `Kappa` with the `value`, its `standard_error`, and the 95 percent interval from `lower` to `upper`. It also gives the test that kappa is 0: the `null_error`, z and the two-sided `p_value`. The errors are the large-sample errors of Fleiss, Cohen and Everitt, as statsmodels gives them.
 
+Fleiss' kappa measures the agreement of more than two raters, such as six pathologists who grade each slide. `fleiss_kappa(table)` takes one row for each subject, of the number of raters who put it in each category. Each subject must have the same number of ratings, 2 or more. A rater can be another person for each subject.
+
+```mojo
+from extensions.clinical.kappa import fleiss_kappa
+
+var result = fleiss_kappa([[0, 0, 0, 0, 14], [0, 2, 6, 4, 2], [0, 0, 3, 5, 6]])
+print(result.value, result.p_value, result.categories[4])
+```
+
+The `FleissKappa` gives:
+
+- `value`, `(P - Pe) / (1 - Pe)`. P is the mean share of rater pairs that agree on a subject, and Pe is the sum of the squares of the category shares.
+- `null_error`, the standard error when the agreement is chance only, by Fleiss, Nee and Landis (1979). `z` and the two-sided `p_value` test that kappa is 0, as R's `irr::kappam.fleiss` gives them.
+- `free_marginal`, Randolph's kappa, which takes chance agreement as 1 over the categories.
+- `categories`, the kappa of each category, by Fleiss (1971). A category that no rater chose has no kappa, and gives not a number.
+
+With two raters, Fleiss' kappa is Scott's pi, not Cohen's kappa.
+
 ## Use the t and F distributions
 
 `distributions` gives the functions that the intervals and the tests use:
@@ -252,6 +270,8 @@ The tests compare `rates` with the Poisson `GLM` of statsmodels 0.15.0, with an 
 
 The tests compare `kappa` with `cohens_kappa` of statsmodels 0.15.0. The tables are four grades of 120 synthetic films, by each weighting, and two categories of 60 smears. `assets/agreement/make_kappa.py` writes them. Kappa agrees to a relative 1e-14, and its errors and interval ends to 1e-12.
 
+The tests compare `fleiss_kappa` with `fleiss_kappa` of statsmodels 0.15.0 on two tables. One is the example of 10 subjects and 14 raters on the Wikipedia page of Fleiss' kappa, with a kappa of 0.210. The other has 40 synthetic films and 6 readers. `assets/agreement/make_fleiss.py` writes them. Kappa and Randolph's kappa agree to a relative 1e-14. The null error, z and the category kappas agree with their formulas in numpy to 1e-13, and the p value with scipy to 1e-10.
+
 The tests compare `calibration` with scikit-learn 1.9.1, scipy 1.18.1, statsmodels 0.15.0 and dcurves 1.1.7 on 300 synthetic patients. `assets/calibration/make_calibration.py` writes them.
 
 - The Brier score agrees with `brier_score_loss` to a relative 1e-14. The counts and events of the ten groups of risk are those of `numpy.array_split`, and their mean risks agree to 1e-14.
@@ -273,6 +293,7 @@ The tests also check cases by hand:
 - A covariate that separates the outcomes does not converge.
 - Events of 10 in 100 person-years against 20 in 50 give a rate ratio of 4 and a baseline rate of 0.1 a year. The log of the ratio has the standard error `sqrt(1/10 + 1/20)`.
 - Full agreement gives a kappa of 1 with no error. Equal cells give a kappa of 0 and a p value of 1. With two categories, the weighted kappas are the simple one. Systematic disagreement gives a kappa below 0.
+- Full agreement of many raters gives a Fleiss' kappa of 1, in each category too. Raters who split each subject evenly give -1. A category that no rater chose has no kappa.
 - With no success in 20 trials, the exact high end is `1 - 0.025^(1/20)`. The beta quantile of Beta(2, 1) is the square root, on both sides of a half.
 - The likelihood ratios of the test are 6 and 0.1 / 0.85. With no false positive, a half is added to each cell.
 - Equal risks need an infinite number to treat.
@@ -299,6 +320,7 @@ Every function raises `Error` for input it cannot use.
 | The strata are not one count of 0 or more, positive person-time and one finite row each, with an event in all and more strata than coefficients, or the tolerance or the steps are out of range | `poisson_regression` |
 | A covariate is constant or collinear with others, or an index names no covariate | `poisson_regression`, `RateModel` |
 | A kappa table is not square, has not 2 to 100 categories, has a count below 0 or no subject, or its raters agree by chance alone | `kappa` |
+| A table of many raters has not 1 to 100000 subjects of 2 to 100 categories, a count below 0, not one number of ratings of 2 or more, or every rating in one category | `fleiss_kappa` |
 | A cell of a diagnostic table is negative, or the table has no diseased, healthy, positive or negative patient | `diagnostic_accuracy` |
 | The covariates are not one finite row of 1 to 32 values for each patient, all outcomes are the same, the tolerance is not between 0 and 1, or the steps are not from 1 to 1000 | `logistic_regression` |
 | The information matrix is not positive definite, because a covariate is constant, is collinear with others, or separates the outcomes | `logistic_regression` |
@@ -345,6 +367,9 @@ Every function raises `Error` for input it cannot use.
 - Breslow and Day, "Statistical Methods in Cancer Research, Volume II: The Design and Analysis of Cohort Studies", 1987.
 - Cohen, "A coefficient of agreement for nominal scales", Educational and Psychological Measurement, 1960.
 - Fleiss, Cohen and Everitt, "Large sample standard errors of kappa and weighted kappa", Psychological Bulletin, 1969.
+- Fleiss, "Measuring nominal scale agreement among many raters", Psychological Bulletin, 1971.
+- Fleiss, Nee and Landis, "Large sample variance of kappa in the case of different sets of raters", Psychological Bulletin, 1979.
+- Randolph, "Free-marginal multirater kappa (multirater K[free]): an alternative to Fleiss' fixed-marginal multirater kappa", Joensuu Learning and Instruction Symposium, 2005.
 - Clopper and Pearson, "The use of confidence or fiducial limits illustrated in the case of the binomial", Biometrika, 1934.
 - Wilson, "Probable inference, the law of succession, and statistical inference", Journal of the American Statistical Association, 1927.
 - Simel, Samsa and Matchar, "Likelihood ratios with confidence: sample size estimation for diagnostic test studies", Journal of Clinical Epidemiology, 1991.
