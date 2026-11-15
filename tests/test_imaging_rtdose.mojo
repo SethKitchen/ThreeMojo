@@ -6,8 +6,9 @@
 """RT Dose files, and the dose-volume histograms of regions.
 
 The fixtures `rtdose.dcm` and `rtdose_implicit.dcm` were written by
-pydicom 3.0.1. See `assets/dicom/make_rtdose.py` and
-`assets/dicom/rtdose_expected.txt`, whose histograms numpy 2.1.3 gave.
+pydicom 3.0.1, from the dose of `tools/make_rtdose.mojo`. See
+`assets/dicom/make_rtdose.py`. The histograms come from the doses that
+pydicom reads, by the closed forms of their measures.
 """
 
 from extensions.imaging.dicom_write import DicomWriter
@@ -38,7 +39,9 @@ from extensions.imaging.rtstruct import read_rt_structures, structure_labels
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Framebuffer
 from extensions.sdf.vector import v3
-from std.math import inf, nan, sqrt
+from extensions.numerics.elementary import precise_power
+from math.sort_utils import stable_sort
+from std.math import ceil, inf, nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -68,8 +71,72 @@ def _lines() raises -> List[List[String]]:
     return out^
 
 
-def _close(actual: Float64, expected: String) raises:
-    assert_almost_equal(actual, atof(expected), atol=0.0, rtol=1e-12)
+def _close(actual: Float64, expected: Float64) raises:
+    assert_almost_equal(actual, expected, atol=0.0, rtol=1e-12)
+
+
+def _masks() raises -> List[String]:
+    """The voxel flags of each region of the structure fixtures, from
+    scikit-image."""
+    var out = List[String]()
+    var text = open("assets/dicom/rtstruct_expected.txt", "r").read()
+    for line in text.splitlines():
+        out.append(String(String(line).split(" ")[3]))
+    return out^
+
+
+def _at_count(doses: List[Float64], count: Int) -> Float64:
+    """The least dose of the hottest `count` voxels."""
+    return doses[min(max(count, 1), len(doses)) - 1]
+
+
+def _reference(values: List[String], flags: String) raises -> List[Float64]:
+    """The measures of a region by their closed forms, from the doses of
+    pydicom: the count, the least, mean and largest dose, D98, D95, D50,
+    D2, V20 and V40 in cm^3, D for 0.03 and 0.1 cm^3, and the gEUD at
+    a = -10 and 5. A dose at a share or a volume is the least dose of
+    the hottest voxels that reach it, to 1e-9 of a voxel."""
+    var doses = List[Float64]()
+    var bytes = flags.as_bytes()
+    for v in range(len(bytes)):
+        if bytes[v] == 49:
+            doses.append(Float64(Float32(atof(values[1 + v]))))
+
+    def hotter(a: Float64, b: Float64) capturing -> Bool:
+        return a > b
+
+    stable_sort[hotter](doses)
+    var n = len(doses)
+    var sum = 0.0
+    for d in doses:
+        sum += d
+    var voxel = 2.0 * 2.5 * 3.0 / 1000.0
+    var out: List[Float64] = [
+        Float64(n),
+        doses[n - 1],
+        sum / Float64(n),
+        doses[0],
+    ]
+    var fractions: List[Float64] = [0.98, 0.95, 0.5, 0.02]
+    for f in fractions:
+        out.append(_at_count(doses, Int(ceil(f * Float64(n) - 1e-9))))
+    var levels: List[Float64] = [20.0, 40.0]
+    for level in levels:
+        var count = 0
+        for d in doses:
+            if d >= level:
+                count += 1
+        out.append(Float64(count) * voxel)
+    var volumes: List[Float64] = [0.03, 0.1]
+    for v in volumes:
+        out.append(_at_count(doses, Int(ceil(v / voxel - 1e-9))))
+    var powers: List[Float64] = [-10.0, 5.0]
+    for a in powers:
+        var mean = 0.0
+        for d in doses:
+            mean += precise_power(d, a) / Float64(n)
+        out.append(precise_power(mean, 1.0 / a))
+    return out^
 
 
 def test_pydicom_fixtures() raises:
@@ -100,41 +167,40 @@ def test_pydicom_fixtures() raises:
         at += 2
         # Each region of the structure fixtures, on the dose grid.
         var regions = read_rt_structures("assets/dicom/rtstruct.dcm")
+        var masks = _masks()
         for r in range(2):
-            ref want = lines[at]
-            assert_equal(want[1], regions[r].name)
+            var want = _reference(values, masks[r])
             var map = structure_labels(regions[r], dose, LabelId(1))
             var dvh = dose_volume_histogram(dose, map, LabelId(1))
-            assert_equal(dvh.count(), atol(want[2]))
-            _close(dvh.minimum().to(GRAY), want[3])
-            _close(dvh.mean().to(GRAY), want[4])
-            _close(dvh.maximum().to(GRAY), want[5])
+            assert_equal(Float64(dvh.count()), want[0])
+            _close(dvh.minimum().to(GRAY), want[1])
+            _close(dvh.mean().to(GRAY), want[2])
+            _close(dvh.maximum().to(GRAY), want[3])
             var fractions: List[Float64] = [0.98, 0.95, 0.5, 0.02]
             for p in range(4):
-                _close(dvh.dose_at_fraction(fractions[p]).to(GRAY), want[6 + p])
+                _close(dvh.dose_at_fraction(fractions[p]).to(GRAY), want[4 + p])
             _close(
                 dvh.volume_at_dose(AbsorbedDose64(20, GRAY)).to(
                     CUBIC_CENTIMETER64
                 ),
-                want[10],
+                want[8],
             )
             _close(
                 dvh.volume_at_dose(AbsorbedDose64(4000, CENTIGRAY)).to(
                     CUBIC_CENTIMETER64
                 ),
-                want[11],
+                want[9],
             )
             _close(
                 dvh.dose_at_volume(Volume64(0.03, CUBIC_CENTIMETER64)).to(GRAY),
-                want[12],
+                want[10],
             )
             _close(
                 dvh.dose_at_volume(Volume64(0.1, CUBIC_CENTIMETER64)).to(GRAY),
-                want[13],
+                want[11],
             )
-            _close(dvh.equivalent_uniform_dose(-10.0).to(GRAY), want[14])
-            _close(dvh.equivalent_uniform_dose(5.0).to(GRAY), want[15])
-            at += 1
+            _close(dvh.equivalent_uniform_dose(-10.0).to(GRAY), want[12])
+            _close(dvh.equivalent_uniform_dose(5.0).to(GRAY), want[13])
 
 
 struct _Spec(Copyable, Movable):
