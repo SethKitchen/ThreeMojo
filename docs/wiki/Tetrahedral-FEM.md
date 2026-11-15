@@ -18,6 +18,7 @@
 | `post` | `stress_geometry`, `deformed_geometry`, `stress_color`, `mode_geometry`, `temperature_geometry` and `dose_geometry` |
 | `summary` | `stress_summary`, `MaterialStress` and `strain_energy` |
 | `failure` | `effective_strains`, `pistoia_failure` and `PistoiaFailure` |
+| `remodel` | `BoneLaw`, `RemodelingRule`, `RemodelingResult`, `remodel`, `SpecificEnergy64`, `JOULE_PER_KILOGRAM` and `MAX_REMODELING_STEPS` |
 | `quality` | `element_quality`, `ElementQuality`, `mesh_quality` and `MeshQuality` |
 | `probe` | `locate_point`, `MeshPoint`, `sample_field`, `sample_temperature` and `sample_displacement` |
 | `dose` | `thermal_dose` and `dose_volume` |
@@ -242,6 +243,26 @@ var load = failure.factor * reaction
 `pistoia_failure(problem, result, material, critical, fraction)` takes the elements of one material, such as bone without the platens that press it. It takes them from the largest effective strain down, until their volume reaches the fraction of the material's volume. The strain of the last of them is the `threshold`. The model is linear, so the material fails near `factor = critical / threshold` times the solved load.
 
 The factor scales the whole solution: the forces, the reactions and the prescribed displacements. So a model pressed by a prescribed displacement fails near the factor times its reaction force.
+
+## Remodel bone
+
+Bone adds mass where it carries more strain energy than it is used to, and loses mass where it carries less. A stiff implant carries much of the load of the bone around it, so that bone loses mass. This stress shielding loosens joint replacements, so research on implants models it.
+
+```mojo
+from extensions.fem.remodel import BoneLaw, JOULE_PER_KILOGRAM, RemodelingRule, SpecificEnergy64, remodel
+
+var law = BoneLaw(Pressure64(3790, MEGAPASCAL), 3.0, 0.3)
+var rule = RemodelingRule(SpecificEnergy64(0.02, JOULE_PER_KILOGRAM), 0.1, least, most, 1.0)
+var found = remodel(problem^, MaterialId(0), law, rule, start, 100, 1e-6, 5000)
+```
+
+Huiskes and others (1987) take the strain energy density over the density, `S = U / rho`, as the stimulus of bone. Bone does not change while S stays in the lazy zone, from `(1 - s) k` to `(1 + s) k` of a reference stimulus k.
+
+- `BoneLaw(coefficient, exponent, poisson)` gives the modulus `E = C (rho / rho0)^gamma` of bone of a density, with rho0 = 1 g/cm^3.
+- `RemodelingRule(reference, lazy, least, most, relaxation)` holds k, s, the bounds of the density and the relaxation w.
+- `remodel(problem, bone, law, rule, start, steps, tolerance, max_iterations)` gives each element of the bone material its own density, from `start`. At each step it solves the problem. Then it moves each density by `rho (S / k')^(w / (gamma + 1))`, with k' the nearer end of the lazy zone, and keeps it between the bounds.
+
+Under a fixed stress, S falls as `rho^-(gamma + 1)`. So a relaxation of 1 reaches the edge of the lazy zone in one step, and a smaller relaxation approaches it. The equilibria are those of the rule of Huiskes and others. The run stops when no log density changes by more than `tolerance`. The result gives the density and the stimulus of each bone element, the steps and whether the run converged.
 
 ## Principal stresses
 
@@ -468,6 +489,9 @@ The tests check these results:
 - A quadratic cantilever of 60 elements bends to 98 percent of beam theory.
 - A bar has a Poisson's ratio of 0 and its sides held. Pulled to a strain of 0.001, it has an effective strain of 0.001 in every element. So it fails at 7 times the load for a critical strain of 0.007.
 - A soft half and a stiff half of twice the modulus, in series, carry one stress. Their thresholds are 0.002 and 0.001 for a pull of 3 mm.
+- A box of bone on rollers under a pressure of 1 MPa has one stress in every element. Remodeling with a relaxation of 1 gives the density of `rho^(gamma + 1) = sigma^2 rho0^gamma / (2 C k)` in one step, to 1e-12. A relaxation of a half gives the geometric mean of the start and that density in one step.
+- With a lazy zone, a density from above goes to the stimulus `(1 + s) k`, and one from below to `(1 - s) k`. A density inside the zone does not change. A box with no load falls to the least density, and a tiny reference stimulus raises it to the most.
+- A stiff implant fills half of the box, beside the bone, and carries the load. The mean density of the bone falls below 90 percent of that without the implant.
 - Twelve elements have effective strains of 1e-4 to 12e-4. They reach a fifth of their volume at the third largest, and a twentieth at the largest.
 - A quadratic element stiffness is symmetric, and its ten shape gradients sum to zero.
 - A column standing under its own weight puts all of it on its base. With ten-node elements, its top drops by exactly `rho g L^2 / (2 E)`.
@@ -532,6 +556,8 @@ Every function raises `Error` for input it cannot use.
 | A Neo-Hookean solve has quadratic elements, a thermal load, steps out of 1 to 1000, a tolerance not between 0 and 1, no Newton step, or an element turned inside out | `solve_neo_hookean` |
 | A result is not for its mesh, or a stress threshold is negative or not finite | `stress_summary`, `strain_energy` |
 | A result is not for its problem, the material names none or has no element, the critical strain is not positive and finite, the share is not between 0 and 1, or the material has no strain there | `effective_strains`, `pistoia_failure` |
+| A bone law has a coefficient that is not positive and finite, an exponent out of 1 to 4, or a Poisson's ratio out of range, or a rule has a stimulus, a lazy zone, bounds or a relaxation out of range | `BoneLaw`, `RemodelingRule` |
+| The mesh is not of four-node tetrahedra, the material names none, the start is out of the bounds, the steps are not from 1 to 1000, the tolerance is not between 0 and 1, or a solve runs out of its budget | `remodel` |
 | A mesh has no element, or an element id names no element | `mesh_quality`, `element_quality` |
 | A dose has fewer than two records, times that do not rise, records of other sizes, doses that do not fit the mesh, or a bad threshold or scale | `thermal_dose`, `dose_volume`, `dose_geometry` |
 | No element holds a point, or a field or a mesh point does not fit the mesh | `locate_point`, `sample_field`, `sample_temperature`, `sample_displacement` |
@@ -550,6 +576,7 @@ Every function raises `Error` for input it cannot use.
 - A voxel mesh has stair steps on curved surfaces. The stress at a stair step is not the stress of the smooth shape.
 - A thermal dose of 240 minutes is a threshold from research, and tissues differ. A dosed volume is not a prediction of a treatment.
 - The criterion of Pistoia is a rule from linear models of the distal radius. Its critical strain and share suit that site and that kind of model. It estimates a failure load for research, and it does not predict the fracture of a patient.
+- Remodeling takes one load case and the stimulus of one element alone. It has no sum of daily loads, no spread of the stimulus to the next elements and no rate in time. So its steps are not days. The density of each element is the mean density of its bone, and its modulus is isotropic. It shows trends for research, not the bone loss of a patient.
 
 ## References
 
@@ -565,3 +592,4 @@ Every function raises `Error` for input it cannot use.
 - Pennes, "Analysis of tissue and arterial blood temperatures in the resting human forearm", 1948.
 - Sapareto and Dewey, "Thermal dose determination in cancer therapy", International Journal of Radiation Oncology, Biology, Physics, 1984.
 - Pistoia and others, "Estimation of distal radius failure load with micro-finite element analysis models based on three-dimensional peripheral quantitative computed tomography images", Bone, 2002.
+- Huiskes and others, "Adaptive bone-remodeling theory applied to prosthetic-design analysis", Journal of Biomechanics, 1987.
