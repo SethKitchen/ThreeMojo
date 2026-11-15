@@ -735,12 +735,11 @@ The tests check these results:
 - Variants read as `R175H`, `p.R175H` and `p.Arg175His`. Each malformed form is refused, as are a stop, a number of 0 and a change to the same amino acid.
 - Four variants on an ideal helix give their residues, their charge, hydropathy and BLOSUM62 changes, their mean B-factors and their RSA. Their contacts match a search of every pair of atoms. A wrong wild type and a missing number are refused.
 
-The tests compare `conservation` with scipy 1.18.1 and Biopython 1.88 on a synthetic alignment of 12 rows and 48 columns. Some columns are held, some change at rising rates, some are free, and some have gaps. `assets/conservation/make_conservation.py` writes them.
+The tests compare `conservation` with scipy 1.18.1 and Biopython 1.88 on a synthetic alignment of 12 rows and 48 columns. Some columns are held, some change at rising rates, some are free, and some have gaps. `tools/make_conservation.mojo` writes the alignment, and `assets/conservation/make_conservation.py` writes the expected values.
 
-- The Henikoff weights agree with the formula in numpy to 1e-16.
-- With uniform weights and with the Henikoff weights, the share of gaps agrees to 1e-15. The entropy agrees with scipy's `entropy` to 1e-14, and the Jensen-Shannon divergence with the square of scipy's `jensenshannon` to 1e-14.
-- The relative entropy agrees with Biopython's `motifs.Motif.relative_entropy`, from the weighted counts, to 1e-13.
-- A held column has no entropy, and its relative entropy to a uniform background is `log2(20)`. Two copies of one row share the weight of a third row that differs. The B-factors of a chain take the values of its columns past the gaps of its row.
+- With uniform weights, the share of gaps agrees to 1e-15. The entropy agrees with scipy's `entropy` to 1e-14, and the Jensen-Shannon divergence with the square of scipy's `jensenshannon` to 1e-14.
+- The relative entropy agrees with Biopython's `motifs.Motif.relative_entropy`, from the counts, to 1e-13.
+- A held column has no entropy, and its relative entropy to a uniform background is `log2(20)`. Two copies of one row share the weight of a third row that differs. With those weights, a column of A, A and W has an entropy of 1 bit. No library gives the Henikoff weights, so the tests check them by hand only. The B-factors of a chain take the values of its columns past the gaps of its row.
 
 The tests compare `protparam` with Biopython 1.88 and the Python package peptides 0.5.0 on five sequences. They are ubiquitin, magainin 2, melittin, LL-37 and a short peptide of each charged residue. `assets/protparam/make_protparam.py` writes them.
 

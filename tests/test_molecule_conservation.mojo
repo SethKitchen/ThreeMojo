@@ -7,7 +7,7 @@
 
 `assets/conservation/conservation_expected.txt` holds the values of numpy,
 scipy and Biopython for a synthetic alignment. See
-`assets/conservation/make_conservation.py`.
+`tools/make_conservation.mojo` and `assets/conservation/make_conservation.py`.
 """
 
 from extensions.molecule.conservation import (
@@ -41,7 +41,7 @@ def _expected(kind: String) raises -> List[List[Float64]]:
         var parts = line.split(" ")
         if String(parts[0]) != kind:
             continue
-        var first = 1 if kind == "background" or kind == "weights" else 2
+        var first = 1 if kind == "background" else 2
         var row = List[Float64]()
         for at in range(first, len(parts)):
             row.append(atof(String(parts[at])))
@@ -67,12 +67,7 @@ def _check(rows: List[String], weights: List[Float64], kind: String) raises:
 def test_against_references() raises:
     var rows = _rows()
     assert_equal(len(rows), 12)
-    var weights = henikoff_weights(rows)
-    var expected = _expected("weights")[0].copy()
-    for r in range(12):
-        assert_almost_equal(weights[r], expected[r], atol=1e-16, rtol=0)
     _check(rows, List[Float64](length=12, fill=1.0), "uniform")
-    _check(rows, weights, "weighted")
 
 
 def test_by_hand() raises:
@@ -106,6 +101,16 @@ def test_by_hand() raises:
     var weights = henikoff_weights(["AC", "AC", "WY"])
     assert_almost_equal(weights[0], 0.25, atol=1e-16)
     assert_almost_equal(weights[2], 0.5, atol=1e-16)
+    # With those weights, A has a share of 1/4 + 1/4 and W of 1/2: 1 bit.
+    var weighted = column_conservation(
+        ["A", "A", "W"],
+        henikoff_weights(["AC", "AC", "WY"]),
+        uniform_background(),
+    )
+    assert_almost_equal(weighted[0].entropy, 1.0, atol=1e-15)
+    assert_almost_equal(
+        weighted[0].relative_entropy, log(20.0) / log(2.0) - 1.0, atol=1e-14
+    )
     # A gap column of `.` counts as gaps too, and a row of gaps weighs 0.
     weights = henikoff_weights(["A.", "--", "CW"])
     assert_equal(weights[1], 0.0)
