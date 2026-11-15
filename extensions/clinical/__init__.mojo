@@ -13,6 +13,7 @@
 - `competing`: the cumulative incidence of competing causes.
 - `nnt`: the difference of two survival curves at a time, and its NNT.
 - `parametric`: exponential and Weibull models of censored times.
+- `aft`: Weibull accelerated failure time regression.
 - `roc`: ROC curves of diagnostic tests, their AUC and DeLong's test.
 - `agreement`: Bland-Altman agreement and intraclass correlations.
 - `kappa`: Cohen's kappa, simple and weighted, and Fleiss' kappa.

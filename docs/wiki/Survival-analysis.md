@@ -20,6 +20,7 @@ A Cox model gives the placebo a hazard ratio of 4.82, with a 95 percent interval
 | `rmst` | `CumulativeHazard`, `nelson_aalen`, `RestrictedMean`, `restricted_mean`, `RestrictedComparison` and `compare_restricted_means` |
 | `competing` | `CumulativeIncidence`, `cumulative_incidence` and `incidence_image` |
 | `nnt` | `SurvivalDifference` and `survival_difference` |
+| `aft` | `WeibullRegression` and `weibull_regression` |
 | `parametric` | `ParametricFit`, `fit_exponential`, `fit_weibull`, `constant_hazard_test`, `draw_fit` and `DurationUnit64` |
 
 ## Make a survival curve
@@ -119,6 +120,32 @@ The model gives:
 `model.survival(row, time)` predicts the survival of a patient. It uses the Breslow baseline hazard of the fitted model. `model.relative_hazard(row)` gives the hazard of a patient relative to a patient with the mean covariates.
 
 `chi_square_p_value(statistic, freedom)` gives the upper tail of the chi-square distribution in closed form.
+
+## Fit a Weibull regression
+
+A Weibull regression gives the effect of each covariate on the time to the event, not on the hazard. Each unit of a covariate multiplies the times by its time ratio. A time ratio above 1 delays the event.
+
+```mojo
+from extensions.clinical.aft import weibull_regression
+
+var model = weibull_regression(times, events, covariates, 1e-12, 100)
+print(model.time_ratio(0), model.interval(0)[0], model.interval(0)[1])
+print(model.median([1.0]).to(WEEK64))
+```
+
+The model gives each patient the Weibull survival `S(t) = exp(-(t / lambda)^rho)`. The scale is `lambda = exp(b0 + b . x)`, and one shape rho holds for every patient. This is the accelerated failure time model of lifelines' `WeibullAFTFitter`. It is also a proportional hazards model, with a hazard ratio of `exp(-rho b)`.
+
+`weibull_regression(times, events, covariates, tolerance, max_steps)` fits it by Newton steps on `(-rho b, rho)`, in which the log-likelihood is concave. A step that would make rho 0 or less, or that loses log-likelihood, is halved. The fit stops when no parameter changes by more than `tolerance`. It starts from the exponential model without covariates.
+
+The model gives:
+
+- `coefficients` and `standard_errors`, the log time ratios. `intercept(unit)` is `b0`, the log of the scale of a patient whose covariates are all 0, in a unit of time.
+- `shape` and `log_shape_error`. The errors come from the inverse of the observed information, and `covariance` holds them all.
+- `time_ratio(i)`, `interval(i)` and `p_value(i)`: `exp(b_i)`, its 95 percent interval and its Wald test.
+- `scale(row)`, `median(row)` and `survival(row, time)` of a patient.
+- `log_likelihood(unit)`, and `likelihood_ratio()` against the Weibull model without covariates.
+
+In the 6-MP trial, the placebo has a time ratio of 0.28: its remissions are 28 percent as long as with 6-MP.
 
 ## Find the cumulative hazard
 
@@ -243,6 +270,13 @@ The tests compare `parametric` with mpmath fits at 40 digits, on the two arms of
 
 lifelines fits both models by a search that stops early. Its Weibull scale and shape are off by about 1e-6, relative, and its exponential scale by 5e-8. The exponential scale has the closed form `sum t / d`, so the module does not search for it.
 
+The tests compare `aft` with numpy fits of four groups. They are the 6-MP trial, a synthetic cohort of 150 patients with three covariates, and two small groups. The first Newton step of each small group must be halved. `assets/aft/make_aft.py` writes them, and checks that lifelines' `WeibullAFTFitter` agrees to 1e-4.
+
+- The intercept, the coefficients and `ln rho` agree to 1e-12, and their standard errors to 1e-10.
+- The log-likelihood agrees to 1e-13. The likelihood ratio test agrees to 1e-10, and its p value from scipy to 1e-9.
+- The median and the survival of three patients of each group agree to 1e-12.
+- The survival at the scale of a patient is `1/e`. The intercept moves by `ln 7` from weeks to days, and a patient censored at 0 changes nothing.
+
 The tests compare `competing` with the `AalenJohansenFitter` of lifelines on a synthetic cohort of 80 patients with two causes. No two events tie, so lifelines does not jitter them. `assets/competing/make_competing.py` writes them.
 
 - At the 42 times of an event, the incidence of each cause agrees to a relative 1e-14, and its variance to 1e-12.
@@ -299,6 +333,8 @@ Every function raises `Error` for input it cannot use.
 | A row index names no time | `CumulativeIncidence.interval` |
 | The time of a survival difference is below 0 or not finite, or the difference is 0 for an NNT | `survival_difference`, `SurvivalDifference.nnt` |
 | There is no curve, the colors are not one for each, a side is out of 64 to 4096 pixels, a time is out of range, or the ceiling is not above 0 and at most 1 | `incidence_image` |
+| The covariates are not one finite row of 1 to 32 values for each patient, an event is at 0, the tolerance is not between 0 and 1, the steps are not from 1 to 1000, or the information matrix is not positive definite | `weibull_regression` |
+| An index names no covariate, a row does not have one finite value for each covariate, or a time is negative or not finite | `WeibullRegression` |
 | A group has no event, or has an event at 0 | `fit_exponential`, `fit_weibull`, `constant_hazard_test` |
 | No event is before the largest time, so the shape has no finite estimate | `fit_weibull`, `constant_hazard_test` |
 | A time is below 0 or not finite | `ParametricFit` |
@@ -312,7 +348,7 @@ Every function raises `Error` for input it cannot use.
 - A Cox fit holds the risk sets in one pass over the sorted times, and Harrell's C compares each pair of patients. A cohort of many thousands of patients is slow.
 - It takes right censoring only. A patient who enters the study late, or whose event happens between two visits, needs another method.
 - The p value is for one test. Many tests on one data set need a correction.
-- The parametric models are exponential and Weibull only, with no covariates. A curve past the last follow-up holds only if the model holds there. Check the fit against the Kaplan-Meier curve first.
+- The parametric models are exponential and Weibull only. The Weibull regression takes covariates for the scale only, with one shape for all. A curve past the last follow-up holds only if the model holds there. Check the fit against the Kaplan-Meier curve first.
 - The cumulative incidence takes independent censoring. The module has no test of Gray to compare incidences, and no Fine-Gray model of the subdistribution hazard.
 
 ## References
