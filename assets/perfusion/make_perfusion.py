@@ -26,14 +26,12 @@ below `rcond` of the largest:
   `rcond` 0.15.
 
 Each line holds the residue `k = F R(t)` at each frame in 1/s, then the
-flow (the largest k), the Tmax (the time of the largest k), and the
-volume (the sum of the tissue concentration over that of the artery).
-The script checks with numpy's singular values that none is within 1
-percent of a threshold, so the choice of the kept values is stable.
+flow (the largest k) and the Tmax (the time of the largest k). The script
+checks with numpy's singular values that none is within 1 percent of a
+threshold, so the choice of the kept values is stable.
 
-A `dsc` line holds the `delta R2*` of the DSC-MRI signal, `-ln(S / S0) /
-TE` with an echo time of 30 ms and S0 the mean of the first 4 frames, in
-1/s.
+The test checks the volume and the `delta R2*` of the DSC-MRI signal by
+their closed forms.
 """
 
 import os
@@ -82,16 +80,10 @@ def words(values):
 expected = []
 for at, curve in enumerate(tissues):
     ct = concentration(curve)
-    volume = ct.sum() / ca.sum()
     k = deconvolve(lower, ct, 0.2)
-    expected.append("ssvd %d %s" % (at, words(list(k) + [k.max(), STEP * k.argmax(), volume])))
+    expected.append("ssvd %d %s" % (at, words(list(k) + [k.max(), STEP * k.argmax()])))
     k = deconvolve(circulant, numpy.concatenate([ct, numpy.zeros(FRAMES)]), 0.15)
-    expected.append("csvd %d %s" % (at, words(list(k) + [k.max(), STEP * k.argmax(), volume])))
-
-echo = 0.030
-signal = rows["dsc"]
-r2 = -numpy.log(signal / signal[:BASELINE].mean()) / echo
-expected.append("dsc " + words(r2))
+    expected.append("csvd %d %s" % (at, words(list(k) + [k.max(), STEP * k.argmax()])))
 
 with open(os.path.join(HERE, "perfusion_expected.txt"), "w") as out:
     out.write("\n".join(expected) + "\n")

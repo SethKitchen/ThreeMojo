@@ -7,7 +7,8 @@
 
 `assets/perfusion/perfusion_expected.txt` holds numpy deconvolutions of
 synthetic curves. See
-`tools/make_perfusion.mojo` and `assets/perfusion/make_perfusion.py`.
+`tools/make_perfusion.mojo` and `assets/perfusion/make_perfusion.py`. The
+test checks the volume and the DSC-MRI `delta R2*` by their closed forms.
 """
 
 from extensions.imaging.ids import LabelId
@@ -28,7 +29,7 @@ from extensions.imaging.perfusion import (
     perfusion_maps,
     perfusion_mismatch,
 )
-from std.math import inf, nan
+from std.math import inf, log, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -85,9 +86,19 @@ comptime DATA = "assets/perfusion/perfusion_data.txt"
 comptime EXPECTED = "assets/perfusion/perfusion_expected.txt"
 
 
+def _excess(curve: List[Float64]) -> Float64:
+    """Return the sum of a curve less the mean of its first 4 frames."""
+    var baseline = (curve[0] + curve[1] + curve[2] + curve[3]) / 4.0
+    var total = 0.0
+    for value in curve:
+        total += value - baseline
+    return total
+
+
 def _check(
     deconvolution: Deconvolution,
     tissues: List[List[Float64]],
+    arterial: List[Float64],
     expected: List[List[Float64]],
 ) raises:
     for at in range(len(tissues)):
@@ -95,36 +106,44 @@ def _check(
         var k = deconvolution.residue(tissue)
         ref row = expected[at]
         var n = len(k)
-        assert_equal(len(row), n + 3)
+        assert_equal(len(row), n + 2)
         var peak = row[n]
         for i in range(n):
             assert_almost_equal(k[i], row[i], atol=1e-11 * peak, rtol=0)
         var fit = deconvolution.fit(tissue)
         _close(fit.flow.to(PER_SECOND), peak, 1e-11)
         _close(fit.tmax.to(SECOND), row[n + 1], 1e-15)
-        _close(fit.volume, row[n + 2], 1e-13)
+        # The volume is the sum of the tissue concentration over that of
+        # the artery, each less the mean of its first 4 frames.
+        _close(fit.volume, _excess(tissues[at]) / _excess(arterial), 1e-13)
 
 
 def test_against_numpy() raises:
     var step = _rows(DATA, "step")
     assert_equal(step[0][0], 1.5)
-    var arterial = ct_concentration(_rows(DATA, "arterial")[0], 4)
+    var raw = _rows(DATA, "arterial")[0].copy()
+    var arterial = ct_concentration(raw, 4)
     var tissues = _rows(DATA, "tissue")
     assert_equal(len(tissues), 4)
     var lower = Deconvolution(arterial, _step(), 0.2)
     assert_equal(lower.size, 40)
-    _check(lower, tissues, _rows(EXPECTED, "ssvd"))
+    _check(lower, tissues, raw, _rows(EXPECTED, "ssvd"))
     var circular = Deconvolution.circular(arterial, _step(), 0.15)
     assert_equal(circular.size, 80)
-    _check(circular, tissues, _rows(EXPECTED, "csvd"))
+    _check(circular, tissues, raw, _rows(EXPECTED, "csvd"))
 
 
 def test_dsc() raises:
+    # delta R2* is -ln(S / S0) / TE, with S0 the mean of the first 4
+    # frames and an echo time of 30 ms.
     var signal = _rows(DATA, "dsc")[0].copy()
-    var expected = _rows(EXPECTED, "dsc")[0].copy()
     var r2 = dsc_concentration(signal, 4, Duration64(30, MILLISECOND64))
+    assert_equal(len(r2), len(signal))
+    var s0 = (signal[0] + signal[1] + signal[2] + signal[3]) / 4.0
     for at in range(len(r2)):
-        assert_almost_equal(r2[at], expected[at], atol=1e-12, rtol=0)
+        assert_almost_equal(
+            r2[at], -log(signal[at] / s0) / 0.030, atol=1e-12, rtol=0
+        )
 
 
 def _exact(
