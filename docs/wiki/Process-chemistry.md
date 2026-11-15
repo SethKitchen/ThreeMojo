@@ -33,6 +33,7 @@ Each layer uses only the layers above it in this table. Extend the library at th
 | `thermo` | `ThermoFit` with `nasa7`, `nasa9` and `shomate`, `Species` and `Substance` |
 | `chemkin` | `read_chemkin_thermo` and `write_chemkin_thermo` |
 | `cea` | `read_cea_thermo`, a reader for NASA CEA `thermo.inp` files |
+| `fields` | `fortran_number`, the number of a fixed-width Fortran field, which both thermo readers share |
 | `fitting` | `ThermoPoint` and `fit_nasa7` |
 | `catalog` | Built-in substances, with NASA data |
 | `reaction` | `Term`, `reactant`, `product` and `Reaction`, with `delta_g`, `delta_h`, `equilibrium_temperature`, `equilibrium_pressure`, `mass_ratio` and their uncertainties |
@@ -52,6 +53,7 @@ Each layer uses only the layers above it in this table. Extend the library at th
 | `materials` | `ExpansionCurve`, `melting_point` and `eutectic_temperature` |
 | `coating` | `ElasticLayer`, the coating stresses, and the peeling, buckling and cracking limits |
 | `crystal` | `read_cif`, `Crystal` and `bonds` |
+| `cif` | `parse_cif`, `cif_tokens`, `CifBlock` and `CifTable`, the CIF and mmCIF reader of the crystal and molecule readers |
 | `plot` | `Axes`, `nice_ticks` and `tick_text` |
 | `production` | `Money64`, `Price`, `GrowthRun`, `run_cost`, `cost_floor` and `growth_for_price` |
 | `processes` | Worked processes: `titanium`, `diamond`, `lime`, `hpht` and `mpcvd` |
