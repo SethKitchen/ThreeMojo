@@ -951,6 +951,7 @@ Medical images, macromolecules and solid mechanics, for research and teaching. A
 - [x] [Survival analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Survival-analysis): Kaplan-Meier curves, medians, the log-rank test and plots, which match lifelines on the 6-MP leukemia trial [#1089](https://github.com/SethKitchen/ThreeMojo/issues/1089)
 - [x] [Cox regression](https://github.com/SethKitchen/ThreeMojo/wiki/Survival-analysis#fit-a-cox-model): hazard ratios of covariates with Efron ties, intervals, tests, concordance and predicted survival; they match lifelines [#1090](https://github.com/SethKitchen/ThreeMojo/issues/1090)
 - [x] [ROC analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests): ROC curves, AUC with DeLong intervals, Youden thresholds and DeLong's test of two tests; they match scikit-learn and MLstatkit [#1091](https://github.com/SethKitchen/ThreeMojo/issues/1091)
+- [x] [Agreement and reliability](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests#measure-the-agreement-of-two-methods): Bland-Altman limits with intervals and plots, and the six intraclass correlations; they match pingouin [#1092](https://github.com/SethKitchen/ThreeMojo/issues/1092)
 
 ### Out of scope
 

@@ -292,6 +292,8 @@ $(call gallery,indentation,indentation)
 $(call gallery,survival,survival)
 # The ROC curves of two synthetic markers, with the chance diagonal.
 $(call gallery,roc,roc)
+# A Bland-Altman plot of two readers who measure 40 synthetic tumors.
+$(call gallery,agreement,agreement)
 # A bone segment from CT: RLE DICOM slices, two labels with smoothed
 # surfaces, and the two-material voxel mesh under a platen, colored by
 # von Mises stress.
