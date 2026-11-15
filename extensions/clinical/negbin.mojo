@@ -39,11 +39,11 @@ from extensions.numerics.dense import (
 from std.math import lgamma, log, log1p, sqrt
 from units.si import YEAR64, Duration64
 from extensions.numerics.distributions import chi_square_p_value
+from extensions.numerics.search import golden_minimum
 
 # The ends of the search of log(alpha), and its steps.
 comptime _LEAST_LOG_ALPHA = -18.420680743952367
 comptime _MOST_LOG_ALPHA = 9.210340371976184
-comptime _GOLDEN = 0.6180339887498949
 comptime _SEARCH_STEPS = 90
 comptime _POLISH_STEPS = 3
 
@@ -257,26 +257,13 @@ def negative_binomial_regression(
         poisson_ll += y * log(poisson_mu[i]) - poisson_mu[i] - lgamma(y + 1.0)
     # The golden-section search of log(alpha), each start from the last fit.
     var beta = poisson.coefficients.copy()
-    var low = _LEAST_LOG_ALPHA
-    var high = _MOST_LOG_ALPHA
-    var c = high - _GOLDEN * (high - low)
-    var d = low + _GOLDEN * (high - low)
-    var fc = _profile(data, c, beta)
-    var fd = _profile(data, d, beta)
-    for _ in range(_SEARCH_STEPS):  # pragma: no branch
-        if fc > fd:
-            high = d
-            d = c
-            fd = fc
-            c = high - _GOLDEN * (high - low)
-            fc = _profile(data, c, beta)
-        else:
-            low = c
-            c = d
-            fc = fd
-            d = low + _GOLDEN * (high - low)
-            fd = _profile(data, d, beta)
-    var log_alpha = (low + high) / 2.0
+
+    def cost(log_alpha: Float64) raises capturing -> Float64:
+        return -_profile(data, log_alpha, beta)
+
+    var log_alpha = golden_minimum[cost](
+        _LEAST_LOG_ALPHA, _MOST_LOG_ALPHA, _SEARCH_STEPS
+    )
     if log_alpha < _LEAST_LOG_ALPHA + 1.0:
         raise Error(
             "The counts spread no more than Poisson counts: use the Poisson"

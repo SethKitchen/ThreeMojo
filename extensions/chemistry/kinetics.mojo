@@ -45,6 +45,7 @@ from units.si import (
 )
 from units.quantity import Quantity
 from units.temperature import Temperature64
+from extensions.numerics.search import bisect
 
 # Bisection steps for a conversion.
 comptime _BISECTIONS = 60
@@ -337,12 +338,8 @@ struct ShrinkingCore(ImplicitlyCopyable):
             raise Error("A time must be finite and not negative")
         if time.value >= self.time_to(1).value:
             return 1
-        var lo = Float64(0)
-        var hi = Float64(1)
-        for _ in range(_BISECTIONS):  # pragma: no branch
-            var mid = 0.5 * (lo + hi)
-            if self.time_to(mid).value < time.value:
-                lo = mid
-            else:
-                hi = mid
-        return 0.5 * (lo + hi)
+
+        def below(share: Float64) raises capturing -> Bool:
+            return self.time_to(share).value < time.value
+
+        return bisect[below](0.0, 1.0, _BISECTIONS)

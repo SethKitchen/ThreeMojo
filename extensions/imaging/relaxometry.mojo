@@ -28,15 +28,15 @@ from extensions.numerics.dense import (
     DenseMatrix,
     cholesky_solve,
 )
-from std.math import exp, expm1, isfinite, log
+from std.math import isfinite, log
 from units.quantity import Unit
 from units.si import MILLISECOND64, Duration64
 from extensions.numerics.elementary import precise_exp
+from extensions.numerics.search import golden_minimum
 
 # The search of log T1 in ms, and its steps.
 comptime _LEAST_LOG_T1 = 0.0
 comptime _MOST_LOG_T1 = 9.210340371976184
-comptime _GOLDEN = 0.6180339887498949
 comptime _SEARCH_STEPS = 100
 comptime _POLISH_STEPS = 4
 
@@ -199,28 +199,13 @@ def _linear(
     return (a, -slope, sum)
 
 
-def _search(x: List[Float64], y: List[Float64]) -> Float64:
+def _search(x: List[Float64], y: List[Float64]) raises -> Float64:
     """Return the log T1 of the least sum of squares, by golden section."""
-    var low = _LEAST_LOG_T1
-    var high = _MOST_LOG_T1
-    var c = high - _GOLDEN * (high - low)
-    var d = low + _GOLDEN * (high - low)
-    var fc = _linear(x, y, precise_exp(c))[2]
-    var fd = _linear(x, y, precise_exp(d))[2]
-    for _ in range(_SEARCH_STEPS):  # pragma: no branch
-        if fc < fd:
-            high = d
-            d = c
-            fd = fc
-            c = high - _GOLDEN * (high - low)
-            fc = _linear(x, y, precise_exp(c))[2]
-        else:
-            low = c
-            c = d
-            fc = fd
-            d = low + _GOLDEN * (high - low)
-            fd = _linear(x, y, precise_exp(d))[2]
-    return (low + high) / 2.0
+
+    def cost(log_t1: Float64) capturing -> Float64:
+        return _linear(x, y, precise_exp(log_t1))[2]
+
+    return golden_minimum[cost](_LEAST_LOG_T1, _MOST_LOG_T1, _SEARCH_STEPS)
 
 
 def _polish(

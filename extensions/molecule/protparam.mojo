@@ -30,8 +30,9 @@ from extensions.chemistry.quantities import (
 )
 from extensions.molecule.coloring import kyte_doolittle
 from extensions.molecule.peptide import three_letter
-from std.math import expm1, isfinite
+from std.math import isfinite
 from extensions.numerics.elementary import precise_power10
+from extensions.numerics.search import bisect
 
 comptime MolarArea64 = Molar[2, 0, 0, 0]
 """An area for each mole: the unit of a molar extinction coefficient."""
@@ -155,15 +156,11 @@ def isoelectric_point(sequence: String) raises -> Float64:
         Error: If the sequence is empty or holds another code.
     """
     var codes = _codes(sequence)
-    var low = 0.0
-    var high = 14.0
-    for _ in range(_BISECTIONS):  # pragma: no branch
-        var middle = (low + high) / 2.0
-        if _charge(codes, middle) > 0:
-            low = middle
-        else:
-            high = middle
-    return (low + high) / 2.0
+
+    def charged(ph: Float64) raises capturing -> Bool:
+        return _charge(codes, ph) > 0
+
+    return bisect[charged](0.0, 14.0, _BISECTIONS)
 
 
 def average_mass(sequence: String) raises -> MolarMass64:

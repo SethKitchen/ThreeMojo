@@ -14,6 +14,7 @@
 | `distributions` | The normal, t, F, beta, gamma and chi-square tails and quantiles, `inverse_erfc`, `wald_interval`, `ratio_interval`, `Z95`, `MAX_DEGREES`, `MAX_SHAPE` and `MAX_FREEDOM` |
 | `spread` | `PointSpread`, the weighted mean, covariance and principal axes of points, and `descending` |
 | `order` | `ascending_order`, `descending_order`, `sorted_values` and `order_by`, the stable order of values |
+| `search` | `bisect`, `golden_minimum` and `GOLDEN`, the searches along one variable |
 | `sparse` | `SparseBuilder`, which assembles triplets, and `CsrMatrix` |
 | `iterative` | `conjugate_gradient` with a Jacobi preconditioner, and `SolveStatus` |
 | `skyline` | `reverse_cuthill_mckee`, `profile` and `SkylineFactor` |
@@ -127,6 +128,21 @@ var axes = spread.principal()
 `ascending_order(keys)` gives the indexes of the keys from the least, and `descending_order(keys)` gives them from the largest. `sorted_values(values)` gives a sorted copy. `order_by[before](count)` sorts the indexes from 0 by a comparison of indexes, for keys that are not numbers.
 
 Each sort is the stable merge sort of `math.sort_utils`, so equal keys keep their order. The survival curves, the rank tests, the slice stacks and the faces of a mesh take their order from them.
+
+## Search along one variable
+
+`bisect[below](low, high, steps)` finds where a test changes between two ends. The test must hold below the change and fail above it. Each step halves the bracket, so 60 steps reach the last place of a bracket of order 1.
+
+`golden_minimum[cost](low, high, steps)` finds the least of a cost with one minimum between two ends. Each step keeps 0.618 of the bracket and evaluates the cost once. To find the largest value, negate the cost.
+
+```mojo
+def below(x: Float64) capturing -> Bool:
+    return x * x < 2.0
+
+var root = bisect[below](0.0, 2.0, 60)
+```
+
+Both give the middle of the last bracket. The test and the cost run in order, so a fit can start each call from the last fit. The equilibrium temperatures of chemistry, the isoelectric point, the Weibull shape, and the T1, IVIM and negative binomial fits use them.
 
 ## Dense eigenvalue range
 

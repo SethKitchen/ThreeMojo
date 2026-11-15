@@ -59,6 +59,11 @@ def test_convolve_edges() raises:
     assert_almost_equal(nearest[0], w0 * 1.0 + w1 * (1.0 + 2.0), rtol=1e-15)
     assert_almost_equal(nearest[3], w0 * 4.0 + w1 * (3.0 + 4.0), rtol=1e-15)
     assert_almost_equal(nearest[1], 2.0, rtol=1e-15)
+    # A kernel of radius 0 keeps each value.
+    var single = GaussianKernel.smoothing(0.5, 0)
+    var same = convolve_axis(values, shape, 1, single, EDGE_REFLECT)
+    for i in range(4):
+        assert_equal(same[i], values[i])
     var kernel2 = GaussianKernel.smoothing(1.0, 2)
     var reflect = convolve_axis(values, shape, 1, kernel2, EDGE_REFLECT)
     # Two past the first edge, reflect reads 2: `2 1 | 1 2 3 4`.

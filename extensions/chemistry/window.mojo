@@ -23,6 +23,7 @@ from extensions.chemistry.requirement import Constraint, kelvin_text
 from std.math import isfinite
 from units.si import Pressure64
 from units.temperature import Temperature64
+from extensions.numerics.search import bisect
 
 # The default samples of a constraint over a search range.
 comptime SAMPLES = 400
@@ -77,15 +78,11 @@ def _edge[
     pressure: Pressure64,
 ) raises -> Float64:
     """Return where a constraint changes between two temperatures."""
-    var lo = low
-    var hi = high
-    for _ in range(_BISECTIONS):  # pragma: no branch
-        var mid = 0.5 * (lo + hi)
-        if constraint.holds(Temperature64(mid), pressure) == low_holds:
-            lo = mid
-        else:
-            hi = mid
-    return 0.5 * (lo + hi)
+
+    def below(kelvin: Float64) raises capturing -> Bool:
+        return constraint.holds(Temperature64(kelvin), pressure) == low_holds
+
+    return bisect[below](low, high, _BISECTIONS)
 
 
 def met_intervals[

@@ -35,6 +35,7 @@ from std.math import floor, isfinite, log, sqrt
 from units.quantity import Unit
 from units.si import PER_SECOND, SECOND, Duration64, DurationUnit64, Frequency64
 from extensions.numerics.distributions import Z95, chi_square_p_value
+from extensions.numerics.search import bisect
 
 
 # The bisections of the Weibull shape, and the dash of a drawn model.
@@ -447,13 +448,11 @@ def fit_weibull(
     while not (group.score(low) > 0):
         high = low
         low /= 2.0
-    for _ in range(_BISECTIONS):  # pragma: no branch
-        var middle = (low + high) / 2.0
-        if group.score(middle) > 0:
-            low = middle
-        else:
-            high = middle
-    var rho = (low + high) / 2.0
+
+    def rising(shape: Float64) raises capturing -> Bool:
+        return group.score(shape) > 0
+
+    var rho = bisect[rising](low, high, _BISECTIONS)
     var d = Float64(group.events)
     var sum = 0.0
     var event_logs = 0.0

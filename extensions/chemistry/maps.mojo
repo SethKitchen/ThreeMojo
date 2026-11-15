@@ -35,6 +35,7 @@ from extensions.chemistry.requirement import Constraint
 from extensions.chemistry.thermo import Substance
 from units.si import Pressure64
 from units.temperature import Temperature64
+from extensions.numerics.search import bisect
 
 # The most nodes on one side of a map.
 comptime MAX_SIDE = 2000
@@ -409,21 +410,17 @@ def ellingham_crossing(
             the range.
     """
     _require_temperatures(low, high)
-    var lo = low.kelvin
-    var hi = high.kelvin
     var d_lo = ellingham(a, low).value - ellingham(b, low).value
     var d_hi = ellingham(a, high).value - ellingham(b, high).value
     if (d_lo < 0) == (d_hi < 0):
         raise Error("The lines do not cross in the range")
-    for _ in range(_BISECTIONS):  # pragma: no branch
-        var mid = 0.5 * (lo + hi)
-        var t = Temperature64(mid)
+
+    def below(kelvin: Float64) raises capturing -> Bool:
+        var t = Temperature64(kelvin)
         var d = ellingham(a, t).value - ellingham(b, t).value
-        if (d < 0) == (d_lo < 0):
-            lo = mid
-        else:
-            hi = mid
-    return Temperature64(0.5 * (lo + hi))
+        return (d < 0) == (d_lo < 0)
+
+    return Temperature64(bisect[below](low.kelvin, high.kelvin, _BISECTIONS))
 
 
 struct LabelMap(Copyable, Movable):

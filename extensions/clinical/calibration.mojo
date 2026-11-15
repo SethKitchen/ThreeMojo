@@ -35,6 +35,7 @@ from std.math import floor, isfinite, sqrt
 from extensions.numerics.distributions import chi_square_p_value
 from extensions.numerics.elementary import logistic, logit
 from extensions.numerics.order import ascending_order
+from extensions.numerics.search import bisect
 
 # The most groups of risk, and the most thresholds of a decision curve.
 comptime MAX_GROUPS = 100
@@ -333,18 +334,14 @@ def calibration_fit(
         low = min(low, v)
         high = max(high, v)
     var share = logit(Float64(events) / Float64(n))
-    var below = share - high
-    var above = share - low
-    for _ in range(_BISECTIONS):  # pragma: no branch
-        var middle = (below + above) / 2.0
+
+    def under(a: Float64) capturing -> Bool:
         var total = 0.0
         for v in logits:  # pragma: no branch
-            total += logistic(middle + v)
-        if total > Float64(events):
-            above = middle
-        else:
-            below = middle
-    var a = (below + above) / 2.0
+            total += logistic(a + v)
+        return not (total > Float64(events))
+
+    var a = bisect[under](share - high, share - low, _BISECTIONS)
     var information = 0.0
     for v in logits:  # pragma: no branch
         var r = logistic(a + v)

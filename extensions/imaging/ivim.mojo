@@ -35,14 +35,14 @@ from extensions.imaging.diffusion import (
     BValue64,
 )
 from extensions.imaging.image_volume import ImageVolume
-from std.math import exp, expm1, isfinite, log
+from std.math import isfinite, log
 from extensions.numerics.elementary import precise_exp
 from units.si import Diffusivity64
+from extensions.numerics.search import golden_minimum
 
 # The search of ln D* in mm^2/s, and its steps.
 comptime _LEAST_LOG_STAR = -5.809142990314028
 comptime _MOST_LOG_STAR = -0.6931471805599453
-comptime _GOLDEN = 0.6180339887498949
 comptime _SEARCH_STEPS = 120
 
 
@@ -130,7 +130,7 @@ struct _Plan(Movable):
                 " between 0 and it"
             )
 
-    def fit(self, s: List[Float64]) -> IvimFit:
+    def fit(self, s: List[Float64]) raises -> IvimFit:
         """Fit the model to positive signals, one for each b-value."""
         var n = Float64(self.high)
         var mx = 0.0
@@ -147,30 +147,16 @@ struct _Plan(Movable):
                 xy += (self.b[i] - mx) * (log(s[i]) - my)
         var d = -xy / xx
         var f = 1.0 - precise_exp(my + d * mx) / s[0]
-        var low = _LEAST_LOG_STAR
-        var high = _MOST_LOG_STAR
-        var c = high - _GOLDEN * (high - low)
-        var e = low + _GOLDEN * (high - low)
-        var fc = self._cost(s, d, f, c)
-        var fe = self._cost(s, d, f, e)
-        for _ in range(_SEARCH_STEPS):  # pragma: no branch
-            if fc < fe:
-                high = e
-                e = c
-                fe = fc
-                c = high - _GOLDEN * (high - low)
-                fc = self._cost(s, d, f, c)
-            else:
-                low = c
-                c = e
-                fc = fe
-                e = low + _GOLDEN * (high - low)
-                fe = self._cost(s, d, f, e)
+
+        def cost(log_star: Float64) capturing -> Float64:
+            return self._cost(s, d, f, log_star)
+
+        var log_star = golden_minimum[cost](
+            _LEAST_LOG_STAR, _MOST_LOG_STAR, _SEARCH_STEPS
+        )
         return IvimFit(
             Diffusivity64(d, SQUARE_MILLIMETER_PER_SECOND),
-            Diffusivity64(
-                precise_exp((low + high) / 2.0), SQUARE_MILLIMETER_PER_SECOND
-            ),
+            Diffusivity64(precise_exp(log_star), SQUARE_MILLIMETER_PER_SECOND),
             f,
             s[0],
         )
