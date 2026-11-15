@@ -1,6 +1,6 @@
 # Observational studies
 
-`extensions/clinical/propensity.mojo` estimates the effect of a treatment from an observational study, where the patients were not randomized. It fits a propensity score, and it weights each patient by the inverse probability of the treatment that the patient got. It measures the balance of the covariates. It gives the E-value of an effect: how strong an unmeasured confounder must be to explain the effect away.
+`extensions/clinical/propensity.mojo` estimates the effect of a treatment from an observational study, where the patients were not randomized. It fits a propensity score, and it weights each patient by the inverse probability of the treatment that the patient got. It measures the balance of the covariates. It gives the E-value of an effect: how strong an unmeasured confounder must be to explain the effect away. `extensions/clinical/standardize.mojo` standardizes rates for age, with exact Poisson intervals.
 
 It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
 
@@ -9,6 +9,7 @@ It is a library for research and teaching. Its results are not validated for a d
 | Module | What it gives |
 |---|---|
 | `propensity` | `IpwEffect`, `ipw_effect`, `standardized_difference`, `effective_sample_size`, `e_value` and `e_value_bound` |
+| `standardize` | `gamma_tails`, `gamma_quantile`, `poisson_interval`, `StandardizedRatio`, `standardized_ratio`, `expected_events`, `DirectRate`, `direct_rate` and `MAX_SHAPE` |
 
 ## Weight the patients
 
@@ -49,6 +50,31 @@ An observational study cannot measure every confounder. The E-value of VanderWee
 
 For an odds ratio of a common outcome, take its square root as the risk ratio first. For a rare outcome, the odds ratio and the hazard ratio are near the risk ratio.
 
+## Standardize rates
+
+Two groups of different ages have different rates of death, even when the risk at each age is the same. Standardization takes the ages out of a comparison of rates.
+
+```mojo
+from extensions.clinical.standardize import direct_rate, expected_events, standardized_ratio
+
+var expected = expected_events(cohort_years, reference_rates)
+var smr = standardized_ratio(deaths, expected)
+print(smr.ratio, smr.lower, smr.upper, smr.p_value)
+var rate = direct_rate(events, person_years, standard_shares)
+print(rate.rate.to(PER_YEAR64), rate.lower.to(PER_YEAR64), rate.upper.to(PER_YEAR64))
+```
+
+- Indirect standardization: `expected_events(person_time, rates)` gives `sum T_i r_i`. These are the events of the cohort at the rate of a reference population in each group, such as each band of age. `standardized_ratio(observed, expected)` gives the observed over the expected events, such as the standardized mortality ratio (SMR).
+- The interval of the ratio is the exact interval of the count over the expected count. Its p value is the exact central p value of a ratio of 1: twice the smaller Poisson tail of the count, at most 1.
+- Direct standardization: `direct_rate(events, person_time, shares)` weights the rate of each group by its share of a standard population. With `y_i = w_i / T_i`, the rate is `R = sum y_i d_i`, and its variance `V = sum y_i^2 d_i`.
+- The interval of the direct rate is that of Fay and Feuer (1997). Its low end is the 2.5 percent point of a gamma of mean R and variance V. Its high end is the 97.5 percent point of a gamma of mean `R + m` and variance `V + m^2`, with m the largest `y_i`.
+
+The exact intervals come from the gamma distribution:
+
+- `gamma_tails(x, a)` gives the regularized incomplete gamma functions P(a, x) and Q(a, x). It takes the series below `a + 1` and the continued fraction of Numerical Recipes above it. The smaller tail keeps its relative accuracy.
+- `gamma_quantile(p, a)` inverts P by Newton steps, kept in a bracket by bisection. Above a half, it inverts Q.
+- `poisson_interval(count)` gives the exact central 95 percent interval of the mean of a count, after Garwood (1936). It runs from the 2.5 percent point of a gamma of shape `count` to the 97.5 percent point of a gamma of shape `count + 1`.
+
 ## Verification
 
 The tests compare the module with statsmodels 0.15.0 on a synthetic study of 500 patients with three covariates. Older and sicker patients are treated more often and have the outcome more often. `assets/propensity/make_propensity.py` writes the study.
@@ -66,6 +92,15 @@ The tests also check cases by hand:
 - Means of 1 and 2 with variances of 2 give a standardized difference of `-1 / sqrt(2)`.
 - A covariate with the same mean in each group gives each patient a propensity of a half and a weight of 2.
 
+The tests compare `standardize` with scipy 1.18.1 and statsmodels 0.15.0. `assets/standardize/make_standardize.py` writes the values.
+
+- The tests take the gamma tails at 40 points, with shapes from 0.1 to 1e5. Below a shape of 1000, they agree with scipy's `gammainc` and `gammaincc` to a relative 5e-14. Above it, they agree to 5e-10, because `a ln x - x - ln Gamma(a)` cancels.
+- The quantiles at probabilities from 1e-10 to `1 - 1e-10` agree with scipy's `gamma.ppf` to 5e-14 below a shape of 1000, and to 2e-12 above it.
+- The exact intervals of six counts from 0 to 250 agree with statsmodels' `confint_poisson` with `exact-c` to 1e-12.
+- Five standardized ratios agree with the intervals of `confint_poisson` to 1e-12. Their p values agree with `test_poisson` with `exact-c` to 1e-11. An observed count equal to the expected count has a p value of 1.
+- The direct rate of a synthetic cohort of six age groups agrees with numpy to 1e-13. Its interval of Fay and Feuer agrees with scipy's `chi2.ppf` to 1e-11. With no event, the rate and the low end are 0.
+- A cohort of 1000 person-years at 0.001 a year and 500 at 0.004 a year expects 3 events.
+
 ## Errors
 
 Every function raises `Error` for input it cannot use.
@@ -78,6 +113,10 @@ Every function raises `Error` for input it cannot use.
 | There is no weight, or a weight is not positive and finite | `standardized_difference`, `effective_sample_size` |
 | The lists differ in length, a value is not finite, a group has fewer than two patients, or the covariate does not vary | `standardized_difference` |
 | A ratio is not positive and finite, or an interval does not rise | `e_value`, `e_value_bound` |
+| A gamma shape is not above 0 and at most 1e7, a point is below 0 or not a number, or a probability is not above 0 and below 1 | `gamma_tails`, `gamma_quantile` |
+| A count is below 0 or at least 1e7, or an expected count is not positive and finite | `poisson_interval`, `standardized_ratio` |
+| The lists are empty or differ in length, or a person-time or a rate is below 0 or not finite | `expected_events` |
+| The lists are empty or differ in length, an event count is below 0, a person-time is not positive and finite, or the shares are not 0 or more and finite with a sum of 1 | `direct_rate` |
 
 ## Limits
 
@@ -85,6 +124,7 @@ Every function raises `Error` for input it cannot use.
 - The propensity model is a logistic model with no interaction or curve that the caller does not add as a covariate. A wrong model leaves the covariates unbalanced, so check the standardized differences.
 - The module does not trim or truncate extreme weights, and it has no matching, stratification or doubly robust estimator.
 - The effect is the average effect over the whole population, not over the treated only.
+- Standardized rates take the events as Poisson counts. They do not correct for overdispersion. An SMR compares a cohort with the reference population only, so two SMRs of different cohorts do not compare their rates. The intervals are for 95 percent only.
 
 ## References
 
@@ -93,3 +133,6 @@ Every function raises `Error` for input it cannot use.
 - Austin and Stuart, on the best practice of inverse probability of treatment weighting with the propensity score, Statistics in Medicine, 2015.
 - VanderWeele and Ding, "Sensitivity analysis in observational research: introducing the E-value", Annals of Internal Medicine, 2017.
 - Kish, "Survey Sampling", Wiley, 1965.
+- Garwood, "Fiducial limits for the Poisson distribution", Biometrika, 1936.
+- Fay and Feuer, "Confidence intervals for directly standardized rates: a method based on the gamma distribution", Statistics in Medicine, 1997.
+- Breslow and Day, "Statistical Methods in Cancer Research, Volume II: The Design and Analysis of Cohort Studies", IARC, 1987.
