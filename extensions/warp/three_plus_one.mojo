@@ -22,15 +22,17 @@ from std.math import isfinite, sqrt
 from extensions.warp.grid import SpacetimeGrid
 from extensions.warp.kinds import COORDINATE_FRAME, COVARIANT
 from extensions.warp.tensor import Metric, TensorField
+from extensions.numerics.matrix3x3 import Matrix3x3, adjugate3, determinant3
 
-comptime Matrix3 = SIMD[DType.float64, 16]
+comptime Matrix3 = Matrix3x3
 """A 3 by 3 matrix in row-major order, in the first 9 lanes."""
 
 
 def inverse3(a: Matrix3) raises -> Matrix3:
     """Return the inverse of a 3 by 3 matrix, by cofactors.
 
-    This is WarpFactory's `c3Inv`.
+    This is WarpFactory's `c3Inv`: the adjugate over the determinant, of
+    `numerics.matrix3x3`.
 
     Args:
         a: The matrix, in the first 9 lanes, row-major.
@@ -41,24 +43,10 @@ def inverse3(a: Matrix3) raises -> Matrix3:
     Raises:
         Error: If the determinant is zero or not finite.
     """
-    var det = (
-        a[0] * (a[4] * a[8] - a[5] * a[7])
-        - a[1] * (a[3] * a[8] - a[5] * a[6])
-        + a[2] * (a[3] * a[7] - a[4] * a[6])
-    )
+    var det = determinant3(a)
     if det == 0.0 or not isfinite(det):
         raise Error("A spatial metric is singular at a grid point")
-    var out = Matrix3(0)
-    out[0] = a[4] * a[8] - a[5] * a[7]
-    out[1] = a[2] * a[7] - a[1] * a[8]
-    out[2] = a[1] * a[5] - a[2] * a[4]
-    out[3] = a[5] * a[6] - a[3] * a[8]
-    out[4] = a[0] * a[8] - a[2] * a[6]
-    out[5] = a[2] * a[3] - a[0] * a[5]
-    out[6] = a[3] * a[7] - a[4] * a[6]
-    out[7] = a[1] * a[6] - a[0] * a[7]
-    out[8] = a[0] * a[4] - a[1] * a[3]
-    return out / det
+    return adjugate3(a) / det
 
 
 struct ThreePlusOne(Copyable, Movable):

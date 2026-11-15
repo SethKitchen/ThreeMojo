@@ -15,6 +15,7 @@
 | `spread` | `PointSpread`, the weighted mean, covariance and principal axes of points, and `descending` |
 | `order` | `ascending_order`, `descending_order`, `sorted_values` and `order_by`, the stable order of values |
 | `search` | `bisect`, `golden_minimum` and `GOLDEN`, the searches along one variable |
+| `matrix3x3` | `Matrix3x3`, `determinant3` and `adjugate3`, the 3 by 3 matrices of SIMD lanes |
 | `sparse` | `SparseBuilder`, which assembles triplets, and `CsrMatrix` |
 | `iterative` | `conjugate_gradient` with a Jacobi preconditioner, and `SolveStatus` |
 | `skyline` | `reverse_cuthill_mckee`, `profile` and `SkylineFactor` |
@@ -83,6 +84,8 @@ The pivoted fallback uses dense storage. Its storage grows with the square of th
 ## Invert a small matrix
 
 `cholesky_inverse(a)` gives the inverse of a symmetric positive-definite matrix. It factors the matrix once and solves each column of the identity. The covariance of a fit is the inverse of its information matrix, so the statistical models take their standard errors from it. `inverse(a)` gives the inverse of any nonsingular square matrix, by `solve` on each column.
+
+A `Matrix3x3` holds a 3 by 3 matrix in the first 9 of 16 SIMD lanes, row by row. `determinant3(a)` gives its determinant, and `adjugate3(a)` its adjugate, the transpose of its cofactors. The inverse is the adjugate over the determinant. So each caller tests the determinant first. The large-deformation FEM refuses an element that turns inside out. The 3+1 split of a warp metric refuses a singular metric.
 
 `DenseMatrix.triple_product(inner)` gives Tᵀ A T with the matrix as T. A change of variables of a covariance, J V Jᵀ, is the triple product of Jᵀ.
 

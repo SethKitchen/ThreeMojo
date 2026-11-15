@@ -36,6 +36,7 @@ from extensions.fem.ids import LINEAR
 from extensions.fem.mesh import signed_volume
 from extensions.fem.static import StaticProblem
 from extensions.numerics.iterative import conjugate_gradient
+from extensions.numerics.matrix3x3 import Matrix3x3, adjugate3, determinant3
 from extensions.numerics.sparse import SparseBuilder
 from extensions.sdf.vector import V3, dot
 from std.math import log, sqrt
@@ -78,28 +79,6 @@ struct HyperelasticResult(Movable):
         self.converged = True
 
 
-def _inverse(f: List[Float64]) -> Tuple[List[Float64], Float64]:
-    """Return the inverse of a 3 by 3 matrix, by rows, and its
-    determinant."""
-    var c00 = f[4] * f[8] - f[5] * f[7]
-    var c01 = f[5] * f[6] - f[3] * f[8]
-    var c02 = f[3] * f[7] - f[4] * f[6]
-    var det = f[0] * c00 + f[1] * c01 + f[2] * c02
-    var s = 1.0 / det
-    var inv: List[Float64] = [
-        c00 * s,
-        (f[2] * f[7] - f[1] * f[8]) * s,
-        (f[1] * f[5] - f[2] * f[4]) * s,
-        c01 * s,
-        (f[0] * f[8] - f[2] * f[6]) * s,
-        (f[2] * f[3] - f[0] * f[5]) * s,
-        c02 * s,
-        (f[1] * f[6] - f[0] * f[7]) * s,
-        (f[0] * f[4] - f[1] * f[3]) * s,
-    ]
-    return (inv^, det)
-
-
 struct _State(Movable):
     """The internal forces, the tangent and the stresses at a displacement."""
 
@@ -137,11 +116,13 @@ def _state(
                 f[3 * i] += d * g.x
                 f[3 * i + 1] += d * g.y
                 f[3 * i + 2] += d * g.z
-        var inverted = _inverse(f)
-        ref inv = inverted[0]
-        var j = inverted[1]
+        var m = Matrix3x3(0)
+        for k in range(9):  # pragma: no branch
+            m[k] = f[k]
+        var j = determinant3(m)
         if not (j > 0):
             raise Error("An element turned inside out; take more load steps")
+        var inv = adjugate3(m) / j
         var lnj = log(j)
         var v0 = volumes[e]
         # The spatial gradient of each shape function: F^-T times its
