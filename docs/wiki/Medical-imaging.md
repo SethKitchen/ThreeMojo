@@ -35,6 +35,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `roi` | `circle_statistics` and `RegionStatistics` |
 | `texture` | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` and `TextureFeatures` |
 | `firstorder` | `intensity_features` and `IntensityFeatures` |
+| `densitometry` | `low_attenuation_fraction`, `attenuation_percentile` and `tissue_area` |
 | `histogram` | `Histogram`, `volume_histogram`, `label_histogram`, `otsu_threshold`, `multi_otsu_thresholds` and `label_classes` |
 | `filter` | `gaussian_filter`, `gaussian_kernel` and `median_filter` |
 | `thickness` | `label_distance`, `local_thickness`, `thickness_statistics`, `ThicknessStatistics` and `seed_distances` |
@@ -656,6 +657,21 @@ print(f.mean, f.deviation, f.skewness, f.median, f.entropy)
 
 The percentiles interpolate linearly between ranks, as numpy does by default. The histogram has `bins` bins of equal width from `low` to `high`. A value below `low` goes into the first bin, and a value above `high` goes into the last bin. A region of one value has a skewness and a kurtosis of 0. The definitions are those of numpy's `std` and `percentile`, and of scipy's `skew` and `kurtosis` with `fisher=False`.
 
+## Measure CT density
+
+The values of a CT volume are Hounsfield units (HU): -1000 for air and 0 for water. Lung research and body composition research measure them in a label.
+
+```mojo
+var laa = low_attenuation_fraction(ct, lungs, LabelId(1), -950)
+var perc15 = attenuation_percentile(ct, lungs, LabelId(1), 15)
+var muscle = tissue_area(ct, body, LabelId(1), K_AXIS, l3, -29, 150)
+print(100 * laa, perc15, muscle.to(SQUARE_METER) * 1e4)
+```
+
+`low_attenuation_fraction(volume, map, label, threshold)` is the part of the label's voxels below a threshold. Emphysema research takes the lungs below -950 HU, the LAA-950. `attenuation_percentile(volume, map, label, percent)` is a percentile of the label's values, as numpy takes it. Perc15, the 15th percentile of the lungs, falls as emphysema grows.
+
+`tissue_area(volume, map, label, axis, index, low, high)` is the area of the label's pixels on one slice whose values are from `low` to `high`. Body composition research takes skeletal muscle from -29 to 150 HU and fat from -190 to -30 HU. It measures them on the slice of the third lumbar vertebra.
+
 ## Measure texture
 
 Radiomics describes the texture of a region, such as a lesion, by how often two gray levels sit side by side. `cooccurrence_matrix` counts the gray levels of each pair of pixels at an offset, in one slice and inside one label. `texture_features` gives the Haralick features of the matrix.
@@ -966,6 +982,7 @@ The tests check these results:
 - dcmri 0.6.20 wrote a Parker input function and a standard and an extended tissue, with its exact convolution `expconv`. The tissues match to 1e-12. The input function matches to 1e-5, because dcmri rounds the heights of its Gaussians to six digits. `assets/dce/make_dce.py` makes the file.
 - The fits find `Ktrans`, `ve` and `vp` of the two tissues to 1e-6. On voxels of 32-bit values, the maps find them to 1e-4. A tissue of plasma alone is all `vp`, and a tissue of nothing has a `Ktrans` of 0.
 - scipy's `solve_ivp` integrates the same model on the same plasma to a tolerance of 1e-12. It agrees with the tissues to 1.4e-9 of their peak. That check is not part of the test suite.
+- A lung of 100 voxels from -1000 to -901 HU has an LAA-950 of a half and a Perc15 of -985.15 HU. Tissue areas count the pixels of each range on slices of each axis, with pixels of 0.4, 1.6 and 1 mm^2.
 - Two RT Dose files that pydicom 3.0.1 wrote read with pydicom's dose at each voxel, as 32-bit floats. One is explicit VR with 32-bit values and offsets from 0. The other is implicit VR with 16-bit values and frames from z = 9 mm down to 0. `assets/dicom/make_rtdose.py` makes them.
 - The tumor and the ring of the structure fixtures, filled on each dose grid, have the DVH that numpy 2.1.3 gives. The test compares the least, mean and largest dose, D98, D95, D50, D2, V20 and V40. It also compares D for 0.03 and 0.1 cm^3, and the gEUD at a = -10 and 5. Each agrees to 1e-12.
 - Written files check signed and 32-bit values, one frame without offsets, frames that go down, offsets that are z, and sagittal frames. A malformed file is refused for each check of the reader.
@@ -1067,6 +1084,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 | A path has fewer than two points or two equal points in a row, `up` is zero or along a segment, or a size is out of range | `curved_reformat` |
 | A circle has a bad axis, slice, center or radius, or holds no pixel center | `circle_statistics` |
 | A texture has a bad label, axis, slice, offset, level count or range, or no pair at its offset | `cooccurrence_matrix`, `volume_cooccurrence`, `texture_features` |
+| A density measure has a bad, background or empty label, a map on another grid, a threshold that is not finite, a percentile out of 0 to 100, a bad axis or slice, or a range that falls | `low_attenuation_fraction`, `attenuation_percentile`, `tissue_area` |
 | A first-order feature has another grid, a bad or empty label, a bad bin count or a bad range | `intensity_features` |
 | Two maps differ in grid or spacing, or a label is the background or empty | `compare_labels`, `label_overlaps` |
 | A label map and the volume that places it differ in grid or spacing | `resample_labels_onto`, `resample_labels_transformed` |
@@ -1108,6 +1126,7 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - A stack refuses a gantry tilt and slices that are not evenly spaced. It does not resample them.
 - The ray caster runs on the CPU only. It has no GPU path and no parity test.
 - Rendering uses the volume frame. It does not apply the patient orientation.
+- CT density measures take the values as HU, and need a scanner calibrated in HU. They count whole voxels, and do not correct the noise or the reconstruction kernel of a scan.
 - A circle counts whole pixels by their centers. It does not weigh the pixels that its edge cuts.
 - A co-occurrence offset is in voxels. With voxels that are not cubes, two offsets of one count of voxels can differ in length.
 - A centered path is a chain of voxel centers. `smooth_path` smooths it, but does not keep it inside the label at a sharp bend of a thin structure.
