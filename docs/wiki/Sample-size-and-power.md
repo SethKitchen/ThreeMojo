@@ -74,7 +74,7 @@ The tests compare the module with scipy 1.18.1, statsmodels 0.15.0 and lifelines
 - The normal quantile agrees with `norm.ppf` to a relative 1e-15, from 1e-300 to 0.999999.
 - The sizes and powers of two proportions agree with `samplesize_proportions_2indep_onetail` and `power_proportions_2indep` to a relative 1e-13, for equal and unequal groups.
 - The sizes and powers of two means agree with `normal_sample_size_one_tail` and `NormalIndPower` to 1e-13.
-- Schoenfeld's events agree with the formula and `norm.ppf` to 1e-13.
+- No library gives Schoenfeld's events. So the test builds them from scipy's `norm.ppf` by the formula, and they agree to 1e-13.
 - Freedman's sizes, rounded up, are those of lifelines' `sample_size_necessary_under_cph`, and the power agrees with `power_under_cph` to 1e-13.
 
 The tests also check cases by hand:

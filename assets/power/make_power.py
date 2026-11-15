@@ -12,14 +12,13 @@ Run it with scipy 1.18.1, statsmodels 0.15.0 and lifelines 0.30.3. The
 output has these lines:
 
 - `normal` with each probability and its normal quantile, `norm.ppf`.
+  The test builds the events of Schoenfeld (1983) from these quantiles.
 - `proportions` with, for each case, p1, p2, alpha, power, the ratio, the
   size of `samplesize_proportions_2indep_onetail`, a size n1 and the power
   of `power_proportions_2indep` at it.
 - `means` with, for each case, the difference, the deviation, alpha,
   power, the ratio, the size of `normal_sample_size_one_tail`, a size n1
   and the power of `NormalIndPower` at it.
-- `schoenfeld` with, for each case, the hazard ratio, alpha, power, the
-  allocation and the events `(z_a + z_b)^2 / (a (1 - a) ln(HR)^2)`.
 - `freedman` with, for each case, the hazard ratio, alpha, power, the
   ratio, the two chances of an event, the two sizes of lifelines'
   `sample_size_necessary_under_cph`, which rounds up, and the power of
@@ -41,7 +40,7 @@ def line(name, values):
 
 
 values = []
-for p in [1e-300, 1e-10, 0.001, 0.02, 0.025, 0.1, 0.3, 0.5, 0.7, 0.975, 0.999999]:
+for p in [1e-300, 1e-10, 0.001, 0.02, 0.025, 0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 0.975, 0.995, 0.999999]:
     values += [p, stats.norm.ppf(p)]
 line("normal", values)
 
@@ -70,12 +69,6 @@ for d, sd, alpha, power, ratio, n1 in [
     reached = NormalIndPower().power(d / sd, n1, alpha, ratio=ratio)
     values += [d, sd, alpha, power, ratio, size, n1, reached]
 line("means", values)
-
-values = []
-for hr, alpha, power, a in [(0.7, 0.05, 0.8, 0.5), (1.5, 0.01, 0.9, 0.4)]:
-    z = stats.norm.isf(alpha / 2) + stats.norm.ppf(power)
-    values += [hr, alpha, power, a, z**2 / (a * (1 - a) * np.log(hr) ** 2)]
-line("schoenfeld", values)
 
 values = []
 for hr, alpha, power, ratio, pe, pc in [

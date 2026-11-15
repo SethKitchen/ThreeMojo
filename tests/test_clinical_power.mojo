@@ -7,6 +7,7 @@
 
 `assets/power/power_expected.txt` holds the results of scipy 1.18.1,
 statsmodels 0.15.0 and lifelines 0.30.3. See `assets/power/make_power.py`.
+The test builds the events of Schoenfeld from scipy's normal quantiles.
 """
 
 from extensions.numerics.distributions import normal_quantile
@@ -47,9 +48,17 @@ def _expected() raises -> List[List[Float64]]:
     return out^
 
 
+def _scipy_quantile(row: List[Float64], p: Float64) raises -> Float64:
+    """Return scipy's normal quantile of `p` from the `normal` line."""
+    for c in range(len(row) // 2):
+        if row[2 * c] == p:
+            return row[2 * c + 1]
+    raise Error("The normal line has no quantile of that probability")
+
+
 def test_normal_quantile() raises:
     ref row = _expected()[0]
-    for c in range(11):
+    for c in range(14):
         assert_almost_equal(
             normal_quantile(row[2 * c]), row[2 * c + 1], rtol=1e-15, atol=1e-16
         )
@@ -88,15 +97,23 @@ def test_sizes_and_powers() raises:
             m[at + 7],
             rtol=1e-13,
         )
-    ref s = expected[3]
-    for c in range(2):
-        var at = 5 * c
+    # Schoenfeld (1983): the events are (z_a + z_b)^2 / (a (1 - a)
+    # ln(HR)^2), with z_a of 1 - alpha / 2 and z_b of the power, from
+    # scipy's quantiles.
+    ref z = expected[0]
+    var trials: List[List[Float64]] = [
+        [0.7, 0.05, 0.8, 0.5, 0.975],
+        [1.5, 0.01, 0.9, 0.4, 0.995],
+    ]
+    for trial in trials:
+        var total = _scipy_quantile(z, trial[4]) + _scipy_quantile(z, trial[2])
+        var a = trial[3]
         assert_almost_equal(
-            schoenfeld_events(s[at], s[at + 1], s[at + 2], s[at + 3]),
-            s[at + 4],
+            schoenfeld_events(trial[0], trial[1], trial[2], a),
+            total * total / (a * (1 - a) * log(trial[0]) ** 2),
             rtol=1e-13,
         )
-    ref f = expected[4]
+    ref f = expected[3]
     for c in range(2):
         var at = 9 * c
         var size = freedman_size(
