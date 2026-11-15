@@ -10,8 +10,9 @@ A synthetic study, scan or alignment needs numbers that one seed gives
 again on every machine. `Xorshift64(seed)` steps a 64-bit state by three
 shifts. `uniform()` gives its top 53 bits as a number strictly between 0
 and 1. `normal()` gives a standard normal number from two uniforms.
-`between(low, high)`, `poisson(mean)` and `gamma(shape, scale)` give
-uniform, Poisson and gamma numbers for synthetic counts and frailties.
+`between(low, high)`, `exponential(scale)`, `poisson(mean)` and
+`gamma(shape, scale)` give uniform, exponential, Poisson and gamma
+numbers for synthetic times, counts and frailties.
 
 The numbers are not for cryptography.
 """
@@ -73,6 +74,17 @@ struct Xorshift64(Movable):
             `low + (high - low) u` of the next uniform u.
         """
         return low + (high - low) * self.uniform()
+
+    def exponential(mut self, scale: Float64) -> Float64:
+        """Return the next exponential number.
+
+        Args:
+            scale: The mean, the reciprocal of the rate.
+
+        Returns:
+            `-scale ln u` of the next uniform u.
+        """
+        return -scale * log(self.uniform())
 
     def poisson(mut self, mean: Float64) raises -> Int:
         """Return the next Poisson count.

@@ -5,13 +5,14 @@
 
 """Write a synthetic cohort and its Cox model by lifelines, a Python library.
 
-    python3 make_cox.py
+    mojo run -I . tools/make_cox.mojo
+    cd assets/survival && python3 make_cox.py
 
-Run it with numpy and lifelines 0.30.3. It writes two files:
+Run it with numpy and lifelines 0.30.3. `tools/make_cox.mojo` writes 120
+synthetic patients, `cox_cohort.txt`, one to a line: the time in whole
+weeks, 1 for an event or 0 for a censored patient, the age in decades, 1
+for the treatment or 0 for none, and a marker. This script reads them.
 
-- `cox_cohort.txt` holds 120 synthetic patients, one to a line: the time in
-  whole weeks, 1 for an event or 0 for a censored patient, the age in
-  decades, 1 for the treatment or 0 for none, and a marker.
 - `cox_expected.txt` holds the Cox model of lifelines with Efron's method
   for ties, fitted far past its default precision.
 
@@ -27,7 +28,7 @@ The expected file has these lines:
 - `fit` with the log partial likelihood, the null log partial likelihood,
   the likelihood ratio statistic and its p value, and the concordance.
 - `survival` with the predicted survival of three patients at 5, 20 and
-  60 weeks.
+  60 weeks, on the step curve of lifelines.
 - `freireich` with the coefficient, its standard error and its p value
   for the placebo group of the 6-MP trial against the drug group.
 """
@@ -42,22 +43,11 @@ import pandas as pd
 # off, and a precision of 1e-20 lets that last step go.
 OPTIONS = {"precision": 1e-20, "r_precision": -1.0, "max_steps": 500}
 
-rng = np.random.default_rng(20261115)
-n = 120
-age = np.round(rng.normal(6.0, 1.0, n), 1)
-treated = (rng.random(n) < 0.5).astype(int)
-marker = np.round(rng.lognormal(0.0, 0.5, n), 2)
-rate = 0.002 * np.exp(0.4 * age - 0.7 * treated + 0.3 * marker)
-event_time = np.ceil(rng.exponential(1.0 / rate))
-censor_time = np.ceil(rng.uniform(5, 100, n))
-time = np.minimum(event_time, censor_time)
-event = (event_time <= censor_time).astype(int)
-
-with open("cox_cohort.txt", "w") as out:
-    for i in range(n):
-        out.write(
-            "%d %d %.1f %d %.2f\n" % (time[i], event[i], age[i], treated[i], marker[i])
-        )
+with open("cox_cohort.txt") as data:
+    rows = np.array([[float(v) for v in line.split()] for line in data if line.strip()])
+time, event, age, treated, marker = rows.T
+event = event.astype(int)
+treated = treated.astype(int)
 
 frame = pd.DataFrame(
     {"T": time, "E": event, "age": age, "treated": treated, "marker": marker}
@@ -90,10 +80,14 @@ lines.append(
 rows = pd.DataFrame(
     {"age": [5.0, 6.5, 8.0], "treated": [1, 0, 0], "marker": [0.5, 1.0, 2.0]}
 )
-curves = cph.predict_survival_function(rows, times=[5.0, 20.0, 60.0])
+# With `times`, lifelines interpolates between the times of events. The
+# survival of the Breslow baseline is a step function, so take lifelines'
+# curve at the last time of an event at or before each time.
+curves = cph.predict_survival_function(rows)
+steps = [curves[curves.index <= at].iloc[-1] for at in (5.0, 20.0, 60.0)]
 lines.append(
     "survival "
-    + " ".join(repr(float(curves.iloc[t, r])) for r in range(3) for t in range(3))
+    + " ".join(repr(float(steps[t].iloc[r])) for r in range(3) for t in range(3))
 )
 
 drug = "6 6 6 6+ 7 9+ 10 10+ 11+ 13 16 17+ 19+ 20+ 22 23 25+ 32+ 32+ 34+ 35+"

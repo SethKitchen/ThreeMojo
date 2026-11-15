@@ -83,6 +83,15 @@ def test_counts_and_gammas() raises:
         assert_true(positive)
         assert_almost_equal(sum, 3.0 * a, rtol=0.06)
         assert_almost_equal(square - sum * sum, 9.0 * a, rtol=0.15)
+    # An exponential of mean 4 has a variance of 16.
+    var e_sum = 0.0
+    var e_square = 0.0
+    for _ in range(n):
+        var e = noise.exponential(4.0)
+        e_sum += e / Float64(n)
+        e_square += e * e / Float64(n)
+    assert_almost_equal(e_sum, 4.0, rtol=0.06)
+    assert_almost_equal(e_square - e_sum * e_sum, 16.0, rtol=0.15)
     var x = noise.between(2.0, 5.0)
     assert_true(x > 2.0 and x < 5.0)
     var bad: List[Float64] = [-1.0, inf[DType.float64](), nan[DType.float64]()]

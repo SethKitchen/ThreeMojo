@@ -7,7 +7,8 @@
 
 `assets/survival/cox_expected.txt` holds the results of lifelines 0.30.3 on
 the synthetic cohort `assets/survival/cox_cohort.txt` and on the trial of
-Freireich and others (1963). See `assets/survival/make_cox.py`.
+Freireich and others (1963). See `tools/make_cox.mojo` and
+`assets/survival/make_cox.py`.
 """
 
 from extensions.clinical.cox import CoxModel, cox_regression

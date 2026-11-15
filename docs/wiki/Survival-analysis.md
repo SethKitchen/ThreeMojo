@@ -254,7 +254,7 @@ The tests compare the module with lifelines 0.30.3, a Python library, on the tri
 - The medians are 23 and 8 weeks, as lifelines gives.
 - The log-rank statistic agrees to a relative 1e-12, and its p value to a relative 1e-11.
 - The 6-MP group has 9 relapses, and the placebo group has 21.
-- The log-rank test of three synthetic arms with ties agrees with lifelines' `multivariate_logrank_test` to a relative 1e-12, and its p value to 1e-11. With two groups, it is the two-group test.
+- The log-rank test of three synthetic arms with ties agrees with lifelines' `multivariate_logrank_test` to a relative 1e-12, and its p value to 1e-11. `tools/make_survival_groups.mojo` writes the arms. With two groups, it is the two-group test.
 - The Nelson-Aalen hazard of each group agrees with lifelines to a relative 1e-14, and the ends of its interval to 1e-13.
 - The restricted mean to 23 weeks agrees with lifelines' `restricted_mean_survival_time` to 1e-14. Its standard error agrees with the formula in numpy to 1e-13, and the test of the difference to 1e-11.
 
@@ -277,13 +277,13 @@ The tests compare `aft` with numpy fits of four groups. They are the 6-MP trial,
 - The median and the survival of three patients of each group agree to 1e-12.
 - The survival at the scale of a patient is `1/e`. The intercept moves by `ln 7` from weeks to days, and a patient censored at 0 changes nothing.
 
-The tests compare `competing` with the `AalenJohansenFitter` of lifelines on a synthetic cohort of 80 patients with two causes. No two events tie, so lifelines does not jitter them. `assets/competing/make_competing.py` writes them.
+The tests compare `competing` with the `AalenJohansenFitter` of lifelines on a synthetic cohort of 80 patients with two causes. No two events tie, so lifelines does not jitter them. `tools/make_competing.mojo` writes the cohort, and `assets/competing/make_competing.py` writes the expected values.
 
 - At the 42 times of an event, the incidence of each cause agrees to a relative 1e-14, and its variance to 1e-12.
 - The ends of the interval agree to 1e-12. lifelines names its two interval columns the other way round, so the script takes the smaller end as the low end.
 - With no competing event, the incidence is `1 - S` of `kaplan_meier` to 1e-14, and its variance is `S^2` times Greenwood's sum to 1e-12.
 
-The tests compare the Cox model with lifelines on a synthetic cohort of 120 patients with three covariates. The cohort has 70 events and 32 tied times. `assets/survival/make_cox.py` makes it.
+The tests compare the Cox model with lifelines on a synthetic cohort of 120 patients with three covariates. The cohort has 76 events and 29 tied times. `tools/make_cox.mojo` makes it, and `assets/survival/make_cox.py` writes the expected values. The predicted survival is read from the step curve of lifelines, because `predict_survival_function` with `times` interpolates between events.
 
 - The coefficients agree to 1e-12. The standard errors, z values and interval ends agree to a relative 1e-11, and the p values to a relative 1e-10.
 - The log partial likelihood and the null log partial likelihood agree to a relative 1e-14. The likelihood ratio statistic agrees to a relative 1e-11.

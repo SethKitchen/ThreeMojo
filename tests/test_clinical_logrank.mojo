@@ -7,7 +7,8 @@
 
 `assets/survival/groups_expected.txt` holds the result of lifelines
 0.30.3 on the three synthetic arms of `assets/survival/three_arms.txt`.
-See `assets/survival/make_groups.py`.
+See `tools/make_survival_groups.mojo` and
+`assets/survival/make_groups.py`.
 """
 
 from extensions.clinical.logrank import (

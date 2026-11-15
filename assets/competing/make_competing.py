@@ -5,10 +5,12 @@
 
 """Write the cumulative incidence of two competing causes with lifelines.
 
-    python3 make_competing.py > competing_expected.txt
+    mojo run -I . tools/make_competing.mojo
+    cd assets/competing && python3 make_competing.py > competing_expected.txt
 
-Run it with numpy 2.5.4, pandas and lifelines 0.30.3. A synthetic cohort
-of 80 patients has a relapse at a rate of 0.15 a year, a death without
+Run it with numpy 2.5.4, pandas and lifelines 0.30.3.
+`tools/make_competing.mojo` writes the synthetic cohort, `patients.txt`:
+80 patients with a relapse at a rate of 0.15 a year, a death without
 relapse at 0.10 a year, and a censoring time spread evenly up to 10
 years. Each patient keeps the first of the three. The times are in years
 with six decimals, so no two events tie and lifelines does not jitter
@@ -25,16 +27,10 @@ them. The longest time is a censoring.
 import numpy
 from lifelines import AalenJohansenFitter
 
-generator = numpy.random.default_rng(20261115)
-n = 80
-relapse = generator.exponential(1.0 / 0.15, n)
-death = generator.exponential(1.0 / 0.10, n)
-censor = generator.uniform(0.0, 10.0, n)
-first = numpy.minimum(numpy.minimum(relapse, death), censor)
-causes = numpy.where(first == relapse, 1, numpy.where(first == death, 2, 0))
-times = numpy.round(first, 6)
-longest = numpy.argmax(times)
-causes[longest] = 0
+with open("patients.txt") as data:
+    rows = numpy.array([[float(v) for v in line.split()] for line in data if line.strip()])
+times = rows[:, 0]
+causes = rows[:, 1].astype(int)
 
 
 def line(name, values):

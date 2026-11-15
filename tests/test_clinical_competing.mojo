@@ -7,7 +7,7 @@
 
 `assets/competing/competing_expected.txt` holds the values of lifelines
 for a synthetic cohort of 80 patients. See
-`assets/competing/make_competing.py`.
+`tools/make_competing.mojo` and `assets/competing/make_competing.py`.
 """
 
 from extensions.clinical.competing import (
@@ -90,7 +90,7 @@ def test_against_lifelines() raises:
         ref curve = cause[1]
         ref expected = rows[name + "_times"]
         assert_equal(len(curve.times), len(expected))
-        assert_equal(len(curve.times), 42)
+        assert_equal(len(curve.times), 47)
         assert_equal(curve.patients, 80)
         for i in range(len(expected)):
             _close(curve.times[i].to(YEAR64), expected[i], 1e-15)
