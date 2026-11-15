@@ -61,7 +61,10 @@ def _check(rows: List[String], weights: List[Float64], kind: String) raises:
         assert_almost_equal(found[c].entropy, e[1], atol=1e-14, rtol=0)
         assert_almost_equal(found[c].relative_entropy, e[2], atol=1e-13, rtol=0)
         assert_almost_equal(found[c].divergence, e[3], atol=1e-14, rtol=0)
-        assert_almost_equal(found[c].score, e[4], atol=1e-14, rtol=0)
+        # The score is the divergence times one less the share of gaps.
+        assert_almost_equal(
+            found[c].score, e[3] * (1.0 - e[0]), atol=1e-14, rtol=0
+        )
 
 
 def test_against_references() raises:

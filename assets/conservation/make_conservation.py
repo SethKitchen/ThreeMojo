@@ -24,12 +24,14 @@ uniform weights, a line holds:
 - the Shannon entropy in bits of the residue shares, from scipy's
   `entropy`;
 - the relative entropy in bits to the background, from Biopython's
-  `motifs.Motif.relative_entropy` with the counts and no pseudocounts;
+  `motifs.Motif.relative_entropy` with the counts and no pseudocounts.
+  The script checks it against scipy's `entropy` of the shares and the
+  background;
 - the Jensen-Shannon divergence in bits to the background, the square of
-  scipy's `jensenshannon` with base 2;
-- the score: the divergence times one less the share of gaps.
+  scipy's `jensenshannon` with base 2.
 
-A column with gaps only has 0 for each value but the share of gaps. No
+A column with gaps only has 0 for each value but the share of gaps. The
+test checks the score, the divergence times one less the share of gaps. No
 library gives the weights of Henikoff and Henikoff (1994), so the Mojo
 tests check them and the weighted scores by hand.
 """
@@ -82,14 +84,14 @@ def scores(weights):
     for c in range(COLUMNS):
         total = table[c].sum()
         if total == 0:
-            out.append([gaps[c], 0.0, 0.0, 0.0, 0.0])
+            out.append([gaps[c], 0.0, 0.0, 0.0])
             continue
         p = table[c] / total
         h = scipy.stats.entropy(p, base=2)
-        mine = float(numpy.sum(p[p > 0] * numpy.log2(p[p > 0] / background[p > 0])))
-        assert abs(mine - relative[c]) <= 1e-12 * max(1.0, abs(mine))
+        divergence = scipy.stats.entropy(p, background, base=2)
+        assert abs(divergence - relative[c]) <= 1e-12 * max(1.0, abs(divergence))
         jsd = scipy.spatial.distance.jensenshannon(p, background, base=2) ** 2
-        out.append([gaps[c], h, relative[c], jsd, jsd * (1.0 - gaps[c])])
+        out.append([gaps[c], h, relative[c], jsd])
     return out
 
 
