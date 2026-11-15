@@ -953,6 +953,7 @@ Medical images, macromolecules and solid mechanics, for research and teaching. A
 - [x] [ROC analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests): ROC curves, AUC with DeLong intervals, Youden thresholds and DeLong's test of two tests; they match scikit-learn and MLstatkit [#1091](https://github.com/SethKitchen/ThreeMojo/issues/1091)
 - [x] [Agreement and reliability](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests#measure-the-agreement-of-two-methods): Bland-Altman limits with intervals and plots, and the six intraclass correlations; they match pingouin [#1092](https://github.com/SethKitchen/ThreeMojo/issues/1092)
 - [x] [Logistic regression](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests#model-the-risk-of-an-outcome): odds ratios with intervals, Wald and likelihood ratio tests, and predicted risks; they match statsmodels [#1093](https://github.com/SethKitchen/ThreeMojo/issues/1093)
+- [x] [Meta-analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Meta-analysis): fixed and random effects, Q, I^2, tau^2, prediction intervals and forest plots of the BCG trials; they match statsmodels [#1094](https://github.com/SethKitchen/ThreeMojo/issues/1094)
 
 ### Out of scope
 

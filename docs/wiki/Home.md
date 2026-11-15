@@ -97,6 +97,7 @@ Look something up.
 - [Tetrahedral FEM](Tetrahedral-FEM)
 - [Survival analysis](Survival-analysis)
 - [Diagnostic tests](Diagnostic-tests)
+- [Meta-analysis](Meta-analysis)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
   - [Anatomy validity](Anatomy-validity)

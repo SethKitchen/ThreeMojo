@@ -178,6 +178,7 @@
 - [Tetrahedral FEM](Tetrahedral-FEM)
 - [Survival analysis](Survival-analysis)
 - [Diagnostic tests](Diagnostic-tests)
+- [Meta-analysis](Meta-analysis)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)

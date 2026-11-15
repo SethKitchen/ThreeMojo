@@ -11,7 +11,9 @@
 - `roc`: ROC curves of diagnostic tests, their AUC and DeLong's test.
 - `agreement`: Bland-Altman agreement and intraclass correlations.
 - `logistic`: logistic regression with odds ratios.
+- `meta`: meta-analysis of studies, with forest plots.
 - `distributions`: the t and F distributions.
 
-See the wiki pages Survival analysis and Diagnostic tests.
+See the wiki pages Survival analysis, Diagnostic tests and
+Meta-analysis.
 """

@@ -294,6 +294,8 @@ $(call gallery,survival,survival)
 $(call gallery,roc,roc)
 # A Bland-Altman plot of two readers who measure 40 synthetic tumors.
 $(call gallery,agreement,agreement)
+# A forest plot of the 13 trials of the BCG vaccine against tuberculosis.
+$(call gallery,forest,forest)
 # A bone segment from CT: RLE DICOM slices, two labels with smoothed
 # surfaces, and the two-material voxel mesh under a platen, colored by
 # von Mises stress.

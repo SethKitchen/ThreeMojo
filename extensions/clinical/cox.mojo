@@ -31,6 +31,7 @@ mean of each covariate first, which does not change `b`.
 See Cox (1972), Efron (1977), Breslow (1974) and Harrell and others (1982).
 """
 
+from extensions.clinical.distributions import precise_exp
 from extensions.clinical.survival import Z95, require_group
 from extensions.numerics.dense import (
     DenseMatrix,
@@ -87,14 +88,14 @@ def chi_square_p_value(statistic: Float64, freedom: Int) raises -> Float64:
         for j in range(freedom // 2):  # pragma: no branch
             if j > 0:
                 log_factorial += log(Float64(j))
-            total += exp(Float64(j) * lx - x - log_factorial)
+            total += precise_exp(Float64(j) * lx - x - log_factorial)
         return total
     # exp(-x) x^(j + 1/2) / gamma(j + 3/2) for j from 0 to (freedom - 3) / 2.
     var log_gamma = _LOG_GAMMA_THREE_HALVES
     for j in range(freedom // 2):
         if j > 0:
             log_gamma += log(Float64(j) + 0.5)
-        total += exp((Float64(j) + 0.5) * lx - x - log_gamma)
+        total += precise_exp((Float64(j) + 0.5) * lx - x - log_gamma)
     return erfc(sqrt(x)) + total
 
 
