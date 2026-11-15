@@ -127,9 +127,17 @@ struct SurvivalCurve(Copyable, Movable):
         return (exp(lns * exp(c)), exp(lns * exp(-c)))
 
 
-def _require_group(times: List[Duration64], events: List[Bool]) raises:
+def require_group(times: List[Duration64], events: List[Bool]) raises:
     """Refuse a group with no patient, lists of two lengths, or a time
-    that is negative or not finite."""
+    that is negative or not finite.
+
+    Args:
+        times: The time of each patient.
+        events: Whether each patient had the event.
+
+    Raises:
+        Error: If the group is not valid.
+    """
     if len(times) == 0 or len(times) != len(events):
         raise Error("A group needs one patient or more, each with an event")
     for t in times:  # pragma: no branch
@@ -165,7 +173,7 @@ def kaplan_meier(
         Error: If there is no patient, the lists differ in length, or a
             time is negative or not finite.
     """
-    _require_group(times, events)
+    require_group(times, events)
     var order = _order(times)
     var out = SurvivalCurve(len(times))
     var risk = len(times)
@@ -252,8 +260,8 @@ def log_rank_test(
         Error: If a group is not valid, or no event changes the risk of
             either group.
     """
-    _require_group(times_a, events_a)
-    _require_group(times_b, events_b)
+    require_group(times_a, events_a)
+    require_group(times_b, events_b)
     var a = kaplan_meier(times_a, events_a)
     var b = kaplan_meier(times_b, events_b)
     # Each time of an event in either group, rising.

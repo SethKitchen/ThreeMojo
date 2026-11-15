@@ -14,10 +14,11 @@ as Gehan (1965) gives them. A time with a `+` is censored.
 
 The blue curve is the 6-MP group and the red curve the placebo group,
 from 0 to 36 weeks, with a gray line each 6 weeks. A tick marks each
-censored patient. The program prints the median remission of each group
-and the log-rank test.
+censored patient. The program prints the median remission of each group,
+the log-rank test, and the hazard ratio of the placebo by a Cox model.
 """
 
+from extensions.clinical.cox import cox_regression
 from extensions.clinical.survival import (
     SurvivalCurve,
     WEEK64,
@@ -91,5 +92,27 @@ def main() raises:
         "and",
         test.expected[1],
         "were expected",
+    )
+    # The Cox model of one covariate: 1 for the placebo group.
+    var times = drug[0].copy()
+    var events = drug[1].copy()
+    var rows = List[List[Float64]]()
+    for _ in range(len(drug[0])):
+        rows.append([0.0])
+    for i in range(len(placebo[0])):
+        times.append(placebo[0][i])
+        events.append(placebo[1][i])
+        rows.append([1.0])
+    var model = cox_regression(times, events, rows, 1e-10, 50)
+    var band = model.interval(0)
+    print(
+        "Cox: hazard ratio of the placebo",
+        model.hazard_ratio(0),
+        "with a 95 percent interval of",
+        band[0],
+        "to",
+        band[1],
+        "; p",
+        model.p_value(0),
     )
     print("Wrote", destination)
