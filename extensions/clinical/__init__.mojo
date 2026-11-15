@@ -17,8 +17,11 @@
 - `epidemic`: SIR and SEIR models of an epidemic.
 - `incidence`: the growth rate of case counts and its reproduction number.
 - `power`: the sample size and the power of a study.
+- `hypothesis`: t tests and rank tests of two groups and of pairs.
+- `tables`: Fisher's exact test, chi-square tests and McNemar's test.
+- `multiple`: adjusted p values for many tests.
 - `distributions`: the t and F distributions.
 
 See the wiki pages Survival analysis, Diagnostic tests, Meta-analysis,
-Epidemic models, and Sample size and power.
+Epidemic models, Sample size and power, and Group comparisons.
 """

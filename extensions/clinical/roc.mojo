@@ -27,6 +27,7 @@ The DeLong components come from midranks, after Sun and Xu (2014), so a
 curve takes time in proportion to `n log n`.
 """
 
+from extensions.clinical.hypothesis import midranks
 from extensions.clinical.survival import Z95
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
@@ -50,30 +51,6 @@ struct _Components(Movable):
         self.healthy = List[Float64]()
 
 
-def _midranks(values: List[Float64]) -> List[Float64]:
-    """Return the rank of each value from 1, a tie taking the mean rank."""
-    var n = len(values)
-    var order = List[Int]()
-    for i in range(n):  # pragma: no branch
-        order.append(i)
-
-    def before(a: Int, b: Int) capturing -> Bool:
-        return values[a] < values[b]
-
-    stable_sort[before](order)
-    var ranks = List[Float64](length=n, fill=0.0)
-    var i = 0
-    while i < n:
-        var j = i
-        while j < n and values[order[j]] == values[order[i]]:
-            j += 1
-        var rank = 0.5 * Float64(i + j - 1) + 1.0
-        for k in range(i, j):  # pragma: no branch
-            ranks[order[k]] = rank
-        i = j
-    return ranks^
-
-
 def _require_scores(scores: List[Float64], diseased: List[Bool]) raises:
     """Refuse scores that are not one finite value for each patient, or
     fewer than two patients of each kind."""
@@ -93,7 +70,7 @@ def _require_scores(scores: List[Float64], diseased: List[Bool]) raises:
 
 def _components(scores: List[Float64], diseased: List[Bool]) -> _Components:
     """Return the AUC and the DeLong components of one test."""
-    var all = _midranks(scores)
+    var all = midranks(scores)
     var sick = List[Float64]()
     var well = List[Float64]()
     for i in range(len(scores)):  # pragma: no branch
@@ -103,8 +80,8 @@ def _components(scores: List[Float64], diseased: List[Bool]) -> _Components:
             well.append(scores[i])
     var m = Float64(len(sick))
     var n = Float64(len(well))
-    var among_sick = _midranks(sick)
-    var among_well = _midranks(well)
+    var among_sick = midranks(sick)
+    var among_well = midranks(well)
     var out = _Components()
     var below = 0.0
     var a = 0

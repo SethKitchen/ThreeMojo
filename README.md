@@ -959,6 +959,9 @@ Medical images, macromolecules, solid mechanics and the statistics of clinical r
 - [x] [Growth from case counts](https://github.com/SethKitchen/ThreeMojo/wiki/Epidemic-models#estimate-the-growth-from-case-counts): the growth rate of an outbreak by Poisson regression, and R by Wallinga and Lipsitch; they match statsmodels [#1099](https://github.com/SethKitchen/ThreeMojo/issues/1099)
 - [x] [Two-by-two tables](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests#measure-a-test-from-its-table): sensitivity, specificity, predictive values and likelihood ratios, risk ratios and the number needed to treat; they match statsmodels [#1096](https://github.com/SethKitchen/ThreeMojo/issues/1096)
 - [x] [Sample size and power](https://github.com/SethKitchen/ThreeMojo/wiki/Sample-size-and-power): two proportions, two means and survival by Schoenfeld and Freedman; they match statsmodels and lifelines [#1097](https://github.com/SethKitchen/ThreeMojo/issues/1097)
+- [x] [Group comparisons](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons): Student, Welch and paired t tests with intervals, and the Mann-Whitney and Wilcoxon rank tests; they match scipy [#1100](https://github.com/SethKitchen/ThreeMojo/issues/1100)
+- [x] [Count tables](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons#test-a-table-of-counts): Fisher's exact test, chi-square tests with and without Yates's correction, and McNemar's test; they match scipy and statsmodels [#1101](https://github.com/SethKitchen/ThreeMojo/issues/1101)
+- [x] [Many tests](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons#correct-for-many-tests): p values adjusted by Bonferroni, Holm, Benjamini-Hochberg and Benjamini-Yekutieli; they match statsmodels [#1102](https://github.com/SethKitchen/ThreeMojo/issues/1102)
 
 ### Out of scope
 
