@@ -6,11 +6,13 @@
 """Write the Hessian eigenvalues and the Frangi vesselness of a synthetic
 volume, with scikit-image.
 
-    python3 make_vesselness.py > vesselness_expected.txt
+    mojo run -I . tools/make_vesselness.mojo
+    cd assets/vesselness && python3 make_vesselness.py > vesselness_expected.txt
 
-Run it with numpy 2.5.4, scipy 1.18.1 and scikit-image 0.26. The volume
-has 20 by 18 by 16 voxels of 1 mm, with x the fastest axis, rounded to
-32-bit values as a volume stores them. It holds:
+Run it with numpy 2.5.4, scipy 1.18.1 and scikit-image 0.26.
+`tools/make_vesselness.mojo` writes the volume, `volume.txt`: 20 by 18 by
+16 voxels of 1 mm, with x the fastest axis, in 32-bit values as a volume
+stores them. It holds:
 
 - a bright tube along (1, 0.5, 0.25) through (8, 8, 6) mm, of height 100
   and a Gaussian profile of 1.2 mm;
@@ -18,7 +20,7 @@ has 20 by 18 by 16 voxels of 1 mm, with x the fastest axis, rounded to
 - a bright plate at z = 13 mm, of height 40 and 1 mm, where x is 12 mm or
   more.
 
-The test makes the same volume. The lines are:
+The tests read the same volume. The lines are:
 
 - `eigen sigma at l1 l2 l3`: the eigenvalues of scikit-image's
   `hessian_matrix` with `use_gaussian_derivatives=True`, from
@@ -39,17 +41,9 @@ NX, NY, NZ = 20, 18, 16
 
 
 def volume():
-    z, y, x = numpy.meshgrid(numpy.arange(NZ), numpy.arange(NY), numpy.arange(NX), indexing="ij")
-    p = numpy.stack([x, y, z], axis=-1).astype(float)
-    u = numpy.array([1.0, 0.5, 0.25])
-    u /= numpy.sqrt(u @ u)
-    d = p - numpy.array([8.0, 8.0, 6.0])
-    along = d @ u
-    tube = 100.0 * numpy.exp(-((d * d).sum(-1) - along**2) / (2 * 1.2**2))
-    b = p - numpy.array([14.0, 4.0, 10.0])
-    blob = 80.0 * numpy.exp(-(b * b).sum(-1) / (2 * 2.0**2))
-    plate = numpy.where(x >= 12, 40.0 * numpy.exp(-((z - 13.0) ** 2) / 2.0), 0.0)
-    return (tube + blob + plate).astype(numpy.float32).astype(numpy.float64)
+    # Each line is the shortest text of a 32-bit value.
+    values = numpy.loadtxt("volume.txt", dtype=numpy.float32)
+    return values.astype(numpy.float64).reshape(NZ, NY, NX)
 
 
 def sorted_eigen(h):

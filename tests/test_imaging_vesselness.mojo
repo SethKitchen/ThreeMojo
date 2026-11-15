@@ -6,8 +6,8 @@
 """Hessian eigenvalues and Frangi vesselness.
 
 `assets/vesselness/vesselness_expected.txt` holds scikit-image's values
-for a synthetic volume, which `_volume` makes again. See
-`assets/vesselness/make_vesselness.py`.
+for the synthetic volume of `assets/vesselness/volume.txt`. See
+`tools/make_vesselness.mojo` and `assets/vesselness/make_vesselness.py`.
 """
 
 from extensions.numerics.elementary import precise_exp
@@ -34,31 +34,12 @@ def _mm(v: Float64) -> Length64:
 
 
 def _volume(dz: Float64) raises -> ImageVolume:
+    """The volume of `tools/make_vesselness.mojo`, with slices dz mm apart."""
     var volume = ImageVolume(NX, NY, NZ, _mm(1.0), _mm(1.0), _mm(dz))
-    var ux = 1.0
-    var uy = 0.5
-    var uz = 0.25
-    var norm = sqrt(ux * ux + uy * uy + uz * uz)
-    ux /= norm
-    uy /= norm
-    uz /= norm
-    for k in range(NZ):
-        for j in range(NY):
-            for i in range(NX):
-                var dx = Float64(i) - 8.0
-                var dy = Float64(j) - 8.0
-                var dz2 = Float64(k) - 6.0
-                var along = dx * ux + dy * uy + dz2 * uz
-                var d2 = dx * dx + dy * dy + dz2 * dz2 - along * along
-                var v = 100.0 * precise_exp(-d2 / (2.0 * 1.2 * 1.2))
-                var bx = Float64(i) - 14.0
-                var by = Float64(j) - 4.0
-                var bz = Float64(k) - 10.0
-                v += 80.0 * precise_exp(-(bx * bx + by * by + bz * bz) / 8.0)
-                if i >= 12:
-                    var pz = Float64(k) - 13.0
-                    v += 40.0 * precise_exp(-pz * pz / 2.0)
-                volume.set(i, j, k, Float32(v))
+    var lines = open("assets/vesselness/volume.txt", "r").read().splitlines()
+    assert_equal(len(lines), NX * NY * NZ)
+    for at in range(len(lines)):
+        volume.values[at] = Float32(atof(String(lines[at])))
     return volume^
 
 
