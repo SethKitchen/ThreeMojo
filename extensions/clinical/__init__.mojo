@@ -16,6 +16,7 @@
 - `aft`: Weibull accelerated failure time regression.
 - `standardize`: exact Poisson intervals, SMRs and directly standardized
   rates.
+- `phase2`: Simon's two-stage designs and the posterior of a response rate.
 - `roc`: ROC curves of diagnostic tests, their AUC and DeLong's test.
 - `agreement`: Bland-Altman agreement and intraclass correlations.
 - `kappa`: Cohen's kappa, simple and weighted, and Fleiss' kappa.
