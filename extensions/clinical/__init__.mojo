@@ -10,6 +10,7 @@
 - `cox`: Cox proportional hazards regression.
 - `roc`: ROC curves of diagnostic tests, their AUC and DeLong's test.
 - `agreement`: Bland-Altman agreement and intraclass correlations.
+- `logistic`: logistic regression with odds ratios.
 - `distributions`: the t and F distributions.
 
 See the wiki pages Survival analysis and Diagnostic tests.

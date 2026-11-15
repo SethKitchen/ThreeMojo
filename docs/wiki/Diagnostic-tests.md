@@ -1,6 +1,6 @@
 # Diagnostic tests
 
-`extensions/clinical/` measures diagnostic tests and the methods that measure patients. `roc` gives the ROC curve of a test, its area (AUC) with a 95 percent interval, the best threshold, and DeLong's comparison of two tests. `agreement` gives the Bland-Altman agreement of two methods and the intraclass correlations of several raters. It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
+`extensions/clinical/` measures diagnostic tests and the methods that measure patients. `roc` gives the ROC curve of a test, its area (AUC) with a 95 percent interval, the best threshold, and DeLong's comparison of two tests. `agreement` gives the Bland-Altman agreement of two methods and the intraclass correlations of several raters. `logistic` models the risk of an outcome from covariates. It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
 
 ![The ROC curves of two synthetic markers, with the chance diagonal](out/roc.png)
 
@@ -14,6 +14,7 @@ Marker A has an AUC of 0.820, with a 95 percent interval from 0.751 to 0.890. Ma
 |---|---|
 | `roc` | `RocCurve`, `roc_curve`, `RocComparison`, `compare_roc` and `roc_image` |
 | `agreement` | `BlandAltman`, `bland_altman`, `bland_altman_image`, `Icc`, `IccTable`, `intraclass_correlation` and `LIMIT_FACTOR` |
+| `logistic` | `LogisticModel` and `logistic_regression` |
 | `distributions` | `beta_tails`, `student_t_upper`, `student_t_quantile`, `f_upper`, `f_quantile`, `precise_exp` and `MAX_DEGREES` |
 
 ## Make a ROC curve
@@ -60,6 +61,29 @@ Two equal tests give a difference of 0, a z of 0 and a p value of 1.
 ## Draw the curves
 
 `roc_image(curves, colors, size)` plots the curves on a white square. The false positive rate runs from 0 at the left edge to 1 at the right edge. The sensitivity runs from 0 at the bottom edge to 1 at the top edge. Light gray lines mark each tenth, and a darker gray diagonal marks a test no better than chance.
+
+## Model the risk of an outcome
+
+`logistic_regression(outcomes, covariates, tolerance, max_steps)` models the risk of a binary outcome, such as a disease, from covariates, such as the age or smoking. It takes the log odds of the outcome as `b0 + x . b`. `exp(b_i)` is the odds ratio of covariate `i`: the factor on the odds for each unit of that covariate, with the others held.
+
+```mojo
+from extensions.clinical.logistic import logistic_regression
+
+var outcomes: List[Bool] = [True, False, True, False, False, True]
+var rows: List[List[Float64]] = [[6.1], [4.2], [5.0], [5.3], [3.9], [6.6]]
+var model = logistic_regression(outcomes, rows, 1e-10, 50)
+print(model.odds_ratio(1), model.interval(1)[0], model.risk([5.5]))
+```
+
+Index 0 of the model is the intercept, and index `i + 1` is covariate `i`. The model gives:
+
+- `coefficients` and `standard_errors`, from the inverse of the information matrix.
+- `odds_ratio(i)` and `interval(i)`, the odds ratio and its 95 percent interval, `exp(b -+ 1.96 se)`.
+- `z(i)` and `p_value(i)`, the Wald test of each coefficient.
+- `likelihood_ratio()`, the test of the covariates against the intercept alone.
+- `risk(row)`, the predicted risk of a patient. Give the risks of the patients to `roc_curve` to measure how well the model separates them.
+
+The fit uses Newton steps from 0, as statsmodels does. When the steps run out first, `converged` is `False`. That occurs when a covariate separates the patients with the outcome from those without it.
 
 ## Measure the agreement of two methods
 
@@ -128,6 +152,14 @@ The tests compare `agreement` and `distributions` with pingouin 0.7.0 and scipy 
 - The bias, deviation and limits of the two readers agree with numpy to a relative 1e-13. Their intervals agree to 1e-12.
 - The upper tail and the 0.975 quantile of t and F agree with scipy to a relative 1e-12. The cases have whole and real degrees of freedom.
 
+The tests compare `logistic` with the `Logit` model of statsmodels 0.15.0 on a synthetic cohort of 200 patients with three covariates. `assets/logistic/make_logistic.py` writes the cohort and the expected values.
+
+- The coefficients, standard errors, z values and interval ends agree to a relative 1e-12. The p values agree to 1e-10.
+- The log-likelihoods agree to a relative 1e-14, and the likelihood ratio statistic to 1e-12.
+- The predicted risks of three patients agree to a relative 1e-12.
+
+statsmodels fits its own null model with a looser tolerance, which leaves its null log-likelihood 2e-8 below the maximum. So the script fits the null model to 1e-12 too, and then the null log-likelihood agrees exactly.
+
 The tests also check cases by hand:
 
 - Three diseased scores of 3, 2 and 2 against healthy scores of 2, 1 and 0 give an AUC of 8/9. The standard error is from the variances 1/108 and 1/27 of the components. The best threshold is 2.
@@ -138,6 +170,8 @@ The tests also check cases by hand:
 - `precise_exp` gives e, and `e^-70`, to the last place.
 - Differences of 1, 0, 1 and 0 give a bias of 1/2 and a deviation of `sqrt(1/3)`. Their plot has the bias and the zero line in the right rows.
 - Two raters who differ by a constant leave no residual, and the ICC refuses them.
+- A two-by-two table of 10 and 20 exposed patients, and 5 and 40 others, gives an odds ratio of 4. Its standard error is Woolf's `sqrt(1/10 + 1/20 + 1/5 + 1/40)`. The intercept is the log odds 5/40.
+- A covariate that separates the outcomes does not converge.
 
 ## Errors
 
@@ -152,6 +186,9 @@ Every function raises `Error` for input it cannot use.
 | The methods do not give one finite value each for two subjects or more | `bland_altman`, `bland_altman_image` |
 | The result is not that of the data, the means or the differences do not vary, or a side is out of 64 to 4096 pixels | `bland_altman_image` |
 | The ratings are not a finite table of two subjects and two raters or more, or they have no residual variation | `intraclass_correlation` |
+| The covariates are not one finite row of 1 to 32 values for each patient, all outcomes are the same, the tolerance is not between 0 and 1, or the steps are not from 1 to 1000 | `logistic_regression` |
+| The information matrix is not positive definite, because a covariate is constant, is collinear with others, or separates the outcomes | `logistic_regression` |
+| An index names no coefficient, or a row does not have one finite value for each covariate | `LogisticModel` |
 | A degree of freedom is not from more than 0 to 1e8, a probability is not between 0 and 1, or a value is out of range | `distributions` |
 | There is no curve, the colors are not one for each curve, or the side is out of 64 to 4096 pixels | `roc_image` |
 
@@ -164,6 +201,7 @@ Every function raises `Error` for input it cannot use.
 - Bland-Altman takes the differences as normal, with no trend in the mean. When the difference grows with the size, plot ratios or logarithms.
 - The ICC needs a complete table, with each rating present. It uses an analysis of variance, not a mixed model.
 - A p value below about 1e-307 is given as 0.
+- The logistic model has no penalty, so a covariate that separates the outcomes has no finite estimate. It adds no interaction or curve that the caller does not add as a covariate.
 
 ## References
 
@@ -176,5 +214,7 @@ Every function raises `Error` for input it cannot use.
 - Shrout and Fleiss, "Intraclass correlations: uses in assessing rater reliability", Psychological Bulletin, 1979.
 - McGraw and Wong, "Forming inferences about some intraclass correlation coefficients", Psychological Methods, 1996.
 - Koo and Li, "A guideline of selecting and reporting intraclass correlation coefficients for reliability research", Journal of Chiropractic Medicine, 2016.
+- Hosmer, Lemeshow and Sturdivant, "Applied Logistic Regression", 3rd edition, 2013.
+- Woolf, "On estimating the relation between blood group and disease", Annals of Human Genetics, 1955.
 - Press and others, "Numerical Recipes", 3rd edition, 2007, section 6.4.
 - Robin and others, "pROC: an open-source package for R and S+ to analyze and compare ROC curves", BMC Bioinformatics, 2011.
