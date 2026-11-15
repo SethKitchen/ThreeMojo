@@ -6,7 +6,8 @@
 """MRI relaxometry: T2 from multi-echo decays, T1 from inversion recovery.
 
 `assets/relaxometry/relaxometry_expected.txt` holds numpy and scipy fits of
-synthetic signals. See `assets/relaxometry/make_relaxometry.py`.
+synthetic signals. See
+`tools/make_mri_signals.mojo` and `assets/relaxometry/make_relaxometry.py`.
 """
 
 from extensions.imaging.image_volume import ImageVolume

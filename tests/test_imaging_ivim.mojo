@@ -6,7 +6,8 @@
 """Segmented IVIM fits of diffusion MRI, and their maps.
 
 `assets/diffusion/ivim_expected.txt` holds numpy and scipy fits of
-synthetic signals. See `assets/diffusion/make_ivim.py`.
+synthetic signals. See
+`tools/make_mri_signals.mojo` and `assets/diffusion/make_ivim.py`.
 """
 
 from extensions.imaging.diffusion import (

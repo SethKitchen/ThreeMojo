@@ -5,15 +5,17 @@
 
 """Write segmented IVIM fits of synthetic signals with numpy and scipy.
 
-    python3 make_ivim.py > ivim_expected.txt
+    mojo run -I . tools/make_mri_signals.mojo
+    cd assets/diffusion && python3 make_ivim.py > ivim_expected.txt
 
 Run it with numpy 2.5.4 and scipy 1.18.1. The model of intravoxel
 incoherent motion is
 
     S(b) = S0 (f exp(-b D*) + (1 - f) exp(-b D))
 
-The signals are synthetic, with Rician noise of sigma 4, rounded to whole
-numbers. The fit is segmented:
+`tools/make_mri_signals.mojo` writes the synthetic signals,
+`ivim_signals.txt`, with Rician noise of sigma 4, rounded to whole
+numbers. This script fits them. The fit is segmented:
 
 1. D and the intercept come from `numpy.polyfit` of ln S on b, over the
    b-values of 200 s/mm^2 or more.
@@ -29,18 +31,14 @@ then D and D* in mm^2/s, and f.
 import numpy
 from scipy.optimize import minimize_scalar
 
-generator = numpy.random.default_rng(20261115)
-b = numpy.array([0.0, 10.0, 20.0, 40.0, 60.0, 100.0, 150.0, 200.0, 400.0, 600.0, 800.0])
+with open("ivim_signals.txt") as data:
+    lines = [line.split() for line in data if line.strip()]
+b = numpy.array([float(v) for v in lines[0][1:]])
 print("b", " ".join(repr(float(v)) for v in b))
 high = b >= 200.0
 low = ~high
-for index in range(8):
-    d = 0.7e-3 + 0.12e-3 * index
-    star = 0.012 + 0.006 * index
-    f = 0.06 + 0.03 * index
-    clean = 1000.0 * (f * numpy.exp(-b * star) + (1.0 - f) * numpy.exp(-b * d))
-    noise = generator.normal(0.0, 4.0, size=(2, len(b)))
-    s = numpy.maximum(numpy.rint(numpy.hypot(clean + noise[0], noise[1])), 1.0)
+for words in lines[1:]:
+    s = numpy.array([float(v) for v in words[1:]])
     slope, intercept = numpy.polyfit(b[high], numpy.log(s[high]), 1)
     fit_d = -slope
     fraction = 1.0 - numpy.exp(intercept) / s[0]

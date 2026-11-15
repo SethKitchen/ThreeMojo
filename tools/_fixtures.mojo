@@ -12,7 +12,8 @@ needs Python.
 
 - `SEED` is the seed of every generator, so one run gives the same files.
   It has many set bits, as xorshift needs.
-- `normal(noise, mean, sd)` gives a normal number.
+- `normal(noise, mean, sd)` gives a normal number, and
+  `rician(noise, signal, sigma)` a magnitude signal with Rician noise.
 - `whole(x)` rounds to an integer, a half to the even one, and
   `rounded(x, places)` rounds to decimal places.
 - `numbers(values)` and `integers(values)` join values with spaces, each
@@ -21,6 +22,7 @@ needs Python.
 """
 
 from extensions.numerics.noise import Xorshift64
+from std.math import sqrt
 from std.pathlib import Path
 
 comptime SEED: UInt64 = 0x9E3779B97F4A7C15
@@ -41,6 +43,24 @@ def normal(mut noise: Xorshift64, mean: Float64, sd: Float64) -> Float64:
         `mean + sd z`, with z the next standard normal number.
     """
     return mean + sd * noise.normal()
+
+
+def rician(mut noise: Xorshift64, signal: Float64, sigma: Float64) -> Float64:
+    """Return a magnitude signal with Rician noise, as a scanner stores it.
+
+    Args:
+        noise: The source.
+        signal: The true signal.
+        sigma: The deviation of the noise of each channel.
+
+    Returns:
+        `|signal + n1 + i n2|` with n1 and n2 normal, rounded to a whole
+        number and held at 1 or more.
+    """
+    var real = signal + sigma * noise.normal()
+    var imaginary = sigma * noise.normal()
+    var magnitude = sqrt(real * real + imaginary * imaginary)
+    return max(Float64(whole(magnitude)), 1.0)
 
 
 def whole(x: Float64) -> Int:

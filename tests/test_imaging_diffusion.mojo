@@ -6,7 +6,8 @@
 """Diffusion MRI: ADC and kurtosis fits, their maps, and computed images.
 
 `assets/diffusion/diffusion_expected.txt` holds numpy fits of synthetic
-signals. See `assets/diffusion/make_diffusion.py`.
+signals. See
+`tools/make_mri_signals.mojo` and `assets/diffusion/make_diffusion.py`.
 """
 
 from extensions.imaging.diffusion import (

@@ -5,11 +5,13 @@
 
 """Write reference fits of MRI relaxation times with numpy and scipy.
 
-    python3 make_relaxometry.py > relaxometry_expected.txt
+    mojo run -I . tools/make_mri_signals.mojo
+    cd assets/relaxometry && python3 make_relaxometry.py > relaxometry_expected.txt
 
-Run it with numpy 2.5.4 and scipy 1.18.1. The signals are synthetic, with
-Rician noise of sigma 5, rounded to whole numbers as a scanner stores
-them.
+Run it with numpy 2.5.4 and scipy 1.18.1. `tools/make_mri_signals.mojo`
+writes the synthetic signals, `relaxometry_signals.txt`, with Rician
+noise of sigma 5, rounded to whole numbers as a scanner stores them. This
+script fits them.
 
 - `te` holds the echo times of a multi-echo spin echo, in ms. Each `t2`
   line holds the signals of one voxel, then T2 in ms and S0 from
@@ -25,33 +27,27 @@ them.
 import numpy
 from scipy.optimize import least_squares
 
-generator = numpy.random.default_rng(20261115)
 
 
-def noisy(signal):
-    noise = generator.normal(0.0, 5.0, size=(2, len(signal)))
-    return numpy.maximum(numpy.rint(numpy.hypot(signal + noise[0], noise[1])), 1.0)
+def rows(name):
+    with open("relaxometry_signals.txt") as data:
+        return [numpy.array([float(v) for v in line.split()[1:]])
+                for line in data if line.split()[0] == name]
 
 
 def line(name, values):
     print(name, " ".join(repr(float(v)) for v in values))
 
 
-te = numpy.array([10.0, 20.0, 30.0, 40.0, 60.0, 80.0, 100.0, 120.0])
+te = rows("te")[0]
 line("te", te)
-for index in range(8):
-    s0 = 800.0 + 120.0 * index
-    t2 = 30.0 + 20.0 * index
-    s = noisy(s0 * numpy.exp(-te / t2))
+for s in rows("t2"):
     slope, intercept = numpy.polyfit(te, numpy.log(s), 1)
     line("t2", list(s) + [-1.0 / slope, numpy.exp(intercept)])
 
-ti = numpy.array([50.0, 150.0, 300.0, 600.0, 1000.0, 1500.0, 2500.0, 4000.0])
+ti = rows("ti")[0]
 line("ti", ti)
-for index in range(8):
-    a = 900.0 + 80.0 * index
-    t1 = 300.0 + 220.0 * index
-    s = noisy(numpy.abs(a - 2.0 * a * numpy.exp(-ti / t1)))
+for s in rows("t1"):
     best = None
     for k in range(len(ti) + 1):
         signed = s.copy()
