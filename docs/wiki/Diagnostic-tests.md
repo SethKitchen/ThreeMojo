@@ -8,7 +8,7 @@ It is a library for research and teaching. Its results are not validated for a d
 
 `examples/roc.mojo` makes this picture. It uses 150 synthetic patients, 60 of them diseased, with two markers each. The blue curve is marker A, and the red curve is marker B. The gray diagonal is a test no better than chance.
 
-Marker A has an AUC of 0.820, with a 95 percent interval from 0.751 to 0.890. Marker B has an AUC of 0.735, from 0.654 to 0.817. DeLong's test gives a difference of -0.085, with a p value of 0.014. Marker A at 0.6 or more has a sensitivity of 0.77 and a specificity of 0.74.
+Marker A has an AUC of 0.794, with a 95 percent interval from 0.723 to 0.865. Marker B has an AUC of 0.751, from 0.671 to 0.831. DeLong's test gives a difference of -0.043, with a p value of 0.28. Marker A at 0.9 or more has a sensitivity of 0.67 and a specificity of 0.81.
 
 ## Modules
 
@@ -253,7 +253,7 @@ The intervals and the tests take the t, F, beta and normal distributions from `d
 
 ## Verification
 
-The tests compare the module with scikit-learn 1.9.1 and MLstatkit 0.1.91 on two synthetic markers of 150 patients. Marker A has one decimal, so many of its scores tie. `assets/roc/make_roc.py` writes the markers and the expected values.
+The tests compare the module with scikit-learn 1.9.1 and MLstatkit 0.1.91 on two synthetic markers of 150 patients. Marker A has one decimal, so many of its scores tie. `tools/make_roc.mojo` writes the markers, and `assets/roc/make_roc.py` writes the expected values.
 
 - Each point of the curve of marker A is the same as the point of `roc_curve` of scikit-learn.
 - The AUC of each marker agrees with `roc_auc_score` to a relative 1e-15.
@@ -268,7 +268,7 @@ The tests compare `agreement` and the [distributions](Numerics#use-statistical-d
 - The bias, deviation and limits of the two readers agree with numpy to a relative 1e-13. Their intervals agree to 1e-12.
 - The upper tail and the 0.975 quantile of t and F agree with scipy to a relative 1e-12. The cases have whole and real degrees of freedom.
 
-The tests compare `logistic` with the `Logit` model of statsmodels 0.15.0 on a synthetic cohort of 200 patients with three covariates. `assets/logistic/make_logistic.py` writes the cohort and the expected values.
+The tests compare `logistic` with the `Logit` model of statsmodels 0.15.0 on a synthetic cohort of 200 patients with three covariates. `tools/make_logistic.mojo` writes the cohort, and `assets/logistic/make_logistic.py` writes the expected values.
 
 - The coefficients, standard errors, z values and interval ends agree to a relative 1e-12. The p values agree to 1e-10.
 - The log-likelihoods agree to a relative 1e-14, and the likelihood ratio statistic to 1e-12.

@@ -6,15 +6,14 @@
 """Write two synthetic markers and their ROC analysis by scikit-learn and
 MLstatkit, two Python libraries.
 
-    python3 make_roc.py
+    mojo run -I . tools/make_roc.mojo
+    cd assets/roc && python3 make_roc.py
 
-Run it with numpy, scikit-learn 1.9.1 and MLstatkit 0.1.91. It writes two
-files:
-
-- `markers.txt` holds 150 synthetic patients, one to a line: 1 for a
-  diseased patient or 0 for a healthy one, then the values of marker A and
-  of marker B. Marker A has one decimal, so many of its values tie.
-- `roc_expected.txt` holds the results.
+Run it with numpy, scikit-learn 1.9.1 and MLstatkit 0.1.91.
+`tools/make_roc.mojo` writes 150 synthetic patients, `markers.txt`, one
+to a line: 1 for a diseased patient or 0 for a healthy one, then the
+values of marker A and of marker B. Marker A has one decimal, so many of
+its values tie. This script reads them and writes `roc_expected.txt`.
 
 The expected file has these lines:
 
@@ -34,16 +33,11 @@ import numpy as np
 from MLstatkit import Delong_test
 from sklearn.metrics import roc_auc_score, roc_curve
 
-rng = np.random.default_rng(20261115)
-n = 150
-diseased = (np.arange(n) < 60).astype(int)
-rng.shuffle(diseased)
-a = np.round(rng.normal(0.0, 1.0, n) + 1.2 * diseased, 1)
-b = np.round(0.6 * a + rng.normal(0.0, 0.8, n) + 0.3 * diseased, 2)
-
-with open("markers.txt", "w") as out:
-    for i in range(n):
-        out.write("%d %.1f %.2f\n" % (diseased[i], a[i], b[i]))
+with open("markers.txt") as data:
+    rows = np.array([[float(v) for v in line.split()] for line in data if line.strip()])
+diseased = rows[:, 0].astype(int)
+a = rows[:, 1]
+b = rows[:, 2]
 
 lines = []
 fpr, tpr, thresholds = roc_curve(diseased, a, drop_intermediate=False)

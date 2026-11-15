@@ -7,7 +7,7 @@
 
 `assets/logistic/logistic_expected.txt` holds the results of statsmodels
 0.15.0 on the synthetic cohort `assets/logistic/cohort.txt`. See
-`assets/logistic/make_logistic.py`.
+`tools/make_logistic.mojo` and `assets/logistic/make_logistic.py`.
 """
 
 from extensions.clinical.logistic import LogisticModel, logistic_regression

@@ -6,13 +6,14 @@
 """Write a synthetic cohort and its logistic model by statsmodels, a
 Python library.
 
-    python3 make_logistic.py
+    mojo run -I . tools/make_logistic.mojo
+    cd assets/logistic && python3 make_logistic.py
 
-Run it with numpy and statsmodels 0.15.0. It writes two files:
+Run it with numpy and statsmodels 0.15.0. `tools/make_logistic.mojo`
+writes 200 synthetic patients, `cohort.txt`, one to a line: 1 for disease
+or 0 for none, the age in decades, 1 for a smoker or 0 for none, and a
+marker. This script reads them.
 
-- `cohort.txt` holds 200 synthetic patients, one to a line: 1 for disease
-  or 0 for none, the age in decades, 1 for a smoker or 0 for none, and a
-  marker.
 - `logistic_expected.txt` holds the model of statsmodels' `Logit`, fitted
   by Newton steps to a tolerance of 1e-12.
 
@@ -36,17 +37,10 @@ import numpy as np
 import statsmodels.api as sm
 from scipy.stats import chi2
 
-rng = np.random.default_rng(20261115)
-n = 200
-age = np.round(rng.normal(6.0, 1.2, n), 1)
-smoker = (rng.random(n) < 0.35).astype(int)
-marker = np.round(rng.normal(2.0, 1.0, n), 2)
-eta = -6.0 + 0.7 * age + 0.9 * smoker + 0.5 * marker
-disease = (rng.random(n) < 1.0 / (1.0 + np.exp(-eta))).astype(int)
-
-with open("cohort.txt", "w") as out:
-    for i in range(n):
-        out.write("%d %.1f %d %.2f\n" % (disease[i], age[i], smoker[i], marker[i]))
+with open("cohort.txt") as data:
+    rows = np.array([[float(v) for v in line.split()] for line in data if line.strip()])
+disease, age, smoker, marker = rows.T
+n = len(disease)
 
 x = sm.add_constant(np.column_stack([age, smoker, marker]))
 fit = sm.Logit(disease, x).fit(method="newton", tol=1e-12, maxiter=100, disp=0)

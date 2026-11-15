@@ -7,7 +7,7 @@
 
 `assets/roc/roc_expected.txt` holds the results of scikit-learn 1.9.1 and
 MLstatkit 0.1.91 on the synthetic markers of `assets/roc/markers.txt`. See
-`assets/roc/make_roc.py`.
+`tools/make_roc.mojo` and `assets/roc/make_roc.py`.
 """
 
 from extensions.clinical.roc import (
