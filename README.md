@@ -950,6 +950,7 @@ Medical images, macromolecules and solid mechanics, for research and teaching. A
 - [x] [Strain energy](https://github.com/SethKitchen/ThreeMojo/wiki/Tetrahedral-FEM#summarize-the-stress-of-each-material): the energy stored in a solved model, exact for both element orders, and its apparent stiffness [#1054](https://github.com/SethKitchen/ThreeMojo/issues/1054)
 - [x] [Survival analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Survival-analysis): Kaplan-Meier curves, medians, the log-rank test and plots, which match lifelines on the 6-MP leukemia trial [#1089](https://github.com/SethKitchen/ThreeMojo/issues/1089)
 - [x] [Cox regression](https://github.com/SethKitchen/ThreeMojo/wiki/Survival-analysis#fit-a-cox-model): hazard ratios of covariates with Efron ties, intervals, tests, concordance and predicted survival; they match lifelines [#1090](https://github.com/SethKitchen/ThreeMojo/issues/1090)
+- [x] [ROC analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Diagnostic-tests): ROC curves, AUC with DeLong intervals, Youden thresholds and DeLong's test of two tests; they match scikit-learn and MLstatkit [#1091](https://github.com/SethKitchen/ThreeMojo/issues/1091)
 
 ### Out of scope
 

@@ -3,9 +3,12 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Statistics of clinical research: the survival of groups of patients.
+"""Statistics of clinical research: survival and diagnostic tests.
 
-Kaplan-Meier curves with their intervals, medians, the log-rank test of
-two groups, and a picture of the curves. See the wiki page Survival
-analysis.
+- `survival`: Kaplan-Meier curves with their intervals, medians, the
+  log-rank test of two groups, and a picture of the curves.
+- `cox`: Cox proportional hazards regression.
+- `roc`: ROC curves of diagnostic tests, their AUC and DeLong's test.
+
+See the wiki pages Survival analysis and Diagnostic tests.
 """

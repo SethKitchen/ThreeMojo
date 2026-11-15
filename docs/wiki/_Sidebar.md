@@ -177,6 +177,7 @@
 - [Molecular structures](Molecular-structures)
 - [Tetrahedral FEM](Tetrahedral-FEM)
 - [Survival analysis](Survival-analysis)
+- [Diagnostic tests](Diagnostic-tests)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)
