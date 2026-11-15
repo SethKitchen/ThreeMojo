@@ -83,10 +83,10 @@ The tests also check cases by hand:
 - Even groups need `4 (z_a + z_b)^2 / ln(HR)^2` events.
 - A power less than the level needs no patients.
 
-The tests compare `phase2` with an exhaustive search of every design in scipy, to 60 patients, for three pairs of rates. `assets/phase2/make_phase2.py` writes it.
+The tests compare `phase2` with Simon's table of 1989 for three pairs of rates, with a search to 60 patients. `assets/phase2/make_phase2.py` writes the designs and scipy's binomial probabilities for them.
 
-- The optimal and minimax designs have the same `r1`, `n1`, `r` and `n`. They are those of Simon's table of 1989: 1/10 then 5/29, and 1/15 then 5/25, for p0 = 0.1 and p1 = 0.3.
-- The chance of an early stop and the power agree to a relative 1e-12. The expected size agrees to 1e-13, and the type I error to 1e-11.
+- The optimal and minimax designs have the `r1`, `n1`, `r` and `n` of Simon's table. For p0 = 0.1 and p1 = 0.3, they are 1/10 then 5/29, and 1/15 then 5/25.
+- The test builds the errors of each design from scipy's binomial probabilities. The chance of an early stop and the power agree to a relative 1e-12. The expected size agrees to 1e-13, and the type I error to 1e-11.
 - `simon_errors` of a design at p0 and p1 gives its type I error, its early stop and its power.
 - The posterior probabilities of four priors and trials agree with scipy's `beta.sf` to 1e-12.
 

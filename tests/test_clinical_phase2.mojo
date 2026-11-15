@@ -5,9 +5,10 @@
 
 """Simon's two-stage designs and the posterior of a response rate.
 
-`assets/phase2/phase2_expected.txt` holds an exhaustive search with scipy,
-and scipy's beta tails. See `assets/phase2/make_phase2.py`. The designs
-are those of Simon's table of 1989.
+`assets/phase2/phase2_expected.txt` holds the designs of Simon's table of
+1989, scipy's binomial probabilities for them, and scipy's beta tails. See
+`assets/phase2/make_phase2.py`. The test builds the errors of each design
+from the binomial probabilities.
 """
 
 from extensions.clinical.phase2 import (
@@ -40,15 +41,54 @@ def _rows(kind: String) raises -> List[List[Float64]]:
     return out^
 
 
+def _binomial(m: Int, p: Float64) raises -> List[Float64]:
+    """Return scipy's pmf and then its sf of k from 0 to m."""
+    for row in _rows("binomial"):
+        if Int(row[0]) == m and row[1] == p:
+            return List[Float64](row[2:])
+    raise Error("The fixture has no binomial table of that size and chance")
+
+
+def _simon(
+    r1: Int, n1: Int, r: Int, n: Int, p: Float64
+) raises -> Tuple[Float64, Float64]:
+    """Return the chance of rejecting the null at p, and of an early stop.
+
+    A design rejects when x1 > r1 and x1 + x2 > r, so the chance is the sum
+    over x1 from r1 + 1 to n1 of P(x1) P(x2 > r - x1). It stops early with
+    P(x1 <= r1) = 1 - P(x1 > r1).
+    """
+    var first = _binomial(n1, p)
+    var m = n - n1
+    var second = _binomial(m, p)
+    var reject = 0.0
+    for x1 in range(r1 + 1, n1 + 1):
+        var k = r - x1
+        var above = 1.0 if k < 0 else second[m + 1 + k]
+        reject += first[x1] * above
+    return (reject, 1.0 - first[n1 + 1 + r1])
+
+
 def _check(design: SimonDesign, row: List[Float64], at: Int) raises:
-    assert_equal(design.r1, Int(row[at]))
-    assert_equal(design.n1, Int(row[at + 1]))
-    assert_equal(design.r, Int(row[at + 2]))
-    assert_equal(design.n, Int(row[at + 3]))
-    assert_almost_equal(design.early_stop, row[at + 4], rtol=1e-12)
-    assert_almost_equal(design.expected, row[at + 5], rtol=1e-13)
-    assert_almost_equal(design.alpha, row[at + 6], rtol=1e-11)
-    assert_almost_equal(design.power, row[at + 7], rtol=1e-12)
+    """Check a design against Simon's table and the errors of scipy."""
+    var r1 = Int(row[at])
+    var n1 = Int(row[at + 1])
+    var r = Int(row[at + 2])
+    var n = Int(row[at + 3])
+    assert_equal(design.r1, r1)
+    assert_equal(design.n1, n1)
+    assert_equal(design.r, r)
+    assert_equal(design.n, n)
+    var null = _simon(r1, n1, r, n, row[0])
+    var alternative = _simon(r1, n1, r, n, row[1])
+    assert_almost_equal(design.early_stop, null[1], rtol=1e-12)
+    assert_almost_equal(
+        design.expected,
+        Float64(n1) + (1.0 - null[1]) * Float64(n - n1),
+        rtol=1e-13,
+    )
+    assert_almost_equal(design.alpha, null[0], rtol=1e-11)
+    assert_almost_equal(design.power, alternative[0], rtol=1e-12)
 
 
 def test_optimal() raises:
@@ -60,7 +100,7 @@ def test_optimal() raises:
 
 def test_minimax() raises:
     for row in _rows("design"):
-        _check(simon_minimax(row[0], row[1], row[2], row[3], 60), row, 12)
+        _check(simon_minimax(row[0], row[1], row[2], row[3], 60), row, 8)
 
 
 def test_errors_of_a_design() raises:
