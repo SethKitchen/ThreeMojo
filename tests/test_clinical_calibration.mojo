@@ -6,8 +6,8 @@
 """The calibration and decision curves of risk models.
 
 `assets/calibration/calibration_expected.txt` holds the values of
-scikit-learn, scipy, statsmodels and dcurves for a synthetic cohort. See
-`assets/calibration/make_calibration.py`.
+scikit-learn, statsmodels and dcurves for a synthetic cohort. See
+`tools/make_calibration.mojo` and `assets/calibration/make_calibration.py`.
 """
 
 from extensions.clinical.calibration import (
@@ -28,7 +28,7 @@ from extensions.clinical.calibration import (
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Color, Framebuffer
-from std.math import inf, log, nan
+from std.math import erfc, inf, log, nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -45,13 +45,11 @@ struct _Fixture(Movable):
     var risks: List[Float64]
     var outcomes: List[Bool]
     var rows: Dict[String, List[Float64]]
-    var groups: List[List[Float64]]
 
     def __init__(out self) raises:
         self.risks = List[Float64]()
         self.outcomes = List[Bool]()
         self.rows = Dict[String, List[Float64]]()
-        self.groups = List[List[Float64]]()
         var text = open(
             "assets/calibration/calibration_expected.txt", "r"
         ).read()
@@ -61,10 +59,7 @@ struct _Fixture(Movable):
             var values = List[Float64]()
             for at in range(1, len(parts)):
                 values.append(atof(String(parts[at])))
-            if name == "groups":
-                self.groups.append(values^)
-            else:
-                self.rows[name] = values^
+            self.rows[name] = values^
         self.risks = self.rows["risks"].copy()
         for v in self.rows["outcomes"]:
             self.outcomes.append(v == 1.0)
@@ -92,23 +87,20 @@ def test_against_references() raises:
     var data = _Fixture()
     assert_equal(len(data.risks), 300)
     _close(brier_score(data.risks, data.outcomes), data.rows["brier"][0], 1e-14)
+    # The scaled score is 1 less the Brier score over that of the share of
+    # events, `share (1 - share)`.
+    var events = 0.0
+    var expected = 0.0
+    for i in range(len(data.risks)):
+        expected += data.risks[i]
+        if data.outcomes[i]:
+            events += 1.0
+    var share = events / Float64(len(data.risks))
     _close(
         scaled_brier_score(data.risks, data.outcomes),
-        data.rows["brier"][1],
+        1.0 - data.rows["brier"][0] / (share * (1.0 - share)),
         1e-13,
     )
-    var groups = risk_groups(data.risks, data.outcomes, 10)
-    assert_equal(len(groups), 10)
-    for g in range(10):
-        ref row = data.groups[g]
-        assert_equal(groups[g].count, Int(row[0]))
-        _close(groups[g].mean_risk(), row[1], 1e-14)
-        assert_equal(groups[g].events, Int(row[2]))
-        _close(groups[g].observed(), row[3], 1e-15)
-    var test = hosmer_lemeshow(data.risks, data.outcomes, 10)
-    _close(test.statistic, data.rows["hosmer"][0], 1e-12)
-    assert_equal(test.freedom, 8)
-    _close(test.p_value, data.rows["hosmer"][2], 1e-10)
     var fit = calibration_fit(data.risks, data.outcomes)
     ref slope = data.rows["slope"]
     _close(fit.intercept, slope[0], 1e-11)
@@ -118,7 +110,7 @@ def test_against_references() raises:
     ref large = data.rows["large"]
     _close(fit.in_the_large, large[0], 1e-12)
     _close(fit.in_the_large_error, large[1], 1e-12)
-    _close(fit.expected_over_observed, large[2], 1e-14)
+    _close(fit.expected_over_observed, expected / events, 1e-14)
     var curve = decision_curve(
         data.risks, data.outcomes, data.rows["thresholds"]
     )
@@ -138,7 +130,7 @@ def test_against_references() raises:
             net_benefit(data.risks, data.outcomes, curve.thresholds[i]),
             curve.model[i],
         )
-    _close(curve.prevalence, 100.0 / 300.0, 1e-15)
+    _close(curve.prevalence, share, 1e-15)
 
 
 def test_by_hand() raises:
@@ -159,6 +151,12 @@ def test_by_hand() raises:
     _close(groups[1].expected, 1.0, 1e-15)
     assert_equal(groups[1].events, 1)
     assert_equal(groups[2].events, 2)
+    # (O - E)^2 / (E (1 - E / n)) of each group: (1 - 0.6)^2 / (0.6 0.8),
+    # 0, and (2 - 1.4)^2 / (1.4 0.3), so 1/3 + 6/7 = 25/21 on one degree.
+    var seven_test = hosmer_lemeshow(seven, marks, 3)
+    _close(seven_test.statistic, 25.0 / 21.0, 1e-15)
+    assert_equal(seven_test.freedom, 1)
+    _close(seven_test.p_value, erfc(sqrt(25.0 / 42.0)), 1e-14)
     # Groups whose events are what the model expects give a statistic of 0.
     var even: List[Float64] = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
     var alternate: List[Bool] = [True, False, True, False, True, False]

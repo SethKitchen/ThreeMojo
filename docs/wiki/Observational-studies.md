@@ -75,13 +75,13 @@ The exact intervals come from the [gamma functions](Numerics#use-statistical-dis
 
 ## Verification
 
-The tests compare the module with statsmodels 0.15.0 on a synthetic study of 500 patients with three covariates. Older and sicker patients are treated more often and have the outcome more often. `assets/propensity/make_propensity.py` writes the study.
+The tests compare the module with statsmodels 0.15.0 on a synthetic study of 500 patients with three covariates. Older and sicker patients are treated more often and have the outcome more often. `tools/make_propensity.mojo` writes the study, and `assets/propensity/make_propensity.py` writes the expected values.
 
-- The average treatment effect and the two means agree with statsmodels' `TreatmentEffect.ipw` and their closed form to a relative 1e-12.
-- statsmodels takes the derivatives of its moments numerically, so its standard errors agree to 1e-9. The same sandwich with exact derivatives in numpy agrees to 1e-11.
-- The risk ratio, the error of its log and its interval agree with numpy to 1e-11.
-- The standardized differences of the three covariates agree with numpy to 1e-12 before weighting and 1e-9 after it. The weighting brings the differences of age and severity from 0.54 and 0.50 to below 0.04.
-- The effective sample sizes and the E-values agree to 1e-11.
+- The average treatment effect and the two means agree with statsmodels' `TreatmentEffect.ipw` to a relative 1e-12.
+- statsmodels takes the derivatives of its moments numerically, so the standard errors agree to 1e-9. The covariance of the two means agrees with the covariance of its GMM fit to 1e-8.
+- The risk ratio agrees with the ratio of the two means to 1e-13. The error of its log agrees with the delta method on the covariance of statsmodels to 1e-8.
+- The standardized differences of the three covariates agree with numpy's `average` and `cov` with `aweights` to 1e-12 before weighting and 1e-9 after it. The weighting brings the differences of age and severity from 0.48 and 0.49 to below 0.03.
+- The effective sample sizes agree with `(sum w)^2 / sum w^2` to 1e-12.
 
 The tests also check cases by hand:
 

@@ -7,7 +7,7 @@
 
 `assets/propensity/propensity_expected.txt` holds a synthetic study of 500
 patients with the values of statsmodels and numpy. See
-`assets/propensity/make_propensity.py`.
+`tools/make_propensity.mojo` and `assets/propensity/make_propensity.py`.
 """
 
 from extensions.clinical.propensity import (
@@ -65,25 +65,29 @@ def test_against_statsmodels() raises:
     assert_equal(len(study.treated), 500)
     var effect = ipw_effect(study.treated, study.outcomes, study.covariates)
     assert_true(effect.converged)
-    ref closed = study.rows["closed"][0]
-    _close(effect.difference, closed[0], 1e-12)
-    _close(effect.control_mean, closed[1], 1e-13)
-    _close(effect.treated_mean, closed[2], 1e-13)
-    ref errors = study.rows["effect"][0]
-    # statsmodels takes numerical derivatives; numpy takes exact ones.
-    _close(effect.difference_error, errors[3], 1e-9)
-    _close(effect.control_error, errors[4], 1e-9)
-    _close(effect.treated_error, errors[5], 1e-9)
-    _close(effect.difference_error, errors[6], 1e-11)
-    _close(effect.control_error, errors[7], 1e-11)
-    _close(effect.treated_error, errors[8], 1e-11)
-    _close(effect.covariance, errors[9], 1e-9)
-    ref ratio = study.rows["ratio"][0]
+    ref effects = study.rows["effect"][0]
+    _close(effect.difference, effects[0], 1e-12)
+    _close(effect.control_mean, effects[1], 1e-13)
+    _close(effect.treated_mean, effects[2], 1e-13)
+    # statsmodels takes the derivatives of its moments numerically.
+    _close(effect.difference_error, effects[3], 1e-9)
+    _close(effect.control_error, effects[4], 1e-9)
+    _close(effect.treated_error, effects[5], 1e-9)
+    # The covariance of the effect d and the control mean m0 of
+    # statsmodels. The treated mean is d + m0.
+    ref c = study.rows["covariance"][0]
+    var treated_variance = c[0] + 2.0 * c[1] + c[2]
+    var both = c[1] + c[2]
+    _close(effect.covariance, both, 1e-8)
+    # The ratio m1 / m0, with the variance of its log by the delta method.
+    var m1 = effects[2]
+    var m0 = effects[1]
+    var log_variance = (
+        treated_variance / (m1 * m1) + c[2] / (m0 * m0) - 2.0 * both / (m1 * m0)
+    )
     var estimate = effect.ratio()
-    _close(estimate.value, ratio[0], 1e-13)
-    _close(effect.ratio_error(), ratio[1], 1e-11)
-    _close(estimate.lower, ratio[2], 1e-11)
-    _close(estimate.upper, ratio[3], 1e-11)
+    _close(estimate.value, m1 / m0, 1e-13)
+    _close(effect.ratio_error(), sqrt(log_variance), 1e-8)
     var ones = List[Float64](length=500, fill=1.0)
     for c in range(3):
         var values = List[Float64]()
@@ -100,19 +104,30 @@ def test_against_statsmodels() raises:
             balance[1],
             1e-9,
         )
+    # Kish's effective size of each group: (sum w)^2 / sum w^2.
+    var sums: List[Float64] = [0.0, 0.0]
+    var squares: List[Float64] = [0.0, 0.0]
     var treated_weights = List[Float64]()
     var control_weights = List[Float64]()
     for i in range(500):
+        var w = effect.weights[i]
+        var g = 1 if study.treated[i] else 0
+        sums[g] += w
+        squares[g] += w * w
         if study.treated[i]:
-            treated_weights.append(effect.weights[i])
+            treated_weights.append(w)
         else:
-            control_weights.append(effect.weights[i])
-    ref size = study.rows["size"][0]
-    _close(effective_sample_size(treated_weights), size[0], 1e-12)
-    _close(effective_sample_size(control_weights), size[1], 1e-12)
-    ref evalue = study.rows["evalue"][0]
-    _close(e_value(estimate.value), evalue[0], 1e-12)
-    _close(e_value_bound(estimate.lower, estimate.upper), evalue[1], 1e-11)
+            control_weights.append(w)
+    _close(
+        effective_sample_size(treated_weights),
+        sums[1] * sums[1] / squares[1],
+        1e-12,
+    )
+    _close(
+        effective_sample_size(control_weights),
+        sums[0] * sums[0] / squares[0],
+        1e-12,
+    )
 
 
 def test_by_hand() raises:

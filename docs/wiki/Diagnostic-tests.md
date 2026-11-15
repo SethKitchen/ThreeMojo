@@ -290,10 +290,9 @@ The tests compare `kappa` with `cohens_kappa` of statsmodels 0.15.0. The tables 
 
 The tests compare `fleiss_kappa` with `fleiss_kappa` of statsmodels 0.15.0 on two tables. One is the example of 10 subjects and 14 raters on the Wikipedia page of Fleiss' kappa, with a kappa of 0.210. The other has 40 synthetic films and 6 readers. `assets/agreement/make_fleiss.py` writes them. Kappa and Randolph's kappa agree to a relative 1e-14. The null error, z and the category kappas agree with their formulas in numpy to 1e-13, and the p value with scipy to 1e-10.
 
-The tests compare `calibration` with scikit-learn 1.9.1, scipy 1.18.1, statsmodels 0.15.0 and dcurves 1.1.7 on 300 synthetic patients. `assets/calibration/make_calibration.py` writes them.
+The tests compare `calibration` with scikit-learn 1.9.1, statsmodels 0.15.0 and dcurves 1.1.7 on 300 synthetic patients. `tools/make_calibration.mojo` writes them, and `assets/calibration/make_calibration.py` writes the expected values.
 
-- The Brier score agrees with `brier_score_loss` to a relative 1e-14. The counts and events of the ten groups of risk are those of `numpy.array_split`, and their mean risks agree to 1e-14.
-- The Hosmer-Lemeshow statistic agrees with its formula in numpy to 1e-12, and its p value with scipy to 1e-10.
+- The Brier score agrees with `brier_score_loss` to a relative 1e-14. The scaled score agrees with `1 - B / (p (1 - p))` of that score to 1e-13, and the E/O with the sum of the risks over the events to 1e-14.
 - The calibration intercept, the slope and their errors agree with the `Logit` model of statsmodels to 1e-11. The calibration in the large and its error agree with its binomial `GLM` with an offset to 1e-12.
 - At 32 thresholds, the net benefit of the model differs from that of dcurves by 1e-15 or less. Treating all differs by 1e-14 or less, and the treatments avoided by 1e-12 or less.
 
@@ -316,7 +315,8 @@ The tests also check cases by hand:
 - Equal risks need an infinite number to treat.
 - A negative binomial model of one flag fits the mean of each group. Counts with means of 4 and 12 a year give a rate ratio of 3. Counts that spread less than Poisson counts are refused.
 - Risks of 0.2 and 0.8, for outcomes of 0 and 1, give a Brier score of 0.04, scaled to 0.84.
-- Seven patients make groups of 3, 2 and 2, and patients of equal risk keep their order. Groups whose events are what the model expects give a Hosmer-Lemeshow statistic of 0 and a p value of 1.
+- Seven patients make groups of 3, 2 and 2, and patients of equal risk keep their order. Their Hosmer-Lemeshow statistic is `1/3 + 0 + 6/7 = 25/21` on one degree of freedom, with the p value `erfc(sqrt(25/42))`. Groups whose events are what the model expects give a statistic of 0 and a p value of 1.
+- No library gives the groups of risk or the Hosmer-Lemeshow test, so the tests check them by hand only.
 - Risks of 0.25 and 0.75, with a quarter and three quarters of events, are right. They give a slope of 1, intercepts of 0 and an E/O of 1, and recalibration changes no risk.
 - At a threshold of 0.3, two true positives and one false positive of four patients give a net benefit of `1/2 - 1/4 * 3/7`.
 - The calibration plot and the decision curve have their groups, curves, lines and frame in the right pixels.
