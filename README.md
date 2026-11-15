@@ -962,6 +962,7 @@ Medical images, macromolecules, solid mechanics and the statistics of clinical r
 - [x] [Group comparisons](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons): Student, Welch and paired t tests with intervals, and the Mann-Whitney and Wilcoxon rank tests; they match scipy [#1100](https://github.com/SethKitchen/ThreeMojo/issues/1100)
 - [x] [Count tables](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons#test-a-table-of-counts): Fisher's exact test, chi-square tests with and without Yates's correction, and McNemar's test; they match scipy and statsmodels [#1101](https://github.com/SethKitchen/ThreeMojo/issues/1101)
 - [x] [Many tests](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons#correct-for-many-tests): p values adjusted by Bonferroni, Holm, Benjamini-Hochberg and Benjamini-Yekutieli; they match statsmodels [#1102](https://github.com/SethKitchen/ThreeMojo/issues/1102)
+- [x] [Correlations](https://github.com/SethKitchen/ThreeMojo/wiki/Group-comparisons#measure-a-correlation): Pearson's r with Fisher's interval, Spearman's rho and Kendall's tau-b with their tests; they match scipy [#1103](https://github.com/SethKitchen/ThreeMojo/issues/1103)
 
 ### Out of scope
 

@@ -20,6 +20,7 @@
 - `hypothesis`: t tests and rank tests of two groups and of pairs.
 - `tables`: Fisher's exact test, chi-square tests and McNemar's test.
 - `multiple`: adjusted p values for many tests.
+- `correlation`: Pearson's, Spearman's and Kendall's correlations.
 - `distributions`: the t and F distributions.
 
 See the wiki pages Survival analysis, Diagnostic tests, Meta-analysis,

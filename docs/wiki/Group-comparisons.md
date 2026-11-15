@@ -1,6 +1,8 @@
 # Group comparisons
 
-`extensions/clinical/hypothesis.mojo` compares two groups, or the two values of pairs, by two-sided tests. It gives Student's, Welch's and the paired t test, with the interval of the difference of the means. It gives the Mann-Whitney U test and the Wilcoxon signed-rank test, which use ranks. `tables.mojo` tests tables of counts by Fisher's exact test, chi-square and McNemar's test. `multiple.mojo` adjusts p values for many tests. The results match scipy and statsmodels.
+`extensions/clinical/hypothesis.mojo` compares two groups, or the two values of pairs, by two-sided tests. It gives Student's, Welch's and the paired t test, with the interval of the difference of the means. It gives the Mann-Whitney U test and the Wilcoxon signed-rank test, which use ranks. `tables.mojo` tests tables of counts by Fisher's exact test, chi-square and McNemar's test. `multiple.mojo` adjusts p values for many tests.
+
+`correlation.mojo` measures how two measures of the same subjects rise together. The results match scipy and statsmodels.
 
 It is a library for research and teaching. Its results are not validated for a decision about the care of a patient.
 
@@ -11,6 +13,7 @@ It is a library for research and teaching. Its results are not validated for a d
 | `hypothesis` | `TTest`, `student_t_test`, `welch_t_test`, `paired_t_test`, `RankTest`, `mann_whitney`, `wilcoxon` and `midranks` |
 | `tables` | `FisherTest`, `fisher_exact`, `TableTest`, `chi_square_test`, `yates_chi_square_test`, `mcnemar_exact`, `mcnemar_chi_square` and `MAX_SIDE` |
 | `multiple` | `bonferroni`, `holm`, `benjamini_hochberg` and `benjamini_yekutieli` |
+| `correlation` | `Correlation`, `pearson`, `spearman` and `kendall` |
 
 ## Choose a test
 
@@ -73,6 +76,16 @@ McNemar's test compares paired results, such as two tests on each patient. Only 
 - `mcnemar_exact(b, c)` gives the exact two-sided p value from the binomial distribution, `min(1, 2 P(X <= min(b, c)))`.
 - `mcnemar_chi_square(b, c)` gives `(|b - c| - 1)^2 / (b + c)` with 1 degree of freedom, as statsmodels gives it.
 
+## Measure a correlation
+
+A correlation runs from -1 to 1. It is 1 when one measure rises with the other, -1 when it falls, and 0 when there is no relation of that kind. Each function takes two measures of the same subjects, in the same order, and gives a `Correlation` with the `value` and its two-sided `p_value`.
+
+- `pearson(x, y)` gives Pearson's r of a straight-line relation. It also gives the 95 percent interval from `lower` to `upper` by Fisher's z, `tanh(atanh(r) -+ 1.96 / sqrt(n - 3))`. It needs 4 pairs or more.
+- `spearman(x, y)` gives Spearman's rho: r of the midranks. It measures a relation that only rises or only falls, of any shape.
+- `kendall(x, y)` gives Kendall's tau-b: the concordant pairs less the discordant pairs, over the pairs, with a correction for ties. Its p value comes from the normal approximation with the tie-corrected variance. It compares each pair of subjects, so a large sample is slow.
+
+The p value of r and of rho is `2 I_((1 - |r|) / 2)(n/2 - 1, n/2 - 1)`, from the beta distribution, as scipy computes it. A correlation does not show that one measure causes the other.
+
 ## Correct for many tests
 
 With many tests, such as one for each of 50 biomarkers, some find an effect by chance. An adjusted p value corrects for the count of tests. A test rejects at a level, such as 0.05, when its adjusted p value is at or below that level. Each function takes the p values and returns the adjusted values in the same order.
@@ -98,6 +111,8 @@ The tests compare `tables` with scipy 1.18.1 and statsmodels 0.15.0. `assets/hyp
 - The statistics of `chi2_contingency` agree to 1e-13 with and without Yates's correction, and the p values to 1e-11.
 - The exact p values of statsmodels' `mcnemar` agree to 1e-12, and the chi-square form to 1e-11.
 
+The tests take 30 synthetic pairs of glucose and HbA1c with ties. Their correlations agree with scipy's `pearsonr`, `spearmanr` and `kendalltau` to a relative 1e-14. The p values agree to 1e-11, and Pearson's interval to 1e-13. `assets/hypothesis/make_correlation.py` writes them.
+
 The adjusted p values of 12 p values, with a tie, agree with statsmodels' `multipletests` to a relative 1e-15 by each method. `assets/hypothesis/make_multiple.py` writes them.
 
 The tests also check cases by hand:
@@ -107,6 +122,7 @@ The tests also check cases by hand:
 - Two groups apart give U = 0. A U at its mean gives z = 0 and p = 1.
 - Pairs with two zero differences drop them, and the rest give the signed rank sum 3.
 - The most extreme table of three and three has a p value of 2 / 20. A table with a margin of 0 has a p value of 1.
+- A straight line has r = 1, a p value of 0 and an interval of no width. A cube that only rises has rho = 1. Two concordant pairs and one discordant pair give tau = 1/3. A negated measure mirrors r and its interval.
 - The p values 0.01, 0.04 and 0.03 become 0.03, 0.06 and 0.06 by Holm's method, and 0.03, 0.04 and 0.04 by Benjamini and Hochberg's.
 
 ## Errors
@@ -124,6 +140,7 @@ Every function raises `Error` for input it cannot use.
 | A table is not a rectangle of 2 to 100 rows and columns, or a row or a column sums to 0 | `chi_square_test`, `yates_chi_square_test` |
 | There is no discordant pair | `mcnemar_chi_square` |
 | There is no p value, or one is not from 0 to 1 | `multiple` |
+| The measures differ in length, have too few pairs or a value that is not finite, or a measure does not vary | `correlation` |
 
 ## Limits
 
@@ -139,6 +156,9 @@ Every function raises `Error` for input it cannot use.
 - Wilcoxon, "Individual comparisons by ranking methods", Biometrics Bulletin, 1945.
 - Fisher, "On the interpretation of chi-square from contingency tables, and the calculation of P", Journal of the Royal Statistical Society, 1922.
 - Yates, "Contingency tables involving small numbers and the chi-square test", Supplement to the Journal of the Royal Statistical Society, 1934.
+- Pearson, "Notes on the history of correlation", Biometrika, 1920.
+- Spearman, "The proof and measurement of association between two things", American Journal of Psychology, 1904.
+- Kendall, "The treatment of ties in ranking problems", Biometrika, 1945.
 - Holm, "A simple sequentially rejective multiple test procedure", Scandinavian Journal of Statistics, 1979.
 - Benjamini and Hochberg, "Controlling the false discovery rate", Journal of the Royal Statistical Society, Series B, 1995.
 - Benjamini and Yekutieli, "The control of the false discovery rate in multiple testing under dependency", Annals of Statistics, 2001.
