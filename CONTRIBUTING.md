@@ -128,6 +128,22 @@ compress it with `mojo run -I . tools/optimize_png.mojo out/NAME.png`, then use
 `git add -f out/NAME.png`. Existing tracked images still update normally.
 Compression does not remove old files from Git history.
 
+## Reference fixtures
+
+Write all code in Mojo. Use a Python script only to call a reference library, such as scipy, statsmodels, lifelines or pydicom.
+
+A fixture has three parts:
+
+1. `tools/make_NAME.mojo` writes the synthetic inputs into `assets/`. It draws from `Xorshift64` in `extensions/numerics/noise.mojo`, with the seed in `tools/_fixtures.mojo`.
+2. `assets/NAME/make_NAME.py` reads the inputs, calls the library, and prints the values that the library returns.
+3. The Mojo test reads both files. It builds each derived value from the library values by its closed form.
+
+A script can give a model to a library fit or solver. It can prepare the inputs of a library call, such as weights. It must not find a result by a formula of its own. Put that formula in the test, with a comment that names its source.
+
+When no library gives a value, check it in the test by hand or against a published table. For example, the Phase II tests use the table of Simon (1989). A script can use mpmath, because Mojo has no arbitrary precision.
+
+Name the library versions in the docstring of the script. Name the script in the docstring of the test and on the wiki page.
+
 ## Temporary test files
 
 Use `temporary_path` from `tests/test_scratch.mojo` for temporary fixtures.
