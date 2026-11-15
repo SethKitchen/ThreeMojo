@@ -80,7 +80,7 @@ The tests compare the module with statsmodels 0.15.0 on a synthetic study of 500
 - The average treatment effect and the two means agree with statsmodels' `TreatmentEffect.ipw` to a relative 1e-12.
 - statsmodels takes the derivatives of its moments numerically, so the standard errors agree to 1e-9. The covariance of the two means agrees with the covariance of its GMM fit to 1e-8.
 - The risk ratio agrees with the ratio of the two means to 1e-13. The error of its log agrees with the delta method on the covariance of statsmodels to 1e-8.
-- The standardized differences of the three covariates agree with numpy's `average` and `cov` with `aweights` to 1e-12 before weighting and 1e-9 after it. The weighting brings the differences of age and severity from 0.48 and 0.49 to below 0.03.
+- The weights agree with those of statsmodels' propensity scores to 1e-9. The test builds the standardized differences of the three covariates from numpy's `average` and `cov` with `aweights`. They agree to 1e-12 before weighting and 1e-9 after it. The weighting brings the differences of age and severity from 0.48 and 0.49 to below 0.03.
 - The effective sample sizes agree with `(sum w)^2 / sum w^2` to 1e-12.
 
 The tests also check cases by hand:

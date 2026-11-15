@@ -23,12 +23,15 @@ copies each patient to a `patient` line, then writes:
 - `covariance`: the variance of the effect, the covariance of the effect
   and the control mean, and the variance of the control mean, from the
   covariance of statsmodels' GMM fit.
-- `balance`: for each covariate, the standardized difference before and
-  after weighting, as Austin and Stuart (2015) give it: the difference of
-  the weighted means of numpy's `average`, over the root of the mean of
-  the two weighted variances of numpy's `cov` with `aweights`.
+- `score`: the propensity score of each patient, from statsmodels'
+  `Logit.predict`.
+- `moments`: for each covariate, the means of numpy's `average` and the
+  variances of numpy's `cov` with `aweights`, of the treated and then the
+  control patients. They come first without weights, then with the
+  weights `1 / p` of the treated and `1 / (1 - p)` of the controls.
 
-The risk ratio and its interval, the effective sample sizes and the
+The weights, the standardized differences of Austin and Stuart (2015),
+the risk ratio and its interval, the effective sample sizes and the
 E-values are closed forms of these. The Mojo tests check them.
 """
 
@@ -61,20 +64,22 @@ cov = effect.results_gmm.cov_params()
 line("covariance", [cov[0, 0], cov[0, 1], cov[1, 1]])
 
 p = select.predict()
-w = treated / p + (1 - treated) / (1 - p)
+line("score", p)
+w = numpy.where(treated == 1, 1.0 / p, 1.0 / (1.0 - p))
 
 
-def difference(x, weights):
+def moments(x, weights):
     one = treated == 1
     zero = treated == 0
-    m1 = numpy.average(x[one], weights=weights[one])
-    m0 = numpy.average(x[zero], weights=weights[zero])
-    v1 = numpy.cov(x[one], aweights=weights[one])
-    v0 = numpy.cov(x[zero], aweights=weights[zero])
-    return (m1 - m0) / numpy.sqrt((v1 + v0) / 2.0)
+    return [
+        numpy.average(x[one], weights=weights[one]),
+        numpy.average(x[zero], weights=weights[zero]),
+        numpy.cov(x[one], aweights=weights[one]),
+        numpy.cov(x[zero], aweights=weights[zero]),
+    ]
 
 
 ones = numpy.ones(n)
 for column in range(3):
     x = covariates[:, column]
-    line("balance", [difference(x, ones), difference(x, w)])
+    line("moments", moments(x, ones) + moments(x, w))

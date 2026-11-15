@@ -8,6 +8,7 @@
 `assets/propensity/propensity_expected.txt` holds a synthetic study of 500
 patients with the values of statsmodels and numpy. See
 `tools/make_propensity.mojo` and `assets/propensity/make_propensity.py`.
+The test builds the weights and the standardized differences from them.
 """
 
 from extensions.clinical.propensity import (
@@ -88,20 +89,30 @@ def test_against_statsmodels() raises:
     var estimate = effect.ratio()
     _close(estimate.value, m1 / m0, 1e-13)
     _close(effect.ratio_error(), sqrt(log_variance), 1e-8)
+    # The weights are 1 / p of the treated and 1 / (1 - p) of the
+    # controls, with the propensity scores p of statsmodels.
+    ref scores = study.rows["score"][0]
+    for i in range(500):
+        var p = scores[i]
+        var w = 1.0 / p if study.treated[i] else 1.0 / (1.0 - p)
+        _close(effect.weights[i], w, 1e-9)
+    # Austin and Stuart (2015): the standardized difference is the
+    # difference of the means over the root of the mean of the variances,
+    # with numpy's weighted means and variances.
     var ones = List[Float64](length=500, fill=1.0)
     for c in range(3):
         var values = List[Float64]()
         for row in study.covariates:
             values.append(row[c])
-        ref balance = study.rows["balance"][c]
+        ref m = study.rows["moments"][c]
         _close(
             standardized_difference(values, study.treated, ones),
-            balance[0],
+            (m[0] - m[1]) / sqrt((m[2] + m[3]) / 2.0),
             1e-12,
         )
         _close(
             standardized_difference(values, study.treated, effect.weights),
-            balance[1],
+            (m[4] - m[5]) / sqrt((m[6] + m[7]) / 2.0),
             1e-9,
         )
     # Kish's effective size of each group: (sum w)^2 / sum w^2.
