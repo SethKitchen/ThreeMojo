@@ -14,18 +14,18 @@ They are rounded to whole numbers, as a scanner stores them, so that a
 32-bit volume holds them exactly. This script fits them.
 
 - `adc_b` holds the b-values of the ADC voxels, in s/mm^2.
-- Each `adc` line holds the signals of one voxel, then the ADC in mm^2/s,
-  S0, and the computed signal at b = 1500 s/mm^2. The fit is
-  `numpy.polyfit` of ln S on b, of degree 1.
+- Each `adc` line holds the signals of one voxel, then the slope and the
+  intercept of `numpy.polyfit` of ln S on b, of degree 1.
 - `kurtosis_b` holds the b-values of the kurtosis voxels.
-- Each `kurtosis` line holds the signals, then D in mm^2/s, K and S0. The
-  fit is `numpy.polyfit` of ln S on b, of degree 2:
-  `ln S = ln S0 - b D + b^2 D^2 K / 6`. Each true signal falls up to
-  b = 2000 s/mm^2, because `3 / (D K)` is above it.
+- Each `kurtosis` line holds the signals, then the coefficients of b^2, b
+  and 1 of `numpy.polyfit` of ln S on b, of degree 2. Each true signal
+  falls up to b = 2000 s/mm^2, because `3 / (D K)` is above it.
+
+The test finds the ADC, D, K and S0 from the coefficients, by
+`ln S = ln S0 - b D + b^2 D^2 K / 6`.
 """
 
 import numpy
-
 
 
 def rows(name):
@@ -38,15 +38,10 @@ adc_b = rows("adc_b")[0]
 print("adc_b", " ".join(repr(float(v)) for v in adc_b))
 for s in rows("adc"):
     slope, intercept = numpy.polyfit(adc_b, numpy.log(s), 1)
-    fit_s0 = numpy.exp(intercept)
-    computed = fit_s0 * numpy.exp(-1500.0 * -slope)
-    values = list(s) + [-slope, fit_s0, computed]
-    print("adc", " ".join(repr(float(v)) for v in values))
+    print("adc", " ".join(repr(float(v)) for v in list(s) + [slope, intercept]))
 
 kurtosis_b = rows("kurtosis_b")[0]
 print("kurtosis_b", " ".join(repr(float(v)) for v in kurtosis_b))
 for s in rows("kurtosis"):
-    c2, c1, c0 = numpy.polyfit(kurtosis_b, numpy.log(s), 2)
-    fit_d = -c1
-    values = list(s) + [fit_d, 6.0 * c2 / (fit_d * fit_d), numpy.exp(c0)]
+    values = list(s) + list(numpy.polyfit(kurtosis_b, numpy.log(s), 2))
     print("kurtosis", " ".join(repr(float(v)) for v in values))

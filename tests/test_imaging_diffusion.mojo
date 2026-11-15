@@ -8,6 +8,7 @@
 `assets/diffusion/diffusion_expected.txt` holds numpy fits of synthetic
 signals. See
 `tools/make_mri_signals.mojo` and `assets/diffusion/make_diffusion.py`.
+The test finds D, K and S0 from the coefficients of each fit.
 """
 
 from extensions.imaging.diffusion import (
@@ -24,6 +25,7 @@ from extensions.imaging.diffusion import (
 )
 from extensions.imaging.image_volume import ImageVolume
 from extensions.sdf.vector import v3
+from extensions.numerics.elementary import precise_exp
 from std.math import expm1, inf, log, nan
 from std.testing import (
     TestSuite,
@@ -58,7 +60,13 @@ def _numbers(line: String) raises -> List[Float64]:
 
 
 def _fixture(name: String) raises -> _Rows:
-    """Read the rows of `adc` or `kurtosis` from the fixture."""
+    """Read the rows of `adc` or `kurtosis` from the fixture.
+
+    Each row holds the signals and the coefficients of numpy's fit of
+    ln S on b. Of `ln S = ln S0 - b D + b^2 D^2 K / 6`, an `adc` row then
+    gets D in mm^2/s, S0 and the signal at b = 1500 s/mm^2. A `kurtosis`
+    row gets D, K and S0.
+    """
     var out = _Rows()
     var text = open("assets/diffusion/diffusion_expected.txt", "r").read()
     for line in text.splitlines():
@@ -66,7 +74,21 @@ def _fixture(name: String) raises -> _Rows:
         if head == name + "_b":
             out.b_values = _b(_numbers(String(line)))
         elif head == name:
-            out.rows.append(_numbers(String(line)))
+            var raw = _numbers(String(line))
+            var count = len(raw) - (2 if name == "adc" else 3)
+            var row = List[Float64](raw[0:count])
+            if name == "adc":
+                var d = -raw[count]
+                var s0 = precise_exp(raw[count + 1])
+                row += [d, s0, s0 * precise_exp(-1500.0 * d)]
+            else:
+                var d = -raw[count + 1]
+                row += [
+                    d,
+                    6.0 * raw[count] / (d * d),
+                    precise_exp(raw[count + 2]),
+                ]
+            out.rows.append(row^)
     return out^
 
 

@@ -8,10 +8,12 @@
 `assets/relaxometry/relaxometry_expected.txt` holds numpy and scipy fits of
 synthetic signals. See
 `tools/make_mri_signals.mojo` and `assets/relaxometry/make_relaxometry.py`.
+The test finds T2 and S0 from the coefficients of numpy's fit.
 """
 
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.relaxometry import fit_t1, fit_t2, t1_maps, t2_maps
+from extensions.numerics.elementary import precise_exp
 from std.math import exp, expm1, inf, nan
 from std.testing import (
     TestSuite,
@@ -41,6 +43,13 @@ struct _Rows(Movable):
             if String(parts[0]) == head:
                 self.times = _ms(values)
             elif String(parts[0]) == name:
+                if name == "t2":
+                    # numpy fits ln S = ln S0 - TE / T2: the row ends with
+                    # its slope and intercept, for T2 in ms and S0.
+                    var last = len(values) - 1
+                    var slope = values[last - 1]
+                    values[last - 1] = -1.0 / slope
+                    values[last] = precise_exp(values[last])
                 self.rows.append(values^)
 
 

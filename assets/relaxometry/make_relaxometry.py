@@ -14,8 +14,9 @@ noise of sigma 5, rounded to whole numbers as a scanner stores them. This
 script fits them.
 
 - `te` holds the echo times of a multi-echo spin echo, in ms. Each `t2`
-  line holds the signals of one voxel, then T2 in ms and S0 from
-  `numpy.polyfit` of ln S on the echo time.
+  line holds the signals of one voxel, then the slope and the intercept of
+  `numpy.polyfit` of ln S on the echo time. The test finds T2 and S0 from
+  them.
 - `ti` holds the inversion times, in ms. Each `t1` line holds the
   magnitude signals of one voxel of an inversion recovery, then T1 in ms,
   A, B and the number of signals whose sign the fit restores. The model is
@@ -26,7 +27,6 @@ script fits them.
 
 import numpy
 from scipy.optimize import least_squares
-
 
 
 def rows(name):
@@ -42,8 +42,7 @@ def line(name, values):
 te = rows("te")[0]
 line("te", te)
 for s in rows("t2"):
-    slope, intercept = numpy.polyfit(te, numpy.log(s), 1)
-    line("t2", list(s) + [-1.0 / slope, numpy.exp(intercept)])
+    line("t2", list(s) + list(numpy.polyfit(te, numpy.log(s), 1)))
 
 ti = rows("ti")[0]
 line("ti", ti)
