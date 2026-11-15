@@ -43,13 +43,13 @@ from extensions.molecule.peptide import build_peptide
 from extensions.molecule.ribbon import ribbon_geometry
 from extensions.molecule.structure import SQUARE_ANGSTROM
 from extensions.molecule.surface import excluded_surface
-from extensions.sdf.vector import V3, cross, dot, normalize, v3
+from extensions.sdf.vector import V3, cross, dot, normalize, rotate_about, v3
 from materials.material import Material, PHONG
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from render.png import encode
-from std.math import acos, cos, max, min, pi, sin, tan
+from std.math import acos, max, min, pi, tan
 from std.pathlib import Path
 from tools._example_output import (
     blit,
@@ -136,12 +136,6 @@ def _plddt() -> List[Float64]:
     ]
 
 
-def _turned(p: V3, axis: V3, angle: Float64) -> V3:
-    """Return `p` turned about a unit axis by Rodrigues' formula."""
-    var c = cos(angle)
-    return p * c + cross(axis, p) * sin(angle) + axis * (dot(axis, p) * (1 - c))
-
-
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
     var kinds = _kinds()
@@ -178,7 +172,7 @@ def main() raises:
     var low = v3(1, 1, 1)
     var high = v3(-1, -1, -1)
     for atom in peptide.atoms:
-        var r = _turned(atom.position - middle, axis, turn)
+        var r = rotate_about(atom.position - middle, axis, turn)
         low = v3(min(low.x, r.x), min(low.y, r.y), min(low.z, r.z))
         high = v3(max(high.x, r.x), max(high.y, r.y), max(high.z, r.z))
     var shift = (low + high) * 0.5

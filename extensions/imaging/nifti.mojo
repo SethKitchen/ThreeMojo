@@ -24,6 +24,7 @@ writes a label map as unsigned bytes with the label intent. Both write
 the placement as sform rows, in millimeters.
 """
 
+from core.binary import append_little_endian_u16, append_little_endian_u32
 from extensions.imaging.ids import LabelId, require_label
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
@@ -32,7 +33,7 @@ from loaders.bytes import bytes_match
 from loaders.nrrd import gunzip
 from render.checksum import crc32
 from render.deflate import deflate
-from std.math import floor, isfinite, max, sqrt
+from std.math import isfinite, max, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import METER, MILLIMETER64, Length64
@@ -324,21 +325,9 @@ def labels_from_volume(volume: ImageVolume) raises -> LabelMap:
     return map^
 
 
-def _push16(mut out: List[UInt8], value: Int):
-    """Append a little-endian 16-bit value."""
-    out.append(UInt8(value & 0xFF))
-    out.append(UInt8((value >> 8) & 0xFF))
-
-
-def _push32(mut out: List[UInt8], value: Int):
-    """Append a little-endian 32-bit value."""
-    _push16(out, value & 0xFFFF)
-    _push16(out, (value >> 16) & 0xFFFF)
-
-
 def _push_float(mut out: List[UInt8], value: Float64):
     """Append a little-endian 32-bit float."""
-    _push32(out, Int(bitcast[DType.uint32](Float32(value))))
+    append_little_endian_u32(out, Int(bitcast[DType.uint32](Float32(value))))
 
 
 def _header(
@@ -351,18 +340,18 @@ def _header(
 ) raises -> List[UInt8]:
     """Return a header and its extension flags, little endian."""
     var out = List[UInt8]()
-    _push32(out, HEADER_SIZE)
+    append_little_endian_u32(out, HEADER_SIZE)
     for _ in range(36):
         out.append(0)
     var sizes: List[Int] = [3, volume.nx, volume.ny, volume.nz, 1, 1, 1, 1]
     for value in sizes:  # pragma: no branch
-        _push16(out, value)
+        append_little_endian_u16(out, value)
     for _ in range(3):
         _push_float(out, 0)
-    _push16(out, intent)
-    _push16(out, datatype)
-    _push16(out, bits)
-    _push16(out, 0)
+    append_little_endian_u16(out, intent)
+    append_little_endian_u16(out, datatype)
+    append_little_endian_u16(out, bits)
+    append_little_endian_u16(out, 0)
     var sx = volume.spacing_x.to(MILLIMETER64)
     var sy = volume.spacing_y.to(MILLIMETER64)
     var sz = volume.spacing_z.to(MILLIMETER64)
@@ -372,7 +361,7 @@ def _header(
     _push_float(out, Float64(DATA_OFFSET))
     _push_float(out, 1)
     _push_float(out, 0)
-    _push16(out, 0)
+    append_little_endian_u16(out, 0)
     out.append(0)
     # Spatial units of millimeters.
     out.append(2)
@@ -386,8 +375,8 @@ def _header(
     for _ in range(24):
         out.append(0)
     # No qform; an sform in scanner coordinates.
-    _push16(out, 0)
-    _push16(out, 1)
+    append_little_endian_u16(out, 0)
+    append_little_endian_u16(out, 1)
     for _ in range(6):
         _push_float(out, 0)
     var mm = 1.0 / Length64(1.0, MILLIMETER64).to(METER)
@@ -426,8 +415,8 @@ def _gzip(var data: List[UInt8]) raises -> List[UInt8]:
     """Return bytes wrapped as one gzip member."""
     var out: List[UInt8] = [31, 139, 8, 0, 0, 0, 0, 0, 0, 255]
     out.extend(deflate(data))
-    _push32(out, Int(crc32(data)))
-    _push32(out, len(data) & 0xFFFFFFFF)
+    append_little_endian_u32(out, Int(crc32(data)))
+    append_little_endian_u32(out, len(data) & 0xFFFFFFFF)
     return out^
 
 
@@ -451,7 +440,7 @@ def encode_nifti(volume: ImageVolume, compress: Bool) raises -> List[UInt8]:
     var high = volume.window_center + volume.window_width / 2
     var out = _header(volume, 16, 32, 0, low, high)
     for value in volume.values:  # pragma: no branch
-        _push32(out, Int(bitcast[DType.uint32](value)))
+        append_little_endian_u32(out, Int(bitcast[DType.uint32](value)))
     if compress:
         return _gzip(out^)
     return out^

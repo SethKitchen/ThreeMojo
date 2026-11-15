@@ -50,7 +50,7 @@ from extensions.imaging.ids import (
 )
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
-from extensions.imaging.overlay import slice_size
+from extensions.imaging.overlay import slice_size, slice_voxel
 from std.math import floor, isfinite, sqrt
 
 
@@ -72,15 +72,6 @@ struct TextureFeatures(Copyable, Movable):
     """The square root of the angular second moment."""
     var correlation: Float64
     """The correlation of the two gray levels of a pair."""
-
-
-def _voxel(axis: SliceAxis, x: Int, y: Int, index: Int) -> Tuple[Int, Int, Int]:
-    """Return the voxel of a slice pixel."""
-    if axis == K_AXIS:
-        return (x, y, index)
-    if axis == J_AXIS:
-        return (x, index, y)
-    return (index, x, y)
 
 
 def cooccurrence_matrix(
@@ -145,7 +136,7 @@ def cooccurrence_matrix(
     var gray = List[Int](length=width * height, fill=-1)
     for y in range(height):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var v = _voxel(axis, x, y, index)
+            var v = slice_voxel(axis, x, y, index)
             var at = volume.index(v[0], v[1], v[2])
             if map.labels[at] != mark:
                 continue

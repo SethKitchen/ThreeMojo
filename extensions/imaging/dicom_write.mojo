@@ -17,6 +17,7 @@ one frame in one fragment, each row of each segment on its own, as
 DICOM needs.
 """
 
+from core.binary import append_little_endian_u16, append_little_endian_u32
 from extensions.imaging.dicom import (
     DicomSlice,
     ITEM,
@@ -48,18 +49,6 @@ comptime DEFAULT_INSTANCE_UID = "1.2.826.0.1.3680043.2.1125.1"
 comptime ENHANCED_CT_IMAGE_STORAGE = "1.2.840.10008.5.1.4.1.1.2.1"
 
 
-def _push16(mut out: List[UInt8], value: Int):
-    """Append a little-endian 16-bit value."""
-    out.append(UInt8(value & 0xFF))
-    out.append(UInt8((value >> 8) & 0xFF))
-
-
-def _push32(mut out: List[UInt8], value: Int):
-    """Append a little-endian 32-bit value."""
-    _push16(out, value & 0xFFFF)
-    _push16(out, (value >> 16) & 0xFFFF)
-
-
 def _push_text(mut out: List[UInt8], text: String):
     """Append the bytes of ASCII text."""
     for byte in text.as_bytes():
@@ -76,17 +65,17 @@ def _element(
     size: Int,
 ):
     """Append the header of one element."""
-    _push16(out, group)
-    _push16(out, element)
+    append_little_endian_u16(out, group)
+    append_little_endian_u16(out, element)
     if not explicit:
-        _push32(out, size)
+        append_little_endian_u32(out, size)
         return
     _push_text(out, vr)
     if long_form:
-        _push16(out, 0)
-        _push32(out, size)
+        append_little_endian_u16(out, 0)
+        append_little_endian_u32(out, size)
     else:
-        _push16(out, size)
+        append_little_endian_u16(out, size)
 
 
 def ds_text(value: Float64) raises -> String:
@@ -160,7 +149,7 @@ struct DicomWriter(Movable):
         self.bytes = List[UInt8](length=128, fill=0)
         _push_text(self.bytes, "DICM")
         _element(self.bytes, True, 0x0002, 0x0000, "UL", False, 4)
-        _push32(self.bytes, len(meta))
+        append_little_endian_u32(self.bytes, len(meta))
         self.bytes.extend(meta^)
         self.meta_end = len(self.bytes)
 
@@ -231,7 +220,7 @@ struct DicomWriter(Movable):
             value: The value, from 0 to 65535.
         """
         _element(self.bytes, self.explicit, group, element, "US", False, 2)
-        _push16(self.bytes, value)
+        append_little_endian_u16(self.bytes, value)
 
     def binary(
         mut self, group: Int, element: Int, vr: String, data: List[UInt8]
@@ -266,15 +255,15 @@ struct DicomWriter(Movable):
 
     def open_item(mut self):
         """Append the header of an item of undefined length."""
-        _push16(self.bytes, ITEM_GROUP)
-        _push16(self.bytes, ITEM)
-        _push32(self.bytes, UNDEFINED_LENGTH)
+        append_little_endian_u16(self.bytes, ITEM_GROUP)
+        append_little_endian_u16(self.bytes, ITEM)
+        append_little_endian_u32(self.bytes, UNDEFINED_LENGTH)
 
     def close_item(mut self):
         """Append the delimiter that ends an item of undefined length."""
-        _push16(self.bytes, ITEM_GROUP)
-        _push16(self.bytes, ITEM_END)
-        _push32(self.bytes, 0)
+        append_little_endian_u16(self.bytes, ITEM_GROUP)
+        append_little_endian_u16(self.bytes, ITEM_END)
+        append_little_endian_u32(self.bytes, 0)
 
     def encapsulated(mut self, frame: List[UInt8]):
         """Append pixel data of undefined length that holds one fragment.
@@ -297,14 +286,14 @@ struct DicomWriter(Movable):
             frames: The bytes of each frame.
         """
         _element(self.bytes, True, 0x7FE0, 0x0010, "OB", True, UNDEFINED_LENGTH)
-        _push16(self.bytes, ITEM_GROUP)
-        _push16(self.bytes, ITEM)
-        _push32(self.bytes, 0)
+        append_little_endian_u16(self.bytes, ITEM_GROUP)
+        append_little_endian_u16(self.bytes, ITEM)
+        append_little_endian_u32(self.bytes, 0)
         for frame in frames:
             var size = len(frame) + len(frame) % 2
-            _push16(self.bytes, ITEM_GROUP)
-            _push16(self.bytes, ITEM)
-            _push32(self.bytes, size)
+            append_little_endian_u16(self.bytes, ITEM_GROUP)
+            append_little_endian_u16(self.bytes, ITEM)
+            append_little_endian_u32(self.bytes, size)
             self.bytes.extend(frame.copy())
             if size > len(frame):
                 self.bytes.append(0)
@@ -333,9 +322,9 @@ struct DicomWriter(Movable):
 
     def close_sequence(mut self):
         """Append the delimiter that ends a sequence of undefined length."""
-        _push16(self.bytes, ITEM_GROUP)
-        _push16(self.bytes, SEQUENCE_END)
-        _push32(self.bytes, 0)
+        append_little_endian_u16(self.bytes, ITEM_GROUP)
+        append_little_endian_u16(self.bytes, SEQUENCE_END)
+        append_little_endian_u32(self.bytes, 0)
 
 
 def _meta_text(mut meta: List[UInt8], element: Int, uid: String):
@@ -376,7 +365,7 @@ def _stored_bytes(image: DicomSlice) -> List[UInt8]:
     for value in image.values:  # pragma: no branch
         var stored = stored_value(image, value) & mask
         if image.bits_allocated == 16:
-            _push16(data, stored)
+            append_little_endian_u16(data, stored)
         else:
             data.append(UInt8(stored))
     return data^
@@ -676,11 +665,11 @@ def encode_rle_frame(
         raise Error("RLE samples must fill whole rows")
     var count = len(samples) // step
     var frame = List[UInt8]()
-    _push32(frame, step)
+    append_little_endian_u32(frame, step)
     var segments = List[UInt8]()
     # A frame holds at least one segment.
     for segment in range(step):  # pragma: no branch
-        _push32(frame, RLE_HEADER + len(segments))
+        append_little_endian_u32(frame, RLE_HEADER + len(segments))
         var row = List[UInt8](capacity=columns)
         for index in range(count):  # pragma: no branch
             row.append(samples[index * step + step - 1 - segment])
@@ -690,6 +679,6 @@ def encode_rle_frame(
         if len(segments) % 2 == 1:
             segments.append(0)
     while len(frame) < RLE_HEADER:
-        _push32(frame, 0)
+        append_little_endian_u32(frame, 0)
     frame.extend(segments^)
     return frame^

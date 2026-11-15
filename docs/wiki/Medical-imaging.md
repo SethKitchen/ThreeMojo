@@ -51,7 +51,7 @@ The left panel is the ray cast volume, cut in half. The middle panel is the same
 | `grow` | `confidence_connected` |
 | `smooth` | `weld_surface`, `smooth_surface`, `surface_area` and `enclosed_volume` |
 | `printing` | `printable_stl` and `label_stl` |
-| `overlay` | `render_slice`, `overlay_labels`, `draw_measurement`, `draw_line`, `zoom_image`, `slice_size` and `label_color` |
+| `overlay` | `render_slice`, `overlay_labels`, `draw_measurement`, `draw_line`, `zoom_image`, `slice_size`, `slice_voxel` and `label_color` |
 | `contour` | `slice_outlines`, `slice_isolines`, `Outline` and `draw_outlines` |
 | `fusion` | `overlay_values` and `hot_color` |
 | `reformat` | `oblique_slice`, `slab_projection` and `sample_point` |

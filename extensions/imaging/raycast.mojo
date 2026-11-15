@@ -42,11 +42,10 @@ from extensions.imaging.transfer import (
     Rgba,
     TransferFunction,
     WindowLevel,
-    clamp_unit,
     corrected_opacity,
 )
 from extensions.sdf.vector import V3, cross, dot, length, normalize, v3
-from render.framebuffer import Framebuffer
+from render.framebuffer import Framebuffer, unit_byte
 from render.tasks import TaskGroup
 from std.math import cos, inf, isfinite, max, min, pi, sin, tan
 from std.sys import num_logical_cores
@@ -426,11 +425,6 @@ def _first_hit(
     return Rgba(0, 0, 0, 0)
 
 
-def _byte(value: Float32) -> UInt8:
-    """Return a channel from zero to one as a byte."""
-    return UInt8(Int(clamp_unit(value) * 255 + 0.5))
-
-
 __async def _render_rows(
     volume: Pointer[ImageVolume, ImmutAnyOrigin],
     table: Pointer[List[Rgba], ImmutAnyOrigin],
@@ -461,13 +455,13 @@ __async def _render_rows(
                     color = _maximum(volume[], scene, direction, hit[1], hit[2])
             var clear = 1 - color.a
             var at = (y * width + x) * 4
-            pixels[unsafe_offset=at] = _byte(
+            pixels[unsafe_offset=at] = unit_byte(
                 color.r + clear * scene.background.r
             )
-            pixels[unsafe_offset=at + 1] = _byte(
+            pixels[unsafe_offset=at + 1] = unit_byte(
                 color.g + clear * scene.background.g
             )
-            pixels[unsafe_offset=at + 2] = _byte(
+            pixels[unsafe_offset=at + 2] = unit_byte(
                 color.b + clear * scene.background.b
             )
             pixels[unsafe_offset=at + 3] = 255

@@ -27,6 +27,7 @@ coefficient, D_e the diffusivity in the ash and k_s the surface rate
 constant.
 """
 
+from math.finite import require_positive_finite
 from std.math import exp, isfinite, log
 from extensions.chemistry.quantities import (
     GAS_CONSTANT,
@@ -58,12 +59,6 @@ struct Concentration64(ImplicitlyCopyable, Writable):
     var value: Float64
 
 
-def _require_positive(value: Float64, message: String) raises:
-    """Refuse a value that is not finite and positive."""
-    if not (isfinite(value) and value > 0):
-        raise Error(message)
-
-
 @fieldwise_init
 struct Arrhenius(ImplicitlyCopyable):
     """A first-order rate constant: k = A exp(-Ea / R T)."""
@@ -81,7 +76,7 @@ struct Arrhenius(ImplicitlyCopyable):
                 positive, or the activation energy is negative or not
                 finite.
         """
-        _require_positive(
+        require_positive_finite(
             self.pre_exponential.value,
             "A pre-exponential factor must be finite and positive",
         )
@@ -103,7 +98,7 @@ struct Arrhenius(ImplicitlyCopyable):
                 above absolute zero.
         """
         self.check()
-        _require_positive(
+        require_positive_finite(
             temperature.kelvin, "A temperature must be above absolute zero"
         )
         var rt = GAS_CONSTANT.value * temperature.kelvin
@@ -127,7 +122,9 @@ struct Arrhenius(ImplicitlyCopyable):
         self.check()
         if self.activation.value == 0:
             raise Error("A rate with no activation energy does not vary")
-        _require_positive(rate.value, "A rate must be finite and positive")
+        require_positive_finite(
+            rate.value, "A rate must be finite and positive"
+        )
         if rate.value >= self.pre_exponential.value:
             raise Error("A rate must be below the pre-exponential factor")
         var ratio = log(self.pre_exponential.value / rate.value)
@@ -168,7 +165,9 @@ struct RateAtLeast(Constraint):
                 and positive.
         """
         law.check()
-        _require_positive(minimum.value, "A rate must be finite and positive")
+        require_positive_finite(
+            minimum.value, "A rate must be finite and positive"
+        )
         self.law = law
         self.minimum = minimum
 
@@ -290,7 +289,7 @@ struct ShrinkingCore(ImplicitlyCopyable):
             surface_rate.value,
         ]
         for v in values:  # pragma: no branch
-            _require_positive(v, "A sphere's property must be positive")
+            require_positive_finite(v, "A sphere's property must be positive")
         var r = radius.value
         var base = solid_density.value * r / (stoichiometry * gas.value)
         return ShrinkingCore(

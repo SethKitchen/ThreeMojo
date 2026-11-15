@@ -32,9 +32,9 @@ from extensions.imaging.ids import (
 )
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
-from extensions.imaging.transfer import Rgba, WindowLevel, clamp_unit
+from extensions.imaging.transfer import Rgba, WindowLevel
 from extensions.sdf.vector import V3
-from render.framebuffer import Framebuffer
+from render.framebuffer import Framebuffer, unit_byte
 from std.math import floor
 
 
@@ -72,8 +72,20 @@ def _depth(nx: Int, ny: Int, nz: Int, axis: SliceAxis) -> Int:
     return nx
 
 
-def _voxel(axis: SliceAxis, x: Int, y: Int, index: Int) -> Tuple[Int, Int, Int]:
-    """Return the voxel of a slice pixel."""
+def slice_voxel(
+    axis: SliceAxis, x: Int, y: Int, index: Int
+) -> Tuple[Int, Int, Int]:
+    """Return the voxel of a pixel of a slice.
+
+    Args:
+        axis: The axis across the slice.
+        x: The column of the pixel.
+        y: The row of the pixel.
+        index: The index of the slice along the axis.
+
+    Returns:
+        The voxel `(i, j, k)`.
+    """
     if axis == K_AXIS:
         return (x, y, index)
     if axis == J_AXIS:
@@ -89,11 +101,6 @@ def _require_slice(
     var depth = _depth(nx, ny, nz, axis)
     if index < 0 or index >= depth:
         raise Error("The slice index is outside the volume")
-
-
-def _byte(value: Float32) -> UInt8:
-    """Return a channel from zero to one as a byte."""
-    return UInt8(Int(clamp_unit(value) * 255 + 0.5))
 
 
 def render_slice(
@@ -123,12 +130,12 @@ def render_slice(
     var pixels = List[UInt8](length=width * height * 4, fill=255)
     for y in range(height):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var v = _voxel(axis, x, y, index)
+            var v = slice_voxel(axis, x, y, index)
             var value = Float64(volume.values[volume.index(v[0], v[1], v[2])])
             var gray = Float32(window.apply(value))
             if inverted:
                 gray = 1 - gray
-            var level = _byte(gray)
+            var level = unit_byte(gray)
             var at = (y * width + x) * 4
             pixels[at] = level
             pixels[at + 1] = level
@@ -199,7 +206,7 @@ def overlay_labels(
         colors.append(label_color(LabelId(value)))
     for y in range(image.height):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var v = _voxel(axis, x, y, index)
+            var v = slice_voxel(axis, x, y, index)
             var label = Int(map.labels[map.index(v[0], v[1], v[2])])
             if label == 0:
                 continue
@@ -217,7 +224,7 @@ def overlay_labels(
 def _blend(base: UInt8, color: Float32, opacity: Float32) -> UInt8:
     """Return a byte channel with a color blended over it."""
     var under = Float32(Int(base)) / 255
-    return _byte(under + (color - under) * opacity)
+    return unit_byte(under + (color - under) * opacity)
 
 
 def _project(axis: SliceAxis, point: V3) -> Tuple[Float64, Float64]:
@@ -234,9 +241,9 @@ def _plot(mut image: Framebuffer, x: Int, y: Int, color: Rgba):
     if x < 0 or y < 0 or x >= image.width or y >= image.height:
         return
     var at = (y * image.width + x) * 4
-    image.pixels[at] = _byte(color.r)
-    image.pixels[at + 1] = _byte(color.g)
-    image.pixels[at + 2] = _byte(color.b)
+    image.pixels[at] = unit_byte(color.r)
+    image.pixels[at + 1] = unit_byte(color.g)
+    image.pixels[at + 2] = unit_byte(color.b)
 
 
 def draw_line(
