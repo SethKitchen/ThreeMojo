@@ -30,6 +30,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `contacts` | `distance_map`, `DistanceMap` and `map_image` |
 | `shape` | `molecular_shape` and `MolecularShape` |
 | `accessibility` | `residue_accessibility`, `ResidueAccess` and `max_accessible_area` |
+| `variants` | `parse_variant`, `Variant`, `variant_sites` and `VariantSite` |
 | `interface` | `chain_interface` and `ChainInterface` |
 | `links` | `disulfide_bonds`, `salt_bridges` and `ResiduePair` |
 | `sequence` | `chain_sequence`, `encode_fasta`, `align_sequences`, `SequenceAlignment`, `aligned_atoms`, `blosum62` and `one_letter` |
@@ -305,6 +306,33 @@ for entry in residue_accessibility(structure, ModelId(0), areas):
 The RSA is about 0 for a buried residue and about 1 for a residue in the open. A residue with an RSA below a cutoff, such as 0.2 or 0.25, is often called buried. `entry.buried(cutoff)` tells which side of the cutoff a residue is on.
 
 The largest areas are the theoretical values of Tien and others (2013), for a residue in an extended chain of three. `max_accessible_area(name)` gives the value of one of the twenty standard amino acids. Another residue, such as a water or a ligand, has its area but no RSA, and `has_relative` is false.
+
+## Place disease variants
+
+A missense variant changes one amino acid, such as `R175H` of the tumor suppressor p53: arginine 175 becomes histidine. Disease research asks where such a site is in the folded protein. `parse_variant(text)` reads a variant as `R175H`, `p.R175H` or `p.Arg175His`.
+
+```mojo
+var variants = List[Variant]()
+for name in ["R175H", "G245S", "R248Q"]:
+    variants.append(parse_variant(name))
+var reach = Length64(4.5, ANGSTROM)
+for site in variant_sites(structure, ModelId(0), ChainId(0), variants, reach):
+    print(site.variant.name(), site.relative_accessibility, site.blosum)
+```
+
+`variant_sites(structure, model, chain, variants, reach)` finds each site in the chain by its author number. It checks that the residue there is the wild type of the variant. Then it gives these fields of each site:
+
+| Field | Meaning |
+|---|---|
+| `relative_accessibility` | The RSA, with a probe of 1.4 angstroms and 480 points on each sphere |
+| `secondary` | The secondary structure of the residue |
+| `b_factor` | The mean B-factor of its atoms, which is the pLDDT of a predicted model |
+| `contacts` | The other residues with an atom within `reach` of one of its atoms |
+| `charge_change` | The formal charge at pH 7 of the new amino acid less that of the old: +1 for R and K, -1 for D and E |
+| `hydropathy_change` | The Kyte-Doolittle hydropathy of the new amino acid less that of the old |
+| `blosum` | The BLOSUM62 score of the change. Below 0, the change is rare in related proteins |
+
+A buried site in a helix or a strand, whose change is rare or changes the charge, often unfolds a protein. These are measures for research, not a prediction of disease.
 
 ## Measure a chain interface
 
@@ -594,6 +622,8 @@ The tests check these results:
 - A test file holds each charged group, a water at a chain's end and four ions. It has a terminus with OXT and one without. It gives each charge, and a net charge of +5. One charge at 5 angstroms gives 332.0636 / 100 kcal/(mol e), and two opposite charges cancel halfway. A vertex near a lysine is blue, near a chloride red, and far from every charge white.
 - The band colors are the four colors of the AlphaFold Protein Structure Database, with each edge in the lower band. A helix of eight residues with two in each band gives each count and the mean. A residue without a CA does not count. Each CA, and each ring of a ribbon, takes its band's color.
 - A vertex takes the color of the nearest atom sphere, also far from every atom. On the excluded surface of an isoleucine and an arginine, each colors its own part orange or blue.
+- Variants read as `R175H`, `p.R175H` and `p.Arg175His`. Each malformed form is refused, as are a stop, a number of 0 and a change to the same amino acid.
+- Four variants on an ideal helix give their residues, their charge, hydropathy and BLOSUM62 changes, their mean B-factors and their RSA. Their contacts match a search of every pair of atoms. A wrong wild type and a missing number are refused.
 
 ## Errors
 
@@ -601,6 +631,8 @@ Every function raises `Error` for input it cannot use.
 
 | Case | Functions |
 |---|---|
+| A variant is not an amino acid, a number and an amino acid, has a number below 1, or does not change its amino acid | `parse_variant`, `Variant` |
+| A variant's number is not in the chain, or the residue there is not its wild type, or the chain is not in the model, or the reach is not positive and finite | `variant_sites` |
 | A quoted value or a text field has no end | `cif_tokens`, `parse_cif`, `parse_mmcif` |
 | A link cutoff is not positive and finite | `disulfide_bonds`, `salt_bridges` |
 | A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, an alignment mode is not valid, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
@@ -636,6 +668,7 @@ Every function raises `Error` for input it cannot use.
 - A Ramachandran plot shows the angles only. It does not draw the favored and allowed regions of a reference set, and it does not validate a model.
 - Where three or more spheres make a crevice, the excluded surface uses the grid bound. It can lie up to one grid step outside the true surface there.
 - A surface grid holds at most 2^24 points. A large structure needs a larger spacing.
+- A variant is found by its author number in the file. A file numbered another way, or a residue with an insertion code, needs its numbers mapped first. A site's measures are of the wild-type structure; the variant's own shape is not modeled.
 - The Coulomb potential uses formal charges at pH 7 and the dielectric `4 r`. It is not a Poisson-Boltzmann solution. It leaves out a charged histidine, other protonation states and the ions of the solvent.
 
 ## References
