@@ -39,6 +39,7 @@ The bottom panel is the same surface colored by hydropathy. The leucines and ala
 | `dihedral` | `backbone_angles`, `BackboneAngles`, `dihedral`, `ramachandran_image`, `ramachandran_color` and `plot_pixel` |
 | `amphipathic` | `eisenberg_hydrophobicity`, `sequence_hydrophobicity`, `HydrophobicMoment`, `hydrophobic_moment`, `window_moment`, `HelicalWheel`, `helical_wheel` and `MAX_WHEEL` |
 | `phylogeny` | `alignment_distances`, `kimura_distances`, `neighbor_joining`, `upgma`, `midpoint_root`, `PhyloTree`, `tree_image`, `TreeDrawing` and `MAX_TAXA` |
+| `protparam` | `net_charge`, `isoelectric_point`, `average_mass`, `extinction_coefficients`, `gravy`, `aromaticity`, `aliphatic_index`, `MolarArea64` and `PER_MOLAR_CENTIMETER` |
 
 ## Read an mmCIF file
 
@@ -436,6 +437,25 @@ A `PhyloTree` holds its leaves as nodes 0 to `n - 1`, in the order of the names.
 
 `tree_image(tree, width, height, label)` draws the tree with the root at the left and the leaves in rows. It keeps `label` pixels at the right, and gives the place of each leaf's name so the caller can write it.
 
+## Measure the parameters of a protein
+
+The sequence of a protein gives its charge, its mass and how it absorbs light. A laboratory uses them to purify a protein, to measure its concentration, and to choose a buffer.
+
+```mojo
+from extensions.molecule.protparam import average_mass, extinction_coefficients, isoelectric_point
+
+var ubiquitin = "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG"
+print(average_mass(ubiquitin).to(GRAM_PER_MOLE), isoelectric_point(ubiquitin))
+```
+
+- `net_charge(sequence, ph)` sums the charges of the ends and of the ionizable side chains at a pH, by the equation of Henderson and Hasselbalch. It takes the pK values of EMBOSS. They are 8.6 for the N terminus and 3.6 for the C terminus. They are K 10.8, R 12.5, H 6.5, D 3.9, E 4.1, C 8.5 and Y 10.1.
+- `isoelectric_point(sequence)` finds the pH of no net charge by 200 bisections from pH 0 to 14.
+- `average_mass(sequence)` sums the average masses of the free amino acids, less one water for each peptide bond, as Biopython does. The result is a `MolarMass64`.
+- `extinction_coefficients(sequence)` gives the molar extinction at 280 nm, `5500 W + 1490 Y`, after Pace and others (1995). The second value adds 125 for each pair of cysteines as a cystine. Each is a `MolarArea64` in M^-1 cm^-1.
+- `gravy(sequence)` gives the mean hydropathy of Kyte and Doolittle, above 0 for a hydrophobic protein.
+- `aromaticity(sequence)` gives the share of F, W and Y.
+- `aliphatic_index(sequence)` gives `100 (x_A + 2.9 x_V + 3.9 (x_I + x_L))` of the shares x, after Ikai (1980). A higher index means a protein more stable to heat.
+
 ## Superpose two models
 
 Superpose two models before you compare them, such as two models of an NMR ensemble, or a crystal structure and a prediction.
@@ -681,6 +701,12 @@ The tests check these results:
 - Variants read as `R175H`, `p.R175H` and `p.Arg175His`. Each malformed form is refused, as are a stop, a number of 0 and a change to the same amino acid.
 - Four variants on an ideal helix give their residues, their charge, hydropathy and BLOSUM62 changes, their mean B-factors and their RSA. Their contacts match a search of every pair of atoms. A wrong wild type and a missing number are refused.
 
+The tests compare `protparam` with Biopython 1.88 and the Python package peptides 0.5.0 on five sequences. They are ubiquitin, magainin 2, melittin, LL-37 and a short peptide of each charged residue. `assets/protparam/make_protparam.py` writes them.
+
+- The net charge at pH 7 and 7.4 agrees with peptides on the scale of EMBOSS to 1e-13. The isoelectric point agrees to 1e-8, because peptides stops its bisection when its ends agree to 1e-9.
+- The average mass agrees with Biopython's `ProteinAnalysis` to 1e-13, and the extinction coefficients are the same numbers. The GRAVY, the aromaticity and peptides' aliphatic index agree to 1e-14.
+- Glycine alone has its isoelectric point at 6.1, halfway between the pK values of its ends. Far below every pK, each base and the N terminus carry a full charge.
+
 The tests compare `phylogeny` with Biopython 1.88 and scipy 1.18.1 on eight synthetic sequences of 120 residues. They evolve from one root along a known tree, by substitutions only. `assets/phylogeny/make_phylogeny.py` writes them.
 
 - The p-distances from the alignments agree with the share of sites that differ to 1e-15, and Kimura's distances with numpy to 1e-14.
@@ -712,6 +738,7 @@ Every function raises `Error` for input it cannot use.
 | A p-distance is below 0, not finite or too large for Kimura's formula | `kimura_distances` |
 | A leaf index names no leaf, or a tree has no root | `PhyloTree.path_length`, `midpoint_root` |
 | A side of a tree image is out of 64 to 4096 pixels, or its label space is out of 0 to half its width | `tree_image` |
+| A sequence is empty or holds a code that is not one of the twenty, or a pH is not finite | `protparam` |
 | A sequence is empty or holds a code that is not standard, a gap score is positive or not finite, an alignment mode is not valid, or an alignment pairs no column | `align_sequences`, `blosum62`, `SequenceAlignment` |
 | Two chains of an interface are one chain, are not in the model, or have no atoms | `chain_interface`, `ChainInterface` |
 | The areas do not fit the atoms of the model, a residue is not a standard amino acid, or a cutoff is not positive | `residue_accessibility`, `max_accessible_area`, `ResidueAccess` |
@@ -748,6 +775,7 @@ Every function raises `Error` for input it cannot use.
 - A variant is found by its author number in the file. A file numbered another way, or a residue with an insertion code, needs its numbers mapped first. A site's measures are of the wild-type structure; the variant's own shape is not modeled.
 - The Coulomb potential uses formal charges at pH 7 and the dielectric `4 r`. It is not a Poisson-Boltzmann solution. It leaves out a charged histidine, other protonation states and the ions of the solvent.
 - A hydrophobic moment takes the sequence as one ideal helix or strand. It does not find where a helix starts or ends, and it does not predict the activity or the toxicity of a peptide.
+- The parameters of a sequence take each residue as free in water. They do not see a residue buried in the fold, a modified residue, a bound metal or the shift of a pK in the protein.
 - The trees are distance trees. They do not fit a model of evolution by likelihood, give no bootstrap support, and take the gaps of an alignment out of its identity. A tree of a few sequences is not a study of an outbreak.
 
 ## References
@@ -783,5 +811,8 @@ Every function raises `Error` for input it cannot use.
 - Saitou and Nei, "The neighbor-joining method: a new method for reconstructing phylogenetic trees", Molecular Biology and Evolution, 1987.
 - Sokal and Michener, "A statistical method for evaluating systematic relationships", University of Kansas Science Bulletin, 1958.
 - Kimura, "The Neutral Theory of Molecular Evolution", Cambridge University Press, 1983.
+- Pace and others, "How to measure and predict the molar absorption coefficient of a protein", Protein Science, 1995.
+- Ikai, "Thermostability and aliphatic index of globular proteins", Journal of Biochemistry, 1980.
+- Gasteiger and others, "Protein identification and analysis tools on the ExPASy server", in The Proteomics Protocols Handbook, Humana Press, 2005.
 - Kabsch, "A solution for the best rotation to relate two sets of vectors", 1976.
 - Horn, "Closed-form solution of absolute orientation using unit quaternions", 1987.
