@@ -14,6 +14,7 @@
 | `mesh` | `TetMesh`, `box_mesh`, `voxel_mesh`, `voxel_mesh_labels`, `quadratic_mesh`, `boundary_faces`, `edge_pairs` and `signed_volume` |
 | `elasticity` | `IsotropicMaterial`, `shape_gradients`, `element_stiffness`, `quadratic_gradients`, `quadratic_stiffness`, `gauss_points`, `element_strain`, `stress_of`, `von_mises`, `principal_stresses` and `PrincipalStress` |
 | `static` | `StaticProblem`, `StaticResult`, `assemble` and `solve_static` |
+| `hyperelastic` | `solve_neo_hookean` and `HyperelasticResult` |
 | `post` | `stress_geometry`, `stress_color`, `mode_geometry`, `temperature_geometry` and `dose_geometry` |
 | `summary` | `stress_summary`, `MaterialStress` and `strain_energy` |
 | `quality` | `element_quality`, `ElementQuality`, `mesh_quality` and `MeshQuality` |
@@ -163,6 +164,33 @@ The supports must stop the mesh from moving as a rigid body. A mesh that can sti
 | `iterations`, `relative_residual`, `status` | How the solve ended |
 
 Check `status`. A solve that runs out of iterations returns its last iterate with `BUDGET_EXHAUSTED`.
+
+## Large deformation of soft tissue
+
+Soft tissues, such as the wall of an artery, the liver and the brain, stretch by tens of percent. Linear elasticity holds for small strains only. `solve_neo_hookean(problem, steps, tolerance, newton_limit, cg_tolerance, cg_limit)` solves the same `StaticProblem` as a compressible Neo-Hookean solid:
+
+    W = mu / 2 (I1 - 3) - mu ln J + lambda / 2 (ln J)^2
+
+`F` is the deformation gradient, `I1` is the trace of `F^T F` and `J` is the determinant of `F`. `mu` and `lambda` are the Lame constants of each `IsotropicMaterial`, so the solid is the linear one at small strains.
+
+```mojo
+var result = solve_neo_hookean(problem, 10, 1e-10, 20, 1e-12, 5000)
+if result.converged:
+    print(result.displacements[3 * tip.value + 2], result.jacobians[0])
+```
+
+The loads and the prescribed displacements grow in `steps` equal steps. Each step finds equilibrium by Newton's method, with the exact tangent of the first Piola-Kirchhoff stress `P = mu F + (lambda ln J - mu) F^-T`. The conjugate gradient solves each Newton step on the free degrees of freedom. A load step stops when its residual falls to `tolerance` times its first residual.
+
+| Field of `HyperelasticResult` | What it holds |
+|---|---|
+| `displacements` | Three per node, in meters |
+| `stresses` | The Cauchy stress, six per element, in pascals |
+| `von_mises` | The von Mises stress of the Cauchy stress, one per element |
+| `jacobians` | `J` of each element: its volume over its volume at rest |
+| `reactions` | Three per node, in newtons, zero where nothing is prescribed |
+| `newton_steps`, `converged` | How the solve ended |
+
+A load is a dead load: it keeps its size and direction as the mesh moves. The solve takes four-node tetrahedra and no thermal load. A step that turns an element inside out raises an error, and more steps can avoid it.
 
 ### Summarize the stress of each material
 
@@ -457,6 +485,8 @@ Use quadratic elements for any part that bends. A four-node tetrahedron has a co
 | 40 by 4 by 4 | 3840 | 6.66 | 1.00 |
 
 Shear adds about 0.05 mm to the beam theory value. Check a result against a finer mesh.
+- A block of soft tissue of 10 kPa and a Poisson's ratio of 0.45 is held on three planes of symmetry. It is stretched by 30 percent. Its nodes move with the exact homogeneous field of the Neo-Hookean solid, to 1e-12 m. The pull on its face is the exact nominal stress times the area, to 1e-9. Each element has the exact `J` and Cauchy stress.
+- The exact nominal stress, as a dead load, stretches the block by 30 percent again, to 1e-11 m. A stretch of 1e-6 gives the linear solution, to 1e-14 m.
 
 ## Errors
 
@@ -470,6 +500,7 @@ Every function raises `Error` for input it cannot use.
 | A label has no voxels | `voxel_mesh` |
 | A mesh has a node that no element holds, or is free to move | `solve_static` |
 | A result is not for its mesh | `stress_geometry` |
+| A Neo-Hookean solve has quadratic elements, a thermal load, steps out of 1 to 1000, a tolerance not between 0 and 1, no Newton step, or an element turned inside out | `solve_neo_hookean` |
 | A result is not for its mesh, or a stress threshold is negative or not finite | `stress_summary`, `strain_energy` |
 | A mesh has no element, or an element id names no element | `mesh_quality`, `element_quality` |
 | A dose has fewer than two records, times that do not rise, records of other sizes, doses that do not fit the mesh, or a bad threshold or scale | `thermal_dose`, `dose_volume`, `dose_geometry` |
@@ -480,7 +511,7 @@ Every function raises `Error` for input it cannot use.
 
 ## Limits
 
-- The strains are small, and the materials are linear and isotropic.
+- `solve_static` takes small strains and linear isotropic materials. `solve_neo_hookean` takes large strains of one isotropic hyperelastic law, with dead loads, and no fibers, viscosity or growth. Its linear tetrahedra lock for a Poisson's ratio near 0.5, as in the linear solve.
 - Four-node tetrahedra are stiff in bending. Both orders lock for a Poisson's ratio near 0.5, the four-node ones much more.
 - Ten-node tetrahedra have straight edges. A curved boundary is a set of flat faces.
 - The elastic loads are static. There is no damping, contact or response to a load in time.
@@ -498,6 +529,7 @@ Every function raises `Error` for input it cannot use.
 - Hestenes and Stiefel, "Methods of conjugate gradients for solving linear systems", 1952.
 - Morgan, Bayraktar and Keaveny, "Trabecular bone modulus-density relationships depend on anatomic site", 2003.
 - Bathe, "Finite Element Procedures", 2nd edition, 2014, sections 10.2 and 11.6.
+- Bonet and Wood, "Nonlinear Continuum Mechanics for Finite Element Analysis", 2nd edition, 2008.
 - Hinton, Rock and Zienkiewicz, "A note on mass lumping and related processes in the finite element method", 1976.
 - Pennes, "Analysis of tissue and arterial blood temperatures in the resting human forearm", 1948.
 - Sapareto and Dewey, "Thermal dose determination in cancer therapy", International Journal of Radiation Oncology, Biology, Physics, 1984.
