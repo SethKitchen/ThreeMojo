@@ -3,9 +3,14 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The t and F distributions, from the regularized incomplete beta
-function.
+"""Statistical distributions: the normal, Student's t, F, beta, gamma and
+chi-square distributions.
 
+- `normal_upper` and `normal_two_sided` give the tails of the standard
+  normal distribution, and `normal_quantile` inverts them. `Z95` is its
+  97.5 percent point. `inverse_erfc` inverts `erfc`.
+- `wald_interval` and `ratio_interval` give the 95 percent interval of an
+  estimate and of a ratio from their standard errors.
 - `beta_tails(x, a, b)` gives both tails of the beta distribution. The
   smaller tail comes from the continued fraction of Numerical Recipes,
   section 6.4, with the modified Lentz method, so it keeps its relative
@@ -14,8 +19,12 @@ function.
   quantile of Student's t.
 - `f_upper` and `f_quantile` give the upper tail and the quantile of the F
   distribution.
-- `normal_quantile` gives the quantile of the standard normal
-  distribution.
+- `gamma_tails(x, a)` gives the regularized incomplete gamma functions
+  P(a, x) and Q(a, x), by the series or the continued fraction of
+  Numerical Recipes, section 6.2. `gamma_quantile` and
+  `gamma_upper_quantile` invert them.
+- `chi_square_p_value` gives the upper tail of the chi-square
+  distribution, Q(k / 2, x / 2).
 - Each exponential is `precise_exp` of `numerics.elementary`. The `exp`
   of Mojo 1.2 is off by about 3e-11 near -70, and a p value is an `exp`.
 
@@ -25,9 +34,7 @@ ICC needs.
 """
 
 from extensions.numerics.elementary import precise_exp
-from std.math import erfc, expm1, floor, inf, isfinite, ldexp, lgamma, log
-from std.math import log1p
-from std.math import sqrt
+from std.math import erfc, isfinite, lgamma, log, log1p, sqrt
 
 # The most degrees of freedom of a distribution here.
 comptime MAX_DEGREES = 1e8
@@ -226,9 +233,91 @@ def normal_quantile(p: Float64) raises -> Float64:
             * q
             / (((((_B0 * r + _B1) * r + _B2) * r + _B3) * r + _B4) * r + 1.0)
         )
-    var e = 0.5 * erfc(-x / _SQRT_TWO) - p
+    var e = normal_upper(-x) - p
     var u = e * _SQRT_TWO_PI * precise_exp(0.5 * x * x)
     return x - u / (1.0 + 0.5 * x * u)
+
+
+comptime Z95 = 1.959963984540054
+"""The 97.5 percent point of the standard normal distribution: the half
+width of a 95 percent interval, in standard errors."""
+
+
+def normal_upper(z: Float64) -> Float64:
+    """Return the chance that a standard normal value is more than z.
+
+    Args:
+        z: The value.
+
+    Returns:
+        P(Z > z), as `erfc(z / sqrt 2) / 2`. The upper tail keeps its
+        relative accuracy far out.
+    """
+    return 0.5 * erfc(z / _SQRT_TWO)
+
+
+def normal_two_sided(z: Float64) -> Float64:
+    """Return the two-sided p value of a standard normal value.
+
+    Args:
+        z: The value, such as a Wald z.
+
+    Returns:
+        P(|Z| > |z|), as `erfc(|z| / sqrt 2)`.
+    """
+    return erfc(abs(z) / _SQRT_TWO)
+
+
+def inverse_erfc(value: Float64) raises -> Float64:
+    """Return the z with erfc(z) = value.
+
+    Args:
+        value: The value, above 0 and below 2, and at least 2e-300 from
+            each end.
+
+    Returns:
+        `-normal_quantile(value / 2) / sqrt 2`.
+
+    Raises:
+        Error: If the value is out of range.
+    """
+    if not (value > 0 and value < 2):
+        raise Error("An inverse erfc needs a value above 0 and below 2")
+    return -normal_quantile(0.5 * value) / _SQRT_TWO
+
+
+def wald_interval(
+    estimate: Float64, standard_error: Float64
+) -> Tuple[Float64, Float64]:
+    """Return the 95 percent Wald interval of an estimate.
+
+    Args:
+        estimate: The estimate.
+        standard_error: Its standard error.
+
+    Returns:
+        The low and the high end, `estimate -+ Z95 se`.
+    """
+    var half = Z95 * standard_error
+    return (estimate - half, estimate + half)
+
+
+def ratio_interval(
+    ratio: Float64, log_error: Float64
+) -> Tuple[Float64, Float64]:
+    """Return the 95 percent interval of a ratio, from the standard error
+    of its logarithm.
+
+    Args:
+        ratio: The ratio, such as an odds ratio or `exp(b)` of a
+            coefficient b.
+        log_error: The standard error of the logarithm of the ratio.
+
+    Returns:
+        The low and the high end, `ratio exp(-+ Z95 se)`.
+    """
+    var half = Z95 * log_error
+    return (ratio * precise_exp(-half), ratio * precise_exp(half))
 
 
 def _require_probability(p: Float64) raises:
@@ -344,3 +433,195 @@ def f_quantile(p: Float64, d1: Float64, d2: Float64) raises -> Float64:
     # 1 - p = I_y(d2 / 2, d1 / 2), and x = d2 (1 - y) / (d1 y).
     var y = _invert(1.0 - p, 0.5 * d2, 0.5 * d1)
     return d2 * y[1] / (d1 * y[0])
+
+
+comptime MAX_SHAPE = 1e7
+"""The largest shape of a gamma distribution here."""
+comptime MAX_FREEDOM = 1000
+"""The most degrees of freedom of a chi-square test."""
+# The most terms of a gamma series or fraction, and the most steps of a
+# gamma search.
+comptime _GAMMA_TERMS = 100000
+comptime _GAMMA_SEARCH = 400
+comptime _GAMMA_EPSILON = 1e-17
+comptime _TINY = 1e-300
+
+
+def _require_gamma_shape(a: Float64) raises:
+    """Refuse a shape that is not above 0 and at most MAX_SHAPE."""
+    if not (a > 0 and a <= MAX_SHAPE):
+        raise Error("A gamma shape must be above 0 and at most 1e7")
+
+
+def _gamma_front(x: Float64, a: Float64) -> Float64:
+    """Return `x^a e^-x / Gamma(a)` for x above 0."""
+    return precise_exp(a * log(x) - x - lgamma(a))
+
+
+def _gamma(x: Float64, a: Float64) -> Tuple[Float64, Float64]:
+    """Return P(a, x) and Q(a, x) for an x of 0 or more."""
+    if x == 0:
+        return (0.0, 1.0)
+    if not isfinite(x):
+        return (1.0, 0.0)
+    if x < a + 1.0:
+        # The series: P = front sum x^n / (a (a + 1) ... (a + n)).
+        var term = 1.0 / a
+        var sum = term
+        var n = a
+        for _ in range(_GAMMA_TERMS):  # pragma: no branch
+            n += 1.0
+            term *= x / n
+            sum += term
+            if abs(term) < abs(sum) * _GAMMA_EPSILON:
+                break
+        var lower = sum * _gamma_front(x, a)
+        return (lower, 1.0 - lower)
+    # The continued fraction of Q, by the modified Lentz method. For x at
+    # or above a + 1, its denominators stay well away from 0.
+    var b = x + 1.0 - a
+    var c = 1.0 / _TINY
+    var d = 1.0 / b
+    var h = d
+    for i in range(1, _GAMMA_TERMS):  # pragma: no branch
+        var an = -Float64(i) * (Float64(i) - a)
+        b += 2.0
+        d = 1.0 / (an * d + b)
+        c = b + an / c
+        var delta = d * c
+        h *= delta
+        if abs(delta - 1.0) < _GAMMA_EPSILON:
+            break
+    var upper = _gamma_front(x, a) * h
+    return (1.0 - upper, upper)
+
+
+def gamma_tails(x: Float64, a: Float64) raises -> Tuple[Float64, Float64]:
+    """Return both tails of the gamma distribution of unit scale.
+
+    Args:
+        x: The point, 0 or more. Infinity gives 1 and 0.
+        a: The shape, above 0 and at most 1e7.
+
+    Returns:
+        The regularized incomplete gamma functions P(a, x) and Q(a, x).
+        The smaller of the two keeps its relative accuracy far out.
+
+    Raises:
+        Error: If the point is below 0 or not a number, or the shape is out
+            of range.
+    """
+    _require_gamma_shape(a)
+    if not (x >= 0):
+        raise Error("A gamma point must be 0 or more")
+    return _gamma(x, a)
+
+
+def _gamma_gap(x: Float64, a: Float64, target: Float64, upper: Bool) -> Float64:
+    """Return P(a, x) less the target, or the target less Q(a, x) when
+    `upper`. Both rise with x."""
+    var tails = _gamma(x, a)
+    if upper:
+        return target - tails[1]
+    return tails[0] - target
+
+
+def _gamma_invert(target: Float64, a: Float64, upper: Bool) -> Float64:
+    """Return the x with P(a, x) = target, or Q(a, x) = target when
+    `upper`, for a target between 0 and 1/2."""
+    # A first guess from the far tail of each side.
+    var x = a - log(target)
+    if not upper:
+        x = min(precise_exp((log(target) + lgamma(a + 1.0)) / a), a)
+    var low = 0.0
+    var high = max(2.0 * x, 1.0)
+    while not (_gamma_gap(high, a, target, upper) > 0):
+        low = high
+        high *= 2.0
+    # The guess is below the first `high`; only a wider bracket passes it.
+    if not (x > low):
+        x = 0.5 * (low + high)
+    for _ in range(_GAMMA_SEARCH):  # pragma: no branch
+        var gap = _gamma_gap(x, a, target, upper)
+        if gap > 0:
+            high = x
+        else:
+            low = x
+        var density = precise_exp((a - 1.0) * log(x) - x - lgamma(a))
+        var next = x - gap / density
+        if not (next > low and next < high):
+            next = 0.5 * (low + high)
+        if abs(next - x) <= 4e-16 * next:
+            x = next
+            break
+        x = next
+    return x
+
+
+def _require_gamma_probability(p: Float64) raises:
+    """Refuse a probability that is not above 0 and below 1."""
+    if not (p > 0 and p < 1):
+        raise Error("A gamma quantile needs a probability above 0, below 1")
+
+
+def gamma_quantile(p: Float64, a: Float64) raises -> Float64:
+    """Return the quantile of the gamma distribution of unit scale.
+
+    Args:
+        p: The probability, above 0 and below 1.
+        a: The shape, above 0 and at most 1e7.
+
+    Returns:
+        The x with P(a, x) = p. Above a half, the search runs on Q, so a
+        large x keeps its accuracy.
+
+    Raises:
+        Error: If the probability or the shape is out of range.
+    """
+    _require_gamma_shape(a)
+    _require_gamma_probability(p)
+    if p <= 0.5:
+        return _gamma_invert(p, a, False)
+    return _gamma_invert(1.0 - p, a, True)
+
+
+def gamma_upper_quantile(q: Float64, a: Float64) raises -> Float64:
+    """Return the point of the gamma distribution with an upper tail of q.
+
+    Args:
+        q: The upper tail, above 0 and below 1.
+        a: The shape, above 0 and at most 1e7.
+
+    Returns:
+        The x with Q(a, x) = q. A small tail keeps its accuracy, as the
+        search runs on Q itself.
+
+    Raises:
+        Error: If the tail or the shape is out of range.
+    """
+    _require_gamma_shape(a)
+    _require_gamma_probability(q)
+    if q <= 0.5:
+        return _gamma_invert(q, a, True)
+    return _gamma_invert(1.0 - q, a, False)
+
+
+def chi_square_p_value(statistic: Float64, freedom: Int) raises -> Float64:
+    """Return the chance that a chi-square value is the statistic or more.
+
+    Args:
+        statistic: The statistic. 0 or more; infinity gives 0.
+        freedom: The degrees of freedom, from 1 to 1000.
+
+    Returns:
+        The upper tail of the chi-square distribution, Q(k / 2, x / 2).
+
+    Raises:
+        Error: If the freedom is out of range, or the statistic is negative
+            or not a number.
+    """
+    if freedom < 1 or freedom > MAX_FREEDOM:
+        raise Error("A chi-square test has from 1 to 1000 degrees of freedom")
+    if not (statistic >= 0):
+        raise Error("A chi-square statistic must be 0 or more")
+    return _gamma(0.5 * statistic, 0.5 * Float64(freedom))[1]

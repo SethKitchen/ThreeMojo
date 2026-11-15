@@ -21,7 +21,7 @@ A measurement is a plain number in a unit that the caller chooses, such as
 a volume in milliliters. The bias and the limits are in that unit.
 """
 
-from extensions.clinical.distributions import (
+from extensions.numerics.distributions import (
     f_quantile,
     f_upper,
     student_t_quantile,

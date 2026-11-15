@@ -25,17 +25,15 @@ multiply the standard errors by its square root.
 
 from extensions.clinical.cox import MAX_COVARIATES
 from extensions.numerics.elementary import precise_exp
-from extensions.clinical.survival import Z95
 from extensions.numerics.dense import (
     DenseMatrix,
     cholesky_inverse,
     cholesky_solve,
 )
-from std.math import erfc, isfinite, log, sqrt
+from std.math import isfinite, log, sqrt
 from units.quantity import Unit
 from units.si import PER_YEAR64, YEAR64, Duration64, Frequency64
-
-comptime _SQRT_TWO = 1.4142135623730951
+from extensions.numerics.distributions import normal_two_sided, ratio_interval
 
 
 struct RateModel(Copyable, Movable):
@@ -109,9 +107,9 @@ struct RateModel(Copyable, Movable):
             Error: If the index names no covariate.
         """
         self._require_index(index)
-        var b = self.coefficients[index]
-        var half = Z95 * self.standard_errors[index]
-        return (precise_exp(b - half), precise_exp(b + half))
+        return ratio_interval(
+            precise_exp(self.coefficients[index]), self.standard_errors[index]
+        )
 
     def z(self, index: Int) raises -> Float64:
         """Return the Wald z of a covariate.
@@ -140,7 +138,7 @@ struct RateModel(Copyable, Movable):
         Raises:
             Error: If the index names no covariate.
         """
-        return erfc(abs(self.z(index)) / _SQRT_TWO)
+        return normal_two_sided(self.z(index))
 
     def rate(self, row: List[Float64]) raises -> Frequency64:
         """Return the fitted rate of a stratum.

@@ -19,7 +19,7 @@ adjusted p value is at or below the level.
 Each function returns the adjusted p values in the order of the p values.
 """
 
-from math.sort_utils import stable_sort
+from extensions.numerics.order import ascending_order
 
 
 def _require_values(p: List[Float64]) raises:
@@ -29,19 +29,6 @@ def _require_values(p: List[Float64]) raises:
     for v in p:  # pragma: no branch
         if not (v >= 0 and v <= 1):
             raise Error("A p value must be from 0 to 1")
-
-
-def _order(p: List[Float64]) -> List[Int]:
-    """Return the indices of the p values, from the least."""
-    var order = List[Int]()
-    for i in range(len(p)):  # pragma: no branch
-        order.append(i)
-
-    def before(a: Int, b: Int) capturing -> Bool:
-        return p[a] < p[b]
-
-    stable_sort[before](order)
-    return order^
 
 
 def bonferroni(p: List[Float64]) raises -> List[Float64]:
@@ -80,7 +67,7 @@ def holm(p: List[Float64]) raises -> List[Float64]:
         Error: If there is no p value, or one is out of range.
     """
     _require_values(p)
-    var order = _order(p)
+    var order = ascending_order(p)
     var m = len(p)
     var out = List[Float64](length=m, fill=0.0)
     var running = 0.0
@@ -94,7 +81,7 @@ def _step_up(p: List[Float64], scale: Float64) raises -> List[Float64]:
     """Divide the k-th least p value by `(k / m) / scale`, then take the
     least from the top down."""
     _require_values(p)
-    var order = _order(p)
+    var order = ascending_order(p)
     var m = len(p)
     var out = List[Float64](length=m, fill=0.0)
     var running = 1.0

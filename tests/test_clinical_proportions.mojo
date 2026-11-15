@@ -9,7 +9,7 @@
 statsmodels 0.15.0. See `assets/proportions/make_proportions.py`.
 """
 
-from extensions.clinical.distributions import beta_quantile
+from extensions.numerics.distributions import beta_quantile
 from extensions.clinical.proportions import (
     Estimate,
     compare_risks,

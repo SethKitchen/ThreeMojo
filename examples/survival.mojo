@@ -21,10 +21,10 @@ difference of the restricted mean remission to 23 weeks.
 
 from extensions.clinical.cox import cox_regression
 from extensions.clinical.rmst import compare_restricted_means
+from extensions.clinical.logrank import log_rank_test
 from extensions.clinical.survival import (
     SurvivalCurve,
     kaplan_meier,
-    log_rank_test,
     survival_image,
 )
 from extensions.imaging.transfer import Rgba

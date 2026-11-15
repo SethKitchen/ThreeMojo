@@ -9,7 +9,7 @@
 statsmodels 0.15.0 and lifelines 0.30.3. See `assets/power/make_power.py`.
 """
 
-from extensions.clinical.distributions import normal_quantile
+from extensions.numerics.distributions import normal_quantile
 from extensions.clinical.power import (
     freedman_power,
     freedman_size,

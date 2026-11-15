@@ -14,9 +14,9 @@ A Cox model gives the placebo a hazard ratio of 4.82, with a 95 percent interval
 
 | Module | What it gives |
 |---|---|
-| `survival` | `SurvivalCurve`, `kaplan_meier`, `LogRank`, `log_rank_test`, `survival_image` and `require_group` |
-| `cox` | `CoxModel`, `cox_regression`, `chi_square_p_value` and `MAX_COVARIATES` |
-| `logrank` | `GroupLogRank`, `log_rank_groups` and `MAX_GROUPS` |
+| `survival` | `SurvivalCurve`, `kaplan_meier`, `survival_image` and `require_group` |
+| `cox` | `CoxModel`, `cox_regression` and `MAX_COVARIATES` |
+| `logrank` | `LogRank`, `log_rank_test`, `GroupLogRank`, `log_rank_groups` and `MAX_GROUPS` |
 | `rmst` | `CumulativeHazard`, `nelson_aalen`, `RestrictedMean`, `restricted_mean`, `RestrictedComparison` and `compare_restricted_means` |
 | `competing` | `CumulativeIncidence`, `cumulative_incidence` and `incidence_image` |
 | `nnt` | `SurvivalDifference` and `survival_difference` |
@@ -77,7 +77,7 @@ A time at which one patient alone is at risk adds no variance.
 
 `log_rank_groups(times, events)` compares two groups or more, such as the arms of a trial. It takes the times and the event flags of each group. At each time of an event in any group, each group expects its share at risk of the events. The statistic is `(O - E)' V^-1 (O - E)` over all groups but the last, with V the covariance of the observed events. It has one degree of freedom less than the groups.
 
-The result gives the `statistic`, `freedom`, `p_value`, and the `observed` and `expected` events of each group. With two groups, it is the test of `log_rank_test`.
+The result gives the `statistic`, `freedom`, `p_value`, and the `observed` and `expected` events of each group. `log_rank_test` is this test with two groups.
 
 ## Fit a Cox model
 
@@ -119,7 +119,7 @@ The model gives:
 
 `model.survival(row, time)` predicts the survival of a patient. It uses the Breslow baseline hazard of the fitted model. `model.relative_hazard(row)` gives the hazard of a patient relative to a patient with the mean covariates.
 
-`chi_square_p_value(statistic, freedom)` gives the upper tail of the chi-square distribution in closed form.
+The tests take the chi-square tail from `chi_square_p_value` of the [Numerics](Numerics#use-statistical-distributions) extension.
 
 ## Fit a Weibull regression
 
@@ -326,7 +326,6 @@ Every function raises `Error` for input it cannot use.
 | There is no event, the covariates are not one finite row of 1 to 32 values for each patient, the tolerance is not between 0 and 1, or the steps are not from 1 to 1000 | `cox_regression` |
 | The information matrix is not positive definite, because a covariate is constant, is collinear with others, or separates the patients | `cox_regression` |
 | An index names no covariate, a row does not have one finite value for each covariate, or a time is negative or not finite | `CoxModel` |
-| The freedom is not from 1 to 1000, or the statistic is negative or not a number | `chi_square_p_value` |
 | The colors are not one for each curve, or there is no curve | `survival_image` |
 | A side is out of 64 to 4096 pixels, the top time is not positive and finite, or the grid gives more than 100 lines | `survival_image` |
 | The competing events are not one for each patient, or a patient has both first events | `cumulative_incidence` |

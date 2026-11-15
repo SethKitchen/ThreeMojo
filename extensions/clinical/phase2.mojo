@@ -27,7 +27,7 @@ at most alpha, by bisection: the error falls as r rises. A tie keeps the
 first design, in the order of n, n1 and r1.
 """
 
-from extensions.clinical.distributions import beta_tails
+from extensions.numerics.distributions import beta_tails
 from extensions.numerics.elementary import precise_exp
 from std.math import isfinite, lgamma, log
 

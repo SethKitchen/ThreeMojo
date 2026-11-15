@@ -28,12 +28,12 @@ curve takes time in proportion to `n log n`.
 """
 
 from extensions.clinical.hypothesis import midranks
-from extensions.clinical.survival import Z95
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
-from math.sort_utils import stable_sort
 from render.framebuffer import Color, Framebuffer
-from std.math import erfc, floor, inf, isfinite, sqrt
+from std.math import floor, inf, isfinite, sqrt
+from extensions.numerics.distributions import normal_two_sided, wald_interval
+from extensions.numerics.order import descending_order
 
 
 struct _Components(Movable):
@@ -152,8 +152,8 @@ struct RocCurve(Copyable, Movable):
             The low and the high end, `AUC -+ 1.96 se`, held between 0 and
             1.
         """
-        var half = Z95 * self.standard_error
-        return (max(0.0, self.auc - half), min(1.0, self.auc + half))
+        var band = wald_interval(self.auc, self.standard_error)
+        return (max(0.0, band[0]), min(1.0, band[1]))
 
     def youden(self) raises -> Tuple[Float64, Float64, Float64]:
         """Return the threshold of the largest Youden index.
@@ -202,14 +202,7 @@ def roc_curve(scores: List[Float64], diseased: List[Bool]) raises -> RocCurve:
     out.healthy = len(parts.healthy)
     out.auc = parts.auc
     out.standard_error = sqrt(_covariance(parts, parts))
-    var order = List[Int]()
-    for i in range(len(scores)):  # pragma: no branch
-        order.append(i)
-
-    def higher(a: Int, b: Int) capturing -> Bool:
-        return scores[a] > scores[b]
-
-    stable_sort[higher](order)
+    var order = descending_order(scores)
     out.thresholds.append(inf[DType.float64]())
     out.false_positive_rate.append(0.0)
     out.sensitivity.append(0.0)
@@ -258,7 +251,7 @@ struct RocComparison(Copyable, Movable):
             self.z = difference / self.standard_error
         else:
             self.z = 0.0
-        self.p_value = erfc(abs(self.z) / sqrt(2.0))
+        self.p_value = normal_two_sided(self.z)
 
 
 def compare_roc(

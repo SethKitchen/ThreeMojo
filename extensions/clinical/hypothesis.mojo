@@ -22,14 +22,13 @@ A value is a plain number in a unit that the caller chooses, such as a
 blood pressure in mmHg. A difference is in that unit.
 """
 
-from extensions.clinical.distributions import (
+from extensions.numerics.distributions import (
+    normal_two_sided,
     student_t_quantile,
     student_t_upper,
 )
-from math.sort_utils import stable_sort
-from std.math import erfc, isfinite, sqrt
-
-comptime _SQRT_TWO = 1.4142135623730951
+from std.math import isfinite, sqrt
+from extensions.numerics.order import ascending_order, sorted_values
 
 
 def midranks(values: List[Float64]) -> List[Float64]:
@@ -42,14 +41,7 @@ def midranks(values: List[Float64]) -> List[Float64]:
         The rank of each value, in the order of the values.
     """
     var n = len(values)
-    var order = List[Int]()
-    for i in range(n):
-        order.append(i)
-
-    def before(a: Int, b: Int) capturing -> Bool:
-        return values[a] < values[b]
-
-    stable_sort[before](order)
+    var order = ascending_order(values)
     var ranks = List[Float64](length=n, fill=0.0)
     var i = 0
     while i < n:
@@ -234,17 +226,12 @@ struct RankTest(Copyable, Movable):
         """
         self.statistic = statistic
         self.z = z
-        self.p_value = min(1.0, erfc(abs(z) / _SQRT_TWO))
+        self.p_value = min(1.0, normal_two_sided(z))
 
 
 def _tie_term(ranks: List[Float64]) -> Float64:
     """Return the sum of `t^3 - t` over the groups of tied ranks."""
-    var sorted = ranks.copy()
-
-    def lower(a: Float64, b: Float64) capturing -> Bool:
-        return a < b
-
-    stable_sort[lower](sorted)
+    var sorted = sorted_values(ranks)
     var term = 0.0
     var i = 0
     while i < len(sorted):

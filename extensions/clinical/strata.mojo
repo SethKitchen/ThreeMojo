@@ -24,11 +24,10 @@ Each stratum holds `a` and `b`, the exposed patients with and without the
 outcome, and `c` and `d`, the unexposed patients with and without it.
 """
 
-from extensions.numerics.elementary import precise_exp
 from extensions.clinical.proportions import Estimate
-from extensions.clinical.survival import Z95
 from extensions.clinical.tables import TableTest
 from std.math import sqrt
+from extensions.numerics.distributions import ratio_interval
 
 # The most strata of one analysis.
 comptime MAX_STRATA = 1000
@@ -148,10 +147,8 @@ struct MantelHaenszel(Copyable, Movable):
 
 def _estimate(ratio: Float64, error: Float64) -> Estimate:
     """Return a ratio with the interval `ratio exp(-+ 1.96 se)`."""
-    var half = Z95 * error
-    return Estimate(
-        ratio, ratio * precise_exp(-half), ratio * precise_exp(half)
-    )
+    var band = ratio_interval(ratio, error)
+    return Estimate(ratio, band[0], band[1])
 
 
 def mantel_haenszel(strata: List[Stratum]) raises -> MantelHaenszel:

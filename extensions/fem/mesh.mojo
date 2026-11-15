@@ -39,6 +39,7 @@ from extensions.imaging.labels import LabelMap
 from extensions.sdf.vector import V3, cross, dot, v3
 from std.math import isfinite, max, min
 from units.si import CUBIC_METER, Length64, METER, Volume64
+from extensions.numerics.order import order_by
 
 # The most elements that `box_mesh` makes.
 comptime MAX_MESH_ENTRIES = 16777216
@@ -503,7 +504,11 @@ def boundary_faces(mesh: TetMesh) -> List[Int]:
             faces.append(b)
             faces.append(c)
             faces.append(e)
-    var order = _sort_keys(keys)
+
+    def before(a: Int, b: Int) capturing -> Bool:
+        return _less(keys[a], keys[b])
+
+    var order = order_by[before](len(keys))
     var out = List[Int]()
     var at = 0
     while at < len(order):
@@ -575,39 +580,10 @@ def _sorted(a: Int, b: Int, c: Int) -> Tuple[Int, Int, Int]:
     return (low, a + b + c - low - high, high)
 
 
-def _sort_keys(keys: List[Tuple[Int, Int, Int]]) -> List[Int]:
-    """Return the indexes of `keys` sorted by key, by a merge sort."""
-    var order = List[Int]()
-    for index in range(len(keys)):
-        order.append(index)
-    var scratch = order.copy()
-    var width = 1
-    while width < len(order):
-        var start = 0
-        while start < len(order):
-            var middle = min(start + width, len(order))
-            var end = min(start + 2 * width, len(order))
-            var i = start
-            var j = middle
-            for k in range(start, end):  # pragma: no branch
-                if j >= end or (
-                    i < middle and _before(keys[order[i]], keys[order[j]])
-                ):
-                    scratch[k] = order[i]
-                    i += 1
-                else:
-                    scratch[k] = order[j]
-                    j += 1
-            start = end
-        order = scratch.copy()
-        width *= 2
-    return order^
-
-
-def _before(a: Tuple[Int, Int, Int], b: Tuple[Int, Int, Int]) -> Bool:
-    """Return whether key `a` sorts no later than key `b`."""
+def _less(a: Tuple[Int, Int, Int], b: Tuple[Int, Int, Int]) -> Bool:
+    """Return whether key `a` sorts before key `b`."""
     if a[0] != b[0]:
         return a[0] < b[0]
     if a[1] != b[1]:
         return a[1] < b[1]
-    return a[2] <= b[2]
+    return a[2] < b[2]

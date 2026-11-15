@@ -16,11 +16,10 @@ A test that finds a difference does not say which groups differ. Compare
 the pairs next, with a correction for many tests.
 """
 
-from extensions.clinical.cox import chi_square_p_value
-from extensions.clinical.distributions import f_upper
+from extensions.numerics.distributions import chi_square_p_value, f_upper
 from extensions.clinical.hypothesis import midranks
-from math.sort_utils import stable_sort
 from std.math import isfinite
+from extensions.numerics.order import sorted_values
 
 # The most groups of one test.
 comptime MAX_GROUPS = 1000
@@ -149,12 +148,7 @@ def kruskal_wallis(groups: List[List[Float64]]) raises -> GroupsTest:
     var count = Float64(n)
     h = 12.0 / (count * (count + 1.0)) * h - 3.0 * (count + 1.0)
     # The tie correction: 1 - sum(t^3 - t) / (n^3 - n).
-    var sorted = pooled.copy()
-
-    def lower(a: Float64, b: Float64) capturing -> Bool:
-        return a < b
-
-    stable_sort[lower](sorted)
+    var sorted = sorted_values(pooled)
     var ties = 0.0
     var i = 0
     while i < n:

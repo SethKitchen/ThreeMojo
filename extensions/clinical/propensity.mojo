@@ -30,14 +30,15 @@ the treatment.
 The weights remove the confounding of the measured covariates only.
 """
 
-from extensions.numerics.elementary import precise_exp
 from extensions.clinical.logistic import logistic_regression
 from extensions.clinical.proportions import Estimate
-from extensions.clinical.survival import Z95
 from extensions.numerics.dense import DenseMatrix, inverse
-from std.math import erfc, isfinite, sqrt
-
-comptime _SQRT_TWO = 1.4142135623730951
+from std.math import isfinite, sqrt
+from extensions.numerics.distributions import (
+    normal_two_sided,
+    ratio_interval,
+    wald_interval,
+)
 
 
 struct IpwEffect(Copyable, Movable):
@@ -85,8 +86,7 @@ struct IpwEffect(Copyable, Movable):
         Returns:
             The low and the high end, `difference -+ 1.96 se`.
         """
-        var half = Z95 * self.difference_error
-        return (self.difference - half, self.difference + half)
+        return wald_interval(self.difference, self.difference_error)
 
     def p_value(self) -> Float64:
         """Return the two-sided p value of the difference.
@@ -96,7 +96,7 @@ struct IpwEffect(Copyable, Movable):
             has no effect.
         """
         var z = self.difference / self.difference_error
-        return erfc(abs(z) / _SQRT_TWO)
+        return normal_two_sided(z)
 
     def ratio_error(self) raises -> Float64:
         """Return the standard error of the log of the ratio of the means.
@@ -128,9 +128,9 @@ struct IpwEffect(Copyable, Movable):
         Raises:
             Error: If a mean is not above 0.
         """
-        var half = Z95 * self.ratio_error()
         var r = self.treated_mean / self.control_mean
-        return Estimate(r, r * precise_exp(-half), r * precise_exp(half))
+        var band = ratio_interval(r, self.ratio_error())
+        return Estimate(r, band[0], band[1])
 
 
 def ipw_effect(

@@ -9,12 +9,15 @@ from extensions.numerics.elementary import (
     INVERSE_LN2,
     LN10,
     LN2,
+    logistic,
+    logit,
     precise_exp,
     precise_log2,
     precise_power,
     precise_power10,
+    softplus,
 )
-from std.math import inf, isinf, nan
+from std.math import exp, inf, isinf, log, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -47,6 +50,26 @@ def test_logarithms_and_constants() raises:
     assert_almost_equal(precise_log2(10.0) * LN2 / LN10, 1.0, rtol=4e-16)
     assert_almost_equal(LN2 * INVERSE_LN2, 1.0, rtol=2e-16)
     assert_true(isinf(precise_log2(inf[DType.float64]())))
+
+
+def test_logistic_link() raises:
+    assert_equal(logistic(0.0), 0.5)
+    assert_almost_equal(logistic(2.0), 1.0 / (1.0 + exp(-2.0)), rtol=1e-15)
+    assert_almost_equal(
+        logistic(-2.0), exp(-2.0) / (1.0 + exp(-2.0)), rtol=1e-15
+    )
+    # Far out, neither side overflows.
+    assert_equal(logistic(800.0), 1.0)
+    assert_equal(logistic(-800.0), 0.0)
+    assert_almost_equal(logistic(-700.0), exp(-700.0), rtol=1e-12)
+    assert_equal(logit(0.5), 0.0)
+    assert_almost_equal(logit(logistic(3.0)), 3.0, rtol=1e-14)
+    assert_almost_equal(logit(0.2), log(0.25), rtol=1e-15)
+    # ln(1 + e^x): ln 2 at 0, x far up and e^x far down.
+    assert_almost_equal(softplus(0.0), LN2, rtol=1e-16)
+    assert_equal(softplus(800.0), 800.0)
+    assert_almost_equal(softplus(-40.0), exp(-40.0), rtol=1e-15)
+    assert_almost_equal(softplus(1.0), log(1.0 + exp(1.0)), rtol=1e-15)
 
 
 def main() raises:

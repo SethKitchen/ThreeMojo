@@ -18,7 +18,7 @@
   furnace, valid where the Biot number h L / k is below about 0.1.
 """
 
-from std.math import erfc, exp, isfinite, log, pi, sqrt
+from std.math import exp, isfinite, log, pi, sqrt
 from extensions.chemistry.quantities import GAS_CONSTANT, MolarMass64
 from extensions.chemistry.reaction import Reaction, product, reactant
 from extensions.chemistry.thermo import Substance
@@ -36,14 +36,13 @@ from units.si import (
 )
 from extensions.chemistry.quantities import MolarEnergy64
 from units.temperature import Temperature64
+from extensions.numerics.distributions import inverse_erfc
 
 # A mass flux: kilograms per square meter per second.
 comptime MassFlux64 = Quantity[-2, 1, -1, 0, 0, DType.float64]
 # The range a vapor pressure is searched over, in pascals.
 comptime _P_LOWEST = 1e-30
 comptime _P_HIGHEST = 1e12
-# Bisection steps for an inverse error function.
-comptime _BISECTIONS = 80
 
 
 def _require_positive(value: Float64, message: String) raises:
@@ -170,19 +169,6 @@ struct Diffusivity(ImplicitlyCopyable):
         return Diffusivity64(self.d0.value * exp(-q / rt))
 
 
-def _inverse_erfc(value: Float64) -> Float64:
-    """Return z with erfc(z) = value, for value in (0, 1)."""
-    var lo = Float64(0)
-    var hi = Float64(10)
-    for _ in range(_BISECTIONS):  # pragma: no branch
-        var mid = 0.5 * (lo + hi)
-        if erfc(mid) > value:
-            lo = mid
-        else:
-            hi = mid
-    return 0.5 * (lo + hi)
-
-
 def _require_ratio(ratio: Float64) raises:
     """Refuse a concentration ratio outside (0, 1)."""
     if not (ratio > 0 and ratio < 1):
@@ -209,7 +195,7 @@ def case_depth(
     _require_positive(diffusivity.value, "A diffusivity must be positive")
     _require_positive(time.value, "A time must be finite and positive")
     _require_ratio(ratio)
-    var z = _inverse_erfc(ratio)
+    var z = inverse_erfc(ratio)
     return Length64(2 * z * sqrt(diffusivity.value * time.value))
 
 
@@ -233,7 +219,7 @@ def time_to_depth(
     _require_positive(diffusivity.value, "A diffusivity must be positive")
     _require_positive(depth.value, "A depth must be finite and positive")
     _require_ratio(ratio)
-    var z = _inverse_erfc(ratio)
+    var z = inverse_erfc(ratio)
     var half = depth.value / (2 * z)
     return Duration64(half * half / diffusivity.value)
 

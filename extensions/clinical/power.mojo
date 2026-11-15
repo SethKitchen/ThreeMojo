@@ -24,15 +24,8 @@ size that it plans for.
 A size is the exact real number of the formula. Round it up.
 """
 
-from extensions.clinical.distributions import normal_quantile
-from std.math import erfc, isfinite, log, sqrt
-
-comptime _SQRT_TWO = 1.4142135623730951
-
-
-def _normal_upper(x: Float64) -> Float64:
-    """Return P(Z > x) of a standard normal Z."""
-    return 0.5 * erfc(x / _SQRT_TWO)
+from extensions.numerics.distributions import normal_quantile, normal_upper
+from std.math import isfinite, log, sqrt
 
 
 def _require_plan(alpha: Float64, power: Float64) raises:
@@ -80,7 +73,7 @@ def _power(
     var z_alpha = -normal_quantile(alpha / 2.0)
     var shift = abs(difference) * sqrt(n) / alternative
     var scaled = z_alpha * null / alternative
-    return _normal_upper(scaled - shift) + _normal_upper(scaled + shift)
+    return normal_upper(scaled - shift) + normal_upper(scaled + shift)
 
 
 def _proportion_spread(
@@ -338,4 +331,4 @@ def freedman_power(
         sqrt(k * events) * abs(hazard_ratio - 1.0) / (k * hazard_ratio + 1.0)
     )
     # Phi(z - z_a) is the upper tail at z_a - z.
-    return _normal_upper(-normal_quantile(alpha / 2.0) - z)
+    return normal_upper(-normal_quantile(alpha / 2.0) - z)

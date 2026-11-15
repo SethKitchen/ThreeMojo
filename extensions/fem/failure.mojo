@@ -28,9 +28,9 @@ fails near the factor times its reaction force.
 from extensions.fem.ids import MaterialId, require_id
 from extensions.fem.mesh import signed_volume
 from extensions.fem.static import StaticProblem, StaticResult
-from math.sort_utils import stable_sort
 from std.math import isfinite, sqrt
 from units.si import CUBIC_METER, PASCAL, Volume64
+from extensions.numerics.order import descending_order
 
 
 def effective_strains(
@@ -160,14 +160,10 @@ def pistoia_failure(
         total += v
     if len(picked) == 0:
         raise Error("The material has no element")
-    var order = List[Int]()
-    for i in range(len(picked)):  # pragma: no branch
-        order.append(i)
-
-    def larger(a: Int, b: Int) capturing -> Bool:
-        return strains[picked[a]] > strains[picked[b]]
-
-    stable_sort[larger](order)
+    var picked_strains = List[Float64]()
+    for e in picked:  # pragma: no branch
+        picked_strains.append(strains[e])
+    var order = descending_order(picked_strains)
     var goal = fraction * total
     var reached = 0.0
     var threshold = 0.0

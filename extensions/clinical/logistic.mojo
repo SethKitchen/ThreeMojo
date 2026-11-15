@@ -23,29 +23,18 @@ A covariate is a plain number in a unit that the caller chooses. Its
 coefficient is per that unit.
 """
 
-from extensions.clinical.cox import MAX_COVARIATES, chi_square_p_value
-from extensions.numerics.elementary import precise_exp
-from extensions.clinical.survival import Z95
+from extensions.clinical.cox import MAX_COVARIATES
+from extensions.numerics.elementary import logistic, precise_exp, softplus
 from extensions.numerics.dense import (
     DenseMatrix,
     cholesky_inverse,
 )
-from std.math import erfc, isfinite, log, log1p, sqrt
-
-
-def _log_one_plus_exp(eta: Float64) -> Float64:
-    """Return ln(1 + e^eta) without overflow."""
-    if eta > 0:
-        return eta + log1p(precise_exp(-eta))
-    return log1p(precise_exp(eta))
-
-
-def _risk(eta: Float64) -> Float64:
-    """Return 1 / (1 + e^-eta) without overflow."""
-    if eta >= 0:
-        return 1.0 / (1.0 + precise_exp(-eta))
-    var e = precise_exp(eta)
-    return e / (1.0 + e)
+from std.math import isfinite, log, log1p, sqrt
+from extensions.numerics.distributions import (
+    chi_square_p_value,
+    normal_two_sided,
+    ratio_interval,
+)
 
 
 struct LogisticModel(Copyable, Movable):
@@ -110,7 +99,7 @@ struct LogisticModel(Copyable, Movable):
         Raises:
             Error: If the index names no coefficient.
         """
-        return erfc(abs(self.z(index)) / sqrt(2.0))
+        return normal_two_sided(self.z(index))
 
     def odds_ratio(self, index: Int) raises -> Float64:
         """Return the odds ratio of a coefficient.
@@ -141,9 +130,9 @@ struct LogisticModel(Copyable, Movable):
             Error: If the index names no coefficient.
         """
         self._require_index(index)
-        var b = self.coefficients[index]
-        var half = Z95 * self.standard_errors[index]
-        return (precise_exp(b - half), precise_exp(b + half))
+        return ratio_interval(
+            precise_exp(self.coefficients[index]), self.standard_errors[index]
+        )
 
     def likelihood_ratio(self) raises -> Tuple[Float64, Float64]:
         """Return the likelihood ratio test of the covariates.
@@ -184,7 +173,7 @@ struct LogisticModel(Copyable, Movable):
             if not isfinite(row[a]):
                 raise Error("The covariates of a patient must be finite")
             eta += row[a] * self.coefficients[a + 1]
-        return _risk(eta)
+        return logistic(eta)
 
 
 struct _Pass(Movable):
@@ -213,10 +202,10 @@ def _evaluate(
         var eta = beta[0]
         for a in range(1, k):  # pragma: no branch
             eta += row[a - 1] * beta[a]
-        var p = _risk(eta)
+        var p = logistic(eta)
         var weight = p * (1.0 - p)
         var residual = -p
-        out.log_likelihood -= _log_one_plus_exp(eta)
+        out.log_likelihood -= softplus(eta)
         if outcomes[i]:
             out.log_likelihood += eta
             residual += 1.0

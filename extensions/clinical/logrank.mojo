@@ -10,18 +10,21 @@ At each time of an event in any group, each group expects its share at
 risk of the events. The statistic is `(O - E)' V^-1 (O - E)` over all
 groups but the last, with V the hypergeometric covariance of the observed
 events. It has chi-square with `g - 1` degrees of freedom when the groups
-have one survival. With two groups, it is the log-rank test of
-`survival.log_rank_test`.
+have one survival.
+
+`log_rank_test(a, b)` is the test of two groups. Its statistic is
+`(O - E)^2 / V` of the first group, with one degree of freedom.
 """
 
-from extensions.clinical.cox import chi_square_p_value
 from extensions.clinical.survival import kaplan_meier, require_group
-from extensions.numerics.dense import (
-    DenseMatrix,
-    cholesky_solve,
-)
-from math.sort_utils import stable_sort
+from extensions.numerics.dense import DenseMatrix, solve
+from std.math import sqrt
 from units.si import Duration64, SECOND
+from extensions.numerics.distributions import (
+    chi_square_p_value,
+    normal_two_sided,
+)
+from extensions.numerics.order import sorted_values
 
 # The most groups of one test.
 comptime MAX_GROUPS = 100
@@ -91,11 +94,7 @@ def log_rank_groups(
         var curve = kaplan_meier(times[k], events[k])
         for t in curve.times:
             pooled.append(t.to(SECOND))
-
-    def lower(a: Float64, b: Float64) capturing -> Bool:
-        return a < b
-
-    stable_sort[lower](pooled)
+    pooled = sorted_values(pooled)
     var observed = List[Int](length=g, fill=0)
     var expected = List[Float64](length=g, fill=0.0)
     var covariance = DenseMatrix(g, g)
@@ -138,10 +137,75 @@ def log_rank_groups(
             reduced.set(a, b, covariance.get(a, b))
     var solved: List[Float64]
     try:
-        solved = cholesky_solve(reduced, gap)
+        solved = solve(reduced, gap)
     except:
         raise Error("A log-rank test needs events that change the risk")
     var statistic = 0.0
     for a in range(m):  # pragma: no branch
         statistic += gap[a] * solved[a]
     return GroupLogRank(statistic, observed^, expected^)
+
+
+struct LogRank(Copyable, Movable):
+    """The log-rank test of two groups."""
+
+    var statistic: Float64
+    """`(O - E)^2 / V` of the first group: chi-square, one degree of
+    freedom."""
+    var p_value: Float64
+    """The chance of a statistic this large when the groups have one
+    survival."""
+    var observed: Tuple[Int, Int]
+    """The events of each group."""
+    var expected: Tuple[Float64, Float64]
+    """The events that each group expects."""
+
+    def __init__(
+        out self,
+        statistic: Float64,
+        observed: Tuple[Int, Int],
+        expected: Tuple[Float64, Float64],
+    ):
+        """Create a result.
+
+        Args:
+            statistic: The statistic.
+            observed: The events of each group.
+            expected: The events that each group expects.
+        """
+        self.statistic = statistic
+        self.p_value = normal_two_sided(sqrt(statistic))
+        self.observed = observed
+        self.expected = expected
+
+
+def log_rank_test(
+    times_a: List[Duration64],
+    events_a: List[Bool],
+    times_b: List[Duration64],
+    events_b: List[Bool],
+) raises -> LogRank:
+    """Compare the survival of two groups by the log-rank test.
+
+    Args:
+        times_a: The times of the first group.
+        events_a: Whether each patient of the first group had the event.
+        times_b: The times of the second group.
+        events_b: Whether each patient of the second group had the event.
+
+    Returns:
+        The statistic, its p value, and the observed and expected events:
+        `log_rank_groups` of the two groups.
+
+    Raises:
+        Error: If a group is not valid, or no event changes the risk of
+            either group.
+    """
+    var times: List[List[Duration64]] = [times_a.copy(), times_b.copy()]
+    var events: List[List[Bool]] = [events_a.copy(), events_b.copy()]
+    var test = log_rank_groups(times, events)
+    return LogRank(
+        test.statistic,
+        (test.observed[0], test.observed[1]),
+        (test.expected[0], test.expected[1]),
+    )

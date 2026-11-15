@@ -10,11 +10,10 @@
 `assets/survival/make_survival.py`.
 """
 
+from extensions.clinical.logrank import LogRank, log_rank_test
 from extensions.clinical.survival import (
-    LogRank,
     SurvivalCurve,
     kaplan_meier,
-    log_rank_test,
     survival_image,
 )
 from extensions.imaging.transfer import Rgba

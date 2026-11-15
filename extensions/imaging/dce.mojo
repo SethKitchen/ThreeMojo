@@ -43,10 +43,10 @@ from extensions.imaging.ids import (
 )
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap, require_same_grid
-from std.math import exp, expm1, isfinite, log, max, min, pi, sqrt
+from std.math import expm1, isfinite, log, max, min, pi, sqrt
 from units.quantity import Unit
 from units.si import MINUTE64, PER_MINUTE64, Duration64, Frequency64
-from extensions.numerics.elementary import precise_exp
+from extensions.numerics.elementary import logistic, precise_exp
 
 # Below this `kep` times a step, the convolution takes a series.
 comptime SMALL = 1.0e-3
@@ -453,8 +453,6 @@ def parker_aif(times: List[Duration64]) raises -> List[Float64]:
         out.append(
             0.809 / (0.0563 * root) * precise_exp(-0.5 * d1 * d1)
             + 0.330 / (0.132 * root) * precise_exp(-0.5 * d2 * d2)
-            + 1.050
-            * precise_exp(-0.1685 * t)
-            / (1.0 + precise_exp(-38.078 * (t - 0.483)))
+            + 1.050 * precise_exp(-0.1685 * t) * logistic(38.078 * (t - 0.483))
         )
     return out^

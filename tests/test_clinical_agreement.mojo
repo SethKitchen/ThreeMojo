@@ -17,7 +17,7 @@ from extensions.clinical.agreement import (
     bland_altman_image,
     intraclass_correlation,
 )
-from extensions.clinical.distributions import (
+from extensions.numerics.distributions import (
     beta_tails,
     f_quantile,
     f_upper,
@@ -25,7 +25,7 @@ from extensions.clinical.distributions import (
     student_t_upper,
 )
 from render.framebuffer import Framebuffer
-from std.math import atan, inf, isinf, nan, sqrt
+from std.math import atan, inf, nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,

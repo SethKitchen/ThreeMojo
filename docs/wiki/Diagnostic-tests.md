@@ -22,7 +22,6 @@ Marker A has an AUC of 0.820, with a 95 percent interval from 0.751 to 0.890. Ma
 | `negbin` | `NegativeBinomialModel` and `negative_binomial_regression` |
 | `calibration` | `brier_score`, `scaled_brier_score`, `RiskGroup`, `risk_groups`, `HosmerLemeshow`, `hosmer_lemeshow`, `CalibrationFit`, `calibration_fit`, `recalibrate`, `net_benefit`, `DecisionCurve`, `decision_curve`, `calibration_image`, `decision_curve_image`, `MAX_GROUPS` and `MAX_THRESHOLDS` |
 | `proportions` | `Estimate`, `wilson_interval`, `exact_interval`, `DiagnosticAccuracy`, `diagnostic_accuracy`, `RiskComparison` and `compare_risks` |
-| `distributions` | `beta_tails`, `beta_quantile`, `normal_quantile`, `student_t_upper`, `student_t_quantile`, `f_upper`, `f_quantile` and `MAX_DEGREES` |
 
 ## Make a ROC curve
 
@@ -250,15 +249,7 @@ With two raters, Fleiss' kappa is Scott's pi, not Cohen's kappa.
 
 ## Use the t and F distributions
 
-`distributions` gives the functions that the intervals and the tests use:
-
-- `beta_tails(x, a, b)` gives both tails of the beta distribution. The smaller tail comes from a continued fraction, so it keeps its relative accuracy far out.
-- `student_t_upper(t, df)` and `student_t_quantile(p, df)` give the upper tail and the quantile of Student's t.
-- `f_upper(x, d1, d2)` and `f_quantile(p, d1, d2)` give the upper tail and the quantile of the F distribution.
-
-The degrees of freedom are real numbers from more than 0 to 1e8. A quantile comes from Newton steps on the tail, held in a bracket by bisection.
-
-The `exp` of Mojo 1.2 is off by about 3e-11 near -70, and a p value is an `exp`. So the distributions use `precise_exp` of the [Numerics](Numerics#use-accurate-elementary-functions) extension.
+The intervals and the tests take the t, F, beta and normal distributions from `distributions` of the [Numerics](Numerics#use-statistical-distributions) extension.
 
 ## Verification
 
@@ -270,7 +261,7 @@ The tests compare the module with scikit-learn 1.9.1 and MLstatkit 0.1.91 on two
 - DeLong's z and the standard error of the difference agree to a relative 1e-12. The p value agrees to a relative 1e-11.
 - The threshold, sensitivity and specificity of the largest Youden index are the same as numpy finds on the curve.
 
-The tests compare `agreement` and `distributions` with pingouin 0.7.0 and scipy 1.18.1. `assets/agreement/make_agreement.py` writes the expected values and 40 synthetic pairs of tumor volumes.
+The tests compare `agreement` and the [distributions](Numerics#use-statistical-distributions) with pingouin 0.7.0 and scipy 1.18.1. `assets/agreement/make_agreement.py` writes the expected values and 40 synthetic pairs of tumor volumes.
 
 - The six ICC of table 2 of Shrout and Fleiss and of the two readers agree with pingouin to a relative 1e-12. Their F statistics agree to 1e-12, and their p values and interval ends to 1e-10. pingouin rounds its intervals to two decimals. So the script finds the ends with its formulas and scipy, and checks that they round to the ends of pingouin.
 - The six ICC of Shrout and Fleiss are their published values to two decimals: 0.17, 0.29, 0.71, 0.44, 0.62 and 0.91.
@@ -353,7 +344,6 @@ Every function raises `Error` for input it cannot use.
 | The covariates are not one finite row of 1 to 32 values for each patient, all outcomes are the same, the tolerance is not between 0 and 1, or the steps are not from 1 to 1000 | `logistic_regression` |
 | The information matrix is not positive definite, because a covariate is constant, is collinear with others, or separates the outcomes | `logistic_regression` |
 | An index names no coefficient, or a row does not have one finite value for each covariate | `LogisticModel` |
-| A degree of freedom is not from more than 0 to 1e8, a probability is not between 0 and 1, or a value is out of range | `distributions` |
 | There is no curve, the colors are not one for each curve, or the side is out of 64 to 4096 pixels | `roc_image` |
 | A risk is not between 0 and 1, or there is not one risk for each outcome | `calibration` |
 | The outcomes are all the same | `scaled_brier_score`, `calibration_fit` |

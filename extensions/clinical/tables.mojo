@@ -20,8 +20,7 @@
   distribution, or by chi-square with the continuity correction.
 """
 
-from extensions.clinical.cox import chi_square_p_value
-from extensions.clinical.distributions import beta_tails
+from extensions.numerics.distributions import beta_tails, chi_square_p_value
 from std.math import floor, inf, nan
 
 # The most rows or columns of a table.

@@ -25,14 +25,18 @@ effect over its standard error on its precision, and tests the intercept.
 `funnel_image` draws each effect against its standard error.
 """
 
-from extensions.clinical.cox import chi_square_p_value
-from extensions.clinical.distributions import student_t_quantile
+from extensions.numerics.distributions import (
+    Z95,
+    chi_square_p_value,
+    normal_two_sided,
+    student_t_quantile,
+    wald_interval,
+)
 from extensions.clinical.regression import linear_regression
-from extensions.clinical.survival import Z95
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Color, Framebuffer
-from std.math import erfc, floor, isfinite, log, sqrt
+from std.math import floor, isfinite, log, sqrt
 
 # The most studies of one meta-analysis.
 comptime MAX_STUDIES = 160
@@ -65,10 +69,11 @@ struct Pooled(Copyable, Movable):
         """
         self.estimate = estimate
         self.standard_error = standard_error
-        self.lower = estimate - Z95 * standard_error
-        self.upper = estimate + Z95 * standard_error
+        var band = wald_interval(estimate, standard_error)
+        self.lower = band[0]
+        self.upper = band[1]
         self.z = estimate / standard_error
-        self.p_value = erfc(abs(self.z) / sqrt(2.0))
+        self.p_value = normal_two_sided(self.z)
 
 
 struct MetaAnalysis(Copyable, Movable):
@@ -362,9 +367,9 @@ def forest_image(
     var high = max(0.0, max(result.fixed.upper, result.random.upper))
     var heaviest = 0.0
     for i in range(k):  # pragma: no branch
-        var half = Z95 * sqrt(variances[i])
-        low = min(low, effects[i] - half)
-        high = max(high, effects[i] + half)
+        var band = wald_interval(effects[i], sqrt(variances[i]))
+        low = min(low, band[0])
+        high = max(high, band[1])
         heaviest = max(heaviest, result.random_weights[i])
     var margin = 0.05 * (high - low)
     low -= margin
@@ -378,12 +383,12 @@ def forest_image(
     var dark = Rgba(0.24, 0.24, 0.26, 1)
     for i in range(k):  # pragma: no branch
         var y = FOREST_ROW * (i + 1)
-        var half = Z95 * sqrt(variances[i])
+        var band = wald_interval(effects[i], sqrt(variances[i]))
         draw_line(
             image,
-            _column(effects[i] - half, low, high, right),
+            _column(band[0], low, high, right),
             y,
-            _column(effects[i] + half, low, high, right),
+            _column(band[1], low, high, right),
             y,
             dark,
         )

@@ -21,7 +21,7 @@ caller chooses. A coefficient is in outcome units per covariate unit.
 """
 
 from extensions.clinical.cox import MAX_COVARIATES
-from extensions.clinical.distributions import (
+from extensions.numerics.distributions import (
     f_upper,
     student_t_quantile,
     student_t_upper,

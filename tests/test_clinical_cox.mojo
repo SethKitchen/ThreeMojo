@@ -10,12 +10,8 @@ the synthetic cohort `assets/survival/cox_cohort.txt` and on the trial of
 Freireich and others (1963). See `assets/survival/make_cox.py`.
 """
 
-from extensions.clinical.cox import (
-    CoxModel,
-    chi_square_p_value,
-    cox_regression,
-)
-from std.math import erfc, exp, inf, log, nan, sqrt
+from extensions.clinical.cox import CoxModel, cox_regression
+from std.math import exp, inf, log, nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -218,36 +214,6 @@ def test_steps() raises:
     assert_equal(together.concordance, 0.5)
     assert_almost_equal(together.coefficients[0], 0.0, atol=1e-12)
     assert_true(together.likelihood_ratio()[1] > 0.999)
-
-
-def test_chi_square() raises:
-    # One degree: erfc(sqrt(x / 2)). Two degrees: exp(-x / 2).
-    assert_equal(chi_square_p_value(3.0, 1), erfc(sqrt(1.5)))
-    assert_almost_equal(chi_square_p_value(3.0, 2), exp(-1.5), rtol=1e-15)
-    # Three degrees, and four: chi2.sf of scipy.
-    assert_almost_equal(
-        chi_square_p_value(7.0, 3), 0.07189777249646509, rtol=1e-12
-    )
-    assert_almost_equal(
-        chi_square_p_value(7.0, 4), 0.13588822540043327, rtol=1e-12
-    )
-    # Many degrees, odd and even.
-    assert_almost_equal(
-        chi_square_p_value(250.0, 201), 0.010663859138751904, rtol=1e-10
-    )
-    assert_almost_equal(
-        chi_square_p_value(250.0, 200), 0.009379131668826098, rtol=1e-10
-    )
-    assert_equal(chi_square_p_value(0.0, 5), 1.0)
-    assert_equal(chi_square_p_value(inf[DType.float64](), 5), 0.0)
-    var freedoms: List[Int] = [0, 1001]
-    for f in freedoms:
-        with assert_raises(contains="degrees of freedom"):
-            _ = chi_square_p_value(1.0, f)
-    var bad: List[Float64] = [-1.0, nan[DType.float64]()]
-    for b in bad:
-        with assert_raises(contains="0 or more"):
-            _ = chi_square_p_value(b, 1)
 
 
 def test_refusals() raises:

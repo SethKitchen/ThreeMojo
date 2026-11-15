@@ -27,17 +27,22 @@ likelihood ratio test of all the covariates against the Weibull model
 without them.
 """
 
-from extensions.clinical.cox import MAX_COVARIATES, chi_square_p_value
+from extensions.clinical.cox import MAX_COVARIATES
 from extensions.numerics.elementary import LN2, precise_exp
 from extensions.clinical.parametric import fit_weibull
-from extensions.clinical.survival import Z95, require_group
+from extensions.clinical.survival import require_group
 from extensions.numerics.dense import (
     DenseMatrix,
     cholesky_inverse,
     cholesky_solve,
 )
-from std.math import erfc, inf, isfinite, log, sqrt
+from std.math import inf, isfinite, log, sqrt
 from units.si import SECOND, Duration64, DurationUnit64
+from extensions.numerics.distributions import (
+    chi_square_p_value,
+    normal_two_sided,
+    ratio_interval,
+)
 
 # The most halvings of one Newton step, and the log-likelihood that a step
 # may lose, relative, to roundoff.
@@ -131,9 +136,9 @@ struct WeibullRegression(Copyable, Movable):
             Error: If the index names no covariate.
         """
         self._require_index(index)
-        var b = self.coefficients[index]
-        var e = Z95 * self.standard_errors[index]
-        return (precise_exp(b - e), precise_exp(b + e))
+        return ratio_interval(
+            precise_exp(self.coefficients[index]), self.standard_errors[index]
+        )
 
     def p_value(self, index: Int) raises -> Float64:
         """Return the two-sided Wald p value of a coefficient.
@@ -149,7 +154,7 @@ struct WeibullRegression(Copyable, Movable):
         """
         self._require_index(index)
         var z = self.coefficients[index] / self.standard_errors[index]
-        return erfc(abs(z) / sqrt(2.0))
+        return normal_two_sided(z)
 
     def intercept(self, unit: DurationUnit64) -> Float64:
         """Return the intercept, the log of the scale of a patient whose

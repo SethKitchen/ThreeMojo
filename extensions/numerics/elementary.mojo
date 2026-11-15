@@ -15,11 +15,13 @@ them:
 - `precise_power(x, p)` is `x^p` for an x of 0 or more.
 - `precise_power10(x)` is `10^x`.
 - `precise_log2(x)` is `log(x) / ln 2`.
+- `logistic(x)` is `1 / (1 + e^-x)`, `logit(p)` is its inverse, and
+  `softplus(x)` is `ln(1 + e^x)`. None of them overflows.
 
 `LN2`, `LN10` and `INVERSE_LN2` are the constants, rounded once.
 """
 
-from std.math import expm1, floor, inf, ldexp, log
+from std.math import expm1, floor, inf, ldexp, log, log1p
 
 comptime LN2 = 0.6931471805599453
 """The natural logarithm of 2."""
@@ -93,3 +95,44 @@ def precise_log2(x: Float64) -> Float64:
         `log(x) / ln 2`.
     """
     return log(x) * INVERSE_LN2
+
+
+def logistic(x: Float64) -> Float64:
+    """Return the logistic function, the inverse of the logit.
+
+    Args:
+        x: The value, such as a log odds.
+
+    Returns:
+        `1 / (1 + e^-x)`, from the side that does not overflow.
+    """
+    if x >= 0:
+        return 1.0 / (1.0 + precise_exp(-x))
+    var e = precise_exp(x)
+    return e / (1.0 + e)
+
+
+def logit(p: Float64) -> Float64:
+    """Return the log odds of a probability.
+
+    Args:
+        p: The probability, between 0 and 1.
+
+    Returns:
+        `ln(p / (1 - p))`, as `log(p) - log1p(-p)`.
+    """
+    return log(p) - log1p(-p)
+
+
+def softplus(x: Float64) -> Float64:
+    """Return the logarithm of 1 plus an exponential.
+
+    Args:
+        x: The value.
+
+    Returns:
+        `ln(1 + e^x)`, from the side that does not overflow.
+    """
+    if x > 0:
+        return x + log1p(precise_exp(-x))
+    return log1p(precise_exp(x))

@@ -8,7 +8,7 @@
 |---|---|
 | `power` | `proportions_size`, `proportions_power`, `means_size`, `means_power`, `schoenfeld_events`, `freedman_size` and `freedman_power` |
 | `phase2` | `SimonDesign`, `simon_optimal`, `simon_minimax`, `simon_errors`, `posterior_above` and `MAX_SIMON_SIZE` |
-| `distributions` | `normal_quantile`, among the functions of [Diagnostic tests](Diagnostic-tests#use-the-t-and-f-distributions) |
+| `numerics.distributions` | `normal_quantile` and `normal_upper`, among the functions of [Numerics](Numerics#use-statistical-distributions) |
 
 ## Plan a study
 

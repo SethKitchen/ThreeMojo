@@ -32,70 +32,27 @@ See Cox (1972), Efron (1977), Breslow (1974) and Harrell and others (1982).
 """
 
 from extensions.numerics.elementary import precise_exp
-from extensions.clinical.survival import Z95, require_group
+from extensions.clinical.survival import require_group
 from extensions.numerics.dense import (
     DenseMatrix,
     cholesky_inverse,
     cholesky_solve,
 )
-from math.sort_utils import stable_sort
-from std.math import erfc, exp, isfinite, log, sqrt
+from std.math import exp, isfinite, log, sqrt
 from units.si import Duration64, SECOND
+from extensions.numerics.distributions import (
+    chi_square_p_value,
+    normal_two_sided,
+    ratio_interval,
+)
+from extensions.numerics.order import descending_order
 
 # The most covariates of one model.
 comptime MAX_COVARIATES = 32
-# The most degrees of freedom of a chi-square test.
-comptime MAX_FREEDOM = 1000
 # The most halvings of one Newton step.
 comptime _HALVINGS = 30
 # A step may lose this much log-likelihood, relative, to roundoff.
 comptime _SLACK = 1e-10
-# ln(sqrt(pi) / 2), the logarithm of the gamma function at 3/2.
-comptime _LOG_GAMMA_THREE_HALVES = -0.12078223763524522
-
-
-def chi_square_p_value(statistic: Float64, freedom: Int) raises -> Float64:
-    """Return the chance that a chi-square value is the statistic or more.
-
-    Args:
-        statistic: The statistic. 0 or more; infinity gives 0.
-        freedom: The degrees of freedom, from 1 to 1000.
-
-    Returns:
-        The upper tail of the chi-square distribution, in closed form:
-        a sum of Poisson terms for an even freedom, and `erfc` and a sum
-        for an odd freedom.
-
-    Raises:
-        Error: If the freedom is out of range, or the statistic is negative
-            or not a number.
-    """
-    if freedom < 1 or freedom > MAX_FREEDOM:
-        raise Error("A chi-square test has from 1 to 1000 degrees of freedom")
-    if not (statistic >= 0):
-        raise Error("A chi-square statistic must be 0 or more")
-    if statistic == 0:
-        return 1.0
-    if not isfinite(statistic):
-        return 0.0
-    var x = statistic / 2.0
-    var lx = log(x)
-    var total = 0.0
-    if freedom % 2 == 0:
-        # exp(-x) x^j / j! for j from 0 to freedom / 2 - 1.
-        var log_factorial = 0.0
-        for j in range(freedom // 2):  # pragma: no branch
-            if j > 0:
-                log_factorial += log(Float64(j))
-            total += precise_exp(Float64(j) * lx - x - log_factorial)
-        return total
-    # exp(-x) x^(j + 1/2) / gamma(j + 3/2) for j from 0 to (freedom - 3) / 2.
-    var log_gamma = _LOG_GAMMA_THREE_HALVES
-    for j in range(freedom // 2):
-        if j > 0:
-            log_gamma += log(Float64(j) + 0.5)
-        total += precise_exp((Float64(j) + 0.5) * lx - x - log_gamma)
-    return erfc(sqrt(x)) + total
 
 
 struct CoxModel(Copyable, Movable):
@@ -173,7 +130,7 @@ struct CoxModel(Copyable, Movable):
         Raises:
             Error: If the index names no covariate.
         """
-        return erfc(abs(self.z(index)) / sqrt(2.0))
+        return normal_two_sided(self.z(index))
 
     def hazard_ratio(self, index: Int) raises -> Float64:
         """Return the hazard ratio of a covariate.
@@ -204,9 +161,9 @@ struct CoxModel(Copyable, Movable):
             Error: If the index names no covariate.
         """
         self._require_index(index)
-        var b = self.coefficients[index]
-        var half = Z95 * self.standard_errors[index]
-        return (exp(b - half), exp(b + half))
+        return ratio_interval(
+            precise_exp(self.coefficients[index]), self.standard_errors[index]
+        )
 
     def likelihood_ratio(self) raises -> Tuple[Float64, Float64]:
         """Return the likelihood ratio test of the whole model.
@@ -474,14 +431,7 @@ def cox_regression(
         for a in range(k):  # pragma: no branch
             centered.append(row[a] - model.means[a])
         x.append(centered^)
-    var order = List[Int]()
-    for i in range(n):  # pragma: no branch
-        order.append(i)
-
-    def later(a: Int, b: Int) capturing -> Bool:
-        return seconds[a] > seconds[b]
-
-    stable_sort[later](order)
+    var order = descending_order(seconds)
 
     var beta = List[Float64](length=k, fill=0.0)
     var current = _efron(order, seconds, events, x, beta)

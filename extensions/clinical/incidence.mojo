@@ -25,13 +25,13 @@ counts often show. Then multiply the standard errors by its square root.
 """
 
 from extensions.numerics.elementary import precise_exp
-from extensions.clinical.survival import Z95
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Color, Framebuffer
 from std.math import floor, isfinite, log, sqrt
 from units.quantity import Unit
 from units.si import DAY64, PER_DAY64, Duration64, Frequency64
+from extensions.numerics.distributions import wald_interval
 
 # The most counts of one fit.
 comptime MAX_COUNTS = 100000
@@ -75,11 +75,12 @@ struct GrowthFit(Copyable, Movable):
         Returns:
             The rate `-+ 1.96 se`, by the Poisson standard error.
         """
-        var r = self.rate.to(PER_DAY64)
-        var half = Z95 * self.rate_error.to(PER_DAY64)
+        var band = wald_interval(
+            self.rate.to(PER_DAY64), self.rate_error.to(PER_DAY64)
+        )
         return (
-            Frequency64(r - half, PER_DAY64),
-            Frequency64(r + half, PER_DAY64),
+            Frequency64(band[0], PER_DAY64),
+            Frequency64(band[1], PER_DAY64),
         )
 
     def doubling_time(self) raises -> Duration64:

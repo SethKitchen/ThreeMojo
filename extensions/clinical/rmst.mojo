@@ -20,9 +20,14 @@ The RMST does not need proportional hazards, and it is in units of time.
 """
 
 from extensions.numerics.elementary import precise_exp
-from extensions.clinical.survival import SurvivalCurve, Z95
-from std.math import erfc, isfinite, sqrt
+from extensions.clinical.survival import SurvivalCurve
+from std.math import isfinite, sqrt
 from units.si import Duration64, SECOND
+from extensions.numerics.distributions import (
+    Z95,
+    normal_two_sided,
+    wald_interval,
+)
 
 
 struct CumulativeHazard(Copyable, Movable):
@@ -117,9 +122,10 @@ struct RestrictedMean(Copyable, Movable):
         Returns:
             The mean `-+ 1.96 se`.
         """
-        var m = self.mean.to(SECOND)
-        var half = Z95 * self.standard_error.to(SECOND)
-        return (Duration64(m - half, SECOND), Duration64(m + half, SECOND))
+        var band = wald_interval(
+            self.mean.to(SECOND), self.standard_error.to(SECOND)
+        )
+        return (Duration64(band[0], SECOND), Duration64(band[1], SECOND))
 
 
 def _horizon(horizon: Duration64) raises -> Float64:
@@ -214,7 +220,7 @@ struct RestrictedComparison(Copyable, Movable):
         self.z = 0.0
         if error > 0:
             self.z = gap / error
-        self.p_value = erfc(abs(self.z) / sqrt(2.0))
+        self.p_value = normal_two_sided(self.z)
 
     def interval(self) -> Tuple[Duration64, Duration64]:
         """Return the 95 percent interval of the difference.
@@ -222,9 +228,10 @@ struct RestrictedComparison(Copyable, Movable):
         Returns:
             The difference `-+ 1.96 se`.
         """
-        var g = self.difference.to(SECOND)
-        var half = Z95 * self.standard_error.to(SECOND)
-        return (Duration64(g - half, SECOND), Duration64(g + half, SECOND))
+        var band = wald_interval(
+            self.difference.to(SECOND), self.standard_error.to(SECOND)
+        )
+        return (Duration64(band[0], SECOND), Duration64(band[1], SECOND))
 
 
 def compare_restricted_means(

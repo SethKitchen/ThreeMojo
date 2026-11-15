@@ -18,13 +18,10 @@ computes it from the beta distribution. Fisher's z uses `atanh` and `tanh`
 from `log1p` and `expm1`, which are exact.
 """
 
-from extensions.clinical.distributions import beta_tails
+from extensions.numerics.distributions import Z95, beta_tails, normal_two_sided
 from extensions.clinical.hypothesis import midranks
-from extensions.clinical.survival import Z95
-from math.sort_utils import stable_sort
-from std.math import erfc, expm1, isfinite, log1p, sqrt
-
-comptime _SQRT_TWO = 1.4142135623730951
+from std.math import expm1, isfinite, log1p, sqrt
+from extensions.numerics.order import sorted_values
 
 
 struct Correlation(Copyable, Movable):
@@ -165,12 +162,7 @@ def spearman(x: List[Float64], y: List[Float64]) raises -> Correlation:
 def _ties(values: List[Float64]) -> Tuple[Float64, Float64, Float64]:
     """Return the sums over groups of t ties of `t (t - 1) / 2`,
     `t (t - 1) (t - 2)` and `t (t - 1) (2 t + 5)`."""
-    var sorted = values.copy()
-
-    def lower(a: Float64, b: Float64) capturing -> Bool:
-        return a < b
-
-    stable_sort[lower](sorted)
+    var sorted = sorted_values(values)
     var pairs = 0.0
     var cubic = 0.0
     var spread = 0.0
@@ -232,6 +224,4 @@ def kendall(x: List[Float64], y: List[Float64]) raises -> Correlation:
         + tx[1] * ty[1] / (9.0 * m * Float64(n - 2))
     )
     var z = difference / sqrt(variance)
-    return Correlation(
-        max(-1.0, min(1.0, tau)), erfc(abs(z) / _SQRT_TWO), -1.0, 1.0
-    )
+    return Correlation(max(-1.0, min(1.0, tau)), normal_two_sided(z), -1.0, 1.0)

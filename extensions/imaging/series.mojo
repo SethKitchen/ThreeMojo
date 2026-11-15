@@ -19,6 +19,7 @@ from extensions.imaging.image_volume import ImageVolume
 from extensions.sdf.vector import V3, dot, length
 from std.math import isfinite, max
 from units.si import Length64, METER
+from extensions.numerics.order import ascending_order
 
 # Two slices agree on a direction when their unit vectors differ by less
 # than this.
@@ -59,17 +60,6 @@ def _check_slice(first: DicomSlice, other: DicomSlice) raises:
         raise Error("The slices of a stack must have one orientation")
 
 
-def _order(keys: List[Float64]) -> List[Int]:
-    """Return the indexes of `keys` in increasing order, stable."""
-    var order = List[Int]()
-    for index in range(len(keys)):  # pragma: no branch
-        var at = len(order)
-        while at > 0 and keys[order[at - 1]] > keys[index]:
-            at -= 1
-        order.insert(at, index)
-    return order^
-
-
 def stack_slices(slices: List[DicomSlice]) raises -> ImageVolume:
     """Return the volume that a series of slices fills.
 
@@ -98,7 +88,7 @@ def stack_slices(slices: List[DicomSlice]) raises -> ImageVolume:
     var keys = List[Float64]()
     for slice in slices:  # pragma: no branch
         keys.append(dot(slice.position, normal))
-    var order = _order(keys)
+    var order = ascending_order(keys)
     ref first = slices[order[0]]
     var spacing_z = _stack_spacing(slices, order, keys, normal)
     var volume = ImageVolume(

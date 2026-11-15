@@ -19,9 +19,10 @@ inverses of the two ends. The low end is then below 0: its size is the
 number needed to harm.
 """
 
-from extensions.clinical.survival import SurvivalCurve, Z95
+from extensions.clinical.survival import SurvivalCurve
 from std.math import isfinite, sqrt
 from units.si import Duration64, SECOND
+from extensions.numerics.distributions import wald_interval
 
 
 struct SurvivalDifference(Copyable, Movable):
@@ -62,8 +63,9 @@ struct SurvivalDifference(Copyable, Movable):
         self.control = control
         self.difference = treated - control
         self.standard_error = standard_error
-        self.lower = self.difference - Z95 * standard_error
-        self.upper = self.difference + Z95 * standard_error
+        var band = wald_interval(self.difference, standard_error)
+        self.lower = band[0]
+        self.upper = band[1]
 
     def nnt(self) raises -> Float64:
         """Return the number needed to treat.

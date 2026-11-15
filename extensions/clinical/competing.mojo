@@ -26,13 +26,14 @@ variance is Greenwood's.
 """
 
 from extensions.numerics.elementary import precise_exp
-from extensions.clinical.survival import Z95, require_group
+from extensions.clinical.survival import require_group
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
-from math.sort_utils import stable_sort
 from render.framebuffer import Color, Framebuffer
 from std.math import floor, isfinite, log, sqrt
 from units.si import Duration64, SECOND
+from extensions.numerics.distributions import Z95
+from extensions.numerics.order import ascending_order
 
 
 struct CumulativeIncidence(Copyable, Movable):
@@ -143,16 +144,12 @@ def cumulative_incidence(
     var n = len(times)
     if len(competing) != n:
         raise Error("A competing risk needs one competing event per patient")
-    var order = List[Int]()
+    var seconds = List[Float64]()
     for i in range(n):  # pragma: no branch
         if events[i] and competing[i]:
             raise Error("A patient has one first event at most")
-        order.append(i)
-
-    def earlier(a: Int, b: Int) capturing -> Bool:
-        return times[a].to(SECOND) < times[b].to(SECOND)
-
-    stable_sort[earlier](order)
+        seconds.append(times[i].to(SECOND))
+    var order = ascending_order(seconds)
     var out = CumulativeIncidence(n)
     # The survival from every cause just before each time.
     var before = List[Float64]()

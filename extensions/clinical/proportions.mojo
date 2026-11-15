@@ -18,10 +18,14 @@ intervals.
 All intervals are 95 percent.
 """
 
-from extensions.clinical.distributions import beta_quantile
+from extensions.numerics.distributions import (
+    Z95,
+    beta_quantile,
+    ratio_interval,
+    wald_interval,
+)
 from extensions.numerics.elementary import precise_exp
 from extensions.clinical.meta import log_odds_ratio, log_risk_ratio
-from extensions.clinical.survival import Z95
 from std.math import inf, sqrt
 
 
@@ -116,12 +120,9 @@ def _exact(successes: Int, trials: Int) raises -> Estimate:
 
 def _ratio(effect: Tuple[Float64, Float64]) -> Estimate:
     """Return a ratio and its interval from its log and the variance."""
-    var half = Z95 * sqrt(effect[1])
-    return Estimate(
-        precise_exp(effect[0]),
-        precise_exp(effect[0] - half),
-        precise_exp(effect[0] + half),
-    )
+    var ratio = precise_exp(effect[0])
+    var band = ratio_interval(ratio, sqrt(effect[1]))
+    return Estimate(ratio, band[0], band[1])
 
 
 struct DiagnosticAccuracy(Copyable, Movable):
@@ -262,11 +263,14 @@ struct RiskComparison(Copyable, Movable):
         var p1 = self.first.value
         var p2 = self.second.value
         var gap = p1 - p2
-        var half = Z95 * sqrt(
-            p1 * (1.0 - p1) / Float64(total_a)
-            + p2 * (1.0 - p2) / Float64(total_b)
+        var band = wald_interval(
+            gap,
+            sqrt(
+                p1 * (1.0 - p1) / Float64(total_a)
+                + p2 * (1.0 - p2) / Float64(total_b)
+            ),
         )
-        self.difference = Estimate(gap, gap - half, gap + half)
+        self.difference = Estimate(gap, band[0], band[1])
         self.ratio = _ratio(
             log_risk_ratio(events_a, total_a, events_b, total_b)
         )

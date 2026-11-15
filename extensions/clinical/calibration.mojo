@@ -27,14 +27,14 @@ risk above a threshold leads to a treatment.
 Each risk must be between 0 and 1, and not at either end.
 """
 
-from extensions.clinical.cox import chi_square_p_value
-from extensions.numerics.elementary import precise_exp
 from extensions.clinical.logistic import logistic_regression
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
-from math.sort_utils import stable_sort
 from render.framebuffer import Color, Framebuffer
-from std.math import floor, isfinite, log, log1p, sqrt
+from std.math import floor, isfinite, sqrt
+from extensions.numerics.distributions import chi_square_p_value
+from extensions.numerics.elementary import logistic, logit
+from extensions.numerics.order import ascending_order
 
 # The most groups of risk, and the most thresholds of a decision curve.
 comptime MAX_GROUPS = 100
@@ -62,19 +62,6 @@ def _require_both(events: Int, count: Int) raises:
     """Refuse outcomes that are all the same."""
     if events == 0 or events == count:
         raise Error("A risk model needs patients with and without the outcome")
-
-
-def _logit(p: Float64) -> Float64:
-    """Return `ln(p / (1 - p))`."""
-    return log(p) - log1p(-p)
-
-
-def _risk(eta: Float64) -> Float64:
-    """Return `1 / (1 + e^-eta)` without overflow."""
-    if eta >= 0:
-        return 1.0 / (1.0 + precise_exp(-eta))
-    var e = precise_exp(eta)
-    return e / (1.0 + e)
 
 
 def brier_score(risks: List[Float64], outcomes: List[Bool]) raises -> Float64:
@@ -191,14 +178,7 @@ def risk_groups(
         raise Error(
             "Risk groups number from 2 to 100, and no more than the patients"
         )
-    var order = List[Int]()
-    for i in range(n):  # pragma: no branch
-        order.append(i)
-
-    def lower(a: Int, b: Int) capturing -> Bool:
-        return risks[a] < risks[b]
-
-    stable_sort[lower](order)
+    var order = ascending_order(risks)
     var out = List[RiskGroup]()
     var at = 0
     for g in range(groups):  # pragma: no branch
@@ -333,8 +313,8 @@ def calibration_fit(
     var rows = List[List[Float64]]()
     var expected = 0.0
     for p in risks:  # pragma: no branch
-        logits.append(_logit(p))
-        rows.append([_logit(p)])
+        logits.append(logit(p))
+        rows.append([logit(p)])
         expected += p
     var model = logistic_regression(outcomes, rows, 1e-10, 100)
     var out = CalibrationFit()
@@ -352,14 +332,14 @@ def calibration_fit(
     for v in logits:  # pragma: no branch
         low = min(low, v)
         high = max(high, v)
-    var share = _logit(Float64(events) / Float64(n))
+    var share = logit(Float64(events) / Float64(n))
     var below = share - high
     var above = share - low
     for _ in range(_BISECTIONS):  # pragma: no branch
         var middle = (below + above) / 2.0
         var total = 0.0
         for v in logits:  # pragma: no branch
-            total += _risk(middle + v)
+            total += logistic(middle + v)
         if total > Float64(events):
             above = middle
         else:
@@ -367,7 +347,7 @@ def calibration_fit(
     var a = (below + above) / 2.0
     var information = 0.0
     for v in logits:  # pragma: no branch
-        var r = _risk(a + v)
+        var r = logistic(a + v)
         information += r * (1.0 - r)
     out.in_the_large = a
     out.in_the_large_error = 1.0 / sqrt(information)
@@ -399,7 +379,7 @@ def recalibrate(
     for p in risks:  # pragma: no branch
         if not (p > 0 and p < 1):
             raise Error("A risk must be between 0 and 1, not at either end")
-        out.append(_risk(fit.intercept + fit.slope * _logit(p)))
+        out.append(logistic(fit.intercept + fit.slope * logit(p)))
     return out^
 
 

@@ -26,15 +26,15 @@ time, and the time at any survival, such as the median. A fit extends
 past the last time that a group has, but the model alone holds it there.
 """
 
-from extensions.clinical.cox import chi_square_p_value
 from extensions.numerics.elementary import LN2, precise_exp, precise_power
-from extensions.clinical.survival import Z95, require_group
+from extensions.clinical.survival import require_group
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Framebuffer
-from std.math import floor, inf, isfinite, log, sqrt
+from std.math import floor, isfinite, log, sqrt
 from units.quantity import Unit
 from units.si import PER_SECOND, SECOND, Duration64, DurationUnit64, Frequency64
+from extensions.numerics.distributions import Z95, chi_square_p_value
 
 
 # The bisections of the Weibull shape, and the dash of a drawn model.

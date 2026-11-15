@@ -10,8 +10,11 @@
 See `assets/survival/make_groups.py`.
 """
 
-from extensions.clinical.logrank import GroupLogRank, log_rank_groups
-from extensions.clinical.survival import log_rank_test
+from extensions.clinical.logrank import (
+    GroupLogRank,
+    log_rank_groups,
+    log_rank_test,
+)
 from std.testing import (
     TestSuite,
     assert_almost_equal,

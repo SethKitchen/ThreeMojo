@@ -3,8 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The survival of groups of patients: Kaplan-Meier curves and the log-rank
-test.
+"""The survival of groups of patients: Kaplan-Meier curves.
 
 Clinical research follows patients from a start, such as a diagnosis or a
 treatment, to an event, such as a relapse or a death. A patient who leaves
@@ -20,9 +19,7 @@ the study before the event is censored at the time last seen.
   `(ln S)^2`.
 - `SurvivalCurve.median()` is the first time of an event at which the
   survival is a half or less.
-- `log_rank_test(a, b)` compares two groups. At each time of an event, a
-  group expects its share at risk of the events. The statistic is
-  `(O - E)^2 / V` of the first group, with one degree of freedom.
+- `logrank` compares the survival of groups.
 - `survival_image` plots the curves as steps, with a tick at each
   censored time.
 """
@@ -30,12 +27,11 @@ the study before the event is censored at the time last seen.
 from extensions.imaging.overlay import draw_line
 from extensions.imaging.transfer import Rgba
 from render.framebuffer import Color, Framebuffer
-from std.math import erfc, exp, floor, inf, isfinite, log, sqrt
+from std.math import exp, floor, inf, isfinite, log, sqrt
 from units.quantity import Unit
 from units.si import Duration64, SECOND
-
-# The normal quantile of a two-sided 95 percent interval.
-comptime Z95 = 1.959963984540054
+from extensions.numerics.distributions import Z95
+from extensions.numerics.order import ascending_order
 
 
 struct SurvivalCurve(Copyable, Movable):
@@ -143,17 +139,6 @@ def require_group(times: List[Duration64], events: List[Bool]) raises:
             raise Error("A survival time must be 0 or more, and finite")
 
 
-def _order(times: List[Duration64]) -> List[Int]:
-    """Return the indices of the times, from the least."""
-    var order = List[Int]()
-    for i in range(len(times)):  # pragma: no branch
-        var at = len(order)
-        while at > 0 and times[order[at - 1]].to(SECOND) > times[i].to(SECOND):
-            at -= 1
-        order.insert(at, i)
-    return order^
-
-
 def kaplan_meier(
     times: List[Duration64], events: List[Bool]
 ) raises -> SurvivalCurve:
@@ -171,7 +156,10 @@ def kaplan_meier(
             time is negative or not finite.
     """
     require_group(times, events)
-    var order = _order(times)
+    var seconds = List[Float64]()
+    for t in times:  # pragma: no branch
+        seconds.append(t.to(SECOND))
+    var order = ascending_order(seconds)
     var out = SurvivalCurve(len(times))
     var risk = len(times)
     var s = 1.0
@@ -201,123 +189,6 @@ def kaplan_meier(
             out.greenwood.append(sum)
         risk -= d + c
     return out^
-
-
-struct LogRank(Copyable, Movable):
-    """The log-rank test of two groups."""
-
-    var statistic: Float64
-    """`(O - E)^2 / V` of the first group: chi-square, one degree of
-    freedom."""
-    var p_value: Float64
-    """The chance of a statistic this large when the groups have one
-    survival."""
-    var observed: Tuple[Int, Int]
-    """The events of each group."""
-    var expected: Tuple[Float64, Float64]
-    """The events that each group expects."""
-
-    def __init__(
-        out self,
-        statistic: Float64,
-        observed: Tuple[Int, Int],
-        expected: Tuple[Float64, Float64],
-    ):
-        """Create a result.
-
-        Args:
-            statistic: The statistic.
-            observed: The events of each group.
-            expected: The events that each group expects.
-        """
-        self.statistic = statistic
-        self.p_value = erfc(sqrt(statistic / 2.0))
-        self.observed = observed
-        self.expected = expected
-
-
-def log_rank_test(
-    times_a: List[Duration64],
-    events_a: List[Bool],
-    times_b: List[Duration64],
-    events_b: List[Bool],
-) raises -> LogRank:
-    """Compare the survival of two groups by the log-rank test.
-
-    Args:
-        times_a: The times of the first group.
-        events_a: Whether each patient of the first group had the event.
-        times_b: The times of the second group.
-        events_b: Whether each patient of the second group had the event.
-
-    Returns:
-        The statistic, its p value, and the observed and expected events.
-
-    Raises:
-        Error: If a group is not valid, or no event changes the risk of
-            either group.
-    """
-    require_group(times_a, events_a)
-    require_group(times_b, events_b)
-    var a = kaplan_meier(times_a, events_a)
-    var b = kaplan_meier(times_b, events_b)
-    # Each time of an event in either group, rising.
-    var pooled = List[Duration64]()
-    for t in a.times:
-        pooled.append(t)
-    for t in b.times:
-        pooled.append(t)
-    var order = _order(pooled)
-    var observed = 0
-    var expected = 0.0
-    var variance = 0.0
-    var last = -1.0
-    for i in order:
-        var t = pooled[i].to(SECOND)
-        if t == last:
-            continue
-        last = t
-        var na = 0
-        var nb = 0
-        var da = 0
-        var db = 0
-        for k in range(len(times_a)):  # pragma: no branch
-            var s = times_a[k].to(SECOND)
-            if s >= t:
-                na += 1
-                if s == t and events_a[k]:
-                    da += 1
-        for k in range(len(times_b)):  # pragma: no branch
-            var s = times_b[k].to(SECOND)
-            if s >= t:
-                nb += 1
-                if s == t and events_b[k]:
-                    db += 1
-        var n = Float64(na + nb)
-        var d = Float64(da + db)
-        observed += da
-        expected += d * Float64(na) / n
-        if na + nb > 1:
-            variance += (
-                d
-                * (Float64(na) / n)
-                * (1.0 - Float64(na) / n)
-                * (n - d)
-                / (n - 1.0)
-            )
-    if not (variance > 0):
-        raise Error("A log-rank test needs events that change the risk")
-    var total = 0
-    for e in a.events:
-        total += e
-    for e in b.events:
-        total += e
-    var gap = Float64(observed) - expected
-    return LogRank(
-        gap * gap / variance,
-        (observed, total - observed),
-        (expected, Float64(total) - expected),
-    )
 
 
 def survival_image(

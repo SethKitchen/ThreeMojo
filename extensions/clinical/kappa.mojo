@@ -26,11 +26,10 @@ pathologists who each grade every slide. Its table holds, for each
 subject, how many raters put it in each category.
 """
 
-from extensions.clinical.survival import Z95
 from extensions.numerics.dense import DenseMatrix
-from std.math import erfc, nan, sqrt
+from std.math import nan, sqrt
+from extensions.numerics.distributions import normal_two_sided, wald_interval
 
-comptime _SQRT_TWO = 1.4142135623730951
 # The most categories of one table.
 comptime MAX_CATEGORIES = 100
 # The most subjects of a table of many raters.
@@ -69,9 +68,10 @@ struct Kappa(Copyable, Movable):
         self.standard_error = standard_error
         self.null_error = null_error
         self.z = value / null_error
-        self.p_value = erfc(abs(self.z) / _SQRT_TWO)
-        self.lower = value - Z95 * standard_error
-        self.upper = value + Z95 * standard_error
+        self.p_value = normal_two_sided(self.z)
+        var band = wald_interval(value, standard_error)
+        self.lower = band[0]
+        self.upper = band[1]
 
 
 def _require_table(table: List[List[Int]]) raises -> Int:
@@ -306,7 +306,7 @@ def fleiss_kappa(table: List[List[Int]]) raises -> FleissKappa:
         * sqrt(spread * spread - skew)
     )
     out.z = out.value / out.null_error
-    out.p_value = erfc(abs(out.z) / _SQRT_TWO)
+    out.p_value = normal_two_sided(out.z)
     for j in range(k):  # pragma: no branch
         var p = shares[j]
         if not (p > 0):

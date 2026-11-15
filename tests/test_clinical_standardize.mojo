@@ -13,8 +13,6 @@ and statsmodels. See `assets/standardize/make_standardize.py`.
 from extensions.clinical.standardize import (
     direct_rate,
     expected_events,
-    gamma_quantile,
-    gamma_tails,
     poisson_interval,
     standardized_ratio,
 )
@@ -26,6 +24,7 @@ from std.testing import (
     assert_raises,
 )
 from units.si import PER_YEAR64, YEAR64, Duration64, Frequency64
+from extensions.numerics.distributions import gamma_quantile, gamma_tails
 
 
 def _close(a: Float64, b: Float64, tolerance: Float64) raises:

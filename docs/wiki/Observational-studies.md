@@ -9,7 +9,7 @@ It is a library for research and teaching. Its results are not validated for a d
 | Module | What it gives |
 |---|---|
 | `propensity` | `IpwEffect`, `ipw_effect`, `standardized_difference`, `effective_sample_size`, `e_value` and `e_value_bound` |
-| `standardize` | `gamma_tails`, `gamma_quantile`, `poisson_interval`, `StandardizedRatio`, `standardized_ratio`, `expected_events`, `DirectRate`, `direct_rate` and `MAX_SHAPE` |
+| `standardize` | `poisson_interval`, `StandardizedRatio`, `standardized_ratio`, `expected_events`, `DirectRate` and `direct_rate` |
 
 ## Weight the patients
 
@@ -69,10 +69,8 @@ print(rate.rate.to(PER_YEAR64), rate.lower.to(PER_YEAR64), rate.upper.to(PER_YEA
 - Direct standardization: `direct_rate(events, person_time, shares)` weights the rate of each group by its share of a standard population. With `y_i = w_i / T_i`, the rate is `R = sum y_i d_i`, and its variance `V = sum y_i^2 d_i`.
 - The interval of the direct rate is that of Fay and Feuer (1997). Its low end is the 2.5 percent point of a gamma of mean R and variance V. Its high end is the 97.5 percent point of a gamma of mean `R + m` and variance `V + m^2`, with m the largest `y_i`.
 
-The exact intervals come from the gamma distribution:
+The exact intervals come from the [gamma functions](Numerics#use-statistical-distributions) of `numerics.distributions`.
 
-- `gamma_tails(x, a)` gives the regularized incomplete gamma functions P(a, x) and Q(a, x). It takes the series below `a + 1` and the continued fraction of Numerical Recipes above it. The smaller tail keeps its relative accuracy.
-- `gamma_quantile(p, a)` inverts P by Newton steps, kept in a bracket by bisection. Above a half, it inverts Q.
 - `poisson_interval(count)` gives the exact central 95 percent interval of the mean of a count, after Garwood (1936). It runs from the 2.5 percent point of a gamma of shape `count` to the 97.5 percent point of a gamma of shape `count + 1`.
 
 ## Verification
@@ -113,10 +111,9 @@ Every function raises `Error` for input it cannot use.
 | There is no weight, or a weight is not positive and finite | `standardized_difference`, `effective_sample_size` |
 | The lists differ in length, a value is not finite, a group has fewer than two patients, or the covariate does not vary | `standardized_difference` |
 | A ratio is not positive and finite, or an interval does not rise | `e_value`, `e_value_bound` |
-| A gamma shape is not above 0 and at most 1e7, a point is below 0 or not a number, or a probability is not above 0 and below 1 | `gamma_tails`, `gamma_quantile` |
 | A count is below 0 or at least 1e7, or an expected count is not positive and finite | `poisson_interval`, `standardized_ratio` |
 | The lists are empty or differ in length, or a person-time or a rate is below 0 or not finite | `expected_events` |
-| The lists are empty or differ in length, an event count is below 0, a person-time is not positive and finite, or the shares are not 0 or more and finite with a sum of 1 | `direct_rate` |
+| The lists are empty or differ in length, an event count is below 0, a person-time is not positive and finite, the shares are not 0 or more and finite with a sum of 1, or an end of the interval needs a gamma shape above 1e7 | `direct_rate` |
 
 ## Limits
 
