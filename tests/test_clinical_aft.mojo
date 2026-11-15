@@ -5,8 +5,9 @@
 
 """Weibull accelerated failure time regression.
 
-`assets/aft/aft_expected.txt` holds numpy fits of four groups, checked
-against lifelines. See `assets/aft/make_aft.py`.
+`assets/aft/aft_expected.txt` holds the fits of four groups by lifelines,
+solved to 40 digits by mpmath. See `tools/make_aft.mojo` and
+`assets/aft/make_aft.py`.
 """
 
 from extensions.clinical.aft import WeibullRegression, weibull_regression
