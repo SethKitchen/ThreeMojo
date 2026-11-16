@@ -42,7 +42,13 @@ function.
 
 from std.memory import Layout, unsafe_memcpy
 from std.runtime import initialize_runtime
-from window.capi_abi import ABI_VERSION, MAX_SIDE, GpuInfo, GpuPart
+from window.capi_abi import (
+    ABI_VERSION,
+    MAX_SIDE,
+    GpuInfo,
+    GpuPart,
+    null_pointer,
+)
 from window.water_app import BED, WaterApp
 
 comptime MAX_ASSET = 67108864
@@ -134,6 +140,8 @@ def tm_free(room: Pointer[UInt8, MutUntrackedOrigin]) abi("C") -> None:
     Args:
         room: An address that `tm_alloc` returned.
     """
+    if Int(room) == 0:
+        return
     room.unsafe_free()
 
 
@@ -155,6 +163,10 @@ def tm_asset(
         the bytes are not a JPEG that the app can read. The bed is not
         changed then.
     """
+    if Int(handle) == 0:
+        return 1
+    if Int(bytes) == 0:
+        return 1
     if length <= 0:
         return 1
     # One bulk copy. A byte loop here copies the photograph one byte at a
@@ -175,6 +187,8 @@ def tm_destroy(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> None:
     Args:
         handle: A handle from `tm_create`.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     _ = app.unsafe_take_pointee()
     app.unsafe_free()
@@ -203,6 +217,8 @@ def tm_event(
         detail: The key code of a key event. A pointer event's button is not
             used.
     """
+    if Int(handle) == 0:
+        return
     _app(handle)[].handle(Int(kind), Int(y), Int(detail))
 
 
@@ -220,6 +236,8 @@ def tm_step(
         handle: A handle from `tm_create`.
         microseconds: The time since the last step, in microseconds.
     """
+    if Int(handle) == 0:
+        return
     _app(handle)[].advance(Int(microseconds))
 
 
@@ -240,6 +258,8 @@ def tm_frame(
         `tm_width * tm_height * 4` bytes. It stays valid until the next
         call on this app.
     """
+    if Int(handle) == 0:
+        return null_pointer[UInt8]()
     var app = _app(handle)
     try:
         app[].draw()
@@ -260,6 +280,8 @@ def tm_width(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The width, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].width)
 
 
@@ -273,6 +295,8 @@ def tm_height(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The height, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].height)
 
 
@@ -293,6 +317,8 @@ def tm_gpu_prepare(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
         It is -1 if the water cannot be prepared, and the arrays are those of
         the last frame that could.
     """
+    if Int(handle) == 0:
+        return -1
     try:
         return Int32(_app(handle)[].prepare())
     except:
@@ -310,6 +336,8 @@ def tm_gpu_glare(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
         0 if the `GPU_GRID` part now holds the glare. 1 if `tm_gpu_prepare` has
         not run, and the part is unchanged.
     """
+    if Int(handle) == 0:
+        return 1
     try:
         _app(handle)[].glare()
     except:
@@ -334,6 +362,8 @@ def tm_gpu_part(
         The address of the part's first byte, or NULL before `tm_gpu_prepare`
         and for a part number that does not exist.
     """
+    if Int(handle) == 0:
+        return None
     var part = GpuPart(Int(which))
     if not part.is_valid():
         return None
@@ -358,6 +388,8 @@ def tm_gpu_words(
         an entry. It is 0 before `tm_gpu_prepare` and for a part number that
         does not exist.
     """
+    if Int(handle) == 0:
+        return 0
     var part = GpuPart(Int(which))
     if not part.is_valid():
         return 0
@@ -378,6 +410,8 @@ def tm_gpu_info(
     Returns:
         The number. It is 0 before `tm_gpu_prepare` and for another `which`.
     """
+    if Int(handle) == 0:
+        return 0
     var info = GpuInfo(Int(which))
     if not info.is_valid():
         return 0

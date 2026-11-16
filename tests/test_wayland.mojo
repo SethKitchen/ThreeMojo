@@ -86,6 +86,7 @@ from window.wayland import (
     require_io,
     runtime_folder,
     send_message,
+    should_retry_recvmsg,
     socket_address,
     socket_path,
     socket_ready,
@@ -1538,6 +1539,39 @@ def test_a_window_shows_a_frame_on_a_real_compositor() raises:
     window.close()
     _ = setenv("XDG_RUNTIME_DIR", saved)
     _ = run("kill " + pid + "; rm -rf '" + folder + "'")
+
+
+def test_receive_retry_and_socket_error_reporting() raises:
+    assert_false(should_retry_recvmsg(8, 4))
+    assert_false(should_retry_recvmsg(0, 0))
+    assert_false(should_retry_recvmsg(-1, 9))
+    assert_true(should_retry_recvmsg(-1, 4))
+
+    var libc = OwnedDLHandle()
+    var bad = receive_message(libc, WaylandSocket(-1), is_bsd())
+    assert_true(bad.count < 0)
+    assert_true(bad.error_code > 0)
+
+    var compositor = Compositor()
+    var window = _open(compositor)
+    # Append > 4096 bytes of 8-byte silent messages plus 1 trailing byte so
+    # `_next` exercises the `_incoming_at >= READ_BYTES` compaction branch.
+    for _ in range(520):
+        var raw_msg = WireMessage(COMPOSITOR, 0)
+        var noop = raw_msg.finish()
+        for b in noop:
+            window._incoming.append(b)
+    window._incoming.append(1)
+    while window._next():
+        pass
+    assert_equal(len(window._incoming) - window._incoming_at, 1)
+    window._incoming.clear()
+    window._incoming_at = 0
+    _ = libc.call["close", c_int](c_int(window._fd))
+    with assert_raises(contains="could not read from the compositor socket"):
+        _ = window._fill(0)
+    window.is_open = False
+    compositor.close()
 
 
 def main() raises:

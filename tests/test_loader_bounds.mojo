@@ -23,11 +23,18 @@ from loaders.draco import (
     decode_draco,
 )
 from loaders.draco_buffer import DracoBuffer
+from loaders.file_path import confined_path
 from loaders.fbx_tree import (
     _BinaryReader,
     MAX_FBX_ARRAY_BYTES,
     FbxDocument,
     FBX_BINARY,
+)
+from loaders.gltf import (
+    MAX_GLTF_BUFFER_BYTES,
+    _data_uri_bytes,
+    _uri_bytes,
+    load_gltf,
 )
 from loaders.gltf_layout import (
     AccessorLayout,
@@ -51,6 +58,20 @@ from loaders.vox import (
     vox_geometry,
 )
 from render.png import zlib_stream
+from core.assets import Assets
+from core.scene import Scene
+from materials.node_program import (
+    INSTRUCTION_A,
+    INSTRUCTION_B,
+    INSTRUCTION_FLOATS,
+    NodeProgram,
+    NodeProgramStore,
+    PROGRAM_HEADER,
+    check_program_bounds,
+)
+from std.math import nan
+from std.os import remove, symlink
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -58,6 +79,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from test_scratch import TestScratch, temporary_path
 
 
 def _le(value: Int) -> List[UInt8]:
@@ -423,5 +445,177 @@ def test_cmap_groups_cannot_read_beyond_the_declared_subtable() raises:
         _ = _cmap(_Data(Span(bytes)), 0)
 
 
+def test_confined_path_refuses_escapes_and_symbolic_links() raises:
+    var root = temporary_path("confined_root")
+    var sub = root + "/sub"
+    _ = Path(root)
+    from tools._carla_files import make_dirs, write_file
+
+    make_dirs(sub)
+    var outside_bytes: List[UInt8] = [1, 2, 3]
+    var inside_bytes: List[UInt8] = [4, 5]
+    write_file(root + "/outside.bin", Span(outside_bytes))
+    write_file(sub + "/inside.bin", Span(inside_bytes))
+    symlink(root + "/outside.bin", sub + "/escape_link.bin")
+
+    try:
+        assert_equal(confined_path("", "a/./b.png", "T"), "a/b.png")
+        assert_equal(confined_path(sub, "inside.bin", "T"), sub + "/inside.bin")
+        assert_equal(
+            confined_path(sub + "/", "./inside.bin", "T"), sub + "/inside.bin"
+        )
+        assert_equal(confined_path("/", "tmp", "T"), "/tmp")
+        assert_equal(
+            confined_path("./assets/mtl/", "../brick.png", "T", True),
+            "./assets/mtl/../brick.png",
+        )
+        assert_equal(confined_path("", "inside.bin", "T", True), "inside.bin")
+        with assert_raises():
+            _ = confined_path(sub, "../outside.bin", "T", True)
+        with assert_raises():
+            _ = confined_path(
+                "assets/mtl/", "../../../../etc/passwd", "T", True
+            )
+        with assert_raises():
+            _ = confined_path(
+                "assets/mtl/", "../../../../no_such_root_file", "T", True
+            )
+        assert_equal(
+            confined_path("assets/mtl/", "no_dir/missing", "T", True),
+            "assets/mtl/no_dir/missing",
+        )
+        assert_equal(
+            confined_path("assets/mtl/", "missing_here", "T", True),
+            "assets/mtl/missing_here",
+        )
+
+        for bad in [
+            "",
+            "a\0b",
+            "/etc/passwd",
+            "a\\b",
+            "http:x",
+            "../outside.bin",
+            "nested/../../outside.bin",
+            ".",
+            "./.",
+            "escape_link.bin",
+        ]:
+            with assert_raises():
+                _ = confined_path(sub, String(bad), "T")
+        with assert_raises():
+            _ = _uri_bytes("../outside.bin", sub + "/")
+        with assert_raises():
+            _ = _uri_bytes("..%2foutside.bin", sub + "/")
+    finally:
+        remove(sub + "/escape_link.bin")
+
+
+def test_gltf_buffer_limits_and_truncation() raises:
+    with assert_raises(contains="exceeds the buffer byte limit"):
+        _ = _data_uri_bytes("data:application/octet-stream;base64,QUFBQQ==", 1)
+    assert_equal(MAX_GLTF_BUFFER_BYTES, 536870912)
+
+    var scene = Scene()
+    var assets = Assets()
+    # Declared byteLength 2, embedded 4 bytes ("QUFBQQ==" -> 4 bytes): truncated to 2!
+    var truncated_doc = (
+        '{"asset":{"version":"2.0"},"buffers":[{"byteLength":2,'
+        '"uri":"data:application/octet-stream;base64,QUFBQQ=="}]}'
+    )
+    var model = load_gltf(truncated_doc, [], "", scene, assets)
+    _ = model
+
+    for bad_doc in [
+        '{"asset":{"version":"2.0"},"buffers":[{"byteLength":-1}]}',
+        '{"asset":{"version":"2.0"},"buffers":[{"byteLength":600000000}]}',
+    ]:
+        var s = Scene()
+        var a = Assets()
+        with assert_raises(contains="byteLength"):
+            _ = load_gltf(String(bad_doc), [], "", s, a)
+
+
+def test_node_program_bounds_validation_and_clamping() raises:
+    var short = NodeProgram()
+    short.code = [Float32(0)]
+    with assert_raises(contains="shorter than PROGRAM_HEADER"):
+        check_program_bounds(short)
+    var store = NodeProgramStore()
+    var short_id = store.add(short^)
+    assert_equal(len(store.get(short_id).code), PROGRAM_HEADER)
+
+    var nan_prog = NodeProgram()
+    nan_prog.code = List[Float32](
+        length=PROGRAM_HEADER + INSTRUCTION_FLOATS, fill=0
+    )
+    nan_prog.code[0] = nan[DType.float32]()
+    with assert_raises(contains="output start"):
+        check_program_bounds(nan_prog)
+    _ = store.add(nan_prog^)
+
+    var frac_prog = NodeProgram()
+    frac_prog.code = List[Float32](
+        length=PROGRAM_HEADER + INSTRUCTION_FLOATS, fill=0
+    )
+    frac_prog.code[0] = Float32(PROGRAM_HEADER) + 0.5
+    with assert_raises(contains="output start"):
+        check_program_bounds(frac_prog)
+
+    var neg_count = NodeProgram()
+    neg_count.code = List[Float32](
+        length=PROGRAM_HEADER + INSTRUCTION_FLOATS, fill=0
+    )
+    neg_count.code[0] = Float32(PROGRAM_HEADER)
+    neg_count.code[1] = -1
+    with assert_raises(contains="instruction count"):
+        check_program_bounds(neg_count)
+    _ = store.add(neg_count^)
+
+    var overlap_hdr = NodeProgram()
+    overlap_hdr.code = List[Float32](
+        length=PROGRAM_HEADER + INSTRUCTION_FLOATS, fill=0
+    )
+    overlap_hdr.code[0] = 2
+    overlap_hdr.code[1] = 1
+    with assert_raises(contains="overlap header"):
+        check_program_bounds(overlap_hdr)
+    _ = store.add(overlap_hdr^)
+
+    var past_end = NodeProgram()
+    past_end.code = List[Float32](
+        length=PROGRAM_HEADER + INSTRUCTION_FLOATS, fill=0
+    )
+    past_end.code[0] = Float32(PROGRAM_HEADER)
+    past_end.code[1] = 2
+    with assert_raises(contains="run past code"):
+        check_program_bounds(past_end)
+    _ = store.add(past_end^)
+
+    var bad_reg = NodeProgram()
+    bad_reg.code = List[Float32](
+        length=PROGRAM_HEADER + INSTRUCTION_FLOATS, fill=0
+    )
+    bad_reg.code[0] = Float32(PROGRAM_HEADER)
+    bad_reg.code[1] = 1
+    bad_reg.code[PROGRAM_HEADER + INSTRUCTION_A] = 99
+    bad_reg.code[PROGRAM_HEADER + INSTRUCTION_B] = 3
+    with assert_raises(contains="register index"):
+        _ = store.add_checked(bad_reg.copy())
+    var clamped_id = store.add(bad_reg^)
+    assert_equal(store.get(clamped_id).code[PROGRAM_HEADER + INSTRUCTION_A], 0)
+    assert_equal(store.get(clamped_id).code[PROGRAM_HEADER + INSTRUCTION_B], 3)
+
+    var valid = NodeProgram()
+    valid.code = List[Float32](
+        length=PROGRAM_HEADER + INSTRUCTION_FLOATS, fill=0
+    )
+    valid.code[0] = Float32(PROGRAM_HEADER)
+    valid.code[1] = 1
+    var checked_id = store.add_checked(valid^)
+    assert_equal(checked_id.value, 6)
+
+
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

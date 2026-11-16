@@ -26,6 +26,7 @@ from window.capi_abi import (
     POINTER_MOVE,
     POINTER_UP,
     WHEEL,
+    null_pointer,
 )
 from window.capi_scene import (
     SceneApp,
@@ -235,6 +236,16 @@ def test_a_frame_that_cannot_be_drawn_is_the_last_one() raises:
     )
     assert_equal(before, _hash(app))
     tm_destroy(app)
+
+
+def test_null_handles_are_ignored() raises:
+    var empty = null_pointer[NoneType]()
+    tm_destroy(empty)
+    tm_event(empty, Int32(WHEEL), Int32(1), Int32(1), Int32(1))
+    tm_step(empty, Int32(16000))
+    assert_equal(Int(tm_frame(empty)), 0)
+    assert_equal(tm_width(empty), Int32(0))
+    assert_equal(tm_height(empty), Int32(0))
 
 
 def main() raises:

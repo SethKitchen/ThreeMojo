@@ -97,7 +97,7 @@ from lights.light import (
     spot_light,
 )
 from loaders.collada_animation import read_collada_animations
-from loaders.file_path import path_directory
+from loaders.file_path import confined_path, path_directory
 from loaders.collada_id import collada_reference
 from loaders.collada_numbers import collada_floats, require_positive_stride
 from loaders.js_text import split_fields
@@ -1082,7 +1082,7 @@ struct _Loader(Movable):
                     if entry.name == name:
                         found = entry.data.copy()
                 return found^
-        return Path(self.directory + path).read_bytes()
+        return Path(confined_path(self.directory, path, "Collada")).read_bytes()
 
     def or_default(
         self, settings: Dict[String, Float64], key: String, default: Float64

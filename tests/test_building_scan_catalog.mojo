@@ -183,6 +183,20 @@ def test_a_field_that_cannot_be_read_is_refused() raises:
         )
     with assert_raises():
         _ = ScanCatalog.open("assets/building_scans/no-such.json", "c")
+    with assert_raises(contains="Scan catalog"):
+        _ = ScanCatalog.parse(
+            _manifest(String(ENTRY).replace('"flat-room"', '"../escape"')), "c"
+        )
+    with assert_raises(contains="Scan catalog"):
+        _ = ScanCatalog.parse(
+            _manifest(
+                String(ENTRY).replace(
+                    "}}",
+                    '}, "files": [{"role": "splat", "path": "../escape.ply"}]}',
+                )
+            ),
+            "c",
+        )
 
 
 def main() raises:

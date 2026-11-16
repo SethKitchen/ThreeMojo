@@ -272,7 +272,7 @@ from loaders.bytes import decode_base64
 from loaders.js_text import without_bom
 from loaders.image_file import decode_image
 from loaders.fbx import sanitize_node_name
-from loaders.file_path import path_directory
+from loaders.file_path import confined_path, path_directory
 from loaders.draco_attributes import DracoDataType
 from loaders.meshopt import (
     FILTER_NONE,
@@ -1102,13 +1102,22 @@ def _check_asset(document: JsonDocument, root: Int) raises:
         raise Error("glTF: only version 2 is read")
 
 
-def _data_uri_bytes(uri: String) raises -> List[UInt8]:
+comptime MAX_GLTF_BUFFER_BYTES = 536870912
+"""The largest raw glTF buffer read into host memory: 512 MiB."""
+
+
+def _data_uri_bytes(
+    uri: String, limit: Int = MAX_GLTF_BUFFER_BYTES
+) raises -> List[UInt8]:
     """Return the bytes of a `data:` URI, which must be base64."""
     var comma = uri.find(",")
     require_non_negative(comma, "glTF: a data URI without a comma")
     var header = _slice(uri, 0, comma)
     if not header.endswith(";base64"):
         raise Error("glTF: only a base64 data URI is read")
+    var encoded_length = uri.byte_length() - (comma + 1)
+    if encoded_length > ((limit + 2) // 3) * 4:
+        raise Error("glTF: a data URI exceeds the buffer byte limit")
     return decode_base64(_slice(uri, comma + 1, uri.byte_length()))
 
 
@@ -1155,14 +1164,18 @@ def _percent_decoded(uri: String) raises -> String:
     return String(from_utf8_lossy=out)
 
 
-def _uri_bytes(uri: String, directory: String) raises -> List[UInt8]:
+def _uri_bytes(
+    uri: String, directory: String, limit: Int = MAX_GLTF_BUFFER_BYTES
+) raises -> List[UInt8]:
     """Return the bytes a URI names: decoded from a `data:` URI, or read
     from a file beside the document, its percent escapes decoded."""
     if uri.startswith("data:"):
-        return _data_uri_bytes(uri)
+        return _data_uri_bytes(uri, limit)
     if uri.find(":") >= 0:
         raise Error("glTF: only a data URI or a relative path is read: " + uri)
-    return Path(directory + _percent_decoded(uri)).read_bytes()
+    var decoded = _percent_decoded(uri)
+    var resolved = confined_path(directory, decoded, "glTF")
+    return Path(resolved).read_bytes()
 
 
 struct _DracoPrimitive(Movable):
@@ -1482,6 +1495,10 @@ struct _Loader(Movable):
         for index in range(self.count("buffers")):
             var buffer = self.entry("buffers", index)
             var length = self.required_integer(buffer, "byteLength")
+            if length < 0:
+                raise Error("glTF: buffer byteLength must not be negative")
+            if length > MAX_GLTF_BUFFER_BYTES:
+                raise Error("glTF: buffer byteLength exceeds the buffer limit")
             var uri = self.text(buffer, "uri")
             var meshopt = self.extension(buffer, MESHOPT_COMPRESSION)
             var fallback = meshopt != NO_NODE and self.flag(meshopt, "fallback")
@@ -1495,8 +1512,11 @@ struct _Loader(Movable):
                 bytes = self.bin.copy()
             else:
                 bytes = _uri_bytes(uri, self.directory)
-            if not placeholder and len(bytes) < length:
-                raise Error("glTF: a buffer is shorter than its byteLength")
+            if not placeholder:
+                if len(bytes) < length:
+                    raise Error("glTF: a buffer is shorter than its byteLength")
+                if len(bytes) > length:
+                    bytes = copy_bytes(bytes, 0, length)
             self.buffers.append(bytes^)
             self.placeholders.append(placeholder)
         self.decode_views()

@@ -213,5 +213,64 @@ def test_stat_fails_without_writing_either_platform_layout() raises:
     tree.close()
 
 
+def test_allocator_wraparound_and_large_angle_sine_stay_safe() raises:
+    var found = run_program(["sh", "-c", "command -v cc"], 5)
+    if found.status != 0:
+        print("SKIP (no cc): C ABI allocator and trig runtime")
+        return
+    var compiler = String(found.output.split("\n")[0])
+    var text = Path("examples/capi/mwrt.c").read_text()
+    var until_files = String(text.split("/* ---- 3. Files:")[0])
+    var harness = (
+        "#include <math.h>\n#include <stdint.h>\n#include <stdio.h>\n"
+        + "static size_t cur_pages = 2;\n"
+        + "unsigned char __heap_base;\n"
+        + "#define __builtin_wasm_memory_size(x) cur_pages\n"
+        + "#define __builtin_wasm_memory_grow(x, p) ((size_t)-1)\n"
+        + until_files.replace("extern unsigned char __heap_base;", "")
+        .replace("double sin(double x)", "double mw_sin(double x)")
+        .replace("double cos(double x)", "double mw_cos(double x)")
+        .replace("sin((double)x)", "mw_sin((double)x)")
+        .replace("cos((double)x)", "mw_cos((double)x)")
+        + "\nint main(void) {\n"
+        + "  if (KGEN_CompilerRT_AlignedAlloc(16, (uint64_t)-8) != 0) return"
+        " 1;\n"
+        + "  if (KGEN_CompilerRT_AlignedAlloc(0, 16) != 0) return 2;\n"
+        + "  if (KGEN_CompilerRT_AlignedAlloc(24, 16) != 0) return 3;\n"
+        + "  if (KGEN_CompilerRT_AlignedAlloc(64, (uint64_t)-64) != 0) return"
+        " 4;\n"
+        + "  if (KGEN_CompilerRT_AlignedAlloc(64, 0xFFFFFFC0u) != 0) return"
+        " 5;\n"
+        + "  double xs[6] = {1e10, 1e18, 1e20, -1e30, 1e150, 1e300};\n"
+        + "  for (int i = 0; i < 6; i++) {\n"
+        + "    if (fabs(mw_sin(xs[i]) - sin(xs[i])) > 1e-14) return 6;\n"
+        + "    if (fabs(mw_cos(xs[i]) - cos(xs[i])) > 1e-14) return 7;\n"
+        + "  }\n"
+        + "  return 0;\n"
+        + "}\n"
+    )
+    var tree = Tree()
+    tree.write("mwrt_check.c", harness)
+    var built = run_program(
+        [
+            compiler,
+            "-O2",
+            "-ffp-contract=off",
+            tree.root + "/mwrt_check.c",
+            "-lm",
+            "-o",
+            tree.root + "/mwrt_check",
+        ],
+        10,
+    )
+    if built.status != 0:
+        var msg = built.output + built.errors
+        tree.close()
+        raise Error(msg)
+    var ran = run_program([tree.root + "/mwrt_check"], 5)
+    tree.close()
+    assert_equal(ran.status, 0, ran.output + ran.errors)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

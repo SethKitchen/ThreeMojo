@@ -158,6 +158,15 @@ from materials.node_program import (
     PROGRAM_HEADER,
     PROGRAM_TIME,
     PROGRAM_VIEW,
+    INSTRUCTION_A,
+    INSTRUCTION_B,
+    INSTRUCTION_C,
+    INSTRUCTION_DEST,
+    INSTRUCTION_FLOATS,
+    INSTRUCTION_IMMEDIATE,
+    INSTRUCTION_OP,
+    MAX_INSTRUCTIONS,
+    MAX_REGISTERS,
     ROUGHNESS_NODE,
     SCATTERING_NODE,
     SIZE_NODE,
@@ -223,29 +232,10 @@ from std.math import (
 )
 from std.memory import bitcast
 
-# How many values one output can hold alive at once: one register each, four
-# floats a register. The kernel keeps them in a fixed array per thread, so
-# the number is fixed, and a graph that needs more is refused by `compile`.
-comptime MAX_REGISTERS = 32
-# How many instructions one output can hold, so a fragment's work is bounded.
-comptime MAX_INSTRUCTIONS = 4096
 # How many times one `Loop` can run its body, and how many nodes a graph can
 # grow to as its loops are unrolled.
 comptime MAX_LOOP_COUNT = 1024
 comptime MAX_GRAPH_NODES = 65536
-# How one instruction is laid out: the node kind, the registers of its three
-# inputs, one immediate -- where a constant's floats are, which components a
-# swizzle picks, or how wide a vector is -- and the register it writes. A
-# node that reads the fragment keeps its context in the third input's place.
-# An exact integer constant keeps ValueType.value - 40 in the unused B slot.
-# Constant and uniform loads must run before operand-register reads.
-comptime INSTRUCTION_OP = 0
-comptime INSTRUCTION_A = 1
-comptime INSTRUCTION_B = 2
-comptime INSTRUCTION_C = 3
-comptime INSTRUCTION_IMMEDIATE = 4
-comptime INSTRUCTION_DEST = 5
-comptime INSTRUCTION_FLOATS = 6
 
 
 def require_program_code(size: Int) raises:

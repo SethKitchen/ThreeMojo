@@ -44,6 +44,7 @@ from window.capi_abi import (
     MAX_SIDE,
     SplatInfo,
     SplatPart,
+    null_pointer,
 )
 from window.splat_app import SCAN, SplatApp
 
@@ -137,6 +138,8 @@ def tm_free(room: Pointer[UInt8, MutUntrackedOrigin]) abi("C") -> None:
     Args:
         room: An address that `tm_alloc` returned.
     """
+    if Int(room) == 0:
+        return
     room.unsafe_free()
 
 
@@ -160,6 +163,10 @@ def tm_asset(
         not positive, or the bytes are not a scan that the app can read. The
         scan is not changed then.
     """
+    if Int(handle) == 0:
+        return 1
+    if Int(bytes) == 0:
+        return 1
     if length <= 0:
         return 1
     var file = List[UInt8](length=Int(length), fill=0)
@@ -186,6 +193,8 @@ def tm_resize(
         0 if the frame has the new size. 1 if a side is out of range, and the
         frame is not changed.
     """
+    if Int(handle) == 0:
+        return 1
     var w = Int(width)
     var h = Int(height)
     if w > MAX_SIDE or h > MAX_SIDE:
@@ -204,6 +213,8 @@ def tm_destroy(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> None:
     Args:
         handle: A handle from `tm_create`.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     _ = app.unsafe_take_pointee()
     app.unsafe_free()
@@ -234,6 +245,8 @@ def tm_event(
             as `controls.input.PointerButton` numbers it, or -1, or the
             notches of a wheel event, positive toward the user.
     """
+    if Int(handle) == 0:
+        return
     _app(handle)[].handle(Int(kind), Int(x), Int(y), Int(detail))
 
 
@@ -251,6 +264,8 @@ def tm_step(
         handle: A handle from `tm_create`.
         microseconds: The time since the last step, in microseconds.
     """
+    if Int(handle) == 0:
+        return
     _app(handle)[].advance(Int(microseconds))
 
 
@@ -271,6 +286,8 @@ def tm_frame(
         `tm_width * tm_height * 4` bytes. It stays valid until the next
         call on this app.
     """
+    if Int(handle) == 0:
+        return null_pointer[UInt8]()
     var app = _app(handle)
     try:
         app[].draw()
@@ -291,6 +308,8 @@ def tm_width(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The width, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].width)
 
 
@@ -304,6 +323,8 @@ def tm_height(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The height, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].height)
 
 
@@ -325,6 +346,8 @@ def tm_splat_prepare(
         view cannot be prepared, and the parts are those of the last frame
         that could be.
     """
+    if Int(handle) == 0:
+        return 1
     try:
         if _app(handle)[].prepare() == 0:
             return 1
@@ -351,6 +374,8 @@ def tm_splat_part(
         loaded, for a band that the scan lacks, for the order before
         `tm_splat_prepare`, and for a part number that does not exist.
     """
+    if Int(handle) == 0:
+        return None
     var part = SplatPart(Int(which))
     if not part.is_valid():
         return None
@@ -373,6 +398,8 @@ def tm_splat_words(
     Returns:
         The size in 32-bit words. It is 0 where `tm_splat_part` is NULL.
     """
+    if Int(handle) == 0:
+        return 0
     var part = SplatPart(Int(which))
     if not part.is_valid():
         return 0
@@ -392,6 +419,8 @@ def tm_splat_info(
     Returns:
         The number. It is 0 for another `which`.
     """
+    if Int(handle) == 0:
+        return 0
     var info = SplatInfo(Int(which))
     if not info.is_valid():
         return 0

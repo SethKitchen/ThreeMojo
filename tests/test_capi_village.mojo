@@ -108,6 +108,7 @@ from window.capi_abi import (
     POINTER_MOVE,
     POINTER_UP,
     WHEEL,
+    null_pointer,
 )
 from window.capi_village import (
     tm_abi_version,
@@ -1045,6 +1046,27 @@ def test_a_game_begins_at_an_hour_in_a_weather() raises:
             25,
             -1,
         )
+
+
+def test_null_handles_and_audio_buffers_are_ignored() raises:
+    var empty = null_pointer[NoneType]()
+    var no_samples = null_pointer[Float32]()
+    tm_destroy(empty)
+    tm_event(empty, Int32(KEY_DOWN), Int32(0), Int32(0), Int32(KEY_SPACE))
+    tm_step(empty, Int32(16000))
+    assert_equal(Int(tm_frame(empty)), 0)
+    assert_equal(tm_width(empty), Int32(0))
+    assert_equal(tm_height(empty), Int32(0))
+    assert_equal(tm_village_audio(empty, no_samples, Int32(16)), Int32(0))
+    assert_equal(tm_village_passes(empty, Int32(1)), Int32(0))
+    assert_equal(tm_village_prepare(empty), Int32(0))
+    assert_equal(Int(tm_village_ints(empty)), 0)
+    assert_equal(Int(tm_village_floats(empty)), 0)
+    assert_equal(Int(tm_village_pointers(empty)), 0)
+    assert_equal(Int(tm_village_finish(empty)), 0)
+    var app = _make()
+    assert_equal(tm_village_audio(app, no_samples, Int32(16)), Int32(0))
+    tm_destroy(app)
 
 
 def main() raises:

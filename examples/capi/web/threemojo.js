@@ -77,17 +77,21 @@ export class App {
   }
 
   event(kind, x, y, detail) {
+    if (this.handle === 0) return;
     this.library.exports.tm_event(this.handle, kind, x, y, detail);
   }
 
   step(microseconds) {
+    if (this.handle === 0) return;
     this.library.exports.tm_step(this.handle, microseconds);
   }
 
   /** Draw, and return the frame as RGBA bytes, a view of the module's memory. */
   frame() {
+    if (this.handle === 0) throw new Error("The app has been destroyed");
     const { exports, memory, shared } = this.library;
     const pointer = address(exports.tm_frame(this.handle));
+    if (pointer === 0) throw new Error("The app returned no frame");
     const view = new Uint8ClampedArray(memory.buffer, pointer, this.width * this.height * 4);
     // ImageData refuses a view of shared memory, and the next frame would
     // overwrite it, so a threaded module hands out a copy.
@@ -101,6 +105,7 @@ export class App {
    * tm_asset, and the bytes cross in its memory.
    */
   asset(bytes) {
+    if (this.handle === 0) return false;
     const { exports } = this.library;
     if (!exports.tm_asset) return false;
     const room = address(exports.tm_alloc(bytes.length));
@@ -118,6 +123,7 @@ export class App {
    * takes a new size exports tm_resize.
    */
   resize(width, height) {
+    if (this.handle === 0) return false;
     const { exports } = this.library;
     if (!exports.tm_resize) return false;
     if (exports.tm_resize(this.handle, width, height) !== 0) return false;
@@ -127,6 +133,7 @@ export class App {
   }
 
   destroy() {
+    if (this.handle === 0) return;
     this.library.exports.tm_destroy(this.handle);
     this.handle = 0;
   }

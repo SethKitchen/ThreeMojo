@@ -65,7 +65,7 @@ from controls.input import (
 )
 from core.ordinal import ordinal_valid
 from render.framebuffer import Framebuffer
-from std.ffi import OwnedDLHandle, c_int
+from std.ffi import OwnedDLHandle, c_int, external_call
 from std.os import getenv
 from std.sys import CompilationTarget
 from std.time import perf_counter_ns
@@ -97,6 +97,10 @@ comptime MESSAGE_HEADER_BYTES = 56
 comptime SCM_RIGHTS = 1
 comptime CONTROL_BYTES = 256
 comptime READ_BYTES = 4096
+comptime EINTR = 4
+"""Interrupted system call."""
+comptime MSG_CMSG_CLOEXEC = 0x40000000
+"""Linux `recvmsg` flag that sets close-on-exec on received descriptors."""
 # A message is an object, then its size in the high half of a word and its
 # opcode in the low half.
 comptime HEADER_BYTES = 8
@@ -351,12 +355,40 @@ def control_descriptors(
 
 @fieldwise_init
 struct Received(Movable):
-    """What one `recvmsg` gave: how many bytes, the bytes, and the file
-    descriptors that came with them."""
+    """What one `recvmsg` gave: how many bytes, the bytes, the file
+    descriptors that came with them, and `errno` on failure."""
 
     var count: Int
     var bytes: List[UInt8]
     var descriptors: List[Int]
+    var error_code: Int
+
+
+def _socket_errno() -> Int:
+    """Return the calling thread's `errno`."""
+    var address: Int
+    comptime if CompilationTarget.is_linux():
+        address = Int(
+            external_call["__errno_location", OpaquePointer[MutAnyOrigin]]()
+        )
+    else:
+        address = Int(external_call["__error", OpaquePointer[MutAnyOrigin]]())
+    return Int(Pointer[Int32, MutAnyOrigin](unsafe_from_address=address)[])
+
+
+def should_retry_recvmsg(count: Int, error_code: Int) -> Bool:
+    """Return whether a `recvmsg` result failed with `EINTR` and must retry.
+
+    Args:
+        count: The return value of `recvmsg`.
+        error_code: The `errno` captured after a negative return.
+
+    Returns:
+        True only when `count` is negative and `error_code` is `EINTR`.
+    """
+    if count >= 0:
+        return False
+    return error_code == EINTR
 
 
 def send_message(
@@ -427,16 +459,28 @@ def receive_message(
     store_little_endian(header, 16, Int(vector.unsafe_ptr()), 8)
     store_little_endian(header, 24, 1, 8)
     store_little_endian(header, 32, Int(control.unsafe_ptr()), 8)
-    store_little_endian(header, 40, len(control), 8)
-    var count = libc.call["recvmsg", Int](
-        c_int(socket.value), Int(header.unsafe_ptr()), c_int(0)
-    )
+    var flags = c_int(
+        MSG_CMSG_CLOEXEC
+    ) if CompilationTarget.is_linux() else c_int(0)
+    var count = -1
+    var err = 0
+    while True:  # pragma: no branch
+        store_little_endian(header, 40, len(control), 8)
+        count = libc.call["recvmsg", Int](
+            c_int(socket.value), Int(header.unsafe_ptr()), flags
+        )
+        err = 0 if count >= 0 else _socket_errno()
+        if not should_retry_recvmsg(count, err):  # pragma: no branch
+            break
     _ = vector^
     var descriptors = control_descriptors(header, control, bsd)
     var bytes = List[UInt8]()
-    for index in range(count):
-        bytes.append(data[index])
-    return Received(count, bytes^, descriptors^)
+    if count >= 0:
+        for index in range(count):
+            bytes.append(data[index])
+    else:
+        descriptors.clear()
+    return Received(count, bytes^, descriptors^, err)
 
 
 def socket_ready(libc: OwnedDLHandle, socket: WaylandSocket, wait: Int) -> Bool:
@@ -698,6 +742,7 @@ struct WaylandWindow(Movable):
     # The bytes read and not yet a whole message, and the events waiting
     # for `poll`.
     var _incoming: List[UInt8]
+    var _incoming_at: Int
     var _events: List[InputEvent]
     # The registry's names and versions of the globals, -1 for none.
     var _compositor_name: Int
@@ -803,6 +848,7 @@ struct WaylandWindow(Movable):
         self._fd = socket.value
         self._kinds = [NO_INTERFACE, WL_DISPLAY]
         self._incoming = List[UInt8]()
+        self._incoming_at = 0
         self._events = List[InputEvent]()
         self._compositor_name = -1
         self._shm_name = -1
@@ -914,6 +960,12 @@ struct WaylandWindow(Movable):
         var received = receive_message(self._libc, socket, is_bsd())
         for descriptor in received.descriptors:
             _ = self._libc.call["close", c_int](c_int(descriptor))
+        require_io(
+            received.count >= 0,
+            "could not read from the compositor socket (errno "
+            + String(received.error_code)
+            + ")",
+        )
         require_io(received.count > 0, "the compositor closed the connection")
         # The count is positive here.
         for byte in received.bytes:  # pragma: no branch
@@ -930,23 +982,35 @@ struct WaylandWindow(Movable):
             Error: If the message is malformed, or it is an error the
                 compositor reports.
         """
-        if len(self._incoming) < HEADER_BYTES:
+        var unread = len(self._incoming) - self._incoming_at
+        if unread < HEADER_BYTES:
             return False
-        var size = little_endian_u32(self._incoming, 4) >> 16
+        var size = (
+            little_endian_u32(self._incoming, self._incoming_at + 4) >> 16
+        )
         require_io(
             size >= HEADER_BYTES and size % 4 == 0,
             "the compositor sent a malformed message",
         )
-        if len(self._incoming) < size:
+        if unread < size:
             return False
         # A message is at least its header.
+        var start = self._incoming_at
         var message = List[UInt8](capacity=size)
         for index in range(size):  # pragma: no branch
-            message.append(self._incoming[index])
-        var rest = List[UInt8](capacity=len(self._incoming) - size)
-        for index in range(size, len(self._incoming)):
-            rest.append(self._incoming[index])
-        self._incoming = rest^
+            message.append(self._incoming[start + index])
+        self._incoming_at += size
+        if self._incoming_at == len(self._incoming):
+            self._incoming.clear()
+            self._incoming_at = 0
+        elif self._incoming_at >= READ_BYTES:
+            var rest = List[UInt8](
+                capacity=len(self._incoming) - self._incoming_at
+            )
+            for index in range(self._incoming_at, len(self._incoming)):
+                rest.append(self._incoming[index])
+            self._incoming = rest^
+            self._incoming_at = 0
         self._dispatch(message)
         return True
 

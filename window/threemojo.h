@@ -62,7 +62,7 @@ void tm_init(void);
  * is outside 1..TM_MAX_SIDE. */
 tm_app *tm_create(int32_t width, int32_t height);
 
-/* Free an app and its frame. The handle must not be used again. */
+/* Free an app and its frame. NULL is ignored. The handle must not be used again. */
 void tm_destroy(tm_app *app);
 
 /* Tell the app about one input event. x and y are pixels. detail is the key
@@ -94,7 +94,7 @@ int32_t tm_height(const tm_app *app);
  * splats. Give the room back with tm_free. */
 uint8_t *tm_alloc(int32_t size);
 
-/* Give back room from tm_alloc. */
+/* Give back room from tm_alloc. NULL is ignored. */
 void tm_free(uint8_t *room);
 
 /* Give the app a file: for the water, its pebble photograph, a JPEG, and for

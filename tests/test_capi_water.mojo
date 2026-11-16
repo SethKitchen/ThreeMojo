@@ -49,6 +49,7 @@ from window.capi_abi import (
     POINTER_MOVE,
     POINTER_UP,
     WHEEL,
+    null_pointer,
 )
 from window.capi_water import (
     MAX_ASSET,
@@ -647,6 +648,29 @@ def test_refused_glare_kernels_keep_the_previous_frame_and_photograph() raises:
     _state(app)[].water.glare_resolution = SpectrumResolution(64)
     assert_equal(tm_gpu_prepare(app), Int32(2))
     assert_true(_words(app, GPU_PEBBLE.value) > 3)
+    tm_destroy(app)
+
+
+def test_null_handles_and_buffers_are_ignored() raises:
+    var empty = null_pointer[NoneType]()
+    var no_bytes = null_pointer[UInt8]()
+    tm_free(no_bytes)
+    tm_destroy(empty)
+    tm_event(empty, Int32(POINTER_DOWN), Int32(1), Int32(1), Int32(0))
+    tm_step(empty, Int32(STEP_MICROSECONDS))
+    assert_equal(Int(tm_frame(empty)), 0)
+    assert_equal(tm_width(empty), Int32(0))
+    assert_equal(tm_height(empty), Int32(0))
+    assert_equal(tm_asset(empty, no_bytes, Int32(4)), Int32(1))
+    assert_equal(tm_gpu_prepare(empty), Int32(-1))
+    assert_equal(tm_gpu_glare(empty), Int32(1))
+    assert_false(Bool(tm_gpu_part(empty, Int32(GPU_SURFACE.value))))
+    assert_equal(tm_gpu_words(empty, Int32(GPU_SURFACE.value)), Int32(0))
+    assert_equal(
+        tm_gpu_info(empty, Int32(GPU_INFO_RIPPLE_SIDE.value)), Int32(0)
+    )
+    var app = _plain()
+    assert_equal(tm_asset(app, no_bytes, Int32(4)), Int32(1))
     tm_destroy(app)
 
 

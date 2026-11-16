@@ -87,7 +87,7 @@ from geometries.box import box
 from geometries.capsule import capsule
 from geometries.cylinder import cone, cylinder
 from geometries.sphere import sphere
-from loaders.file_path import path_name
+from loaders.file_path import confined_path, path_name
 from loaders.image_file import decode_image
 from loaders.js_number import js_number_text
 from loaders.js_text import is_js_word
@@ -2393,7 +2393,7 @@ struct _Composer(Movable):
                     )
             if self.base_path != "":
                 return self.create_texture(
-                    -1, resolved, attrs, transform, assets, built
+                    -1, resolved, attrs, transform, assets, built, clean
                 )
             return -1
         return self.create_texture(asset, "", attrs, transform, assets, built)
@@ -2406,6 +2406,7 @@ struct _Composer(Movable):
         transform: Optional[_Attrs],
         assets: UsdAssets,
         mut built: _Built,
+        relative: String = "",
     ) raises -> Int:
         """Make a texture and load its image, three.js's
         `_createTextureFromData`: on a load, the wraps and the placement
@@ -2418,6 +2419,7 @@ struct _Composer(Movable):
             transform: The `UsdTransform2d`'s attributes, when it has one.
             assets: The archive's files.
             built: What is being built.
+            relative: The unjoined relative file name when `asset` is -1.
 
         Returns:
             The texture, or -1 when the archive's file is a layer.
@@ -2435,7 +2437,8 @@ struct _Composer(Movable):
         else:
             image = _Image(url, False)
             try:
-                bytes = Path(url).read_bytes()
+                var disk = confined_path(self.base_path, relative, "USD", True)
+                bytes = Path(disk).read_bytes()
             except:
                 pass
         if len(bytes) > 0:

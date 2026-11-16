@@ -35,6 +35,7 @@ from render.volume_texture_store import (
     DataArrayTextureId,
 )
 from render.texture_store import TextureId
+from std.math import isfinite
 from std.memory import bitcast
 from units.si import (
     Duration,
@@ -56,6 +57,26 @@ comptime PROGRAM_VIEW = PROGRAM_TIME + 1
 
 
 comptime PROGRAM_HEADER = PROGRAM_VIEW + 16
+
+
+comptime MAX_REGISTERS = 32
+"""How many registers one shader output may hold alive at once."""
+comptime MAX_INSTRUCTIONS = 4096
+"""How many instructions one shader output may hold."""
+comptime INSTRUCTION_OP = 0
+"""The opcode slot inside an instruction."""
+comptime INSTRUCTION_A = 1
+"""The first input register slot inside an instruction."""
+comptime INSTRUCTION_B = 2
+"""The second input register slot inside an instruction."""
+comptime INSTRUCTION_C = 3
+"""The third input register or context slot inside an instruction."""
+comptime INSTRUCTION_IMMEDIATE = 4
+"""The immediate operand slot inside an instruction."""
+comptime INSTRUCTION_DEST = 5
+"""The destination register slot inside an instruction."""
+comptime INSTRUCTION_FLOATS = 6
+"""How many 32-bit words make one instruction."""
 
 
 comptime Lanes = SIMD[DType.float32, 4]
@@ -814,7 +835,8 @@ struct NodeProgramStore(Copyable, Movable):
         return len(self.programs)
 
     def add(mut self, var program: NodeProgram) -> NodeProgramId:
-        """Take ownership of a program and return the id naming it.
+        """Take ownership of a program, clamp any out-of-range header or
+        register indices, and return the id naming it.
 
         Args:
             program: The program, moved in.
@@ -822,6 +844,24 @@ struct NodeProgramStore(Copyable, Movable):
         Returns:
             Its id, valid for the life of the store.
         """
+        _clamp_program_bounds(program.code)
+        self.programs.append(program^)
+        return NodeProgramId(len(self.programs) - 1)
+
+    def add_checked(mut self, var program: NodeProgram) raises -> NodeProgramId:
+        """Validate header and register bounds of `program` and store it.
+
+        Args:
+            program: The program, moved in.
+
+        Returns:
+            Its id, valid for the life of the store.
+
+        Raises:
+            Error: If the header, instruction spans or register slots are
+                out of bounds.
+        """
+        check_program_bounds(program)
         self.programs.append(program^)
         return NodeProgramId(len(self.programs) - 1)
 
@@ -854,6 +894,94 @@ struct NodeProgramStore(Copyable, Movable):
         """
         for index in range(len(self.programs)):
             self.programs[index].set_frame(time, view)
+
+
+def _whole_in_range(value: Float32, limit: Int) -> Bool:
+    """Return whether `value` is a finite whole number in `0..limit`."""
+    if not isfinite(value):
+        return False
+    if value < 0 or value > Float32(limit):
+        return False
+    return Float32(Int(value)) == value
+
+
+def check_program_bounds(program: NodeProgram) raises:
+    """Refuse a node program whose output spans or register slots leave bounds.
+
+    Args:
+        program: The program to inspect.
+
+    Raises:
+        Error: If `code` is shorter than `PROGRAM_HEADER`, an output span
+            exceeds `code` or `MAX_INSTRUCTIONS`, or an instruction names a
+            register outside `0..MAX_REGISTERS - 1`.
+    """
+    var size = len(program.code)
+    if size < PROGRAM_HEADER:
+        raise Error("NodeProgram: code is shorter than PROGRAM_HEADER")
+    for output in range(NODE_OUTPUT_COUNT):  # pragma: no branch
+        var raw_start = program.code[output * 2]
+        var raw_count = program.code[output * 2 + 1]
+        if not _whole_in_range(raw_start, size):
+            raise Error("NodeProgram: output start is out of range")
+        if not _whole_in_range(raw_count, MAX_INSTRUCTIONS):
+            raise Error("NodeProgram: output instruction count is out of range")
+        var start = Int(raw_start)
+        var count = Int(raw_count)
+        if count == 0:
+            continue
+        if start < PROGRAM_HEADER:
+            raise Error("NodeProgram: output instructions overlap header")
+        if start + count * INSTRUCTION_FLOATS > size:
+            raise Error("NodeProgram: output instructions run past code")
+        for step in range(count):
+            var base = start + step * INSTRUCTION_FLOATS
+            for offset in [
+                INSTRUCTION_A,
+                INSTRUCTION_B,
+                INSTRUCTION_C,
+                INSTRUCTION_DEST,
+            ]:  # pragma: no branch
+                if not _whole_in_range(
+                    program.code[base + offset], MAX_REGISTERS - 1
+                ):
+                    raise Error("NodeProgram: register index is out of range")
+
+
+def _clamp_program_bounds(mut code: List[Float32]):
+    """Ensure header spans and register slots cannot index outside VM arrays."""
+    if len(code) < PROGRAM_HEADER:
+        while len(code) < PROGRAM_HEADER:
+            code.append(0)
+        return
+    var size = len(code)
+    for output in range(NODE_OUTPUT_COUNT):  # pragma: no branch
+        var raw_start = code[output * 2]
+        var raw_count = code[output * 2 + 1]
+        if not _whole_in_range(raw_start, size) or not _whole_in_range(
+            raw_count, MAX_INSTRUCTIONS
+        ):
+            code[output * 2] = 0
+            code[output * 2 + 1] = 0
+            continue
+        var start = Int(raw_start)
+        var count = Int(raw_count)
+        if count == 0:
+            continue
+        if start < PROGRAM_HEADER or start + count * INSTRUCTION_FLOATS > size:
+            code[output * 2] = 0
+            code[output * 2 + 1] = 0
+            continue
+        for step in range(count):
+            var base = start + step * INSTRUCTION_FLOATS
+            for offset in [
+                INSTRUCTION_A,
+                INSTRUCTION_B,
+                INSTRUCTION_C,
+                INSTRUCTION_DEST,
+            ]:  # pragma: no branch
+                if not _whole_in_range(code[base + offset], MAX_REGISTERS - 1):
+                    code[base + offset] = 0
 
 
 # --- the interpreter ----------------------------------------------------------

@@ -40,7 +40,7 @@ that is not a number, and a file that is not found.
 
 from math.utils import clamp
 from loaders.bytes import hex_digit_value, is_sign_mark, space_tab_line
-from loaders.file_path import path_directory
+from loaders.file_path import confined_path, path_directory
 from loaders.js_number import js_parse_float
 from std.math import nan
 from std.pathlib import Path
@@ -805,7 +805,9 @@ struct LDrawLoader(Movable):
                     url = file_name
                     lowered = True
                     state = 0
-            var path = Path(self.parts_library_path + url)
+            var path = Path(
+                confined_path(self.parts_library_path, url, "LDrawLoader")
+            )
             if path.is_file():
                 return path.read_text()
         raise Error(

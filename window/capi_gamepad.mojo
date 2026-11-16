@@ -37,7 +37,7 @@ from extensions.gamepad.web import (
 )
 from std.memory import Layout
 from units.si import Duration64, SECOND
-from window.capi_abi import ABI_VERSION, MAX_SIDE
+from window.capi_abi import ABI_VERSION, MAX_SIDE, null_pointer
 
 comptime MAX_ID = 1024
 """The most bytes of a pad's id that the library reads."""
@@ -197,6 +197,8 @@ def tm_destroy(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> None:
     Args:
         handle: A handle from `tm_create`.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     app[].pixels.unsafe_free()
     _ = app.unsafe_take_pointee()
@@ -235,6 +237,8 @@ def tm_step(
         microseconds: The time since the last step. Negative time is
             ignored.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     if microseconds < 0:
         return
@@ -329,6 +333,8 @@ def tm_frame(
         `tm_width * tm_height * 4` bytes. It stays valid until the next
         call on this app.
     """
+    if Int(handle) == 0:
+        return null_pointer[UInt8]()
     var app = _app(handle)
     _draw(app[])
     return app[].pixels
@@ -344,6 +350,8 @@ def tm_width(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The width, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].width)
 
 
@@ -357,6 +365,8 @@ def tm_height(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The height, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].height)
 
 
@@ -385,6 +395,8 @@ def tm_free(room: Pointer[UInt8, MutUntrackedOrigin]) abi("C") -> None:
     Args:
         room: An address that `tm_alloc` returned.
     """
+    if Int(room) == 0:
+        return
     room.unsafe_free()
 
 
@@ -413,8 +425,12 @@ def tm_gamepad_connect(
         1 if the pad was connected, and 0 if it is connected already or
         the id is too long.
     """
+    if Int(handle) == 0:
+        return 0
     var app = _app(handle)
     if id_length < 0 or Int(id_length) > MAX_ID:
+        return 0
+    if id_length > 0 and Int(id) == 0:
         return 0
     var bytes = List[UInt8](capacity=Int(id_length))
     for at in range(Int(id_length)):
@@ -444,6 +460,8 @@ def tm_gamepad_disconnect(
     Returns:
         1 if the pad was connected, else 0.
     """
+    if Int(handle) == 0:
+        return 0
     var app = _app(handle)
     var at = app[].stage(Int(index))
     if at < 0:
@@ -469,6 +487,8 @@ def tm_gamepad_set_axis(
             ignored.
         value: `Gamepad.axes[axis]`, from -1 to 1.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     var at = app[].stage(Int(index))
     if at < 0 or axis < 0 or Int(axis) >= len(app[].staged[at].axes):
@@ -494,6 +514,8 @@ def tm_gamepad_set_button(
         pressed: `Gamepad.buttons[button].pressed`: 1 or 0.
         value: `Gamepad.buttons[button].value`, from 0 to 1.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     var at = app[].stage(Int(index))
     if (
@@ -523,6 +545,8 @@ def tm_gamepad_sample(
         How many gamepad events the state made, or -1 when the pad is not
         connected.
     """
+    if Int(handle) == 0:
+        return -1
     var app = _app(handle)
     var at = app[].stage(Int(index))
     if at < 0:
@@ -544,6 +568,8 @@ def tm_gamepad_count(
     Returns:
         The number of pads.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(len(_app(handle)[].hub.pads))
 
 
@@ -561,6 +587,8 @@ def tm_gamepad_index(
     Returns:
         The index, or -1 for a slot out of range.
     """
+    if Int(handle) == 0:
+        return -1
     var app = _app(handle)
     if slot < 0 or Int(slot) >= len(app[].hub.pads):
         return -1
@@ -582,6 +610,8 @@ def tm_gamepad_axis(
         The value: -32768 to 32767 for a stick, 0 to 32767 for a trigger,
         and 0 for an axis or pad that does not exist.
     """
+    if Int(handle) == 0:
+        return 0
     var app = _app(handle)
     var at = app[].hub.find(Int(index))
     if at < 0 or axis < 0 or Int(axis) >= AXIS_COUNT:
@@ -603,6 +633,8 @@ def tm_gamepad_button(
     Returns:
         1 while it is down, else 0.
     """
+    if Int(handle) == 0:
+        return 0
     var app = _app(handle)
     var at = app[].hub.find(Int(index))
     if at < 0 or button < 0 or Int(button) >= BUTTON_COUNT:
@@ -632,6 +664,8 @@ def tm_gamepad_rumble(
     Returns:
         1 if the pad rumbles, else 0.
     """
+    if Int(handle) == 0:
+        return 0
     var app = _app(handle)
     var at = app[].hub.find(Int(index))
     if at < 0:
@@ -668,6 +702,8 @@ def tm_gamepad_take_rumble(
         1 if there is one: read it with `tm_gamepad_rumble_strength`.
         0 if there is none.
     """
+    if Int(handle) == 0:
+        return 0
     var app = _app(handle)
     var at = app[].hub.find(Int(index))
     if at < 0:
@@ -692,6 +728,8 @@ def tm_gamepad_rumble_strength(
     Returns:
         The strength, 0 to 65535, or 0 for another motor number.
     """
+    if Int(handle) == 0:
+        return 0
     var app = _app(handle)
     if motor == RUMBLE_LOW:
         return Int32(app[].taken[0])

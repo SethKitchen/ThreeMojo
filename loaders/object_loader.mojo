@@ -213,7 +213,7 @@ from cameras.camera_list import CameraList
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from loaders.curve_json import read_shape
-from loaders.file_path import path_directory
+from loaders.file_path import confined_path, path_directory
 from loaders.geometry_json import geometry_from_parameters
 from math.path import Shape
 from lights.light import (
@@ -1482,7 +1482,9 @@ struct _Loader(Movable):
             return decode_base64(String(text[byte = comma + 1 :]))
         if text.find(":") >= 0:
             raise Error("Object JSON: an image URL with a scheme: " + text)
-        return Path(self.directory + text).read_bytes()
+        return Path(
+            confined_path(self.directory, text, "Object JSON")
+        ).read_bytes()
 
     def texture(
         mut self, uuid: String, alpha: Alpha, mut assets: Assets
@@ -1965,7 +1967,7 @@ struct _Loader(Movable):
                         self.cube(read.cube_uuids[index], False, assets).value
                     )
             read.program.list_maps()
-            built.nodes = assets.programs.add(read.program.copy())
+            built.nodes = assets.programs.add_checked(read.program.copy())
         return built^
 
     def node_graph(

@@ -45,6 +45,7 @@ field lengths before it allocates or writes the archive.
 """
 
 from core.ordinal import index_in_count, require_positive
+from std.collections import Set
 
 from core.binary import (
     append_little_endian_u16,
@@ -77,6 +78,13 @@ struct ZipMethod(Equatable, ImplicitlyCopyable, Writable):
 comptime ZIP_STORED = ZipMethod(0)
 # Method 8: DEFLATE, RFC 1951.
 comptime ZIP_DEFLATED = ZipMethod(8)
+
+comptime MAX_ZIP_ENTRIES = 16384
+"""The most entries an archive may list."""
+comptime MAX_ZIP_ENTRY_BYTES = 268435456
+"""The most uncompressed bytes one entry may expand to: 256 MiB."""
+comptime MAX_ZIP_TOTAL_BYTES = 536870912
+"""The most uncompressed bytes an archive may expand to in all: 512 MiB."""
 
 # The signatures of the records read.
 comptime _LOCAL_HEADER = 0x04034B50
@@ -421,11 +429,19 @@ def _end_of_directory(bytes: List[UInt8]) raises -> Int:
     raise Error("ZIP: no end of central directory record")
 
 
-def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
+def unzip(
+    bytes: List[UInt8],
+    max_entries: Int = MAX_ZIP_ENTRIES,
+    max_entry_bytes: Int = MAX_ZIP_ENTRY_BYTES,
+    max_total_bytes: Int = MAX_ZIP_TOTAL_BYTES,
+) raises -> List[ZipEntry]:
     """Read every entry of a ZIP archive.
 
     Args:
         bytes: The whole archive.
+        max_entries: The largest allowed entry count.
+        max_entry_bytes: The largest allowed uncompressed size for one entry.
+        max_total_bytes: The largest allowed total uncompressed size.
 
     Returns:
         The entries, in central directory order.
@@ -434,8 +450,9 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
         Error: If the archive has no end record or is split, a record
             runs past the end or has the wrong signature, a ZIP64 record
             or extra field that an end record or an entry names is not
-            there, an entry is encrypted or uses another method, or an
-            entry's data does not expand to its declared size and CRC-32.
+            there, an entry is encrypted or uses another method, an entry
+            shares a local header or exceeds the decompression limits, or
+            an entry's data does not expand to its declared size and CRC-32.
     """
     var end = _end_of_directory(bytes)
     var count: Int
@@ -470,7 +487,11 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
     var directory_end = at + directory_size
     if directory_end != directory_limit:
         raise Error("ZIP: the central directory does not end at its end record")
+    if count > max_entries:
+        raise Error("ZIP: archive entry count exceeds the limit")
     var entries = List[ZipEntry]()
+    var seen_locals = Set[Int]()
+    var total_bytes = 0
     for index in range(count):
         var what = "central directory entry " + String(index)
         _need(directory_end, at, _CENTRAL_LENGTH, what)
@@ -526,6 +547,18 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
                 + ", and only stored and deflated are read"
             )
         _need(directory_start, local, _LOCAL_LENGTH, what)
+        if local in seen_locals:
+            raise Error(
+                "ZIP: "
+                + what
+                + " shares a local header offset with an earlier entry"
+            )
+        seen_locals.add(local)
+        if size > max_entry_bytes:
+            raise Error("ZIP: " + what + " exceeds the entry byte limit")
+        if size > max_total_bytes - total_bytes:
+            raise Error("ZIP: archive uncompressed bytes exceed the limit")
+        total_bytes += size
         if little_endian_u32(bytes, local) != _LOCAL_HEADER:
             raise Error("ZIP: the local header of " + what + " is not one")
         var start = (

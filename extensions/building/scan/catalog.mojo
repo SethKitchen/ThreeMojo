@@ -27,6 +27,7 @@ from extensions.scan.frame import (
     scan_axis,
 )
 from generators.utils import Vec3d
+from loaders.file_path import confined_path
 from loaders.json import JsonDocument, NO_NODE, parse_json
 from std.os.path import isfile
 from std.pathlib import Path
@@ -116,12 +117,14 @@ def _scan_file(document: JsonDocument, entry: Int, id: String) raises -> String:
     """
     var files = document.get(entry, "files")
     if files == NO_NODE:
-        return id + "/meta.json"
+        return confined_path("", id + "/meta.json", "Scan catalog")
     for index in range(document.length(files)):
         var item = document.at(files, index)
         if _string(document, item, "role") == "splat":
-            return _string(document, item, "path")
-    return id + "/meta.json"
+            return confined_path(
+                "", _string(document, item, "path"), "Scan catalog"
+            )
+    return confined_path("", id + "/meta.json", "Scan catalog")
 
 
 def _frame(document: JsonDocument, entry: Int) raises -> ScanFrame:
@@ -267,7 +270,7 @@ struct ScanCatalog(Movable):
         Raises:
             Error: If no entry has the id.
         """
-        var path = self.cache + self.find(id).file
+        var path = confined_path(self.cache, self.find(id).file, "Scan catalog")
         if isfile(path):
             return path
         return None
