@@ -652,3 +652,21 @@ def _stored_half[
             _Interval.point(value.error) * _Interval.point(0.5)
         ).high
     return result
+
+
+def _constant_jet(low: Float64, high: Float64) -> _ValueJet:
+    """Return a value jet of a constant known only to lie in an interval.
+
+    Each possible member is a stored constant, not an inexactly evaluated
+    variable, so no scalar rounding is added. The derivatives are unknown.
+
+    Args:
+        low: The lowest possible value.
+        high: The highest possible value.
+
+    Returns:
+        The jet.
+    """
+    return _ValueJet(
+        _Interval(low, high), _Interval.whole(), _Interval.whole(), 0.0
+    )

@@ -47,7 +47,7 @@ from extensions.vegetation.noise import hash01
 from extensions.vegetation.rock import boulder
 from extensions.village.character import Obstacle
 from extensions.village.dressing import WROUGHT, prism
-from extensions.village.sheet import Sheet
+from extensions.village.sheet import Sheet, add_sheet
 from extensions.village.surfaces import (
     ASHLAR_TILE,
     HouseLooks,
@@ -722,30 +722,6 @@ def _marker() -> Sheet:
     return sheet^
 
 
-def _add(
-    mut scene: Scene,
-    mut assets: Assets,
-    sheet: Sheet,
-    material: MaterialId,
-    parent: NodeId,
-    casts: Bool,
-) raises -> Int:
-    """Add a sheet as a mesh under a node, if it has a triangle; return
-    its triangles."""
-    if sheet.triangles() == 0:
-        return 0
-    scene.add_mesh(
-        Mesh(
-            assets.geometries.add(sheet.geometry()),
-            material,
-            parent,
-            cast_shadow=casts,
-            receive_shadow=True,
-        )
-    )
-    return sheet.triangles()
-
-
 def _add_parts(
     mut scene: Scene,
     mut assets: Assets,
@@ -757,13 +733,19 @@ def _add_parts(
     """Add each sheet of a part as a mesh of its material under a node;
     return their triangles."""
     var triangles = 0
-    triangles += _add(
+    triangles += add_sheet(
         scene, assets, parts.plaster, looks.plaster, parent, casts
     )
-    triangles += _add(scene, assets, parts.wood, looks.wood, parent, casts)
-    triangles += _add(scene, assets, parts.ashlar, looks.ashlar, parent, casts)
-    triangles += _add(scene, assets, parts.glass, looks.glass, parent, casts)
-    triangles += _add(scene, assets, parts.glow, looks.daylight, parent, False)
+    triangles += add_sheet(scene, assets, parts.wood, looks.wood, parent, casts)
+    triangles += add_sheet(
+        scene, assets, parts.ashlar, looks.ashlar, parent, casts
+    )
+    triangles += add_sheet(
+        scene, assets, parts.glass, looks.glass, parent, casts
+    )
+    triangles += add_sheet(
+        scene, assets, parts.glow, looks.daylight, parent, False
+    )
     return triangles
 
 
@@ -960,7 +942,7 @@ struct Gathering(Movable):
                 scene, assets, part, looks, node, False
             )
             var glint = _node(scene, at, 0, top + lift + 0.1, 0)
-            self.triangles += _add(
+            self.triangles += add_sheet(
                 scene, assets, _glint(), looks.daylight, glint, False
             )
             self.spots.append(
@@ -984,7 +966,7 @@ struct Gathering(Movable):
         marker.visible = False
         marker.parent = self.root
         self.marker = scene.add(marker^)
-        self.triangles += _add(
+        self.triangles += add_sheet(
             scene, assets, _marker(), looks.daylight, self.marker, False
         )
         self.meshes = len(scene.meshes) - before

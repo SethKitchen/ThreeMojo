@@ -33,6 +33,7 @@ from math.vector2 import Vector2
 from render.srgb import LINEAR, SRGB
 from render.texture import BILINEAR, CLAMP, IGNORED, REPEAT, Texture
 from render.texture_store import TextureId
+from extensions.numerics.noise import lattice_hash
 
 # The size of one tile of each pattern, in meters.
 comptime BRICK_TILE = 0.88
@@ -126,19 +127,6 @@ def _require_size(size: Int) raises:
         )
 
 
-def _hash(x: Int, y: Int, seed: Int) -> Float64:
-    """Return a repeatable number from 0 up to 1 for a lattice point."""
-    var h = (
-        UInt32((x * 73856093) & 0xFFFFFFFF)
-        ^ UInt32((y * 19349663) & 0xFFFFFFFF)
-        ^ UInt32((seed * 83492791) & 0xFFFFFFFF)
-    )
-    h = (h ^ (h >> 16)) * UInt32(0x45D9F3B)
-    h = (h ^ (h >> 16)) * UInt32(0x45D9F3B)
-    h = h ^ (h >> 16)
-    return Float64(h) / 4294967296.0
-
-
 def _smooth(x: Float64) -> Float64:
     """Return the smooth step of a number clamped to 0 through 1."""
     var t = min(max(x, 0.0), 1.0)
@@ -162,8 +150,14 @@ def _noise(u: Float64, v: Float64, period: Int, seed: Int) -> Float64:
     var x1 = _wrap(ix + 1, period)
     var y0 = _wrap(iy, period)
     var y1 = _wrap(iy + 1, period)
-    var low = _hash(x0, y0, seed) * (1.0 - sx) + _hash(x1, y0, seed) * sx
-    var high = _hash(x0, y1, seed) * (1.0 - sx) + _hash(x1, y1, seed) * sx
+    var low = (
+        lattice_hash(x0, y0, seed) * (1.0 - sx)
+        + lattice_hash(x1, y0, seed) * sx
+    )
+    var high = (
+        lattice_hash(x0, y1, seed) * (1.0 - sx)
+        + lattice_hash(x1, y1, seed) * sx
+    )
     return low * (1.0 - sy) + high * sy
 
 
@@ -201,12 +195,12 @@ def _cells(
             var cy = iy + dy
             var wx = _wrap(cx, period)
             var wy = _wrap(cy, period)
-            var px = Float64(cx) + 0.15 + 0.7 * _hash(wx, wy, seed)
-            var py = Float64(cy) + 0.15 + 0.7 * _hash(wx, wy, seed + 5)
+            var px = Float64(cx) + 0.15 + 0.7 * lattice_hash(wx, wy, seed)
+            var py = Float64(cy) + 0.15 + 0.7 * lattice_hash(wx, wy, seed + 5)
             var distance = sqrt((px - x) * (px - x) + (py - y) * (py - y))
             if distance < best:
                 best = distance
-                name = _hash(wx, wy, seed + 9)
+                name = lattice_hash(wx, wy, seed + 9)
     return (best, name)
 
 
@@ -313,7 +307,7 @@ def brick_maps(size: Int, seed: Int) raises -> SurfaceMaps:
             var grain = _fbm(u, v, 64, 3, seed + 3)
             var broad = _fbm(u, v, 3, 3, seed + 11)
             var fine = _noise(u, v, 256, seed + 21)
-            var id = _hash(_wrap(brick, 4), course, seed)
+            var id = lattice_hash(_wrap(brick, 4), course, seed)
             if edge < -0.0005:
                 var shade = 0.78 + 0.34 * grain
                 layers.put(
@@ -325,7 +319,7 @@ def brick_maps(size: Int, seed: Int) raises -> SurfaceMaps:
                 )
                 continue
             var base = dark * (1.0 - id) + light * id
-            if _hash(_wrap(brick, 4), course, seed + 31) > 0.9:
+            if lattice_hash(_wrap(brick, 4), course, seed + 31) > 0.9:
                 base = burnt * 0.5 + base * 0.5
             var ao = 0.78 + 0.22 * _smooth(edge * 1000.0 / 3.0)
             var weather = 0.9 + 0.2 * broad
@@ -388,7 +382,7 @@ def stone_maps(size: Int, seed: Int) raises -> SurfaceMaps:
                     column, row, mortar * (0.8 + 0.3 * grain), height, 0.95
                 )
                 continue
-            var id = _hash(_wrap(block, 2), course, seed)
+            var id = lattice_hash(_wrap(block, 2), course, seed)
             var base = stone * (1.0 - id * 0.6) + warm * (id * 0.6)
             var shade = (0.9 + 0.2 * grain) * (0.88 + 0.2 * stain)
             var pitted = pit > 0.93
@@ -440,8 +434,8 @@ def slate_maps(size: Int, seed: Int) raises -> SurfaceMaps:
                 across += 0.5
             var slate = Int(floor(across))
             var fx = across - Float64(slate)
-            var id = _hash(_wrap(slate, 2), course, seed)
-            var tone = _hash(_wrap(slate, 2), course, seed + 4)
+            var id = lattice_hash(_wrap(slate, 2), course, seed)
+            var tone = lattice_hash(_wrap(slate, 2), course, seed + 4)
             var base = blue * (1.0 - id) + green * id
             if tone > 0.85:
                 base = base * 0.5 + brown * 0.5
@@ -574,15 +568,15 @@ def leaf_texture(size: Int, seed: Int) raises -> Texture:
     var shade = List[Float64]()
     for leaf in range(count):  # pragma: no branch
         # Leaves sit inside a disc, and point away from its middle.
-        var around = 2.0 * pi * _hash(leaf, 1, seed)
-        var reach = 0.36 * sqrt(_hash(leaf, 2, seed))
+        var around = 2.0 * pi * lattice_hash(leaf, 1, seed)
+        var reach = 0.36 * sqrt(lattice_hash(leaf, 2, seed))
         px.append(0.5 + reach * cos(around))
         py.append(0.5 + reach * sin(around))
-        angle.append(around + (_hash(leaf, 3, seed) - 0.5) * 1.6)
-        var length = 0.11 + 0.07 * _hash(leaf, 4, seed)
+        angle.append(around + (lattice_hash(leaf, 3, seed) - 0.5) * 1.6)
+        var length = 0.11 + 0.07 * lattice_hash(leaf, 4, seed)
         half_length.append(length)
-        half_width.append(length * (0.42 + 0.12 * _hash(leaf, 5, seed)))
-        shade.append(0.55 + 0.45 * _hash(leaf, 6, seed))
+        half_width.append(length * (0.42 + 0.12 * lattice_hash(leaf, 5, seed)))
+        shade.append(0.55 + 0.45 * lattice_hash(leaf, 6, seed))
     var pixels = List[UInt8](length=size * size * 4, fill=0)
     for row in range(size):  # pragma: no branch
         for column in range(size):  # pragma: no branch
@@ -678,13 +672,15 @@ def needle_texture(size: Int, seed: Int) raises -> Texture:
                 var length = 0.34 * (1.0 - 0.7 * t)
                 for side in range(2):
                     var sign = -1.0 if side == 0 else 1.0
-                    var wobble = 0.12 * (_hash(k, side, seed) - 0.5)
+                    var wobble = 0.12 * (lattice_hash(k, side, seed) - 0.5)
                     var tip_x = 0.5 + sign * length * cos(0.9 + wobble)
                     var tip_y = base_y + length * sin(0.9 + wobble) * 0.8
                     var hit = _segment_distance(x, y, 0.5, base_y, tip_x, tip_y)
                     if hit[0] < 0.016 * (1.0 - 0.55 * hit[1]):
                         found = True
-                        value = 0.55 + 0.45 * hit[1] * _hash(k, side, seed + 3)
+                        value = 0.55 + 0.45 * hit[1] * lattice_hash(
+                            k, side, seed + 3
+                        )
             if found:
                 var at = (row * size + column) * 4
                 var byte = _byte(value)

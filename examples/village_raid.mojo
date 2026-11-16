@@ -45,6 +45,7 @@ from std.math import sqrt
 from std.pathlib import Path
 from std.sys import argv, stderr
 from units.si import MILLISECOND, SECOND, Duration
+from extensions.village.combat import flat_distance
 
 comptime DEFAULT_OUTPUT = "out/village_raid.png"
 comptime PEBBLES = "assets/pebbles.jpg"
@@ -71,13 +72,6 @@ def _hold(mut state: WebGamepadState, button: Int):
     state.analog_buttons[button] = 1
 
 
-def _flat(a: Vector3, b: Vector3) -> Float32:
-    """Return how far apart two points are on the ground."""
-    var dx = b.x - a.x
-    var dz = b.z - a.z
-    return sqrt(dx * dx + dz * dz)
-
-
 def _pilot(mut state: WebGamepadState, game: VillageGame, frame: Int) raises:
     """Set the pad for a frame from what the fight shows: lock on, close
     in, make combos, dodge out of zones, and gather for a rockfall."""
@@ -98,7 +92,7 @@ def _pilot(mut state: WebGamepadState, game: VillageGame, frame: Int) raises:
         return
     # Call a linked strike on the staggered warden.
     if warden.boss.link_ready() and frame % 2 == 0:
-        if _flat(feet, warden.character.position) < 4:
+        if flat_distance(feet, warden.character.position) < 4:
             _hold(state, NORTH)
             return
     # Out of a zone that winds up: lean away, and dodge as it closes.
@@ -106,7 +100,7 @@ def _pilot(mut state: WebGamepadState, game: VillageGame, frame: Int) raises:
         var zone = warden.boss.zone
         if inside(zone, feet, 0.6):
             var away = feet - zone.at
-            if _flat(feet, zone.at) < 0.3:
+            if flat_distance(feet, zone.at) < 0.3:
                 away = feet - warden.character.position
             away.y = 0
             away = away / max(away.length(), Float32(1.0e-3))
@@ -124,7 +118,7 @@ def _pilot(mut state: WebGamepadState, game: VillageGame, frame: Int) raises:
     # Gather on a member that a rockfall marks.
     if warden.boss.marked > 0:
         var there = battle.members[warden.boss.marked - 1].character.position
-        if _flat(feet, there) > 1.5:
+        if flat_distance(feet, there) > 1.5:
             var way = there - feet
             var ahead = warden.character.position - feet
             ahead.y = 0
@@ -134,7 +128,7 @@ def _pilot(mut state: WebGamepadState, game: VillageGame, frame: Int) raises:
             state.axes[1] = Float64(-(way.x * ahead.x + way.z * ahead.z))
             state.axes[0] = Float64(way.x * right.x + way.z * right.z)
             return
-    var gap = _flat(feet, warden.character.position)
+    var gap = flat_distance(feet, warden.character.position)
     if gap > 3.4:
         state.axes[1] = -1
         return

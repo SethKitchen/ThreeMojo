@@ -412,15 +412,6 @@ def _short(
     return _u16(bytes, element.start)
 
 
-def _direction(values: List[Float64], first: Int) raises -> V3:
-    """Return one direction of an image orientation, checked for length."""
-    var direction = v3(values[first], values[first + 1], values[first + 2])
-    var size = length(direction)
-    if abs(size - 1.0) > ORIENTATION_TOLERANCE:
-        raise Error("A DICOM image orientation needs unit directions")
-    return direction * (1.0 / size)
-
-
 def _syntax(uid: String) raises -> TransferSyntax:
     """Return the syntax of a transfer syntax UID, or refuse it."""
     if uid == EXPLICIT_LITTLE_UID:
@@ -914,8 +905,8 @@ def _place(
         var orientation = _numbers(
             bytes, orientation_element.value(), 6, "image orientation"
         )
-        var row = _direction(orientation, 0)
-        var column = _direction(orientation, 3)
+        var row = unit_direction(orientation, 0, "A DICOM image orientation")
+        var column = unit_direction(orientation, 3, "A DICOM image orientation")
         if abs(dot(row, column)) > ORIENTATION_TOLERANCE:
             raise Error("A DICOM image orientation needs square directions")
         image.row_direction = row
@@ -1369,3 +1360,31 @@ def read_dicom_tree(path: String) raises -> DicomTree:
     """
     var bytes = Path(path).read_bytes()
     return parse_dicom_tree(bytes)
+
+
+def unit_direction(
+    values: List[Float64], first: Int, what: String
+) raises -> V3:
+    """Return the unit direction at three places of an orientation.
+
+    DICOM stores each direction cosine to a few digits, so a direction
+    within `ORIENTATION_TOLERANCE` of length 1 is scaled to length 1.
+
+    Args:
+        values: The direction cosines, such as the six of Image
+            Orientation (Patient).
+        first: The place of the first of the three.
+        what: The orientation for the error text, such as
+            `"A DICOM image orientation"`.
+
+    Returns:
+        The direction, of length 1.
+
+    Raises:
+        Error: If the direction is not of length 1, within the tolerance.
+    """
+    var direction = v3(values[first], values[first + 1], values[first + 2])
+    var size = length(direction)
+    if abs(size - 1.0) > ORIENTATION_TOLERANCE:
+        raise Error(what + " needs unit directions")
+    return direction * (1.0 / size)

@@ -21,15 +21,15 @@ oriented box. The layer keeps CARLA's names and CARLA's numbers.
 """
 
 from extensions.carla.math import rotations_equal
-from extensions.carla.transform import CarlaRotation, CarlaTransform
+from extensions.carla.transform import (
+    CarlaRotation,
+    CarlaTransform,
+    no_rotation,
+)
 from math.matrix3 import Matrix3
 from math.obb import OBB
 from math.vector3 import Vector3
 from units.si import DEGREE, Angle
-
-
-def _no_rotation() -> CarlaRotation:
-    return CarlaRotation(Angle(0, DEGREE), Angle(0, DEGREE), Angle(0, DEGREE))
 
 
 struct BoundingBox(Equatable, ImplicitlyCopyable, Writable):
@@ -71,7 +71,7 @@ struct BoundingBox(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If a half size is negative or not finite.
         """
-        self = BoundingBox(location, extent, _no_rotation())
+        self = BoundingBox(location, extent, no_rotation())
 
     def __init__(out self, extent: Vector3) raises:
         """Create a box at the origin with no rotation.
@@ -82,7 +82,7 @@ struct BoundingBox(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If a half size is negative or not finite.
         """
-        self = BoundingBox(Vector3(0, 0, 0), extent, _no_rotation())
+        self = BoundingBox(Vector3(0, 0, 0), extent, no_rotation())
 
     def to_obb(self) raises -> OBB:
         """Return the same box as an `OBB`, in the local frame.

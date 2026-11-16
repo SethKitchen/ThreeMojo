@@ -12,7 +12,12 @@ after the materialized products. It is not a true-clothoid error estimate.
 Unsupported domains fall back to the full Sum2 expression bound.
 """
 
-from extensions.carla.curve_interval import _Interval, _Jet, _ValueJet
+from extensions.carla.curve_interval import (
+    _Interval,
+    _Jet,
+    _ValueJet,
+    _constant_jet,
+)
 from extensions.carla.curve_sum2 import _sum2_error
 from extensions.carla.curve_trig import (
     _sincos_expression,
@@ -26,13 +31,6 @@ from extensions.carla.geometry import (
     _GL_WEIGHTS,
 )
 from std.math import floor, inf, isfinite
-
-
-def _envelope_constant(low: Float64, high: Float64) -> _ValueJet:
-    # Each member is a stored constant, not an inexactly evaluated variable.
-    return _ValueJet(
-        _Interval(low, high), _Interval.whole(), _Interval.whole(), 0.0
-    )
 
 
 def _sum2_envelope_error(
@@ -119,8 +117,8 @@ def _try_spiral_roundoff_envelope(
         weight_low = min(weight_low, weights[i])
         weight_high = max(weight_high, weights[i])
     var step = distance / _ValueJet.constant(Float64(pieces))
-    var start = step * _envelope_constant(0.0, Float64(pieces - 1))
-    var t = start + step * _ValueJet.constant(0.5) * _envelope_constant(
+    var start = step * _constant_jet(0.0, Float64(pieces - 1))
+    var t = start + step * _ValueJet.constant(0.5) * _constant_jet(
         node_low, node_high
     )
     var theta = _ValueJet.constant(geometry.heading) + t * (
@@ -143,9 +141,7 @@ def _try_spiral_roundoff_envelope(
         return None
     var trig = _sincos_expression(theta)
     var factor = (
-        step
-        * _ValueJet.constant(0.5)
-        * _envelope_constant(weight_low, weight_high)
+        step * _ValueJet.constant(0.5) * _constant_jet(weight_low, weight_high)
     )
     var x = factor * trig[1]
     var y = factor * trig[0]

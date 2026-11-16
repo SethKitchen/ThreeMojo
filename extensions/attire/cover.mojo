@@ -277,3 +277,22 @@ def dominant_joints(skin: BufferGeometry) raises -> List[Joint]:
                 best = k
         joints.append(Joint(Int(bones.component(v, best))))
     return joints^
+
+
+def reach_both(
+    mut cover: Cover, right: Joint, left: Joint, end: Float32, start: Float32
+) raises:
+    """Reach a cover along the right and the left joint of a pair.
+
+    Args:
+        cover: The cover.
+        right: The right joint.
+        left: The left joint.
+        end: How far along each joint the cover ends, as `reach_to` takes it.
+        start: How far along each joint it starts.
+
+    Raises:
+        Error: If `reach_to` refuses a joint or a reach.
+    """
+    cover.reach_to(right, end, start)
+    cover.reach_to(left, end, start)

@@ -443,16 +443,6 @@ struct _JointRows(Copyable, Movable):
     var upper_push: Float32
 
 
-def _times(m: Matrix3, v: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
-    ref e = m.elements
-    return SIMD[DType.float64, 4](
-        Float64(e[0]) * v[0] + Float64(e[3]) * v[1] + Float64(e[6]) * v[2],
-        Float64(e[1]) * v[0] + Float64(e[4]) * v[1] + Float64(e[7]) * v[2],
-        Float64(e[2]) * v[0] + Float64(e[5]) * v[1] + Float64(e[8]) * v[2],
-        0,
-    )
-
-
 def _column(
     mass: Float64,
     inertia_a: Matrix3,
@@ -465,8 +455,8 @@ def _column(
     # summed over the two bodies.
     return (
         unit * mass
-        + wide_cross(_times(inertia_a, wide_cross(ra, unit)), ra)
-        + wide_cross(_times(inertia_b, wide_cross(rb, unit)), rb)
+        + wide_cross(wide_times(inertia_a, wide_cross(ra, unit)), ra)
+        + wide_cross(wide_times(inertia_b, wide_cross(rb, unit)), rb)
     )
 
 
@@ -507,8 +497,8 @@ def _turn(
     along: Vector3,
 ) -> _Turn:
     var n = widen_vector(along)
-    var spin_a = _times(inertia_a, n)
-    var spin_b = _times(inertia_b, n)
+    var spin_a = wide_times(inertia_a, n)
+    var spin_b = wide_times(inertia_b, n)
     # How fast a unit angular impulse parts the anchors, and the point
     # impulse that stops that.
     var part = wide_cross(spin_b, rb) + wide_cross(spin_a, ra)
@@ -866,3 +856,22 @@ def _push_joint(
         )
         _push_twist(bodies, r, r.axis, r.upper_push - upper)
         r.upper_push = upper
+
+
+def wide_times(m: Matrix3, v: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
+    """Return the product of a 3 by 3 matrix and a vector, in Float64.
+
+    Args:
+        m: The matrix. Element (row, column) is `e[column * 3 + row]`.
+        v: The vector, in the first three lanes.
+
+    Returns:
+        `M v` in the first three lanes, and 0 in the last.
+    """
+    ref e = m.elements
+    return SIMD[DType.float64, 4](
+        Float64(e[0]) * v[0] + Float64(e[3]) * v[1] + Float64(e[6]) * v[2],
+        Float64(e[1]) * v[0] + Float64(e[4]) * v[1] + Float64(e[7]) * v[2],
+        Float64(e[2]) * v[0] + Float64(e[5]) * v[1] + Float64(e[8]) * v[2],
+        0,
+    )

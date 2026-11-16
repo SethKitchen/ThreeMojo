@@ -18,6 +18,7 @@ from extensions.carla.curve_interval import (
     _Jet,
     _ValueJet,
     _stored_half,
+    _constant_jet,
 )
 from extensions.carla.curve_sum2 import (
     _sum2_error_checked,
@@ -43,13 +44,6 @@ def _spiral_grouped_roundoff_work(pieces: Int) -> Int:
     if pieces < 1 or pieces > 64:
         return -1
     return 3 * min(4, pieces)
-
-
-def _grouped_constant(low: Float64, high: Float64) -> _ValueJet:
-    # Each possible member is a stored constant; no scalar rounding is added.
-    return _ValueJet(
-        _Interval(low, high), _Interval.whole(), _Interval.whole(), 0.0
-    )
 
 
 def _grouped_term(
@@ -185,7 +179,7 @@ def _try_spiral_grouped_roundoff_envelope(
     var step = distance / _ValueJet.constant(Float64(pieces))
     var half_step = _stored_half(step)
     var half_rate = _stored_half(_ValueJet.constant(rate_value))
-    var node_range = _grouped_constant(node_low, node_high)
+    var node_range = _constant_jet(node_low, node_high)
     var phases = Array[_ValueJet, 4](fill=_ValueJet.constant(0.0))
     # Establish every group's original rounded phase branch before the first
     # polynomial evaluation. An ineligible later group cannot waste trig work.
@@ -194,7 +188,7 @@ def _try_spiral_grouped_roundoff_envelope(
         var high = (group + 1) * pieces // 4
         if low == high:
             continue
-        var start = step * _grouped_constant(Float64(low), Float64(high - 1))
+        var start = step * _constant_jet(Float64(low), Float64(high - 1))
         var t = start + half_step * node_range
         var theta = _ValueJet.constant(geometry.heading) + t * (
             _ValueJet.constant(geometry.curvature_start) + half_rate * t

@@ -72,6 +72,7 @@ from extensions.carla.traffic_manager_shared import (
     LocalizationData,
     TrafficAction,
     TrafficManagerShared,
+    drop_value,
 )
 from extensions.carla.traffic_manager_state import (
     _check_actor_id,
@@ -192,13 +193,6 @@ def _push_unvisited(
 
 def _in(list: List[Int], value: Int) -> Bool:
     return value in list
-
-
-def _drop(mut list: List[Int], value: Int):
-    for i in range(len(list)):
-        if list[i] == value:
-            _ = list.pop(i)
-            return
 
 
 struct LocalizationStage(Movable):
@@ -745,10 +739,10 @@ struct LocalizationStage(Movable):
         elif is_at_junction and _in(
             self.large_vehicles_at_junction_entrance, a
         ):
-            _drop(self.large_vehicles_at_junction_entrance, a)
+            drop_value(self.large_vehicles_at_junction_entrance, a)
             self.large_vehicles_at_junction.append(a)
         elif not is_at_junction and _in(self.large_vehicles_at_junction, a):
-            _drop(self.large_vehicles_at_junction, a)
+            drop_value(self.large_vehicles_at_junction, a)
             shared.large_vehicles[a].junction_length = Length(0)
 
     def _import_path(
@@ -874,9 +868,9 @@ struct LocalizationStage(Movable):
             _ = self.last_lane_change_swpt.pop(a)
         if a in self.vehicles_at_junction_entrance:
             _ = self.vehicles_at_junction_entrance.pop(a)
-        _drop(self.vehicles_at_junction, a)
-        _drop(self.large_vehicles_at_junction_entrance, a)
-        _drop(self.large_vehicles_at_junction, a)
+        drop_value(self.vehicles_at_junction, a)
+        drop_value(self.large_vehicles_at_junction_entrance, a)
+        drop_value(self.large_vehicles_at_junction, a)
 
     def reset(mut self):
         """Forget every vehicle, `Reset`."""

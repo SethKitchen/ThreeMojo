@@ -463,3 +463,18 @@ def should_ignore_joystick(
     if _in_list(vendor, product, _rog_mice()):
         return True
     return should_ignore_gamepad(vendor, product, version, name)
+
+
+def hex2(value: UInt8) -> String:
+    """Return a byte as two lowercase hex digits.
+
+    Args:
+        value: The byte.
+
+    Returns:
+        The digits, as C's `%02x` writes them.
+    """
+    comptime DIGITS = "0123456789abcdef"
+    return String(DIGITS[byte=Int(value >> 4)]) + String(
+        DIGITS[byte=Int(value & 15)]
+    )

@@ -14,6 +14,9 @@ and 1. `normal()` gives a standard normal number from two uniforms.
 `gamma(shape, scale)` give uniform, exponential, Poisson and gamma
 numbers for synthetic times, counts and frailties.
 
+`lattice_hash(x, y, seed)` gives a repeatable number from 0 up to 1 for a
+point of a grid, with no state, for value noise in textures.
+
 The numbers are not for cryptography.
 """
 
@@ -145,3 +148,29 @@ struct Xorshift64(Movable):
             var u = self.uniform()
             if log(u) < 0.5 * x * x + d - d * v + d * log(v):
                 return d * v * scale
+
+
+def lattice_hash(x: Int, y: Int, seed: Int) -> Float64:
+    """Return a repeatable number from 0 up to 1 for a lattice point.
+
+    The point and the seed each take a large odd factor, as in the spatial
+    hash of Teschner and others (2003), and the 32-bit result is mixed
+    twice by `h ^ (h >> 16)` and a multiply.
+
+    Args:
+        x: The first coordinate.
+        y: The second coordinate.
+        seed: The seed.
+
+    Returns:
+        A number from 0 up to 1.
+    """
+    var h = (
+        UInt32((x * 73856093) & 0xFFFFFFFF)
+        ^ UInt32((y * 19349663) & 0xFFFFFFFF)
+        ^ UInt32((seed * 83492791) & 0xFFFFFFFF)
+    )
+    h = (h ^ (h >> 16)) * UInt32(0x45D9F3B)
+    h = (h ^ (h >> 16)) * UInt32(0x45D9F3B)
+    h = h ^ (h >> 16)
+    return Float64(h) / 4294967296.0

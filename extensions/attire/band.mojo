@@ -28,7 +28,7 @@ This is not a three.js port. See Extensions.
 from std.math import cos, pi, sin
 
 from core.buffer_geometry import POSITION, BufferGeometry
-from extensions.attire.mesh_ops import MeshWriter
+from extensions.attire.mesh_ops import MeshWriter, nearest_kept
 from extensions.attire.skirt import (
     SKIRT_SIDES,
     hull_radii,
@@ -36,6 +36,7 @@ from extensions.attire.skirt import (
     level_hull,
     skirt_scale,
     slice_segments,
+    side_direction,
 )
 from extensions.humanoid.rig.joints import HumanoidRig
 from math.vector3 import Vector3
@@ -45,27 +46,6 @@ comptime BAND_HEIGHT = Float32(0.04)
 """How deep a band is, top to bottom, in meters on the template."""
 comptime BAND_ROWS = 3
 """How many rows a band's outer face has, top to bottom."""
-
-
-def _side(side: Int) -> Vector3:
-    """Return the unit direction of one side, round from the front, as a
-    skirt's sides run."""
-    var turn = 2 * Float32(pi) * Float32(side) / Float32(SKIRT_SIDES)
-    return Vector3(sin(turn), 0, cos(turn))
-
-
-def _nearest(points: List[Vector3], kept: List[Bool], p: Vector3) -> Int:
-    """Return the kept vertex nearest a point, or -1."""
-    var best = -1
-    var closest = Float32(1e30)
-    for v in range(len(points)):  # pragma: no branch
-        if not kept[v]:
-            continue
-        var d = (points[v] - p).length_sq()
-        if d < closest:
-            closest = d
-            best = v
-    return best
 
 
 def belt_band(
@@ -129,12 +109,12 @@ def belt_band(
         var y = middle + half - 2 * half * Float32(row) / (BAND_ROWS - 1)
         var radii = hull_radii(outlines[row], center)
         for side in range(SKIRT_SIDES):  # pragma: no branch
-            var direction = _side(side)
+            var direction = side_direction(side)
             var p = center + direction * radii[side]
             p.y = y
             var q = p - direction * thickness
             # The side's weights, from the shell where the band lies.
-            var source = _nearest(points, legs, p)
+            var source = nearest_kept(points, legs, p)
             var near = List[Int]()
             var share = List[Float32]()
             for c in range(4):  # pragma: no branch

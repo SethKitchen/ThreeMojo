@@ -227,15 +227,6 @@ def _blend(base: UInt8, color: Float32, opacity: Float32) -> UInt8:
     return unit_byte(under + (color - under) * opacity)
 
 
-def _project(axis: SliceAxis, point: V3) -> Tuple[Float64, Float64]:
-    """Return the slice coordinates of a point in voxel units."""
-    if axis == K_AXIS:
-        return (point.x, point.y)
-    if axis == J_AXIS:
-        return (point.x, point.z)
-    return (point.y, point.z)
-
-
 def _plot(mut image: Framebuffer, x: Int, y: Int, color: Rgba):
     """Set one pixel when it is inside the image."""
     if x < 0 or y < 0 or x >= image.width or y >= image.height:
@@ -310,8 +301,8 @@ def draw_measurement(
         Error: If the axis is not valid, or a point is not finite.
     """
     require_axis(axis)
-    var start = _project(axis, a)
-    var end = _project(axis, b)
+    var start = slice_point(axis, a)
+    var end = slice_point(axis, b)
     if not _finite(start) or not _finite(end):
         raise Error("A measurement needs finite points")
     var x0 = Int(floor(start[0] + 0.5))
@@ -358,3 +349,21 @@ def zoom_image(image: Framebuffer, factor: Int) raises -> Framebuffer:
             for c in range(4):  # pragma: no branch
                 pixels[target + c] = image.pixels[source + c]
     return Framebuffer(width, height, pixels^)
+
+
+def slice_point(axis: SliceAxis, point: V3) -> Tuple[Float64, Float64]:
+    """Return the two coordinates of a point in the plane of a slice.
+
+    Args:
+        axis: The axis normal to the slice.
+        point: The point.
+
+    Returns:
+        `(x, y)` on a K slice, `(x, z)` on a J slice and `(y, z)` on an
+        I slice.
+    """
+    if axis == K_AXIS:
+        return (point.x, point.y)
+    if axis == J_AXIS:
+        return (point.x, point.z)
+    return (point.y, point.z)

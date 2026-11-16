@@ -16,7 +16,7 @@
 | `order` | `ascending_order`, `descending_order`, `sorted_values` and `order_by`, the stable order of values |
 | `search` | `bisect`, `golden_minimum` and `GOLDEN`, the searches along one variable |
 | `matrix3x3` | `Matrix3x3`, `determinant3` and `adjugate3`, the 3 by 3 matrices of SIMD lanes |
-| `noise` | `Xorshift64`, seeded uniform and normal numbers for synthetic data |
+| `noise` | `Xorshift64`, seeded uniform and normal numbers for synthetic data, and `lattice_hash` |
 | `distance` | `distance_transform` and `NO_SEED`, the exact distance from each grid point to the nearest seed |
 | `sparse` | `SparseBuilder`, which assembles triplets, and `CsrMatrix` |
 | `iterative` | `conjugate_gradient` with a Jacobi preconditioner, and `SolveStatus` |
@@ -161,6 +161,8 @@ The local thickness and the label distances of the imaging extension use it with
 
 The synthetic studies, scans and alignments of the gallery examples take their noise from it. The numbers are not for cryptography.
 
+`lattice_hash(x, y, seed)` gives a repeatable number from 0 up to 1 for a point of a grid, with no state. The castle sky and textures take value noise from it. Each coordinate and the seed take a large odd factor, as in the spatial hash of Teschner and others (2003). The 32-bit result is then mixed twice.
+
 ## Dense eigenvalue range
 
 `symmetric_eigen` scales finite input by its largest entry before the Jacobi sweeps. This preserves the relative stopping test when the original entry squares would overflow or underflow. Eigenvectors stay unchanged by this scaling. The method rescales each eigenvalue at the end and raises if it cannot represent that value as finite `Float64`.
@@ -211,5 +213,6 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Acklam, "An algorithm for computing the inverse normal cumulative distribution function", 2003.
 - West, "Updating mean and variance estimates: an improved method", Communications of the ACM, 1979.
 - Marsaglia, "Xorshift RNGs", Journal of Statistical Software, 2003.
+- Teschner, Heidelberger, Müller, Pomeranets and Gross, "Optimized spatial hashing for collision detection of deformable objects", Vision, Modeling, and Visualization, 2003.
 - Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", Theory of Computing, 2012.
 - Box and Muller, "A note on the generation of random normal deviates", Annals of Mathematical Statistics, 1958.

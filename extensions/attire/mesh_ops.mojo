@@ -684,3 +684,69 @@ def _set_vector(mut carrier: _Carrier, at: Int, vertex: Int, value: Vector3):
     carrier.out[at][vertex * 3] = value.x
     carrier.out[at][vertex * 3 + 1] = value.y
     carrier.out[at][vertex * 3 + 2] = value.z
+
+
+def nearest_point(points: List[Vector3], p: Vector3) -> Int:
+    """Return the index of the point nearest `p`.
+
+    Args:
+        points: The points to search.
+        p: The point to match.
+
+    Returns:
+        The index of the first nearest point, or -1 when there is none.
+    """
+    var best = -1
+    var closest = Float32(1e30)
+    for k in range(len(points)):
+        var d = (points[k] - p).length_sq()
+        if d < closest:
+            closest = d
+            best = k
+    return best
+
+
+def nearest_kept(points: List[Vector3], kept: List[Bool], p: Vector3) -> Int:
+    """Return the index of the kept point nearest `p`.
+
+    Args:
+        points: The points to search.
+        kept: True for each point that the search may return.
+        p: The point to match.
+
+    Returns:
+        The index of the first nearest kept point, or -1 when no point is
+        kept.
+    """
+    var best = -1
+    var closest = Float32(1e30)
+    for v in range(len(points)):
+        if not kept[v]:
+            continue
+        var d = (points[v] - p).length_sq()
+        if d < closest:
+            closest = d
+            best = v
+    return best
+
+
+def cap_corner(ring: Int, sector: Int, rings: Int, sectors: Int) -> Int:
+    """Return the vertex of a corner of a closed cap of rings.
+
+    The vertices are the pole, then `rings - 1` rings of `sectors` each,
+    then the other pole. A sector past the last wraps to the first.
+
+    Args:
+        ring: The ring, from 0 (the first pole) to `rings` (the other).
+        sector: The sector, 0 or more.
+        rings: The rings from pole to pole.
+        sectors: The sectors around each ring.
+
+    Returns:
+        The vertex index.
+    """
+    if ring == 0:
+        return 0
+    if ring == rings:
+        return 1 + (rings - 1) * sectors
+    return 1 + (ring - 1) * sectors + sector % sectors

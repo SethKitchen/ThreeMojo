@@ -5,7 +5,7 @@
 
 """Seeded uniform and normal numbers by xorshift64."""
 
-from extensions.numerics.noise import Xorshift64
+from extensions.numerics.noise import Xorshift64, lattice_hash
 from std.math import inf, nan
 from std.testing import (
     TestSuite,
@@ -104,6 +104,19 @@ def test_counts_and_gammas() raises:
             _ = noise.gamma(1.0, v)
     with assert_raises(contains="gamma shape"):
         _ = noise.gamma(0.0, 1.0)
+
+
+def test_lattice_hash() raises:
+    # The values of the same steps in Python's integers, mod 2^32. The
+    # origin of seed 0 hashes to 0, and a point always gives one number.
+    assert_equal(lattice_hash(0, 0, 0), 0.0)
+    assert_equal(lattice_hash(1, 0, 0), 0.38183275307528675)
+    assert_equal(lattice_hash(3, -2, 7), 0.709819293115288)
+    assert_equal(lattice_hash(-5, 4, 11), 0.28794378926977515)
+    for x in range(-20, 20):
+        var h = lattice_hash(x, 2 * x, 5)
+        assert_true(h >= 0.0 and h < 1.0)
+        assert_equal(h, lattice_hash(x, 2 * x, 5))
 
 
 def test_zero_seed() raises:

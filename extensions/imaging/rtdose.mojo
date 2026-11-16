@@ -39,6 +39,7 @@ from extensions.imaging.dicom import (
     DicomTree,
     parse_dicom_tree,
     read_dicom_tree,
+    unit_direction,
 )
 from extensions.imaging.ids import DATA_SET
 from extensions.imaging.image_volume import ImageVolume
@@ -104,15 +105,6 @@ def _values(
     return values^
 
 
-def _unit(values: List[Float64], first: Int) raises -> V3:
-    """Return one direction of an orientation, checked for length."""
-    var direction = v3(values[first], values[first + 1], values[first + 2])
-    var size = length(direction)
-    if abs(size - 1.0) > TOLERANCE:
-        raise Error("An RT dose orientation needs unit directions")
-    return direction * (1.0 / size)
-
-
 def _rt_dose(tree: DicomTree) raises -> RtDose:
     """Read the dose of a parsed RT Dose file."""
     if tree.text(DATA_SET, 0x00080060) != "RTDOSE":
@@ -143,8 +135,8 @@ def _rt_dose(tree: DicomTree) raises -> RtDose:
     var spacing = _values(tree, 0x00280030, 2, "pixel spacing")
     if not (spacing[0] > 0) or not (spacing[1] > 0):
         raise Error("An RT dose pixel spacing must be positive")
-    var row = _unit(orientation, 0)
-    var column = _unit(orientation, 3)
+    var row = unit_direction(orientation, 0, "An RT dose orientation")
+    var column = unit_direction(orientation, 3, "An RT dose orientation")
     if abs(dot(row, column)) > TOLERANCE:
         raise Error("An RT dose orientation needs square directions")
     var normal = cross(row, column)

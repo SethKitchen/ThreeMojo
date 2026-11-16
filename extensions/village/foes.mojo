@@ -84,6 +84,8 @@ from extensions.village.combat import (
     LIGHT_TWO,
     CombatMove,
     FighterParameters,
+    flat_distance,
+    flat_direction,
 )
 from extensions.village.dressing import prism
 from extensions.village.sheet import Sheet
@@ -276,22 +278,6 @@ struct Sight(ImplicitlyCopyable):
     var raging: Bool
 
 
-def _flat_gap(a: Vector3, b: Vector3) -> Float32:
-    """Return how far apart two points are on the ground."""
-    var dx = b.x - a.x
-    var dz = b.z - a.z
-    return sqrt(dx * dx + dz * dz)
-
-
-def _toward(a: Vector3, b: Vector3) -> Vector3:
-    """Return the way from one point to another on the ground, of length
-    one, or +z when they meet."""
-    var gap = _flat_gap(a, b)
-    if gap < 1.0e-4:
-        return Vector3(0, 0, 1)
-    return Vector3((b.x - a.x) / gap, 0, (b.z - a.z) / gap)
-
-
 def plan_for(roll: Float32) -> List[CombatMove]:
     """Return the attacks a bandit makes for a roll of its dice.
 
@@ -437,9 +423,9 @@ struct Brain(Copyable, Movable):
         var seconds = delta.to(SECOND)
         self.timer -= seconds
         var out = still()
-        var gap = _flat_gap(sight.at, sight.player)
-        var toward = _toward(sight.at, sight.player)
-        var away_home = _flat_gap(sight.at, sight.home)
+        var gap = flat_distance(sight.at, sight.player)
+        var toward = flat_direction(sight.at, sight.player, Vector3(0, 0, 1))
+        var away_home = flat_distance(sight.at, sight.home)
         if sight.player_down and not (
             self.state == POSTED or self.state == RETURNING
         ):
@@ -451,18 +437,22 @@ struct Brain(Copyable, Movable):
                 self.timer = ALERT
                 out.face = True
             elif away_home > HOME_NEAR:
-                out.way = _toward(sight.at, sight.home) * 0.5
+                out.way = (
+                    flat_direction(sight.at, sight.home, Vector3(0, 0, 1)) * 0.5
+                )
             return out
         if self.state == RETURNING:
             if not sight.player_down and gap < self.notice / 2:
                 self.state = ALERTED
                 self.timer = ALERT
             elif away_home > HOME_NEAR:
-                out.way = _toward(sight.at, sight.home) * 0.6
+                out.way = (
+                    flat_direction(sight.at, sight.home, Vector3(0, 0, 1)) * 0.6
+                )
             else:
                 self.state = POSTED
             return out
-        if _flat_gap(sight.home, sight.player) > LOSE:
+        if flat_distance(sight.home, sight.player) > LOSE:
             self.state = RETURNING
             out.release = True
             return out

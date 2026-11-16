@@ -33,7 +33,13 @@ from std.math import cos, pi, sin
 
 from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.attire.last import FootLast, foot_last
-from extensions.attire.mesh_ops import MeshWriter, cut, merge
+from extensions.attire.mesh_ops import (
+    MeshWriter,
+    cut,
+    merge,
+    nearest_point,
+    cap_corner,
+)
 from extensions.attire.skirt import skirt_scale
 from extensions.humanoid.rig.joints import CHEST, RIGHT_UPPER_ARM, HumanoidRig
 from math.vector3 import Vector3
@@ -85,30 +91,6 @@ def shoulder_points(
         if (p.x - middle) * side > 0:
             points.append(p)
     return points^
-
-
-def _nearest(points: List[Vector3], p: Vector3) -> Int:
-    """Return the index of the point nearest `p`."""
-    var best = 0
-    var closest = Float32(1e30)
-    for k in range(len(points)):  # pragma: no branch
-        var d = (points[k] - p).length_sq()
-        if d < closest:
-            closest = d
-            best = k
-    return best
-
-
-def _corner(ring: Int, sector: Int) -> Int:
-    """Return the vertex of the cast sphere at a ring and a sector.
-
-    A pole is one vertex. The sectors wrap round.
-    """
-    if ring == 0:
-        return 0
-    if ring == DOME_RINGS:
-        return 1 + (DOME_RINGS - 1) * DOME_SECTORS
-    return 1 + (ring - 1) * DOME_SECTORS + sector % DOME_SECTORS
 
 
 def dome_mesh(
@@ -175,7 +157,7 @@ def dome_mesh(
             if value < DOME_RIM * s:
                 cover = DOME_TRIM
             covers.append(cover)
-            var source = _nearest(points, p)
+            var source = nearest_point(points, p)
             var four = List[Int](length=4, fill=0)
             var share = List[Float32](length=4, fill=0)
             for k in range(4):  # pragma: no branch
@@ -191,10 +173,10 @@ def dome_mesh(
         _ = writer.add(inner[k], covers[k], fours[k], shares[k])
     for ring in range(DOME_RINGS):  # pragma: no branch
         for sector in range(DOME_SECTORS):  # pragma: no branch
-            var a = _corner(ring, sector)
-            var b = _corner(ring, sector + 1)
-            var c2 = _corner(ring + 1, sector)
-            var d2 = _corner(ring + 1, sector + 1)
+            var a = cap_corner(ring, sector, DOME_RINGS, DOME_SECTORS)
+            var b = cap_corner(ring, sector + 1, DOME_RINGS, DOME_SECTORS)
+            var c2 = cap_corner(ring + 1, sector, DOME_RINGS, DOME_SECTORS)
+            var d2 = cap_corner(ring + 1, sector + 1, DOME_RINGS, DOME_SECTORS)
             # Each quad is two triangles, wound to face out of the sphere.
             # At a pole one of them has two corners on the pole, and is
             # left out.

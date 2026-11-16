@@ -21,19 +21,7 @@ gray. The farther a cloud is, the paler and thinner it is.
 from cameras.camera import Camera
 from render.framebuffer import Framebuffer
 from std.math import asin, exp, floor, pi, sqrt
-
-
-def _hash(x: Int, y: Int, seed: Int) -> Float64:
-    """Return a repeatable number from 0 up to 1 for a lattice point."""
-    var h = (
-        UInt32((x * 73856093) & 0xFFFFFFFF)
-        ^ UInt32((y * 19349663) & 0xFFFFFFFF)
-        ^ UInt32((seed * 83492791) & 0xFFFFFFFF)
-    )
-    h = (h ^ (h >> 16)) * UInt32(0x45D9F3B)
-    h = (h ^ (h >> 16)) * UInt32(0x45D9F3B)
-    h = h ^ (h >> 16)
-    return Float64(h) / 4294967296.0
+from extensions.numerics.noise import lattice_hash
 
 
 def _smooth(x: Float64) -> Float64:
@@ -48,9 +36,13 @@ def _noise(x: Float64, y: Float64, seed: Int) -> Float64:
     var iy = Int(floor(y))
     var sx = _smooth(x - Float64(ix))
     var sy = _smooth(y - Float64(iy))
-    var low = _hash(ix, iy, seed) * (1.0 - sx) + _hash(ix + 1, iy, seed) * sx
+    var low = (
+        lattice_hash(ix, iy, seed) * (1.0 - sx)
+        + lattice_hash(ix + 1, iy, seed) * sx
+    )
     var high = (
-        _hash(ix, iy + 1, seed) * (1.0 - sx) + _hash(ix + 1, iy + 1, seed) * sx
+        lattice_hash(ix, iy + 1, seed) * (1.0 - sx)
+        + lattice_hash(ix + 1, iy + 1, seed) * sx
     )
     return low * (1.0 - sy) + high * sy
 

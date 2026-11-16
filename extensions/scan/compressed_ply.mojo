@@ -87,6 +87,7 @@ from loaders.ply import (
 )
 from std.math import exp, log, sqrt
 from std.pathlib import Path
+from loaders.bytes import little_u32
 
 comptime COMPRESSED_PLY_CHUNK = 256
 """How many splats a `chunk` row holds."""
@@ -652,25 +653,6 @@ def _bounds(
 
 
 @always_inline
-def _word(bytes: List[UInt8], at: Int) -> UInt32:
-    """Return a little-endian 32-bit word.
-
-    Args:
-        bytes: The file.
-        at: The word's first byte.
-
-    Returns:
-        The word.
-    """
-    return (
-        UInt32(bytes[at])
-        | (UInt32(bytes[at + 1]) << 8)
-        | (UInt32(bytes[at + 2]) << 16)
-        | (UInt32(bytes[at + 3]) << 24)
-    )
-
-
-@always_inline
 def _unorm(value: UInt32, shift: Int, bits: Int) -> Float64:
     """Return a field of a word as a fraction, splat-transform's
     `unpackUnorm`.
@@ -867,7 +849,7 @@ def parse_compressed_ply(bytes: List[UInt8]) raises -> ScanScene:
     for index in range(count):  # pragma: no branch
         var row = vertex.start + index * vertex.stride
         var box = (index // COMPRESSED_PLY_CHUNK) * 12
-        var p = _word(bytes, row + position)
+        var p = little_u32(bytes, row + position)
         centers.append(
             Float32(_lerp(bounds[box], bounds[box + 3], _unorm(p, 21, 11)))
         )
@@ -878,7 +860,7 @@ def parse_compressed_ply(bytes: List[UInt8]) raises -> ScanScene:
             Float32(_lerp(bounds[box + 2], bounds[box + 5], _unorm(p, 0, 11)))
         )
 
-        var r = _word(bytes, row + rotation)
+        var r = little_u32(bytes, row + rotation)
         var a = (_unorm(r, 20, 10) - 0.5) * norm
         var b = (_unorm(r, 10, 10) - 0.5) * norm
         var c = (_unorm(r, 0, 10) - 0.5) * norm
@@ -897,7 +879,7 @@ def parse_compressed_ply(bytes: List[UInt8]) raises -> ScanScene:
         else:
             q3 = Float32(m)
 
-        var s = _word(bytes, row + scale)
+        var s = little_u32(bytes, row + scale)
         var sx = Float32(
             _lerp(bounds[box + 6], bounds[box + 9], _unorm(s, 21, 11))
         )
@@ -920,7 +902,7 @@ def parse_compressed_ply(bytes: List[UInt8]) raises -> ScanScene:
             Float64(q0),
         )
 
-        var k = _word(bytes, row + color)
+        var k = little_u32(bytes, row + color)
         var red = _unorm(k, 24, 8)
         var green = _unorm(k, 16, 8)
         var blue = _unorm(k, 8, 8)

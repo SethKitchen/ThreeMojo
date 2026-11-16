@@ -45,7 +45,7 @@ from extensions.imaging.ids import (
 )
 from extensions.imaging.image_volume import ImageVolume
 from extensions.imaging.labels import LabelMap
-from extensions.imaging.overlay import draw_line
+from extensions.imaging.overlay import draw_line, slice_point
 from extensions.imaging.transfer import Rgba
 from extensions.sdf.vector import V3, v3
 from render.framebuffer import Framebuffer
@@ -94,15 +94,6 @@ def _voxel_point(axis: SliceAxis, x: Float64, y: Float64, index: Int) -> V3:
     if axis == J_AXIS:
         return v3(x, depth, y)
     return v3(depth, x, y)
-
-
-def _slice_point(axis: SliceAxis, p: V3) -> Tuple[Float64, Float64]:
-    """Return the slice `x` and `y` of a voxel point."""
-    if axis == K_AXIS:
-        return (p.x, p.y)
-    if axis == J_AXIS:
-        return (p.x, p.z)
-    return (p.y, p.z)
 
 
 def _march(
@@ -337,8 +328,8 @@ def draw_outlines(
     for outline in outlines:
         var n = len(outline.points)
         for p in range(n):
-            var a = _slice_point(axis, outline.points[p])
-            var b = _slice_point(axis, outline.points[(p + 1) % n])
+            var a = slice_point(axis, outline.points[p])
+            var b = slice_point(axis, outline.points[(p + 1) % n])
             draw_line(
                 image,
                 Int(floor(a[0] * scale + shift + 0.5)),
