@@ -83,7 +83,7 @@ def confined_path(
             if not directory.startswith("/"):
                 can_step_up = True
     var parts = List[String]()
-    for raw in relative.split("/"):
+    for raw in relative.split("/"):  # pragma: no branch
         var part = String(raw)
         if part == "..":
             if not can_step_up:
@@ -107,7 +107,7 @@ def confined_path(
             joined = directory + "/" + clean
     if can_step_up:
         var depth = 0
-        for segment in joined.split("/"):
+        for segment in joined.split("/"):  # pragma: no branch
             var item = String(segment)
             if item == "":
                 continue
@@ -123,15 +123,15 @@ def confined_path(
                 depth -= 1
             else:
                 depth += 1
-    var root = "."
-    if not can_step_up:
-        if directory != "":
-            root = directory
-    var base_real = realpath(root)
-    var prefix = base_real
-    if not prefix.endswith("/"):
-        prefix += "/"
     if Path(joined).exists():
+        var root = "."
+        if not can_step_up:
+            if directory != "":
+                root = directory
+        var base_real = realpath(root)
+        var prefix = base_real
+        if not prefix.endswith("/"):
+            prefix += "/"
         var target_real = realpath(joined)
         if not target_real.startswith(prefix):
             raise Error(

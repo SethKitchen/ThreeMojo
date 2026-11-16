@@ -23,7 +23,7 @@ from loaders.draco import (
     decode_draco,
 )
 from loaders.draco_buffer import DracoBuffer
-from loaders.file_path import confined_path
+from loaders.file_path import confined_path, path_directory, path_name
 from loaders.fbx_tree import (
     _BinaryReader,
     MAX_FBX_ARRAY_BYTES,
@@ -460,6 +460,13 @@ def test_confined_path_refuses_escapes_and_symbolic_links() raises:
 
     try:
         assert_equal(confined_path("", "a/./b.png", "T"), "a/b.png")
+        assert_equal(path_name("a/b.png"), "b.png")
+        assert_equal(path_directory("a/b.png"), "a/")
+        assert_equal(confined_path("", "README.md", "T"), "README.md")
+        assert_equal(confined_path("sub", "a//b.png", "T"), "sub/a/b.png")
+        assert_equal(
+            confined_path("a//b", "../c.png", "T", True), "a//b/../c.png"
+        )
         assert_equal(confined_path(sub, "inside.bin", "T"), sub + "/inside.bin")
         assert_equal(
             confined_path(sub + "/", "./inside.bin", "T"), sub + "/inside.bin"

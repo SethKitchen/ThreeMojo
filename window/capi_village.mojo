@@ -119,15 +119,15 @@ def tm_create(
     """
     var w = Int(width)
     var h = Int(height)
-    if w < 1 or h < 1 or w > MAX_SIDE or h > MAX_SIDE:
+    if w > MAX_SIDE or h > MAX_SIDE:
         return None
-    print("Building the village...", file=stderr)
     try:
         var gpu = gpu_from_environment()
         var parameters = play_parameters(quality_from_environment(), gpu)
         # A value that is not valid is refused before the village is built.
         var hour = hour_from_environment()
         var weather = weather_from_environment()
+        print("Building the village...", file=stderr)
         return new_app(w, h, parameters, read_bed(), gpu, hour, weather)
     except:
         return None

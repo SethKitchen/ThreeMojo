@@ -934,7 +934,7 @@ def check_program_bounds(program: NodeProgram) raises:
             raise Error("NodeProgram: output instructions overlap header")
         if start + count * INSTRUCTION_FLOATS > size:
             raise Error("NodeProgram: output instructions run past code")
-        for step in range(count):
+        for step in range(count):  # pragma: no branch
             var base = start + step * INSTRUCTION_FLOATS
             for offset in [
                 INSTRUCTION_A,
@@ -972,7 +972,7 @@ def _clamp_program_bounds(mut code: List[Float32]):
             code[output * 2] = 0
             code[output * 2 + 1] = 0
             continue
-        for step in range(count):
+        for step in range(count):  # pragma: no branch
             var base = start + step * INSTRUCTION_FLOATS
             for offset in [
                 INSTRUCTION_A,

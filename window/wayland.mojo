@@ -364,15 +364,16 @@ struct Received(Movable):
     var error_code: Int
 
 
+comptime _ERRNO_SYMBOL = (
+    "__errno_location" if CompilationTarget.is_linux() else "__error"
+)
+
+
 def _socket_errno() -> Int:
     """Return the calling thread's `errno`."""
-    var address: Int
-    comptime if CompilationTarget.is_linux():
-        address = Int(
-            external_call["__errno_location", OpaquePointer[MutAnyOrigin]]()
-        )
-    else:
-        address = Int(external_call["__error", OpaquePointer[MutAnyOrigin]]())
+    var address = Int(
+        external_call[_ERRNO_SYMBOL, OpaquePointer[MutAnyOrigin]]()
+    )
     return Int(Pointer[Int32, MutAnyOrigin](unsafe_from_address=address)[])
 
 
@@ -1007,7 +1008,9 @@ struct WaylandWindow(Movable):
             var rest = List[UInt8](
                 capacity=len(self._incoming) - self._incoming_at
             )
-            for index in range(self._incoming_at, len(self._incoming)):
+            for index in range(
+                self._incoming_at, len(self._incoming)
+            ):  # pragma: no branch
                 rest.append(self._incoming[index])
             self._incoming = rest^
             self._incoming_at = 0

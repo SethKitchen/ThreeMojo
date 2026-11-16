@@ -2495,9 +2495,15 @@ def rasterize_shaded(
     # a triangle that names no ramp, which is three.js's fallback. The uv
     # debug view shades nothing and reads none.
     var local_ramp = List[Float32]()
-    if not precomputed_ramp:
-        if a.gradient_map != NO_TEXTURE and mode != SHADE_UV:
-            local_ramp = gradient_ramp(textures.get(a.gradient_map))
+    var ramp = (
+        Pointer(to=local_ramp)
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
+    )
+    if precomputed_ramp:
+        ramp = precomputed_ramp.value()
+    elif a.gradient_map != NO_TEXTURE and mode != SHADE_UV:
+        local_ramp = gradient_ramp(textures.get(a.gradient_map))
 
     # Whether this surface composites, decided by the material and carried
     # here rather than inferred from a color. It changes two things
@@ -3032,29 +3038,16 @@ def rasterize_shaded(
                     # surface is read at the two pixels beside it. A ramp
                     # of the material's own has no edge to soften.
                     var beside = SurfaceSteps()
-                    if precomputed_ramp:
-                        ref cached = precomputed_ramp.value()[]
-                        if len(cached) == 0:
-                            beside = surface_steps(nodes)
-                        arriving = lighting.toon_at(
-                            facing,
-                            spot,
-                            cached,
-                            a.receives_shadow,
-                            shape,
-                            beside,
-                        )
-                    else:
-                        if len(local_ramp) == 0:
-                            beside = surface_steps(nodes)
-                        arriving = lighting.toon_at(
-                            facing,
-                            spot,
-                            local_ramp,
-                            a.receives_shadow,
-                            shape,
-                            beside,
-                        )
+                    if len(ramp[]) == 0:
+                        beside = surface_steps(nodes)
+                    arriving = lighting.toon_at(
+                        facing,
+                        spot,
+                        ramp[],
+                        a.receives_shadow,
+                        shape,
+                        beside,
+                    )
                 elif a.kind == GOURAUD:
                     # Lit at the corners, and the direct light darkened
                     # here by the shadows; see `gouraud_light`.
@@ -5771,14 +5764,10 @@ def _bucket_band_triangles(
             var rc1 = min(height - 1, triangle_rows[triangle * 2 + 1])
             if rc0 > rc1:
                 continue
-            var first_band = (rc0 * bands) // height
-            for b in range(first_band, bands):  # pragma: no branch
-                var b_first = b * height // bands
-                if b_first > rc1:
-                    break
-                var b_last = (b + 1) * height // bands - 1
-                if b_last >= rc0:
-                    counts[draw_index * bands + b] += 1
+            var first_band = ((rc0 + 1) * bands - 1) // height
+            var last_band = ((rc1 + 1) * bands - 1) // height
+            for b in range(first_band, last_band + 1):  # pragma: no branch
+                counts[draw_index * bands + b] += 1
     var starts = List[Int](length=buckets + 1, fill=0)
     var cursor = List[Int](length=buckets, fill=0)
     var total = 0
@@ -5798,16 +5787,12 @@ def _bucket_band_triangles(
             var rc1 = min(height - 1, triangle_rows[triangle * 2 + 1])
             if rc0 > rc1:
                 continue
-            var first_band = (rc0 * bands) // height
-            for b in range(first_band, bands):  # pragma: no branch
-                var b_first = b * height // bands
-                if b_first > rc1:
-                    break
-                var b_last = (b + 1) * height // bands - 1
-                if b_last >= rc0:
-                    var slot = draw_index * bands + b
-                    indices[cursor[slot]] = triangle
-                    cursor[slot] += 1
+            var first_band = ((rc0 + 1) * bands - 1) // height
+            var last_band = ((rc1 + 1) * bands - 1) // height
+            for b in range(first_band, last_band + 1):  # pragma: no branch
+                var slot = draw_index * bands + b
+                indices[cursor[slot]] = triangle
+                cursor[slot] += 1
     return (starts^, indices^)
 
 

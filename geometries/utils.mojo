@@ -210,13 +210,13 @@ struct _VertexKey(Copyable, Equatable, Hashable, Movable):
     def __eq__(self, other: Self) -> Bool:
         if len(self.words) != len(other.words):
             return False
-        for index in range(len(self.words)):
+        for index in range(len(self.words)):  # pragma: no branch
             if self.words[index] != other.words[index]:
                 return False
         return True
 
     def __hash__[H: Hasher](self, mut hasher: H):
-        for index in range(len(self.words)):
+        for index in range(len(self.words)):  # pragma: no branch
             self.words[index].__hash__(hasher)
 
 
@@ -285,7 +285,8 @@ def merge_vertices(
     var additive = step * 0.5 * multiplier
     var count = geometry.stream_length()
     var stride = 0
-    for name in range(geometry.attribute_count()):
+    # `stream_length` raised above when `geometry` carries no positions.
+    for name in range(geometry.attribute_count()):  # pragma: no branch
         stride += geometry.values[name].item_size
     var seen = Dict[_VertexKey, Int]()
     var kept = List[Int]()

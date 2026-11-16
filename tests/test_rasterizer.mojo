@@ -3553,6 +3553,38 @@ def test_a_named_ramp_replaces_the_fallback() raises:
         if not known:
             seen.append(here)
     assert_equal(len(seen), 3)
+    # Direct `rasterize_shaded` without a frame-cached ramp builds its own
+    # ramp for `SHADE_TEXTURE` and skips it for `SHADE_UV`.
+    var quad = toon_quad(Vector3(0.6, 0, 0.8), Vector3(0.6, 0, -0.8), ramp)
+    var direct = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_shaded(
+        quad[0],
+        quad[1],
+        quad[2],
+        direct,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+    )
+    assert_equal(direct.shown(0, 0).r, UInt8(255))
+    var uv_only = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_shaded(
+        quad[0],
+        quad[1],
+        quad[2],
+        uv_only,
+        SHADE_UV,
+        textures,
+        lighting,
+    )
+    rasterize_all(List[RasterVertex](), uv_only, workers=2)
+    rasterize_frame(
+        List[RasterVertex](),
+        List[RasterVertex](),
+        List[Draw](),
+        uv_only,
+        workers=2,
+    )
 
 
 def test_a_toon_triangles_ramp_is_checked_and_belongs_to_the_kind() raises:
