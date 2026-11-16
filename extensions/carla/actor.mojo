@@ -21,7 +21,11 @@ from extensions.carla.blueprint import ActorAttributeValue
 from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.physics.body import BodyId
 from extensions.carla.sensor import SemanticTag
-from extensions.carla.transform import CarlaRotation, CarlaTransform
+from extensions.carla.transform import (
+    CarlaRotation,
+    CarlaTransform,
+    no_rotation,
+)
 from math.matrix3 import Matrix3
 from math.obb import OBB
 from math.vector3 import Vector3
@@ -135,15 +139,6 @@ comptime YELLOW = TrafficLightState(1)
 comptime GREEN = TrafficLightState(2)
 comptime OFF = TrafficLightState(3)
 comptime UNKNOWN = TrafficLightState(4)
-
-
-def no_rotation() -> CarlaRotation:
-    """Return the rotation that turns nothing.
-
-    Returns:
-        Zero pitch, yaw and roll.
-    """
-    return CarlaRotation(Angle(0, DEGREE), Angle(0, DEGREE), Angle(0, DEGREE))
 
 
 def compose(parent: CarlaTransform, child: CarlaTransform) -> CarlaTransform:

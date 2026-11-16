@@ -263,3 +263,82 @@ $(call gallery,wijnendale-simulation,wijnendale_simulation,assets/pebbles.jpg)
 $(call gallery,wijnendale-landscape,wijnendale_landscape,assets/pebbles.jpg)
 # The castle scanned by 24 virtual cameras, drawn as its splats.
 $(call gallery,wijnendale-scan,wijnendale_scan)
+# A head phantom through DICOM files, ray cast with a cutaway, and one axial
+# slice with labels and a measurement.
+$(call gallery,medical-imaging,medical_imaging)
+# A synthetic PET in SUV fused over the head phantom CT, with a lesion
+# labeled, measured and outlined.
+$(call gallery,fusion,fusion)
+# A synthetic diffusion MRI of the head phantom: a scan at b = 1000, the ADC
+# map with a lesion of restricted diffusion, and a computed image at b = 2000.
+$(call gallery,diffusion,diffusion)
+# A synthetic CT perfusion of a stroke in the head phantom: the CBF and
+# Tmax maps, and the ischemic core and the tissue at risk over the scan.
+$(call gallery,perfusion,perfusion)
+# A synthetic angiogram of a vessel tree, a blob and a plate, projected,
+# beside the projection of its Frangi vesselness.
+$(call gallery,vesselness,vesselness)
+# A synthetic five-beam dose over the head phantom CT, with isodose lines,
+# and the dose-volume histograms of a target and an organ at risk.
+$(call gallery,radiotherapy,radiotherapy)
+# A lesion that grows between two scans of the head phantom: the second
+# scan registered onto the first, both outlines and the longest diameters.
+$(call gallery,longitudinal,longitudinal)
+# An ideal peptide of a helix, a loop and a strand: its cartoon ribbon, and
+# its excluded surface colored by element and by hydropathy.
+$(call gallery,molecule,molecule)
+# The helical wheels of magainin 2 and of a designed peptide of leucine and
+# lysine, with their hydrophobic moments.
+$(call gallery,helical-wheel,helical_wheel)
+# The neighbor-joining tree of a synthetic outbreak in three wards, rooted at
+# its midpoint, with each patient named.
+$(call gallery,phylogeny,phylogeny)
+# A synthetic predicted model: its ribbon and excluded surface colored by
+# pLDDT in the four bands of the AlphaFold database.
+$(call gallery,predicted,predicted)
+# A steel cantilever of tetrahedra bent by a tip load, drawn 40 times its
+# deflection and colored by von Mises stress.
+$(call gallery,tetrahedral-fem,tetrahedral_fem)
+# A soft block indented by two fifths of its thickness: the linear solve
+# beside the Neo-Hookean solve, colored by von Mises stress.
+$(call gallery,indentation,indentation)
+# The Kaplan-Meier curves of the 6-MP leukemia trial of 1963, drug and
+# placebo, with a tick at each censored patient.
+$(call gallery,survival,survival)
+# The cumulative incidence of relapse and of death without relapse in a
+# synthetic cohort, beside one minus the Kaplan-Meier curve of relapse.
+$(call gallery,competing,competing)
+# The Kaplan-Meier curves of the 6-MP trial, with dashed Weibull fits of
+# each arm carried past the follow-up to 52 weeks.
+$(call gallery,parametric,parametric)
+# The ROC curves of two synthetic markers, with the chance diagonal.
+$(call gallery,roc,roc)
+# The calibration plot and the decision curve of an overfitted risk model,
+# and of the same model recalibrated, on 2000 synthetic patients.
+$(call gallery,risk-model,risk_model)
+# A Bland-Altman plot of two readers who measure 40 synthetic tumors.
+$(call gallery,agreement,agreement)
+# A forest plot of the 13 trials of the BCG vaccine against tuberculosis.
+$(call gallery,forest,forest)
+# A funnel plot of the BCG vaccine trials, with the fixed effect and its funnel.
+$(call gallery,funnel,funnel)
+# One SEIR epidemic with 0, 30 and 50 percent of the population vaccinated.
+$(call gallery,epidemic,epidemic)
+# 40 days of synthetic case counts with their fitted exponential growth.
+$(call gallery,incidence,incidence)
+# A bone segment from CT: RLE DICOM slices, two labels with smoothed
+# surfaces, and the two-material voxel mesh under a platen, colored by
+# von Mises stress.
+$(call gallery,ct-to-fem,ct_to_fem)
+# A steel tuning fork of ten-node tetrahedra: its first three natural
+# modes, colored by motion.
+$(call gallery,fem-modes,fem_modes)
+# Half of a block of perfused tissue, cut through a needle held at 70 C,
+# colored by temperature by Pennes' bioheat equation.
+$(call gallery,bioheat,bioheat)
+# The bioheat block heated by a needle for six minutes: its final
+# temperatures, and its thermal dose with the ablated zone in red.
+$(call gallery,ablation,ablation)
+# A synthetic vessel that winds through soft tissue: its projection with
+# the centered path, one axial slice, and the vessel straightened.
+$(call gallery,vessel,vessel)

@@ -63,11 +63,6 @@ from units.temperature import CELSIUS, Temperature64
 comptime FE_TI_EUTECTIC = Temperature64(1358.15)
 
 
-def _celsius(value: Float64) -> Temperature64:
-    """Return a temperature given in degrees Celsius."""
-    return Temperature64(value, CELSIUS)
-
-
 def titanium_chlorination() raises -> Step:
     """Return the chlorination of rutile with coke, which makes TiCl4.
 
@@ -82,7 +77,7 @@ def titanium_chlorination() raises -> Step:
         Pressure64(1, ATMOSPHERE),
         Temperature64(600),
         Temperature64(1500),
-        _celsius(1000),
+        Temperature64(1000, CELSIUS),
     )
     step.add(
         proceeds(
@@ -102,7 +97,7 @@ def titanium_chlorination() raises -> Step:
     step.add(
         above(
             KINETIC,
-            _celsius(900),
+            Temperature64(900, CELSIUS),
             "Below about 900 degC the chlorination rate falls too far.",
             "chloride-process practice: beds run near 1000 degC",
         )
@@ -196,7 +191,7 @@ def kroll_reduction() raises -> Step:
         Pressure64(1, ATMOSPHERE),
         Temperature64(800),
         Temperature64(1500),
-        _celsius(850),
+        Temperature64(850, CELSIUS),
     )
     step.add(
         proceeds(
@@ -286,7 +281,7 @@ def vacuum_distillation() raises -> Step:
         Pressure64(10),
         Temperature64(600),
         Temperature64(1500),
-        _celsius(1000),
+        Temperature64(1000, CELSIUS),
     )
     step.add(
         proceeds(

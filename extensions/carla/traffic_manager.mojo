@@ -105,6 +105,7 @@ from extensions.carla.traffic_manager_shared import (
     TrafficAction,
     TrafficCommand,
     TrafficManagerShared,
+    drop_value,
 )
 from extensions.carla.traffic_manager_state import (
     _check_actor_id,
@@ -334,13 +335,6 @@ def _is_dormant(world: World, actor: ActorId) raises -> Bool:
 # --- ALSM ----------------------------------------------------------------------
 
 
-def _drop(mut list: List[Int], value: Int):
-    for i in range(len(list)):
-        if list[i] == value:
-            _ = list.pop(i)
-            return
-
-
 struct ALSM(Movable):
     """The actor life-cycle manager, CARLA's `ALSM`."""
 
@@ -427,7 +421,7 @@ struct ALSM(Movable):
                 motion_plan,
             )
         for id in gone_registered:
-            _drop(self.hero_actors, id)
+            drop_value(self.hero_actors, id)
         # The actors that are new, and the hero.
         # The spectator is always alive.
         for actor in actors:  # pragma: no branch
@@ -793,8 +787,8 @@ struct ALSM(Movable):
             if a in shared.large_vehicles:
                 _ = shared.large_vehicles.pop(a)
         else:
-            _drop(self.unregistered_actors, a)
-            _drop(self.hero_actors, a)
+            drop_value(self.unregistered_actors, a)
+            drop_value(self.hero_actors, a)
         # A live unregistered-to-registered transition only refreshes the
         # observation. update() removes dead registered ids first, so a
         # remaining registered id here is a live promotion, not destruction.

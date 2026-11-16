@@ -2105,3 +2105,36 @@ def style_move(
         return HEAVY if grounded else PLUNGE
     var specials: List[CombatMove] = [RISING_EDGE, WHIRLWIND, GROUND_WAVE]
     return specials[button.value - RISING_BUTTON.value]
+
+
+def flat_distance(a: Vector3, b: Vector3) -> Float32:
+    """Return how far apart two points are on the ground.
+
+    Args:
+        a: The first point.
+        b: The second point.
+
+    Returns:
+        The distance in x and z, with the heights left out.
+    """
+    var dx = b.x - a.x
+    var dz = b.z - a.z
+    return sqrt(dx * dx + dz * dz)
+
+
+def flat_direction(a: Vector3, b: Vector3, still: Vector3) -> Vector3:
+    """Return the way from one point to another on the ground.
+
+    Args:
+        a: The point to leave.
+        b: The point to reach.
+        still: The way to give when the points are within 0.1 mm on the
+            ground.
+
+    Returns:
+        A unit vector in x and z, with y 0, or `still`.
+    """
+    var gap = flat_distance(a, b)
+    if gap < 1.0e-4:
+        return still
+    return Vector3((b.x - a.x) / gap, 0, (b.z - a.z) / gap)

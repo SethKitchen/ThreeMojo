@@ -5,7 +5,8 @@
 
 """Physical sensor configuration must fail before sensor state is published."""
 
-from extensions.carla.actor import ActorId, no_rotation
+from extensions.carla.actor import ActorId
+from extensions.carla.transform import no_rotation
 from extensions.carla.blueprint import (
     ATTRIBUTE_BOOL,
     ATTRIBUTE_FLOAT,

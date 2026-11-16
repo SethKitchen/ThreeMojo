@@ -12,6 +12,7 @@ correspondence or an asset's source. Visual realism never grants an engineering 
 A producer must change its revision when its geometry or mapping changes.
 """
 
+from core.buffer_geometry import POSITION, BufferGeometry
 from core.ordinal import ordinal_valid, require_valid
 
 from core.user_data import UserData, user_data_of
@@ -21,6 +22,8 @@ from extensions.humanoid.sex import Sex
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE, HumanoidSpec
 from loaders.json import parse_json
 from math.finite import require_finite
+from math.vector3 import Vector3
+from std.collections import Dict
 from std.memory import bitcast
 from units.si import Length, METER
 
@@ -659,3 +662,115 @@ def require_bake_provenance(stored: UserData, expected: UserData) raises:
         raise Error("Humanoid bake visual settings are stale; rebuild it")
     if unsealed(record).to_json() != unsealed(expected).to_json():
         raise Error("Humanoid bake provenance is stale or changed; rebuild it")
+
+
+def fnv1a_int(hash: UInt64, value: Int) -> UInt64:
+    """Fold the eight bytes of an integer into an FNV-1a hash.
+
+    Args:
+        hash: The hash so far.
+        value: The integer, taken as 64 bits, low byte first.
+
+    Returns:
+        The hash after the eight bytes.
+    """
+    var state = hash
+    var bits = UInt64(value)
+    for at in range(8):  # pragma: no branch
+        state = fnv1a_step(state, UInt8((bits >> UInt64(8 * at)) & 0xFF))
+    return state
+
+
+def cell_key(p: Vector3, cell: Float32) -> Int:
+    """Return one integer for the grid cell that holds a point.
+
+    Each axis is offset by 4096 cells and packed in 13 bits, so the key is
+    unique within 4096 cells of the origin on each axis.
+
+    Args:
+        p: The point.
+        cell: The edge of a cell.
+
+    Returns:
+        The key of the cell.
+    """
+    var i = Int(p.x / cell + 4096)
+    var j = Int(p.y / cell + 4096)
+    var k = Int(p.z / cell + 4096)
+    return (i * 8192 + j) * 8192 + k
+
+
+def nearest_vertices(
+    source: BufferGeometry,
+    target: BufferGeometry,
+    cell: Float32,
+    first_ring: Int,
+) raises -> List[Int]:
+    """Return the nearest source vertex of each target vertex.
+
+    The source vertices go into cells of a grid. The search visits rings of
+    cells around each target vertex, from `first_ring` outward, and stops
+    when no unvisited cell can be nearer. A ring of 0 is the cell of the
+    vertex; a first ring of 1 is the block of 27 cells around it. Ties
+    keep the first source vertex that the search meets.
+
+    Args:
+        source: The mesh to search, with `position`, and a vertex if the
+            target has one.
+        target: The mesh whose vertices are matched, with `position`.
+        cell: The edge of a cell.
+        first_ring: The first ring to visit, 0 or 1.
+
+    Returns:
+        One source index for each target vertex.
+
+    Raises:
+        Error: If either mesh has no positions.
+    """
+    ref from_points = source.attribute_view(String(POSITION))
+    ref to_points = target.attribute_view(String(POSITION))
+    var cells = Dict[Int, List[Int]]()
+    for v in range(from_points.count()):
+        var key = cell_key(from_points.vector3(v), cell)
+        if key not in cells:
+            cells[key] = List[Int]()
+        cells[key].append(v)
+    var nearest = List[Int](capacity=to_points.count())
+    for v in range(to_points.count()):
+        var p = to_points.vector3(v)
+        var best = 0
+        var closest = Float32(1e30)
+        var ring = first_ring
+        while True:
+            for dx in range(-ring, ring + 1):  # pragma: no branch
+                for dy in range(-ring, ring + 1):  # pragma: no branch
+                    for dz in range(-ring, ring + 1):  # pragma: no branch
+                        # Only the shell of a later ring is new.
+                        if (
+                            ring > first_ring
+                            and max(abs(dx), max(abs(dy), abs(dz))) < ring
+                        ):
+                            continue
+                        var key = cell_key(
+                            p
+                            + Vector3(
+                                Float32(dx) * cell,
+                                Float32(dy) * cell,
+                                Float32(dz) * cell,
+                            ),
+                            cell,
+                        )
+                        if key not in cells:
+                            continue
+                        for s in cells[key]:  # pragma: no branch
+                            var d = (from_points.vector3(s) - p).length()
+                            if d < closest:
+                                closest = d
+                                best = s
+            # An unvisited cell is at least this far away. One extra cell
+            # absorbs the rounding of the cell key.
+            if closest <= Float32(ring - 1) * cell:
+                break
+            ring += 1
+        nearest.append(best)
+    return nearest^

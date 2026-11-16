@@ -41,19 +41,11 @@ from extensions.chemistry.elements import (
     element_from_symbol,
 )
 from std.math import floor, log10
+from extensions.chemistry.fields import fortran_number
 from extensions.chemistry.kinds import GAS, LIQUID, Phase, SOLID
 from extensions.chemistry.quantities import MolarVolume64
 from extensions.chemistry.thermo import PER_SEGMENT, Species, nasa7
 from loaders.js_number import js_to_fixed
-
-
-def _number(field: String, line: Int) raises -> Float64:
-    """Read a number from a fixed-width field."""
-    var text = String(field.strip()).replace("D", "E").replace("d", "e")
-    try:
-        return atof(text)
-    except:
-        raise Error(String("Line ", line, ": '", field, "' is not a number"))
 
 
 def _phase(letter: String, line: Int) raises -> Phase:
@@ -89,7 +81,9 @@ def _record(lines: List[String], first: Int) raises -> Species:
         var symbol = String(String(head[byte = at : at + 2]).strip())
         if symbol.byte_length() == 0:
             continue
-        var amount = _number(String(head[byte = at + 2 : at + 5]), number)
+        var amount = fortran_number(
+            String(head[byte = at + 2 : at + 5]), number
+        )
         if amount == 0:
             continue
         if amount != Float64(Int(amount)) or amount < 0:
@@ -98,9 +92,9 @@ def _record(lines: List[String], first: Int) raises -> Species:
             )
         counts.append(ElementCount(element_from_symbol(symbol), Int(amount)))
     var phase = _phase(String(head[byte=44:45]), number)
-    var low = _number(String(head[byte=45:55]), number)
-    var high = _number(String(head[byte=55:65]), number)
-    var common = _number(String(head[byte=65:73]), number)
+    var low = fortran_number(String(head[byte=45:55]), number)
+    var high = fortran_number(String(head[byte=55:65]), number)
+    var common = fortran_number(String(head[byte=65:73]), number)
     var fields = List[Float64]()
     for k in range(1, 4):
         ref line = lines[first + k]
@@ -109,7 +103,9 @@ def _record(lines: List[String], first: Int) raises -> Species:
             if k * 5 + j < 19:
                 var at = 15 * j
                 fields.append(
-                    _number(String(line[byte = at : at + 15]), first + k + 1)
+                    fortran_number(
+                        String(line[byte = at : at + 15]), first + k + 1
+                    )
                 )
     # The low range comes first in `nasa7`; the file gives the high first.
     var coefficients = List[Float64]()

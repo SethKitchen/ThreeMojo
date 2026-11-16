@@ -125,7 +125,7 @@ from extensions.village.interior import (
     RAIL_HEIGHT,
     house_interior,
 )
-from extensions.village.sheet import Sheet
+from extensions.village.sheet import Sheet, add_sheet
 from extensions.village.surfaces import (
     ASHLAR_TILE,
     BOARDS_TILE,
@@ -3032,29 +3032,6 @@ struct StandingHouse(Movable):
         self.chimney = chimney
 
 
-def _add(
-    mut scene: Scene,
-    mut assets: Assets,
-    sheet: Sheet,
-    material: MaterialId,
-    parent: NodeId,
-    casts: Bool,
-) raises -> Int:
-    """Add a sheet as a mesh under a node, and return its triangles."""
-    if sheet.triangles() == 0:
-        return 0
-    scene.add_mesh(
-        Mesh(
-            assets.geometries.add(sheet.geometry()),
-            material,
-            parent,
-            cast_shadow=casts,
-            receive_shadow=True,
-        )
-    )
-    return sheet.triangles()
-
-
 def _warm_all(
     mut sheets: _Sheets,
     glows: List[Glow],
@@ -3090,7 +3067,7 @@ def _add_all(
     elif covering == THATCH:
         roof = looks.thatch
     var triangles = 0
-    triangles += _add(
+    triangles += add_sheet(
         scene,
         assets,
         sheets.facade,
@@ -3098,18 +3075,28 @@ def _add_all(
         parent,
         casts,
     )
-    triangles += _add(
+    triangles += add_sheet(
         scene, assets, sheets.plaster, looks.plaster, parent, casts
     )
-    triangles += _add(scene, assets, sheets.wood, looks.wood, parent, casts)
-    triangles += _add(scene, assets, sheets.ashlar, looks.ashlar, parent, casts)
-    triangles += _add(scene, assets, sheets.roof, roof, parent, casts)
-    triangles += _add(scene, assets, sheets.planks, looks.planks, parent, False)
-    triangles += _add(scene, assets, sheets.glass, looks.glass, parent, False)
-    triangles += _add(
+    triangles += add_sheet(
+        scene, assets, sheets.wood, looks.wood, parent, casts
+    )
+    triangles += add_sheet(
+        scene, assets, sheets.ashlar, looks.ashlar, parent, casts
+    )
+    triangles += add_sheet(scene, assets, sheets.roof, roof, parent, casts)
+    triangles += add_sheet(
+        scene, assets, sheets.planks, looks.planks, parent, False
+    )
+    triangles += add_sheet(
+        scene, assets, sheets.glass, looks.glass, parent, False
+    )
+    triangles += add_sheet(
         scene, assets, sheets.daylight, looks.daylight, parent, False
     )
-    triangles += _add(scene, assets, sheets.cloth, looks.cloth, parent, False)
+    triangles += add_sheet(
+        scene, assets, sheets.cloth, looks.cloth, parent, False
+    )
     return triangles
 
 
@@ -3226,16 +3213,16 @@ def stand_house(
     lamps.parent = root
     lamps.visible = False
     var lit = scene.add(lamps^)
-    triangles += _add(
+    triangles += add_sheet(
         scene, assets, sheets.lamplight, looks.daylight, lit, False
     )
-    triangles += _add(
+    triangles += add_sheet(
         scene, assets, sheets.night_panes, looks.daylight, lit, False
     )
     var sun = Object3D()
     sun.parent = root
     var daylit = scene.add(sun^)
-    triangles += _add(
+    triangles += add_sheet(
         scene, assets, sheets.day_panes, looks.daylight, daylit, False
     )
     var room = Object3D()
@@ -3293,7 +3280,7 @@ def stand_house(
                 height - 0.01,
                 paint if exterior else OAK,
             )
-            triangles += _add(scene, assets, leaf, looks.wood, hinge, True)
+            triangles += add_sheet(scene, assets, leaf, looks.wood, hinge, True)
             if host.storey.value == 0:
                 hinges.append(Hinge(hinge, shut, sense, doorway))
         if host.storey.value == 0:

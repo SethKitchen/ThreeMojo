@@ -108,10 +108,10 @@ struct TrafficLightDetectionResult(ImplicitlyCopyable):
 
 def _segments_cross(a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> Bool:
     # Whether segment a-b meets segment c-d in the x-y plane, ends included.
-    var d1 = _orient(c, d, a)
-    var d2 = _orient(c, d, b)
-    var d3 = _orient(a, b, c)
-    var d4 = _orient(a, b, d)
+    var d1 = orient(c, d, a)
+    var d2 = orient(c, d, b)
+    var d3 = orient(a, b, c)
+    var d4 = orient(a, b, d)
     if d1 * d2 < 0.0 and d3 * d4 < 0.0:
         return True
     return (
@@ -120,12 +120,6 @@ def _segments_cross(a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> Bool:
         or (d3 == 0.0 and _on_segment(a, b, c))
         or (d4 == 0.0 and _on_segment(a, b, d))
     )
-
-
-def _orient(a: Vector3, b: Vector3, c: Vector3) -> Float64:
-    return (Float64(b.x) - Float64(a.x)) * (Float64(c.y) - Float64(a.y)) - (
-        Float64(b.y) - Float64(a.y)
-    ) * (Float64(c.x) - Float64(a.x))
 
 
 def _on_segment(a: Vector3, b: Vector3, p: Vector3) -> Bool:
@@ -884,3 +878,20 @@ def _drive_on(
         distance += moved
         plan.append(item)
     return True
+
+
+def orient(o: Vector3, a: Vector3, b: Vector3) -> Float64:
+    """Return the turn from `o` through `a` to `b` in the x-y plane.
+
+    Args:
+        o: The first point.
+        a: The second point.
+        b: The third point.
+
+    Returns:
+        The z part of `(a - o) x (b - o)` in Float64: positive for a turn
+        to the left, negative for one to the right, 0 on a line.
+    """
+    return (Float64(a.x) - Float64(o.x)) * (Float64(b.y) - Float64(o.y)) - (
+        Float64(a.y) - Float64(o.y)
+    ) * (Float64(b.x) - Float64(o.x))

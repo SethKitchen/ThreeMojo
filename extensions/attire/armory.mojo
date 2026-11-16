@@ -41,7 +41,7 @@ This is not a three.js port. See Extensions.
     outfit.add(forged(great_helm(), BLUED, GOLD))
 """
 
-from extensions.attire.cover import Cover
+from extensions.attire.cover import Cover, reach_both
 from extensions.attire.garment import Garment
 from extensions.attire.kinds import (
     ACCENT_DYE,
@@ -98,14 +98,6 @@ comptime IVORY = Color(226, 214, 186)
 """The color of a horned helm's horns."""
 
 
-def _both(
-    mut cover: Cover, right: Joint, left: Joint, end: Float32, start: Float32
-) raises:
-    """Cover the same span of a joint on each side."""
-    cover.reach_to(right, end, start)
-    cover.reach_to(left, end, start)
-
-
 def platebody() raises -> Garment:
     """Return a breastplate and backplate with lames down to the hips.
 
@@ -120,7 +112,7 @@ def platebody() raises -> Garment:
     cover.reach_to(SPINE)
     cover.reach_to(CHEST)
     cover.reach_to(NECK, 0.12)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.12, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.12, 0)
     return Garment(
         "platebody",
         TORSO_SLOT,
@@ -144,8 +136,8 @@ def plate_legs() raises -> Garment:
         Error: If its cover is refused, which an armory garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0.12)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.92, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0.12)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.92, 0)
     return Garment(
         "plate legs",
         LEGS_SLOT,
@@ -169,7 +161,7 @@ def plate_skirt() raises -> Garment:
     """
     var cover = Cover()
     cover.reach_to(HIPS, 0.4)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.6, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.6, 0)
     return Garment(
         "plate skirt",
         WAIST_SLOT,
@@ -195,8 +187,8 @@ def arm_harness() raises -> Garment:
         Error: If its cover is refused, which an armory garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0.3)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.88, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0.3)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.88, 0)
     return Garment(
         "arm harness",
         ARMS_SLOT,
@@ -218,7 +210,7 @@ def great_pauldrons() raises -> Garment:
         Error: If its cover is refused, which an armory garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.6, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.6, 0)
     cover.reach_to(CHEST, 1, 0.9)
     return Garment(
         "great pauldrons",
@@ -248,8 +240,8 @@ def chain_shirt() raises -> Garment:
     cover.reach_to(SPINE)
     cover.reach_to(CHEST)
     cover.reach_to(NECK, 0.2)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.55, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.18, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.55, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.18, 0)
     return Garment(
         "chain shirt",
         TORSO_SLOT,
@@ -280,8 +272,8 @@ def scale_shirt() raises -> Garment:
     cover.reach_to(SPINE)
     cover.reach_to(CHEST)
     cover.reach_to(NECK, 0.15)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.45, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.4, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.45, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.4, 0)
     return Garment(
         "scale shirt",
         TORSO_SLOT,
@@ -331,7 +323,7 @@ def bracers() raises -> Garment:
         Error: If its cover is refused, which an armory garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.85, 0.3)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.85, 0.3)
     return Garment(
         "bracers",
         ARMS_SLOT,

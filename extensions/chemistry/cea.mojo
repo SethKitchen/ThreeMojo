@@ -34,18 +34,10 @@ from extensions.chemistry.elements import (
     Formula,
     element_from_symbol,
 )
+from extensions.chemistry.fields import fortran_number
 from extensions.chemistry.kinds import GAS, LIQUID, Phase, SOLID
 from extensions.chemistry.quantities import MolarVolume64
 from extensions.chemistry.thermo import Species, nasa9
-
-
-def _number(field: String, line: Int) raises -> Float64:
-    """Read a number from a fixed-width field."""
-    var text = String(field.strip()).replace("D", "E").replace("d", "e")
-    try:
-        return atof(text)
-    except:
-        raise Error(String("Line ", line, ": '", field, "' is not a number"))
 
 
 def _field(line: String, start: Int, end: Int) -> String:
@@ -65,7 +57,7 @@ def _record(
     var name = String(_field(lines[first], 0, 24).strip())
     ref head = lines[first + 1]
     var number = first + 2
-    var intervals = Int(_number(_field(head, 0, 2), number))
+    var intervals = Int(fortran_number(_field(head, 0, 2), number))
     var end = first + 2 + 3 * intervals
     if intervals < 0 or end > len(lines):
         raise Error(
@@ -79,7 +71,7 @@ def _record(
         var symbol = String(_field(head, at, at + 2).strip())
         if symbol.byte_length() == 0:
             continue
-        var amount = _number(_field(head, at + 2, at + 8), number)
+        var amount = fortran_number(_field(head, at + 2, at + 8), number)
         if amount == 0:
             continue
         if symbol.upper() == "E":
@@ -92,7 +84,7 @@ def _record(
     if intervals == 0 or ion or not whole:
         return end
     var phase = GAS
-    if Int(_number(_field(head, 50, 52), number)) != 0:
+    if Int(fortran_number(_field(head, 50, 52), number)) != 0:
         phase = SOLID
         if name.find("(L)") >= 0:
             phase = LIQUID
@@ -103,11 +95,13 @@ def _record(
     for i in range(intervals):  # pragma: no branch
         var at = first + 2 + 3 * i
         ref range_line = lines[at]
-        var low = _number(_field(range_line, 0, 11), at + 1)
-        var high = _number(_field(range_line, 11, 22), at + 1)
+        var low = fortran_number(_field(range_line, 0, 11), at + 1)
+        var high = fortran_number(_field(range_line, 11, 22), at + 1)
         for e in range(8):
             var start = 23 + 5 * e
-            var value = _number(_field(range_line, start, start + 5), at + 1)
+            var value = fortran_number(
+                _field(range_line, start, start + 5), at + 1
+            )
             if value != exponents[e]:
                 raise Error(
                     String("Line ", at + 1, ": the exponents of T must be")
@@ -118,13 +112,15 @@ def _record(
         bounds.append(high)
         for j in range(5):
             coefficients.append(
-                _number(_field(lines[at + 1], 16 * j, 16 * j + 16), at + 2)
+                fortran_number(
+                    _field(lines[at + 1], 16 * j, 16 * j + 16), at + 2
+                )
             )
         ref last = lines[at + 2]
-        coefficients.append(_number(_field(last, 0, 16), at + 3))
-        coefficients.append(_number(_field(last, 16, 32), at + 3))
-        coefficients.append(_number(_field(last, 48, 64), at + 3))
-        coefficients.append(_number(_field(last, 64, 80), at + 3))
+        coefficients.append(fortran_number(_field(last, 0, 16), at + 3))
+        coefficients.append(fortran_number(_field(last, 16, 32), at + 3))
+        coefficients.append(fortran_number(_field(last, 48, 64), at + 3))
+        coefficients.append(fortran_number(_field(last, 64, 80), at + 3))
     out.append(
         Species(
             name,

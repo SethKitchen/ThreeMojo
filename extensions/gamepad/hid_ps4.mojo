@@ -99,6 +99,7 @@ from extensions.gamepad.joystick import (
 from extensions.gamepad.mapping import HAT_DOWN, HAT_LEFT, HAT_RIGHT, HAT_UP
 from render.checksum import crc32
 from units.si import Duration64, Frequency, PER_SECOND, SECOND
+from extensions.gamepad.names import hex2
 
 comptime USB_VENDOR_SONY = 0x054C
 comptime USB_PRODUCT_SONY_DS4_DONGLE = 0x0BA0
@@ -178,21 +179,6 @@ def _uint16(data: List[UInt8], index: Int) -> Int:
     return Int(data[index]) | (Int(data[index + 1]) << 8)
 
 
-def _hex2(value: UInt8) -> String:
-    """Write a byte as two lowercase hexadecimal digits, as `%.2x` does.
-
-    Args:
-        value: The byte.
-
-    Returns:
-        The two digits.
-    """
-    comptime DIGITS = "0123456789abcdef"
-    return String(DIGITS[byte=Int(value >> 4)]) + String(
-        DIGITS[byte=Int(value & 15)]
-    )
-
-
 def _read_feature[
     S: HidSource
 ](mut source: S, report_id: Int, mut report: List[UInt8]) -> Int:
@@ -234,9 +220,9 @@ def _serial_from_report(data: List[UInt8], size: Int) -> String:
             any = True
     if not any:
         return ""
-    var serial = _hex2(data[6])
+    var serial = hex2(data[6])
     for index in range(1, 6):
-        serial += "-" + _hex2(data[6 - index])
+        serial += "-" + hex2(data[6 - index])
     return serial^
 
 

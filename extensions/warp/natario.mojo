@@ -34,6 +34,7 @@ from extensions.warp.analytic import (
     flat_components,
     radial,
     sample_metric,
+    outer_self,
 )
 from extensions.warp.grid import (
     SpacetimeCenter,
@@ -80,22 +81,13 @@ def slope_over_radius(square: Jet, derivatives: SIMD[DType.float64, 8]) -> Jet:
         return Jet(
             f1 / (2.0 * r),
             dq * square.gradient,
-            dq * square.hessian + ddq * _outer_self(square.gradient),
+            dq * square.hessian + ddq * outer_self(square.gradient),
         )
     return Jet(
         f2 / 2.0,
         square.gradient * 0.0,
         (derivatives[4] / 12.0) * square.hessian,
     )
-
-
-def _outer_self(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 16]:
-    """Return a ⊗ a."""
-    var out = SIMD[DType.float64, 16](0)
-    for i in range(4):
-        for j in range(4):
-            out[4 * i + j] = a[i] * a[j]
-    return out
 
 
 struct NatarioMetric(AnalyticMetric):

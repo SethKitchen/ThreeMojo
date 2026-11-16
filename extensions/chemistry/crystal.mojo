@@ -10,6 +10,8 @@ crystal as a unit cell, the symmetry operations of its space group and the
 atoms of the asymmetric unit. `read_cif` reads the first data block. It
 applies each operation to each atom site and keeps each different position
 in the cell once. The result is the full contents of one unit cell.
+The tokens and tables come from `parse_cif` of `chemistry.cif`, which also
+reads the mmCIF files of macromolecules.
 
 The reader takes these items:
 
@@ -32,6 +34,7 @@ with the atoms on the far faces, so a picture of the block is whole.
 """
 
 from std.math import cos, floor, isfinite, pi, sin, sqrt
+from extensions.chemistry.cif import CifBlock, CifTable, parse_cif
 from extensions.chemistry.elements import Element, element_from_symbol
 from extensions.chemistry.quantities import ANGSTROM
 from units.si import (
@@ -311,187 +314,33 @@ def bonds(
 # --- reading ------------------------------------------------------------------
 
 
-@fieldwise_init
-struct _Token(Copyable, Movable):
-    """One value or name of a CIF file, and its line."""
-
-    var text: String
-    var quoted: Bool
-    var line: Int
-
-
-@fieldwise_init
-struct _Table(Copyable, Movable):
-    """A loop, or one item as a loop of one name and one value."""
-
-    var tags: List[String]
-    var values: List[_Token]
-
-
-def _is_blank(byte: UInt8) -> Bool:
-    """Return whether a byte is a space or a tab."""
-    return byte == 32 or byte == 9
-
-
-def _split(line: String, number: Int, mut out: List[_Token]) raises:
-    """Append the tokens of one line that is not a text field."""
-    var bytes = line.as_bytes()
-    var n = len(bytes)
-    var k = 0
-    while k < n:
-        var ch = bytes[k]
-        if _is_blank(ch):
-            k += 1
-            continue
-        if ch == 35:
-            # A comment runs to the end of the line.
-            return
-        if ch == 39 or ch == 34:
-            # A quote closes a value only before a blank or the line's end.
-            var end = k + 1
-            while end < n:
-                if bytes[end] == ch and (
-                    end + 1 == n or _is_blank(bytes[end + 1])
-                ):
-                    break
-                end += 1
-            if end >= n:
-                raise Error(
-                    String("Line ", number, ": a quoted value has no end")
-                )
-            out.append(_Token(String(line[byte = k + 1 : end]), True, number))
-            k = end + 1
-            continue
-        var end = k
-        while end < n and not _is_blank(bytes[end]):
-            end += 1
-        out.append(_Token(String(line[byte=k:end]), False, number))
-        k = end
-
-
-def _tokens(text: String) raises -> List[_Token]:
-    """Return the tokens of a CIF file."""
-    var lines = List[String]()
-    for line in text.splitlines():
-        lines.append(String(line))
-    var out = List[_Token]()
-    var i = 0
-    while i < len(lines):
-        if lines[i].startswith(";"):
-            # A text field runs to the next line that starts with ';'.
-            var field = String(lines[i][byte=1:])
-            var j = i + 1
-            while j < len(lines) and not lines[j].startswith(";"):
-                field += "\n" + lines[j]
-                j += 1
-            if j == len(lines):
-                raise Error(String("Line ", i + 1, ": a text field has no end"))
-            out.append(_Token(field^, True, i + 1))
-            i = j + 1
-        else:
-            _split(lines[i], i + 1, out)
-            i += 1
-    return out^
-
-
-def _starts_item(token: _Token) -> Bool:
-    """Return whether a token starts a name, a loop or a data block."""
-    if token.quoted:
-        return False
-    var lower = token.text.lower()
-    return (
-        lower.startswith("_") or lower == "loop_" or lower.startswith("data_")
-    )
-
-
-def _is_block(token: _Token) -> Bool:
-    """Return whether a token starts a data block."""
-    return _starts_item(token) and token.text.lower().startswith("data_")
-
-
-def _tables(tokens: List[_Token], mut name: String) raises -> List[_Table]:
-    """Return the items of the first data block, and set its name."""
-    var k = 0
-    while k < len(tokens) and not _is_block(tokens[k]):
-        k += 1
-    if k == len(tokens):
-        raise Error("A CIF file needs a data block")
-    name = String(tokens[k].text[byte=5:])
-    k += 1
-    var out = List[_Table]()
-    while k < len(tokens):
-        ref token = tokens[k]
-        var lower = token.text.lower()
-        if not _starts_item(token):
-            raise Error(
-                String("Line ", token.line, ": '", token.text, "' is not")
-                + " a name"
-            )
-        if lower.startswith("data_"):
-            break
-        if lower == "loop_":
-            k += 1
-            var tags = List[String]()
-            while (
-                k < len(tokens)
-                and _starts_item(tokens[k])
-                and tokens[k].text.startswith("_")
-            ):
-                tags.append(tokens[k].text.lower())
-                k += 1
-            if len(tags) == 0:
-                raise Error(String("Line ", token.line, ": a loop has no name"))
-            var values = List[_Token]()
-            while k < len(tokens) and not _starts_item(tokens[k]):
-                values.append(tokens[k].copy())
-                k += 1
-            if len(values) % len(tags) != 0:
-                raise Error(
-                    String("Line ", token.line, ": a loop's values do not")
-                    + " fill its rows"
-                )
-            out.append(_Table(tags^, values^))
-        else:
-            if k + 1 >= len(tokens) or _starts_item(tokens[k + 1]):
-                raise Error(
-                    String("Line ", token.line, ": ", token.text)
-                    + " has no value"
-                )
-            out.append(_Table([lower], [tokens[k + 1].copy()]))
-            k += 2
-    return out^
-
-
-def _find(tables: List[_Table], tag: String) -> Tuple[Int, Int]:
-    """Return the table and the column of a name, or (-1, -1)."""
-    for t in range(len(tables)):
-        # Every table has a name.
-        for c in range(len(tables[t].tags)):  # pragma: no branch
-            if tables[t].tags[c] == tag:
-                return (t, c)
-    return (-1, -1)
-
-
-def _number(token: _Token) raises -> Float64:
-    """Read a number, without the uncertainty in parentheses."""
-    var text = token.text
+def _number(table: CifTable, at: Int) raises -> Float64:
+    """Read the number of a value, without the uncertainty in
+    parentheses."""
+    var text = table.values[at]
     var open = text.find("(")
     if open >= 0:
-        text = String(token.text[byte=:open])
+        text = String(table.values[at][byte=:open])
     try:
         return atof(text)
     except:
         raise Error(
-            String("Line ", token.line, ": '", token.text, "' is not a number")
+            String(
+                "Line ",
+                table.lines[at],
+                ": '",
+                table.values[at],
+                "' is not a number",
+            )
         )
 
 
-def _single(tables: List[_Table], tag: String) raises -> Float64:
+def _single(block: CifBlock, tag: String) raises -> Float64:
     """Return the number of a name that the file must hold."""
-    var at = _find(tables, tag)
+    var at = block.find(tag)
     if at[0] < 0:
         raise Error(String("A CIF file needs ", tag))
-    return _number(tables[at[0]].values[at[1]])
+    return _number(block.tables[at[0]], at[1])
 
 
 def _is_digit(byte: UInt8) -> Bool:
@@ -563,17 +412,17 @@ def _component(text: String, number: Int) raises -> List[Float64]:
     return out^
 
 
-def _operation(token: _Token) raises -> List[Float64]:
+def _operation(text: String, line: Int) raises -> List[Float64]:
     """Return an operation as three rows of x, y and z factors and a shift."""
-    var parts = token.text.split(",")
+    var parts = text.split(",")
     if len(parts) != 3:
         raise Error(
-            String("Line ", token.line, ": '", token.text, "' is not")
+            String("Line ", line, ": '", text, "' is not")
             + " an operation of three parts"
         )
     var out = List[Float64]()
     for part in parts:  # pragma: no branch
-        out.extend(_component(String(part), token.line))
+        out.extend(_component(String(part), line))
     return out^
 
 
@@ -626,45 +475,46 @@ def read_cif(text: String) raises -> Crystal:
             cannot be read, an element is not in the table, or a cell item
             or an atom position is missing.
     """
-    var tokens = _tokens(text)
-    var name = String()
-    var tables = _tables(tokens, name)
-    var a = Length64(_single(tables, "_cell_length_a"), ANGSTROM)
-    var b = Length64(_single(tables, "_cell_length_b"), ANGSTROM)
-    var c = Length64(_single(tables, "_cell_length_c"), ANGSTROM)
-    var alpha = Angle64(_single(tables, "_cell_angle_alpha"), DEGREE64)
-    var beta = Angle64(_single(tables, "_cell_angle_beta"), DEGREE64)
-    var gamma = Angle64(_single(tables, "_cell_angle_gamma"), DEGREE64)
+    var block = parse_cif(text)
+    var a = Length64(_single(block, "_cell_length_a"), ANGSTROM)
+    var b = Length64(_single(block, "_cell_length_b"), ANGSTROM)
+    var c = Length64(_single(block, "_cell_length_c"), ANGSTROM)
+    var alpha = Angle64(_single(block, "_cell_angle_alpha"), DEGREE64)
+    var beta = Angle64(_single(block, "_cell_angle_beta"), DEGREE64)
+    var gamma = Angle64(_single(block, "_cell_angle_gamma"), DEGREE64)
     var operations = List[List[Float64]]()
-    var at = _find(tables, "_space_group_symop_operation_xyz")
+    var at = block.find("_space_group_symop_operation_xyz")
     if at[0] < 0:
-        at = _find(tables, "_symmetry_equiv_pos_as_xyz")
+        at = block.find("_symmetry_equiv_pos_as_xyz")
     if at[0] < 0:
         operations.append([1.0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0])
     else:
-        ref table = tables[at[0]]
+        ref table = block.tables[at[0]]
         var width = len(table.tags)
-        for row in range(len(table.values) // width):
-            operations.append(_operation(table.values[row * width + at[1]]))
-    var xs = _find(tables, "_atom_site_fract_x")
-    var ys = _find(tables, "_atom_site_fract_y")
-    var zs = _find(tables, "_atom_site_fract_z")
+        for row in range(table.rows()):
+            var k = row * width + at[1]
+            operations.append(_operation(table.values[k], table.lines[k]))
+    var xs = block.find("_atom_site_fract_x")
+    var ys = block.find("_atom_site_fract_y")
+    var zs = block.find("_atom_site_fract_z")
     if xs[0] < 0 or ys[0] != xs[0] or zs[0] != xs[0]:
         raise Error("A CIF file needs the atom positions in one loop")
-    var kind = _find(tables, "_atom_site_type_symbol")
+    var kind = block.find("_atom_site_type_symbol")
     if kind[0] != xs[0]:
-        kind = _find(tables, "_atom_site_label")
+        kind = block.find("_atom_site_label")
     if kind[0] != xs[0]:
         raise Error("A CIF file needs the atom types or labels")
-    ref sites = tables[xs[0]]
+    ref sites = block.tables[xs[0]]
     var width = len(sites.tags)
     var atoms = List[Atom]()
-    for row in range(len(sites.values) // width):
-        ref symbol = sites.values[row * width + kind[1]]
-        var element = _symbol(symbol.text, symbol.line)
-        var u = _number(sites.values[row * width + xs[1]])
-        var v = _number(sites.values[row * width + ys[1]])
-        var w = _number(sites.values[row * width + zs[1]])
+    for row in range(sites.rows()):
+        var first = row * width
+        var element = _symbol(
+            sites.values[first + kind[1]], sites.lines[first + kind[1]]
+        )
+        var u = _number(sites, first + xs[1])
+        var v = _number(sites, first + ys[1])
+        var w = _number(sites, first + zs[1])
         var images = List[Atom]()
         for op in operations:
             var image = Atom(
@@ -676,4 +526,4 @@ def read_cif(text: String) raises -> Crystal:
             if not _holds(images, image):
                 images.append(image)
         atoms.extend(images^)
-    return Crystal(name, a, b, c, alpha, beta, gamma, atoms^)
+    return Crystal(block.name, a, b, c, alpha, beta, gamma, atoms^)

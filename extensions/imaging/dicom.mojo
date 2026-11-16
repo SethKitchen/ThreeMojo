@@ -1,0 +1,1390 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""Read one grayscale image from a DICOM Part 10 file.
+
+A Part 10 file starts with a 128-byte preamble and the letters `DICM`.
+The file meta group follows in explicit VR little endian. Its transfer
+syntax UID says how the data set after it is encoded. The reader takes
+four syntaxes: explicit VR little endian, implicit VR little endian,
+deflated explicit VR little endian and RLE Lossless. It refuses big
+endian, JPEG and every other compressed syntax.
+
+A deflated file holds the whole data set as one raw DEFLATE stream after
+the meta group. An RLE Lossless file holds the pixel data encapsulated:
+an offset table item, then the fragments of the frame, then a sequence
+delimiter. The frame starts with a 64-byte header: the number of
+segments and the offset of each. Each segment holds one byte of every
+sample, the most significant byte first, compressed by PackBits.
+
+The reader keeps the elements that place and scale the image: rows,
+columns, bits, pixel representation, photometric interpretation, rescale
+slope and intercept, pixel spacing, slice thickness, image position,
+image orientation, instance number, modality and the first window. It
+steps over every other element, sequences of undefined length too.
+
+For PET, it also keeps what standardized uptake values need, in a
+`PetDose`: the units and the decay correction of the values, the
+patient's weight, the series time, and from the first item of the
+Radiopharmaceutical Information Sequence the injection time, the
+injected activity and the half-life.
+
+The pixel values are rescaled: `slope * stored + intercept`. For CT this
+gives Hounsfield units. The reader takes one sample per pixel, one frame,
+and 8 or 16 bits allocated.
+"""
+
+from extensions.imaging.ids import (
+    DATA_SET,
+    DEFLATED_EXPLICIT,
+    DicomNode,
+    EXPLICIT_LITTLE,
+    IMPLICIT_LITTLE,
+    MONOCHROME1,
+    MONOCHROME2,
+    Photometric,
+    PixelRepresentation,
+    RLE_LOSSLESS,
+    SIGNED_PIXELS,
+    TransferSyntax,
+    UNSIGNED_PIXELS,
+    require_syntax,
+)
+from loaders.bytes import bytes_match
+from render.inflate import inflate
+from extensions.sdf.vector import V3, cross, dot, length, v3
+from std.collections import Dict
+from std.math import isfinite, max
+from std.pathlib import Path
+from units.quantity import Unit
+from units.si import (
+    KILOGRAM,
+    MILLIMETER64,
+    SECOND,
+    Duration64,
+    Frequency64,
+    Length64,
+    Mass64,
+)
+
+# An activity: decays per second.
+comptime Activity64 = Frequency64
+comptime BECQUEREL = Unit[0, 0, -1, 0, 0, DType.float64](1.0, "Bq")
+comptime MEGABECQUEREL = Unit[0, 0, -1, 0, 0, DType.float64](1.0e6, "MBq")
+
+comptime EXPLICIT_LITTLE_UID = "1.2.840.10008.1.2.1"
+comptime IMPLICIT_LITTLE_UID = "1.2.840.10008.1.2"
+comptime DEFLATED_EXPLICIT_UID = "1.2.840.10008.1.2.1.99"
+comptime RLE_LOSSLESS_UID = "1.2.840.10008.1.2.5"
+# A deflated data set can expand to at most 1 GiB, so that a small,
+# hostile file cannot fill the memory.
+comptime MAX_INFLATED = 1 << 30
+# The bytes of the header of an RLE frame: a count and 15 offsets.
+comptime RLE_HEADER = 64
+# A row or a column must be a unit vector to this tolerance, and the two
+# must be square to it.
+comptime ORIENTATION_TOLERANCE = 1.0e-3
+# The length field of an element of undefined length.
+comptime UNDEFINED_LENGTH = 0xFFFFFFFF
+# The group of the item and delimiter tags.
+comptime ITEM_GROUP = 0xFFFE
+comptime ITEM = 0xE000
+comptime ITEM_END = 0xE00D
+comptime SEQUENCE_END = 0xE0DD
+
+
+struct PetDose(Copyable, Movable):
+    """The elements of a PET image that standardized uptake values need."""
+
+    var units: String
+    """The units of the values (0054,1001), such as `BQML`. Empty when
+    absent."""
+    var decay_correction: String
+    """The time the values are decay corrected to (0054,1102): `START`,
+    `ADMIN` or `NONE`. Empty when absent."""
+    var patient_weight: Mass64
+    """The patient's weight (0010,1030). Zero when absent."""
+    var series_time: Duration64
+    """The series time (0008,0031), after midnight."""
+    var has_series_time: Bool
+    """Whether the file gave a series time."""
+    var injection_time: Duration64
+    """The radiopharmaceutical start time (0018,1072), after midnight."""
+    var has_injection_time: Bool
+    """Whether the file gave an injection time."""
+    var injected_dose: Activity64
+    """The radionuclide total dose (0018,1074). Zero when absent."""
+    var half_life: Duration64
+    """The radionuclide half-life (0018,1075). Zero when absent."""
+
+    def __init__(out self):
+        """Create the elements of a file without them."""
+        self.units = String("")
+        self.decay_correction = String("")
+        self.patient_weight = Mass64(0, KILOGRAM)
+        self.series_time = Duration64(0, SECOND)
+        self.has_series_time = False
+        self.injection_time = Duration64(0, SECOND)
+        self.has_injection_time = False
+        self.injected_dose = Activity64(0, BECQUEREL)
+        self.half_life = Duration64(0, SECOND)
+
+
+struct DicomSlice(Copyable, Movable):
+    """One grayscale DICOM image and the elements that place it."""
+
+    var rows: Int
+    """The image height in pixels."""
+    var columns: Int
+    """The image width in pixels."""
+    var bits_allocated: Int
+    """The bits that each stored value takes: 8 or 16."""
+    var bits_stored: Int
+    """The bits of each stored value that hold data."""
+    var representation: PixelRepresentation
+    """Whether the stored values have a sign."""
+    var photometric: Photometric
+    """Whether the lowest value shows as black or as white."""
+    var syntax: TransferSyntax
+    """How the data set was encoded."""
+    var modality: String
+    """The modality code, such as `CT` or `MR`. Empty when absent."""
+    var instance_number: Int
+    """The instance number. Zero when absent."""
+    var slope: Float64
+    """The rescale slope. One when absent."""
+    var intercept: Float64
+    """The rescale intercept. Zero when absent."""
+    var row_spacing: Length64
+    """The distance between the centers of two rows."""
+    var column_spacing: Length64
+    """The distance between the centers of two columns."""
+    var thickness: Length64
+    """The slice thickness. Zero when absent."""
+    var position: V3
+    """The center of the first pixel in patient space, in meters."""
+    var row_direction: V3
+    """The unit direction along a row, of increasing column."""
+    var column_direction: V3
+    """The unit direction down a column, of increasing row."""
+    var has_position: Bool
+    """Whether the file gave an image position."""
+    var has_orientation: Bool
+    """Whether the file gave an image orientation."""
+    var has_spacing: Bool
+    """Whether the file gave a pixel spacing."""
+    var window_center: Float64
+    """The first window center. Zero when absent."""
+    var window_width: Float64
+    """The first window width. Zero when absent."""
+    var has_window: Bool
+    """Whether the file gave a window center and width."""
+    var values: List[Float32]
+    """The rescaled values, row by row from the top."""
+    var pet: PetDose
+    """The PET elements of the file. Empty for other images."""
+
+    def __init__(out self, rows: Int, columns: Int) raises:
+        """Create an image of zeros with the default elements.
+
+        The spacing is one millimeter, the position is the origin, the row
+        runs along x and the column along y. The has flags are false.
+
+        Args:
+            rows: The image height in pixels.
+            columns: The image width in pixels.
+
+        Raises:
+            Error: If a size is not from 1 to 65535.
+        """
+        _require_size(rows, columns)
+        self.rows = rows
+        self.columns = columns
+        self.bits_allocated = 16
+        self.bits_stored = 16
+        self.representation = SIGNED_PIXELS
+        self.photometric = MONOCHROME2
+        self.syntax = EXPLICIT_LITTLE
+        self.modality = String("")
+        self.instance_number = 0
+        self.slope = 1.0
+        self.intercept = 0.0
+        self.row_spacing = Length64(1.0, MILLIMETER64)
+        self.column_spacing = Length64(1.0, MILLIMETER64)
+        self.thickness = Length64(0.0, MILLIMETER64)
+        self.position = v3(0, 0, 0)
+        self.row_direction = v3(1, 0, 0)
+        self.column_direction = v3(0, 1, 0)
+        self.has_position = False
+        self.has_orientation = False
+        self.has_spacing = False
+        self.window_center = 0.0
+        self.window_width = 0.0
+        self.has_window = False
+        self.values = List[Float32](length=rows * columns, fill=0)
+        self.pet = PetDose()
+
+    def normal(self) -> V3:
+        """Return the direction from this slice toward the next.
+
+        Returns:
+            The cross product of the row and the column directions.
+        """
+        return cross(self.row_direction, self.column_direction)
+
+
+def _require_size(rows: Int, columns: Int) raises:
+    """Refuse an image size that DICOM cannot hold."""
+    if rows < 1 or columns < 1:
+        raise Error("A DICOM image needs at least one row and one column")
+    if rows > 65535 or columns > 65535:
+        raise Error("A DICOM image has at most 65535 rows and columns")
+
+
+@fieldwise_init
+struct _Element(ImplicitlyCopyable):
+    """The header of one data element."""
+
+    var group: Int
+    var element: Int
+    var start: Int
+    var length: Int
+    var undefined: Bool
+
+
+def _u16(bytes: Span[UInt8, _], at: Int) -> Int:
+    """Read a little-endian 16-bit value."""
+    return Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
+
+
+def _u32(bytes: Span[UInt8, _], at: Int) -> Int:
+    """Read a little-endian 32-bit value."""
+    return _u16(bytes, at) | (_u16(bytes, at + 2) << 16)
+
+
+def _require_bytes(bytes: Span[UInt8, _], end: Int) raises:
+    """Refuse a read that runs past the end of the file."""
+    if end > len(bytes):
+        raise Error("The DICOM file ends inside an element")
+
+
+def _long_form(first: UInt8, second: UInt8) -> Bool:
+    """Return whether an explicit VR has a 32-bit length.
+
+    These VRs are OB, OD, OF, OL, OV, OW, SQ, SV, UC, UN, UR, UT and UV.
+    """
+    var code = (Int(first) << 8) | Int(second)
+    for long in [
+        0x4F42,
+        0x4F44,
+        0x4F46,
+        0x4F4C,
+        0x4F56,
+        0x4F57,
+        0x5351,
+        0x5356,
+        0x5543,
+        0x554E,
+        0x5552,
+        0x5554,
+        0x5556,
+    ]:
+        if code == long:
+            return True
+    return False
+
+
+def _header(bytes: Span[UInt8, _], at: Int, explicit: Bool) raises -> _Element:
+    """Read the header of the element that starts at `at`."""
+    _require_bytes(bytes, at + 8)
+    var group = _u16(bytes, at)
+    var element = _u16(bytes, at + 2)
+    var start: Int
+    var size: Int
+    if group == ITEM_GROUP:
+        # Items and delimiters have no VR in either syntax.
+        start = at + 8
+        size = _u32(bytes, at + 4)
+    elif explicit:
+        if _long_form(bytes[at + 4], bytes[at + 5]):
+            _require_bytes(bytes, at + 12)
+            start = at + 12
+            size = _u32(bytes, at + 8)
+        else:
+            start = at + 8
+            size = _u16(bytes, at + 6)
+    else:
+        start = at + 8
+        size = _u32(bytes, at + 4)
+    var undefined = size == UNDEFINED_LENGTH
+    if not undefined:
+        _require_bytes(bytes, start + size)
+    return _Element(group, element, start, size, undefined)
+
+
+def _skip_sequence(
+    bytes: Span[UInt8, _], at: Int, explicit: Bool
+) raises -> Int:
+    """Return the place after a sequence of undefined length."""
+    var place = at
+    while True:
+        var item = _header(bytes, place, explicit)
+        if item.group != ITEM_GROUP:
+            raise Error("A DICOM sequence holds an element that is not an item")
+        if item.element == SEQUENCE_END:
+            return item.start
+        if item.element != ITEM:
+            raise Error("A DICOM sequence holds an unknown delimiter")
+        if item.undefined:
+            place = _skip_item(bytes, item.start, explicit)
+        else:
+            place = item.start + item.length
+
+
+def _skip_item(bytes: Span[UInt8, _], at: Int, explicit: Bool) raises -> Int:
+    """Return the place after an item of undefined length."""
+    var place = at
+    while True:
+        var element = _header(bytes, place, explicit)
+        if element.group == ITEM_GROUP and element.element == ITEM_END:
+            return element.start
+        if element.undefined:
+            place = _skip_sequence(bytes, element.start, explicit)
+        else:
+            place = element.start + element.length
+
+
+def _text(bytes: Span[UInt8, _], element: _Element) -> String:
+    """Return a text value without its padding."""
+    var start = element.start
+    var end = element.start + element.length
+    while end > start and (bytes[end - 1] == 0 or bytes[end - 1] == 32):
+        end -= 1
+    while start < end and bytes[start] == 32:
+        start += 1
+    return String(from_utf8_lossy=bytes[start:end])
+
+
+def _number(text: String, name: String) raises -> Float64:
+    """Read one decimal string."""
+    var value: Float64
+    try:
+        value = atof(String(text.strip()))
+    except:
+        raise Error("The DICOM " + name + " is not a number")
+    if not isfinite(value):
+        raise Error("The DICOM " + name + " is not finite")
+    return value
+
+
+def _numbers(
+    bytes: Span[UInt8, _], element: _Element, count: Int, name: String
+) raises -> List[Float64]:
+    """Read the first `count` values of a multi-valued decimal string."""
+    var parts = _text(bytes, element).split("\\")
+    if len(parts) < count:
+        raise Error("The DICOM " + name + " needs " + String(count) + " values")
+    var out = List[Float64]()
+    for index in range(count):  # pragma: no branch
+        out.append(_number(String(parts[index]), name))
+    return out^
+
+
+def _integer(
+    bytes: Span[UInt8, _], element: _Element, name: String
+) raises -> Int:
+    """Read one integer string."""
+    var text = _text(bytes, element)
+    try:
+        return atol(text)
+    except:
+        raise Error("The DICOM " + name + " is not an integer")
+
+
+def _short(
+    bytes: Span[UInt8, _], element: _Element, name: String
+) raises -> Int:
+    """Read one unsigned 16-bit value."""
+    if element.length < 2:
+        raise Error("The DICOM " + name + " needs two bytes")
+    return _u16(bytes, element.start)
+
+
+def _syntax(uid: String) raises -> TransferSyntax:
+    """Return the syntax of a transfer syntax UID, or refuse it."""
+    if uid == EXPLICIT_LITTLE_UID:
+        return EXPLICIT_LITTLE
+    if uid == IMPLICIT_LITTLE_UID:
+        return IMPLICIT_LITTLE
+    if uid == DEFLATED_EXPLICIT_UID:
+        return DEFLATED_EXPLICIT
+    if uid == RLE_LOSSLESS_UID:
+        return RLE_LOSSLESS
+    raise Error(
+        "The DICOM transfer syntax "
+        + uid
+        + " is not one of the four that the reader takes"
+    )
+
+
+def syntax_uid(syntax: TransferSyntax) raises -> String:
+    """Return the UID of a transfer syntax.
+
+    Args:
+        syntax: The syntax.
+
+    Returns:
+        The UID that a file meta group gives for it.
+
+    Raises:
+        Error: If `syntax` is not valid.
+    """
+    require_syntax(syntax)
+    var uids: List[String] = [
+        EXPLICIT_LITTLE_UID,
+        IMPLICIT_LITTLE_UID,
+        DEFLATED_EXPLICIT_UID,
+        RLE_LOSSLESS_UID,
+    ]
+    return uids[syntax.value]
+
+
+def _photometric(text: String) raises -> Photometric:
+    """Return the photometric interpretation, or refuse a color one."""
+    if text == "MONOCHROME2":
+        return MONOCHROME2
+    if text == "MONOCHROME1":
+        return MONOCHROME1
+    raise Error("The DICOM image is " + text + ", not a grayscale image")
+
+
+def parse_dicom(bytes: Span[UInt8, _]) raises -> DicomSlice:
+    """Read one grayscale image from the bytes of a Part 10 file.
+
+    Args:
+        bytes: The whole file.
+
+    Returns:
+        The image and the elements that place and scale it.
+
+    Raises:
+        Error: If the bytes are not a Part 10 file, the transfer syntax is
+            not one of the four, the image is not one frame of one
+            grayscale sample, an element is short or malformed, or the
+            compressed data does not decode.
+    """
+    var frames = _parse_file(bytes, True)
+    return frames[0].copy()
+
+
+def parse_dicom_frames(bytes: Span[UInt8, _]) raises -> List[DicomSlice]:
+    """Read every frame of a grayscale Part 10 file, one slice each.
+
+    A multi-frame file, such as an enhanced CT or MR image, places each
+    frame by its functional groups. A frame takes an element from its
+    item of the per-frame functional groups, else from the shared
+    functional groups, else from the data set itself. The elements that
+    it takes so are the pixel spacing, the slice thickness, the image
+    position and orientation, the rescale and the window.
+
+    Args:
+        bytes: The whole file.
+
+    Returns:
+        One slice per frame, in file order. Stack them with
+        `stack_slices`.
+
+    Raises:
+        Error: If the bytes are not a Part 10 file, the transfer syntax is
+            not one of the four, the image is not grayscale with one
+            sample, an element is short or malformed, the pixel data is
+            short, or the compressed data does not decode.
+    """
+    return _parse_file(bytes, False)
+
+
+def _parse_file(bytes: Span[UInt8, _], single: Bool) raises -> List[DicomSlice]:
+    """Read the frames of a Part 10 file, or refuse a second frame."""
+    if len(bytes) < 132:
+        raise Error("A DICOM file starts with a 128-byte preamble and DICM")
+    if not bytes_match(bytes, 128, len(bytes), "DICM"):
+        raise Error("A DICOM file has DICM after its preamble")
+    var at = 132
+    var uid = String("")
+    while at + 2 <= len(bytes) and _u16(bytes, at) == 0x0002:
+        var meta = _header(bytes, at, True)
+        if meta.element == 0x0010:
+            uid = _text(bytes, meta)
+        at = meta.start + meta.length
+    var syntax = _syntax(uid)
+    if syntax == DEFLATED_EXPLICIT:
+        var data = inflate(bytes, at, MAX_INFLATED)
+        return _parse_data_set(data, 0, syntax, single)
+    return _parse_data_set(bytes, at, syntax, single)
+
+
+def _is_group_sequence(tag: Int) -> Bool:
+    """Return whether a tag is a sequence of the functional groups.
+
+    The reader opens the shared and the per-frame groups, and in them the
+    pixel measures, plane position, plane orientation, pixel value
+    transformation and frame VOI LUT sequences.
+    """
+    for known in [
+        0x52009229,
+        0x52009230,
+        0x00289110,
+        0x00209113,
+        0x00209116,
+        0x00289145,
+        0x00289132,
+    ]:
+        if tag == known:
+            return True
+    return False
+
+
+def _sequence_items(
+    bytes: Span[UInt8, _], sequence: _Element, explicit: Bool
+) raises -> Tuple[List[Dict[Int, _Element]], Int]:
+    """Return the elements of each item of a sequence, and its end.
+
+    The elements of a nested sequence of the functional groups join the
+    elements of their item. Of two elements with one tag, the first wins.
+    """
+    var items = List[Dict[Int, _Element]]()
+    var place = sequence.start
+    var end = sequence.start + sequence.length
+    while True:
+        if not sequence.undefined and place >= end:
+            return (items^, end)
+        var item = _header(bytes, place, explicit)
+        if item.group != ITEM_GROUP:
+            raise Error("A DICOM sequence holds an element that is not an item")
+        if item.element == SEQUENCE_END:
+            return (items^, item.start)
+        if item.element != ITEM:
+            raise Error("A DICOM sequence holds an unknown delimiter")
+        var found = Dict[Int, _Element]()
+        place = _item_elements(bytes, item, explicit, found)
+        items.append(found^)
+
+
+def _item_elements(
+    bytes: Span[UInt8, _],
+    item: _Element,
+    explicit: Bool,
+    mut found: Dict[Int, _Element],
+) raises -> Int:
+    """Add the elements of one item to `found`, and return its end."""
+    var place = item.start
+    var end = item.start + item.length
+    while True:
+        if not item.undefined and place >= end:
+            return end
+        var element = _header(bytes, place, explicit)
+        if element.group == ITEM_GROUP:
+            if element.element == ITEM_END:
+                return element.start
+            raise Error("A DICOM item holds a stray delimiter")
+        var tag = (element.group << 16) | element.element
+        if _is_group_sequence(tag):
+            var nested = _sequence_items(bytes, element, explicit)
+            for inner in nested[0]:
+                for entry in inner.items():
+                    if entry.key not in found:
+                        found[entry.key] = entry.value
+            place = nested[1]
+        elif element.undefined:
+            place = _skip_sequence(bytes, element.start, explicit)
+        else:
+            if tag not in found:
+                found[tag] = element
+            place = element.start + element.length
+
+
+struct _Groups(Movable):
+    """The elements of the data set and of its functional groups."""
+
+    var top: Dict[Int, _Element]
+    var shared: Dict[Int, _Element]
+    var frames: List[Dict[Int, _Element]]
+    # The first item of the Radiopharmaceutical Information Sequence.
+    var dose: Dict[Int, _Element]
+
+    def __init__(out self):
+        self.top = Dict[Int, _Element]()
+        self.shared = Dict[Int, _Element]()
+        self.frames = List[Dict[Int, _Element]]()
+        self.dose = Dict[Int, _Element]()
+
+    def find(self, tag: Int, frame: Int) -> Optional[_Element]:
+        """Return an element of one frame: its own, the shared, or the top."""
+        if frame < len(self.frames):
+            var own = self.frames[frame].get(tag)
+            if own:
+                return own
+        var shared = self.shared.get(tag)
+        if shared:
+            return shared
+        return self.top.get(tag)
+
+
+def _parse_data_set(
+    bytes: Span[UInt8, _], start: Int, syntax: TransferSyntax, single: Bool
+) raises -> List[DicomSlice]:
+    """Read every frame from the data set that starts at `start`."""
+    var at = start
+    var explicit = syntax != IMPLICIT_LITTLE
+    var groups = _Groups()
+    var pixels = _Element(0, 0, 0, 0, False)
+    var has_pixels = False
+    # The fragments of encapsulated pixel data.
+    var fragments = List[List[UInt8]]()
+    while at < len(bytes):
+        var element = _header(bytes, at, explicit)
+        var tag = (element.group << 16) | element.element
+        if tag == 0x52009229 or tag == 0x52009230:
+            var read = _sequence_items(bytes, element, explicit)
+            if tag == 0x52009229:
+                for item in read[0]:
+                    for entry in item.items():
+                        if entry.key not in groups.shared:
+                            groups.shared[entry.key] = entry.value
+            else:
+                groups.frames = read[0].copy()
+            at = read[1]
+            continue
+        if tag == 0x00540016:
+            var read = _sequence_items(bytes, element, explicit)
+            if len(read[0]) > 0 and len(groups.dose) == 0:
+                groups.dose = read[0][0].copy()
+            at = read[1]
+            continue
+        if element.undefined:
+            if tag != 0x7FE00010:
+                at = _skip_sequence(bytes, element.start, explicit)
+                continue
+            if syntax != RLE_LOSSLESS:
+                raise Error(
+                    "Encapsulated DICOM pixel data needs the RLE Lossless"
+                    " syntax"
+                )
+            at = _fragments(bytes, element.start, fragments)
+            has_pixels = True
+            continue
+        at = element.start + element.length
+        if tag == 0x7FE00010:
+            if syntax == RLE_LOSSLESS:
+                raise Error(
+                    "RLE Lossless DICOM pixel data must be encapsulated"
+                )
+            pixels = element
+            has_pixels = True
+        elif tag not in groups.top:
+            groups.top[tag] = element
+    return _frames(bytes, groups, pixels, has_pixels, fragments, syntax, single)
+
+
+def _frames(
+    bytes: Span[UInt8, _],
+    groups: _Groups,
+    pixels: _Element,
+    has_pixels: Bool,
+    fragments: List[List[UInt8]],
+    syntax: TransferSyntax,
+    single: Bool,
+) raises -> List[DicomSlice]:
+    """Build one slice per frame from the elements that the reader kept."""
+    var samples = groups.top.get(0x00280002)
+    if samples and _short(bytes, samples.value(), "samples per pixel") != 1:
+        raise Error("A DICOM image must have one sample per pixel")
+    var photometric = MONOCHROME2
+    var interpretation = groups.top.get(0x00280004)
+    if interpretation:
+        photometric = _photometric(_text(bytes, interpretation.value()))
+    var count = 1
+    var frames_element = groups.top.get(0x00280008)
+    if frames_element:
+        count = _integer(bytes, frames_element.value(), "number of frames")
+    if single and count != 1:
+        raise Error("A DICOM image must have one frame")
+    if count < 1 or count > 65535:
+        raise Error("A DICOM image has from 1 to 65535 frames")
+    if not has_pixels:
+        raise Error("The DICOM file has no pixel data")
+    var rows = _top_short(bytes, groups, 0x00280010, "rows", 0)
+    var columns = _top_short(bytes, groups, 0x00280011, "columns", 0)
+    var bits_allocated = _top_short(
+        bytes, groups, 0x00280100, "bits allocated", 0
+    )
+    var bits_stored = _top_short(bytes, groups, 0x00280101, "bits stored", 0)
+    var representation = _top_short(
+        bytes, groups, 0x00280103, "pixel representation", -1
+    )
+    if bits_allocated != 8 and bits_allocated != 16:
+        raise Error("A DICOM image must have 8 or 16 bits allocated")
+    if bits_stored == 0:
+        bits_stored = bits_allocated
+    if bits_stored > bits_allocated:
+        raise Error("A DICOM image cannot store more bits than it allocates")
+    if representation != 0 and representation != 1:
+        raise Error("A DICOM pixel representation must be 0 or 1")
+    var modality = String("")
+    var modality_element = groups.top.get(0x00080060)
+    if modality_element:
+        modality = _text(bytes, modality_element.value())
+    var instance = 0
+    var instance_element = groups.top.get(0x00200013)
+    if instance_element:
+        instance = _integer(bytes, instance_element.value(), "instance number")
+    var pet = _pet(bytes, groups)
+    var step = bits_allocated // 8
+    var frame_bytes = rows * columns * step
+    if syntax == RLE_LOSSLESS and count > 1 and len(fragments) != count:
+        raise Error("An RLE Lossless file needs one fragment per frame")
+    var out = List[DicomSlice]()
+    for f in range(count):  # pragma: no branch
+        var image = DicomSlice(rows, columns)
+        image.bits_allocated = bits_allocated
+        image.bits_stored = bits_stored
+        image.representation = PixelRepresentation(representation)
+        image.photometric = photometric
+        image.syntax = syntax
+        image.modality = modality
+        image.instance_number = instance
+        image.pet = pet.copy()
+        _place(bytes, groups, f, image)
+        if syntax == RLE_LOSSLESS:
+            var frame = List[UInt8]()
+            if count == 1:
+                for fragment in fragments:  # pragma: no branch
+                    frame.extend(fragment.copy())
+            else:
+                frame = fragments[f].copy()
+            var decoded = decode_rle_frame(frame, rows * columns, step)
+            var whole = _Element(0x7FE0, 0x0010, 0, len(decoded), False)
+            _decode_pixels(decoded, whole, image)
+        else:
+            var offset = f * frame_bytes
+            var part = _Element(
+                0x7FE0,
+                0x0010,
+                pixels.start + offset,
+                max(pixels.length - offset, 0),
+                False,
+            )
+            _decode_pixels(bytes, part, image)
+        out.append(image^)
+    return out^
+
+
+def _seconds_of_day(text: String, name: String) raises -> Float64:
+    """Read a DICOM time, `HH`, `HHMM`, `HHMMSS` or `HHMMSS.FFFFFF`, as
+    seconds after midnight."""
+    var parts = text.split(".")
+    var head = String(parts[0])
+    var digits = head.as_bytes()
+    var n = len(digits)
+    var fraction = 0.0
+    var bad = len(parts) > 2 or (n != 2 and n != 4 and n != 6)
+    if len(parts) == 2:
+        var tail = String(parts[1]).as_bytes()
+        bad = bad or n != 6 or len(tail) < 1 or len(tail) > 6
+        var scale = 0.1
+        for b in tail:
+            bad = bad or b < 48 or b > 57
+            fraction += Float64(Int(b) - 48) * scale
+            scale *= 0.1
+    for b in digits:
+        bad = bad or b < 48 or b > 57
+    if bad:
+        raise Error("The DICOM " + name + " is not a time HHMMSS.FFFFFF")
+    var value = List[Int](length=3, fill=0)
+    for k in range(n // 2):  # pragma: no branch
+        value[k] = (Int(digits[2 * k]) - 48) * 10 + Int(digits[2 * k + 1]) - 48
+    if value[0] > 23 or value[1] > 59 or value[2] > 60:
+        raise Error("The DICOM " + name + " is not a time of day")
+    return Float64(value[0] * 3600 + value[1] * 60 + value[2]) + fraction
+
+
+def _filled(
+    bytes: Span[UInt8, _], tags: Dict[Int, _Element], tag: Int
+) -> String:
+    """Return the text of an element, or an empty string when it is absent."""
+    var element = tags.get(tag)
+    if element:
+        return _text(bytes, element.value())
+    return String("")
+
+
+def _pet(bytes: Span[UInt8, _], groups: _Groups) raises -> PetDose:
+    """Read the PET elements of a data set. An empty element is absent."""
+    var out = PetDose()
+    out.units = _filled(bytes, groups.top, 0x00541001)
+    out.decay_correction = _filled(bytes, groups.top, 0x00541102)
+    var weight = _filled(bytes, groups.top, 0x00101030)
+    if weight != "":
+        out.patient_weight = Mass64(_number(weight, "patient weight"), KILOGRAM)
+    var series = _filled(bytes, groups.top, 0x00080031)
+    if series != "":
+        out.series_time = Duration64(
+            _seconds_of_day(series, "series time"), SECOND
+        )
+        out.has_series_time = True
+    var start = _filled(bytes, groups.dose, 0x00181072)
+    if start != "":
+        out.injection_time = Duration64(
+            _seconds_of_day(start, "injection time"), SECOND
+        )
+        out.has_injection_time = True
+    var dose = _filled(bytes, groups.dose, 0x00181074)
+    if dose != "":
+        out.injected_dose = Activity64(
+            _number(dose, "injected dose"), BECQUEREL
+        )
+    var half = _filled(bytes, groups.dose, 0x00181075)
+    if half != "":
+        out.half_life = Duration64(_number(half, "half-life"), SECOND)
+    return out^
+
+
+def _top_short(
+    bytes: Span[UInt8, _], groups: _Groups, tag: Int, name: String, absent: Int
+) raises -> Int:
+    """Read an unsigned 16-bit element of the data set, or `absent`."""
+    var element = groups.top.get(tag)
+    if element:
+        return _short(bytes, element.value(), name)
+    return absent
+
+
+def _place(
+    bytes: Span[UInt8, _], groups: _Groups, frame: Int, mut image: DicomSlice
+) raises:
+    """Set the rescale, spacing, position, orientation and window of a frame."""
+    var slope = groups.find(0x00281053, frame)
+    if slope:
+        image.slope = _numbers(bytes, slope.value(), 1, "rescale slope")[0]
+    var intercept = groups.find(0x00281052, frame)
+    if intercept:
+        image.intercept = _numbers(
+            bytes, intercept.value(), 1, "rescale intercept"
+        )[0]
+    var thickness = groups.find(0x00180050, frame)
+    if thickness:
+        image.thickness = Length64(
+            _numbers(bytes, thickness.value(), 1, "slice thickness")[0],
+            MILLIMETER64,
+        )
+    var spacing_element = groups.find(0x00280030, frame)
+    if spacing_element:
+        var spacing = _numbers(
+            bytes, spacing_element.value(), 2, "pixel spacing"
+        )
+        if not (spacing[0] > 0) or not (spacing[1] > 0):
+            raise Error("A DICOM pixel spacing must be positive")
+        image.row_spacing = Length64(spacing[0], MILLIMETER64)
+        image.column_spacing = Length64(spacing[1], MILLIMETER64)
+        image.has_spacing = True
+    var position_element = groups.find(0x00200032, frame)
+    if position_element:
+        var position = _numbers(
+            bytes, position_element.value(), 3, "image position"
+        )
+        image.position = v3(
+            Length64(position[0], MILLIMETER64).value,
+            Length64(position[1], MILLIMETER64).value,
+            Length64(position[2], MILLIMETER64).value,
+        )
+        image.has_position = True
+    var orientation_element = groups.find(0x00200037, frame)
+    if orientation_element:
+        var orientation = _numbers(
+            bytes, orientation_element.value(), 6, "image orientation"
+        )
+        var row = unit_direction(orientation, 0, "A DICOM image orientation")
+        var column = unit_direction(orientation, 3, "A DICOM image orientation")
+        if abs(dot(row, column)) > ORIENTATION_TOLERANCE:
+            raise Error("A DICOM image orientation needs square directions")
+        image.row_direction = row
+        image.column_direction = column
+        image.has_orientation = True
+    var center = groups.find(0x00281050, frame)
+    var width = groups.find(0x00281051, frame)
+    if center and width:
+        image.window_center = _numbers(
+            bytes, center.value(), 1, "window center"
+        )[0]
+        image.window_width = _numbers(bytes, width.value(), 1, "window width")[
+            0
+        ]
+        image.has_window = True
+    elif center:
+        _ = _numbers(bytes, center.value(), 1, "window center")
+    elif width:
+        _ = _numbers(bytes, width.value(), 1, "window width")
+
+
+def _fragments(
+    bytes: Span[UInt8, _], at: Int, mut fragments: List[List[UInt8]]
+) raises -> Int:
+    """Append the fragments of encapsulated pixel data to `fragments`.
+
+    Returns:
+        The place after the sequence delimiter.
+    """
+    var table = _header(bytes, at, True)
+    if table.group != ITEM_GROUP or table.element != ITEM or table.undefined:
+        raise Error("Encapsulated DICOM pixel data starts with an offset table")
+    var place = table.start + table.length
+    while True:
+        var item = _header(bytes, place, True)
+        if item.group != ITEM_GROUP:
+            raise Error("Encapsulated DICOM pixel data holds a non-item")
+        if item.element == SEQUENCE_END:
+            return item.start
+        if item.element != ITEM or item.undefined:
+            raise Error("A DICOM pixel fragment needs a defined length")
+        var fragment = List[UInt8]()
+        fragment.extend(bytes[item.start : item.start + item.length])
+        fragments.append(fragment^)
+        place = item.start + item.length
+
+
+def decode_rle_frame(
+    frame: Span[UInt8, _], count: Int, step: Int
+) raises -> List[UInt8]:
+    """Return the little-endian samples of one RLE Lossless frame.
+
+    Args:
+        frame: The frame: its 64-byte header, then its segments.
+        count: The samples in the frame, rows times columns.
+        step: The bytes of each sample, and so the segments of the frame.
+
+    Returns:
+        `count * step` bytes, the samples in order, the low byte first.
+
+    Raises:
+        Error: If the header is short, its segment count is not `step`,
+            an offset is outside the frame, or a segment does not decode
+            to `count` bytes.
+    """
+    if len(frame) < RLE_HEADER:
+        raise Error("An RLE frame is shorter than its 64-byte header")
+    if _u32(frame, 0) != step:
+        raise Error("An RLE frame needs one segment per byte of a sample")
+    var samples = List[UInt8](length=count * step, fill=0)
+    for segment in range(step):  # pragma: no branch
+        var start = _u32(frame, 4 + 4 * segment)
+        var end = len(frame)
+        if segment + 1 < step:
+            end = _u32(frame, 8 + 4 * segment)
+        if start < RLE_HEADER or end < start or end > len(frame):
+            raise Error("An RLE segment offset is outside the frame")
+        var data = _unpack(frame, start, end, count)
+        # Segment 0 holds the most significant byte.
+        var place = step - 1 - segment
+        for index in range(count):  # pragma: no branch
+            samples[index * step + place] = data[index]
+    return samples^
+
+
+def _unpack(
+    frame: Span[UInt8, _], start: Int, end: Int, count: Int
+) raises -> List[UInt8]:
+    """Return the first `count` bytes of one PackBits segment."""
+    var out = List[UInt8](capacity=count + 128)
+    var at = start
+    while at < end and len(out) < count:
+        var code = Int(frame[at])
+        at += 1
+        if code == 128:
+            continue
+        var literal = code < 128
+        var need = code + 1 if literal else 1
+        if at + need > end:
+            raise Error("An RLE segment ends inside a run")
+        if literal:
+            out.extend(frame[at : at + need])
+        else:
+            for _ in range(257 - code):  # pragma: no branch
+                out.append(frame[at])
+        at += need
+    if len(out) < count:
+        raise Error("An RLE segment decodes to fewer bytes than the image")
+    return out^
+
+
+def _decode_pixels(
+    bytes: Span[UInt8, _], pixels: _Element, mut image: DicomSlice
+) raises:
+    """Fill the rescaled values from the pixel data."""
+    var step = image.bits_allocated // 8
+    var count = image.rows * image.columns
+    if pixels.length < count * step:
+        raise Error("The DICOM pixel data is shorter than the image")
+    var mask = (1 << image.bits_stored) - 1
+    var sign = 1 << (image.bits_stored - 1)
+    var signed = image.representation == SIGNED_PIXELS
+    var slope = image.slope
+    var intercept = image.intercept
+    for index in range(count):  # pragma: no branch
+        var at = pixels.start + index * step
+        var raw: Int
+        if step == 2:
+            raw = _u16(bytes, at)
+        else:
+            raw = Int(bytes[at])
+        var stored = raw & mask
+        if signed and (stored & sign) != 0:
+            stored -= mask + 1
+        image.values[index] = Float32(slope * Float64(stored) + intercept)
+
+
+def read_dicom_frames(path: String) raises -> List[DicomSlice]:
+    """Read every frame of a grayscale Part 10 file.
+
+    Args:
+        path: The file to read.
+
+    Returns:
+        One slice per frame, in file order.
+
+    Raises:
+        Error: If the file cannot be read, or `parse_dicom_frames` refuses
+            it.
+    """
+    var bytes = Path(path).read_bytes()
+    return parse_dicom_frames(bytes)
+
+
+def read_dicom(path: String) raises -> DicomSlice:
+    """Read one grayscale image from a Part 10 file.
+
+    Args:
+        path: The file to read.
+
+    Returns:
+        The image and the elements that place and scale it.
+
+    Raises:
+        Error: If the file cannot be read, or `parse_dicom` refuses it.
+    """
+    var bytes = Path(path).read_bytes()
+    return parse_dicom(bytes)
+
+
+struct DicomTree(Movable):
+    """Every element of a data set, with each item of a sequence a node.
+
+    `DATA_SET`, node 0, is the data set itself. Each item of a sequence
+    is a node of its own, whose elements and sequences the methods read
+    by tag. A tag is `(group << 16) | element`, such as `0x30060020`.
+    """
+
+    var bytes: List[UInt8]
+    """The bytes of the data set, expanded when the file is deflated."""
+    var explicit: Bool
+    """Whether the data set is explicit VR."""
+    var elements: List[Dict[Int, _Element]]
+    """The elements of each node, by tag."""
+    var children: List[Dict[Int, List[DicomNode]]]
+    """The item nodes of each sequence of each node, by tag."""
+
+    def __init__(out self, var bytes: List[UInt8], explicit: Bool):
+        """Create a tree of one empty node.
+
+        Args:
+            bytes: The bytes that the elements point into.
+            explicit: Whether the data set is explicit VR.
+        """
+        self.bytes = bytes^
+        self.explicit = explicit
+        self.elements = List[Dict[Int, _Element]]()
+        self.children = List[Dict[Int, List[DicomNode]]]()
+
+    def _require_node(self, node: DicomNode) raises:
+        if not node.is_valid() or node.value >= len(self.elements):
+            raise Error("A DICOM tree has no such node")
+
+    def has(self, node: DicomNode, tag: Int) raises -> Bool:
+        """Return whether a node holds an element or a sequence of a tag.
+
+        Args:
+            node: The node, such as `DATA_SET`.
+            tag: The tag.
+
+        Returns:
+            Whether it is there.
+
+        Raises:
+            Error: If the node is not in the tree.
+        """
+        self._require_node(node)
+        return (
+            tag in self.elements[node.value] or tag in self.children[node.value]
+        )
+
+    def text(self, node: DicomNode, tag: Int) raises -> String:
+        """Return the text of an element without its padding.
+
+        Args:
+            node: The node, such as `DATA_SET`.
+            tag: The tag.
+
+        Returns:
+            The text, or an empty string when the node has no such
+            element.
+
+        Raises:
+            Error: If the node is not in the tree.
+        """
+        self._require_node(node)
+        var element = self.elements[node.value].get(tag)
+        if element:
+            return _text(Span(self.bytes), element.value())
+        return String("")
+
+    def data(self, node: DicomNode, tag: Int) raises -> List[UInt8]:
+        """Return the bytes of an element's value, as the file holds them.
+
+        Use it for a binary element, such as a `US` value or native pixel
+        data.
+
+        Args:
+            node: The node, such as `DATA_SET`.
+            tag: The tag.
+
+        Returns:
+            The bytes, little endian. None when the node has no such
+            element.
+
+        Raises:
+            Error: If the node is not in the tree.
+        """
+        self._require_node(node)
+        var element = self.elements[node.value].get(tag)
+        if element:
+            var e = element.value()
+            return List[UInt8](self.bytes[e.start : e.start + e.length])
+        return List[UInt8]()
+
+    def numbers(self, node: DicomNode, tag: Int) raises -> List[Float64]:
+        """Return every value of a decimal or integer string element.
+
+        Args:
+            node: The node, such as `DATA_SET`.
+            tag: The tag.
+
+        Returns:
+            The values, split at backslashes. None when the node has no
+            such element or it is empty.
+
+        Raises:
+            Error: If the node is not in the tree, or a value is not a
+                finite number.
+        """
+        var text = self.text(node, tag)
+        var out = List[Float64]()
+        if text == "":
+            return out^
+        # A text that is not empty splits in one part at least.
+        for part in text.split("\\"):  # pragma: no branch
+            out.append(_number(String(part), "value"))
+        return out^
+
+    def items(self, node: DicomNode, tag: Int) raises -> List[DicomNode]:
+        """Return the item nodes of a sequence of a node.
+
+        Args:
+            node: The node, such as `DATA_SET`.
+            tag: The tag of the sequence.
+
+        Returns:
+            The nodes of its items, in order. None when the node has no
+            such sequence.
+
+        Raises:
+            Error: If the node is not in the tree.
+        """
+        self._require_node(node)
+        var found = self.children[node.value].get(tag)
+        if found:
+            return found.value().copy()
+        return List[DicomNode]()
+
+
+def _is_sequence(
+    bytes: Span[UInt8, _], at: Int, element: _Element, explicit: Bool
+) -> Bool:
+    """Return whether the element that starts at `at` is a sequence."""
+    if element.undefined:
+        return True
+    if explicit:
+        return bytes[at + 4] == 0x53 and bytes[at + 5] == 0x51
+    # Implicit VR has no VR: a value that starts with an item is one.
+    return (
+        element.length >= 8
+        and _u16(bytes, element.start) == ITEM_GROUP
+        and _u16(bytes, element.start + 2) == ITEM
+    )
+
+
+def _tree_node(
+    bytes: Span[UInt8, _],
+    start: Int,
+    length: Int,
+    undefined: Bool,
+    explicit: Bool,
+    mut tree: DicomTree,
+    depth: Int,
+) raises -> Int:
+    """Read the elements from `start` into a new node of the tree, and
+    return the place after them."""
+    if depth > 64:
+        raise Error("A DICOM data set nests its sequences too deep")
+    var node = len(tree.elements)
+    tree.elements.append(Dict[Int, _Element]())
+    tree.children.append(Dict[Int, List[DicomNode]]())
+    var end = start + length
+    var place = start
+    while True:
+        if not undefined and place >= end:
+            return end
+        if undefined and place >= len(bytes):
+            raise Error("A DICOM item of undefined length has no end")
+        var element = _header(bytes, place, explicit)
+        if element.group == ITEM_GROUP:
+            if undefined and element.element == ITEM_END:
+                return element.start
+            raise Error("A DICOM item holds a stray delimiter")
+        var tag = (element.group << 16) | element.element
+        if tag == 0x7FE00010 and element.undefined:
+            place = _skip_sequence(bytes, element.start, explicit)
+            continue
+        if not _is_sequence(bytes, place, element, explicit):
+            if tag not in tree.elements[node]:
+                tree.elements[node][tag] = element
+            place = element.start + element.length
+            continue
+        var items = List[DicomNode]()
+        var at = element.start
+        var stop = element.start + element.length
+        while True:
+            if not element.undefined and at >= stop:
+                place = stop
+                break
+            var item = _header(bytes, at, explicit)
+            if item.group != ITEM_GROUP:
+                raise Error(
+                    "A DICOM sequence holds an element that is not an item"
+                )
+            if item.element == SEQUENCE_END:
+                place = item.start
+                break
+            if item.element != ITEM:
+                raise Error("A DICOM sequence holds an unknown delimiter")
+            items.append(DicomNode(len(tree.elements)))
+            at = _tree_node(
+                bytes,
+                item.start,
+                item.length,
+                item.undefined,
+                explicit,
+                tree,
+                depth + 1,
+            )
+            if not item.undefined:
+                at = item.start + item.length
+        if tag not in tree.children[node]:
+            tree.children[node][tag] = items^
+
+
+def parse_dicom_tree(bytes: Span[UInt8, _]) raises -> DicomTree:
+    """Read every element of a Part 10 file into a tree of nodes.
+
+    Use it for the files that are not images, such as an RT Structure
+    Set. The reader takes the four transfer syntaxes of `parse_dicom`.
+    It steps over encapsulated pixel data. Of two elements with one tag
+    in a node, the first counts.
+
+    Args:
+        bytes: The whole file.
+
+    Returns:
+        The tree. `DATA_SET` is the data set.
+
+    Raises:
+        Error: If the bytes are not a Part 10 file, the transfer syntax is
+            not one of the four, an element is short or malformed, or the
+            sequences nest more than 64 deep.
+    """
+    if len(bytes) < 132:
+        raise Error("A DICOM file starts with a 128-byte preamble and DICM")
+    if not bytes_match(bytes, 128, len(bytes), "DICM"):
+        raise Error("A DICOM file has DICM after its preamble")
+    var at = 132
+    var uid = String("")
+    while at + 2 <= len(bytes) and _u16(bytes, at) == 0x0002:
+        var meta = _header(bytes, at, True)
+        if meta.element == 0x0010:
+            uid = _text(bytes, meta)
+        at = meta.start + meta.length
+    var syntax = _syntax(uid)
+    var data: List[UInt8]
+    if syntax == DEFLATED_EXPLICIT:
+        data = inflate(bytes, at, MAX_INFLATED)
+    else:
+        data = List[UInt8](bytes[at:])
+    var explicit = syntax != IMPLICIT_LITTLE
+    var tree = DicomTree(data.copy(), explicit)
+    _ = _tree_node(Span(data), 0, len(data), False, explicit, tree, 0)
+    return tree^
+
+
+def read_dicom_tree(path: String) raises -> DicomTree:
+    """Read every element of a Part 10 file from disk into a tree.
+
+    Args:
+        path: The file.
+
+    Returns:
+        The tree. `DATA_SET` is the data set.
+
+    Raises:
+        Error: If the file cannot be read, or `parse_dicom_tree` refuses
+            it.
+    """
+    var bytes = Path(path).read_bytes()
+    return parse_dicom_tree(bytes)
+
+
+def unit_direction(
+    values: List[Float64], first: Int, what: String
+) raises -> V3:
+    """Return the unit direction at three places of an orientation.
+
+    DICOM stores each direction cosine to a few digits, so a direction
+    within `ORIENTATION_TOLERANCE` of length 1 is scaled to length 1.
+
+    Args:
+        values: The direction cosines, such as the six of Image
+            Orientation (Patient).
+        first: The place of the first of the three.
+        what: The orientation for the error text, such as
+            `"A DICOM image orientation"`.
+
+    Returns:
+        The direction, of length 1.
+
+    Raises:
+        Error: If the direction is not of length 1, within the tolerance.
+    """
+    var direction = v3(values[first], values[first + 1], values[first + 2])
+    var size = length(direction)
+    if abs(size - 1.0) > ORIENTATION_TOLERANCE:
+        raise Error(what + " needs unit directions")
+    return direction * (1.0 / size)

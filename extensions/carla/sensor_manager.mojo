@@ -57,12 +57,8 @@ CARLA does. The rays are cast against the world's colliders with
 `sensor_rays.WorldRays`.
 """
 
-from extensions.carla.actor import (
-    ActorId,
-    NO_ACTOR,
-    VEHICLE_ACTOR,
-    no_rotation,
-)
+from extensions.carla.actor import ActorId, NO_ACTOR, VEHICLE_ACTOR
+from extensions.carla.transform import no_rotation, CarlaTransform
 from extensions.carla.blueprint import ActorBlueprint
 from extensions.carla.cameras import (
     CameraGeometry,
@@ -143,7 +139,6 @@ from extensions.carla.sensor_data import (
 )
 from extensions.carla.sensor_noise import SensorRandom
 from extensions.carla.sensor_rays import WorldRays
-from extensions.carla.transform import CarlaTransform
 from extensions.carla.v2x import (
     CAM,
     CaService,

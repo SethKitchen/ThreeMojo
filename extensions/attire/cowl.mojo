@@ -38,7 +38,13 @@ from std.math import cos, pi, sin
 from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.attire.cover import face_oval
 from extensions.attire.last import FootLast, foot_last
-from extensions.attire.mesh_ops import MeshWriter, cut, merge
+from extensions.attire.mesh_ops import (
+    MeshWriter,
+    cut,
+    merge,
+    nearest_point,
+    cap_corner,
+)
 from extensions.attire.skirt import leg_side, skirt_scale, slice_segments
 from extensions.humanoid.rig.joints import HEAD, NECK, HumanoidRig
 from math.vector3 import Vector3
@@ -108,30 +114,6 @@ def head_cowl(whole: BufferGeometry, rig: HumanoidRig) raises -> List[FootLast]:
     return hulls^
 
 
-def _nearest(points: List[Vector3], p: Vector3) -> Int:
-    """Return the index of the point nearest `p`, or -1 for none."""
-    var best = -1
-    var closest = Float32(1e30)
-    for k in range(len(points)):
-        var d = (points[k] - p).length_sq()
-        if d < closest:
-            closest = d
-            best = k
-    return best
-
-
-def _corner(ring: Int, sector: Int) -> Int:
-    """Return the vertex of the cast sphere at a ring and a sector.
-
-    A pole is one vertex. The sectors wrap round.
-    """
-    if ring == 0:
-        return 0
-    if ring == COWL_RINGS:
-        return 1 + (COWL_RINGS - 1) * COWL_SECTORS
-    return 1 + (ring - 1) * COWL_SECTORS + sector % COWL_SECTORS
-
-
 def cowl_mesh(
     hull: FootLast,
     piece: BufferGeometry,
@@ -187,7 +169,7 @@ def cowl_mesh(
             )
             d = d * (1 / max(d.length(), Float32(1e-12)))
             var p = hull.center + d * (hull.cast(d) + stand)
-            var source = _nearest(points, p)
+            var source = nearest_point(points, p)
             var four = List[Int](length=4, fill=0)
             var share = List[Float32](length=4, fill=0)
             if source >= 0:
@@ -210,10 +192,10 @@ def cowl_mesh(
         _ = writer.add(lining[k], 1, linings[k], linings_weights[k])
     for ring in range(COWL_RINGS):  # pragma: no branch
         for sector in range(COWL_SECTORS):  # pragma: no branch
-            var a = _corner(ring, sector)
-            var b = _corner(ring, sector + 1)
-            var c = _corner(ring + 1, sector)
-            var d = _corner(ring + 1, sector + 1)
+            var a = cap_corner(ring, sector, COWL_RINGS, COWL_SECTORS)
+            var b = cap_corner(ring, sector + 1, COWL_RINGS, COWL_SECTORS)
+            var c = cap_corner(ring + 1, sector, COWL_RINGS, COWL_SECTORS)
+            var d = cap_corner(ring + 1, sector + 1, COWL_RINGS, COWL_SECTORS)
             # Each quad is two triangles, wound to face out of a sphere
             # whose pole looks forward. At a pole one of them has two
             # corners on the pole, and is left out.

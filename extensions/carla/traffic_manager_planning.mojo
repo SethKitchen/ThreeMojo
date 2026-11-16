@@ -116,6 +116,7 @@ from extensions.carla.traffic_manager_shared import (
     apply_transform,
     apply_vehicle_control,
     set_vehicle_light_state,
+    drop_value,
 )
 from extensions.carla.traffic_manager_state import (
     _check_actor_id,
@@ -146,14 +147,6 @@ from math.vector3 import Vector3
 from std.collections import Dict
 from std.math import atan2, sqrt
 from units.si import DEGREE, Duration, Length, SECOND, Velocity
-
-
-def _drop(mut list: List[Int], value: Int):
-    # The one caller drops a queued vehicle from its own queue.
-    for i in range(len(list)):  # pragma: no branch
-        if list[i] == value:
-            _ = list.pop(i)
-            return
 
 
 # --- TrafficLightStage ---------------------------------------------------------
@@ -340,7 +333,7 @@ struct TrafficLightStage(Movable):
         var junction = self.vehicle_last_junction.get(a)
         if not Bool(junction):
             return
-        _drop(self.entering_vehicles_map[junction.value()], a)
+        drop_value(self.entering_vehicles_map[junction.value()], a)
         if a in self.vehicle_stop_time:
             _ = self.vehicle_stop_time.pop(a)
         _ = self.vehicle_last_junction.pop(a)

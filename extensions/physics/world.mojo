@@ -80,6 +80,7 @@ from extensions.physics.joint import (
     ball_joint,
     hinge_joint,
     require_hinge_limits,
+    wide_times,
 )
 from extensions.physics.collide import (
     ContactPoint,
@@ -1830,7 +1831,7 @@ struct PhysicsWorld(Movable):
             var lever = wide_cross(arm, along)
             var resist = inverse_mass + wide_dot(
                 lever,
-                _turn_out(turn, _apply(tensor, _turn_in(turn, lever))),
+                _turn_out(turn, wide_times(tensor, _turn_in(turn, lever))),
             )
             var impulse = min(
                 speed / resist,
@@ -1840,7 +1841,7 @@ struct PhysicsWorld(Movable):
             velocity += friction * inverse_mass
             angular += _turn_out(
                 turn,
-                _apply(tensor, _turn_in(turn, wide_cross(arm, friction))),
+                wide_times(tensor, _turn_in(turn, wide_cross(arm, friction))),
             )
         velocity = _ccd_close_normal_velocity(
             velocity, normal, -restitution * approach
@@ -2210,7 +2211,7 @@ struct PhysicsWorld(Movable):
         if _isotropic(tensor):
             return torque * Float64(tensor.elements[0])
         var turn = rotation_matrix(self.bodies[i].rotation)
-        return _turn_out(turn, _apply(tensor, _turn_in(turn, torque)))
+        return _turn_out(turn, wide_times(tensor, _turn_in(turn, torque)))
 
     def _integrate_velocities(mut self, h: Float32):
         for i in range(len(self.bodies)):
@@ -3052,17 +3053,6 @@ def _determinant(m: Matrix3) -> Float64:
     )
 
 
-def _apply(m: Matrix3, v: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
-    # Column-major: element (row, column) is e[column * 3 + row].
-    ref e = m.elements
-    return SIMD[DType.float64, 4](
-        Float64(e[0]) * v[0] + Float64(e[3]) * v[1] + Float64(e[6]) * v[2],
-        Float64(e[1]) * v[0] + Float64(e[4]) * v[1] + Float64(e[7]) * v[2],
-        Float64(e[2]) * v[0] + Float64(e[5]) * v[1] + Float64(e[8]) * v[2],
-        0,
-    )
-
-
 def _turn_in(
     turn: Matrix3, v: SIMD[DType.float64, 4]
 ) -> SIMD[DType.float64, 4]:
@@ -3080,7 +3070,7 @@ def _turn_out(
     turn: Matrix3, v: SIMD[DType.float64, 4]
 ) -> SIMD[DType.float64, 4]:
     # R v: body to world.
-    return _apply(turn, v)
+    return wide_times(turn, v)
 
 
 def _solve(m: Matrix3, v: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:

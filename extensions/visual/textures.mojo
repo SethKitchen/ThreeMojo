@@ -23,20 +23,12 @@ from extensions.carla.render_textures import (
     hash2,
     normal_map,
     tile_fbm,
+    _rgba,
+    _byte,
 )
 from math.smoothstep import smoothstep
 from render.srgb import LINEAR, SRGB
 from render.texture import BILINEAR, IGNORED, REPEAT, Texture
-
-
-def _byte(value: Float32) -> UInt8:
-    """Return a channel from zero to one as a byte."""
-    return UInt8(Int(max(Float32(0), min(Float32(1), value)) * 255 + 0.5))
-
-
-def _rgba(mut pixels: List[UInt8], r: Float32, g: Float32, b: Float32):
-    """Append one opaque texel."""
-    pixels.extend([_byte(r), _byte(g), _byte(b), 255])
 
 
 def _check(size: Int) raises:

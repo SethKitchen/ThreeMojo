@@ -39,11 +39,15 @@ from extensions.carla.actor import (
     VEHICLE_ACTOR,
     WALKER_ACTOR,
     compose,
-    no_rotation,
     relative,
     rotation_matrix,
     rotation_of,
     world_obb,
+)
+from extensions.carla.transform import (
+    no_rotation,
+    CarlaRotation,
+    CarlaTransform,
 )
 from extensions.carla.blueprint import ActorAttributeValue
 from extensions.carla.bounding_box import BoundingBox
@@ -57,7 +61,6 @@ from extensions.carla.physics.vehicle_control import (
 from extensions.carla.physics.walker import WalkerControl
 from extensions.carla.road_info import SignalId
 from extensions.carla.sensor import SemanticTag
-from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.vehicle import (
     BACK_RIGHT_WHEEL,
     BACK_WHEEL,

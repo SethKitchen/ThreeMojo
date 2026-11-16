@@ -33,6 +33,7 @@ are different types:
     print(cost.per_mass().to(PER_CARAT))
 """
 
+from math.finite import require_positive_finite
 from std.math import isfinite
 from loaders.js_number import js_to_fixed
 from units.quantity import Quantity, Unit
@@ -172,12 +173,6 @@ comptime PER_CARAT = PriceUnit[0, 1, 0](1.0 / 2.0e-4, "/ct")
 comptime PER_HOUR = PriceUnit[0, 0, 1](1.0 / 3600.0, "/h")
 
 
-def _require_positive(value: Float64, message: String) raises:
-    """Refuse a value that is not finite and positive."""
-    if not (isfinite(value) and value > 0):
-        raise Error(message)
-
-
 def _require_not_negative(value: Float64, message: String) raises:
     """Refuse a value that is not finite and zero or more."""
     if not (isfinite(value) and value >= 0):
@@ -202,9 +197,13 @@ def layer_rate(
     Raises:
         Error: If a value is not finite and positive.
     """
-    _require_positive(thickness_rate.value, "A growth rate must be positive")
-    _require_positive(area.value, "An area must be finite and positive")
-    _require_positive(density.value, "A density must be finite and positive")
+    require_positive_finite(
+        thickness_rate.value, "A growth rate must be positive"
+    )
+    require_positive_finite(area.value, "An area must be finite and positive")
+    require_positive_finite(
+        density.value, "A density must be finite and positive"
+    )
     return MassRate64(thickness_rate.value * area.value * density.value)
 
 
@@ -262,7 +261,7 @@ struct GrowthRun(Copyable, Movable):
                 the equipment price is negative or not finite, there is
                 no crystal, or the kept share is not above 0 and at most 1.
         """
-        _require_positive(growth.value, "A growth time must be positive")
+        require_positive_finite(growth.value, "A growth time must be positive")
         _require_not_negative(
             turnaround.value, "A turnaround must be finite and not negative"
         )
@@ -271,7 +270,7 @@ struct GrowthRun(Copyable, Movable):
         )
         if crystals < 1:
             raise Error("A run must grow one crystal at least")
-        _require_positive(rate.value, "A growth rate must be positive")
+        require_positive_finite(rate.value, "A growth rate must be positive")
         if not (kept > 0 and kept <= 1):
             raise Error("A kept share must be above 0 and at most 1")
         _require_not_negative(
@@ -441,7 +440,7 @@ def growth_for_price(
             floor, which no growth time reaches.
     """
     _require_electricity(electricity)
-    _require_positive(target.value, "A target price must be positive")
+    require_positive_finite(target.value, "A target price must be positive")
     var margin = target.value * _kept_rate(run) - _time_cost(run, electricity)
     if margin <= 0:
         raise Error("No growth time reaches a target at or below the floor")

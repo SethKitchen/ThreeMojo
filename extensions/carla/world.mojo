@@ -71,10 +71,10 @@ from extensions.carla.actor import (
     YELLOW,
     RED,
     compose,
-    no_rotation,
     relative,
     world_obb,
 )
+from extensions.carla.transform import no_rotation, CarlaTransform
 from extensions.carla.blueprint import (
     ActorAttributeValue,
     ActorBlueprint,
@@ -127,7 +127,6 @@ from extensions.carla.traffic_sign import (
     sign_type_id,
     speed_limit_boxes,
 )
-from extensions.carla.transform import CarlaTransform
 from extensions.carla.vehicle import (
     VehicleData,
     VehicleDoor,

@@ -12,6 +12,7 @@ the same of one index. `js_float_byte` names a byte a JavaScript number
 can hold, and `js_float_byte_at` asks the same of one index.
 `hex_digit_value` reads one hexadecimal digit.
 `base64_digit` reads one letter or digit of the base64 alphabet.
+`little_u32` reads a little-endian 32-bit word.
 """
 
 
@@ -402,3 +403,22 @@ def is_hex_digit(byte: Int) -> Bool:
 
     """
     return hex_digit_value(byte) >= 0
+
+
+@always_inline
+def little_u32(bytes: List[UInt8], at: Int) -> UInt32:
+    """Return the little-endian 32-bit word at a byte.
+
+    Args:
+        bytes: The bytes, with four from `at`.
+        at: The index of the low byte.
+
+    Returns:
+        The word.
+    """
+    return (
+        UInt32(bytes[at])
+        | (UInt32(bytes[at + 1]) << 8)
+        | (UInt32(bytes[at + 2]) << 16)
+        | (UInt32(bytes[at + 3]) << 24)
+    )

@@ -250,3 +250,38 @@ comptime INCH64 = Unit[1, 0, 0, 0, 0, DType.float64](0.0254, "in")
 comptime DEGREE64 = Unit[0, 0, 0, 1, 0, DType.float64](
     0.017453292519943295, "deg"
 )
+
+# --- Float64 unit types ---------------------------------------------------------
+# The extensions define their own Float64 units with these.
+comptime LengthUnit64 = Unit[1, 0, 0, 0, 0, DType.float64]
+comptime AreaUnit64 = Unit[2, 0, 0, 0, 0, DType.float64]
+comptime VolumeUnit64 = Unit[3, 0, 0, 0, 0, DType.float64]
+comptime InertiaUnit64 = Unit[4, 0, 0, 0, 0, DType.float64]
+comptime DurationUnit64 = Unit[0, 0, 1, 0, 0, DType.float64]
+comptime FrequencyUnit64 = Unit[0, 0, -1, 0, 0, DType.float64]
+comptime AngleUnit64 = Unit[0, 0, 0, 1, 0, DType.float64]
+comptime VelocityUnit64 = Unit[1, 0, -1, 0, 0, DType.float64]
+comptime ForceUnit64 = Unit[1, 1, -2, 0, 0, DType.float64]
+comptime MomentUnit64 = Unit[2, 1, -2, 0, 0, DType.float64]
+comptime PressureUnit64 = Unit[-1, 1, -2, 0, 0, DType.float64]
+comptime LineLoadUnit64 = Unit[0, 1, -2, 0, 0, DType.float64]
+comptime DiffusivityUnit64 = Unit[2, 0, -1, 0, 0, DType.float64]
+# An area each second: a diffusion coefficient.
+comptime Diffusivity64 = Quantity[2, 0, -1, 0, 0, DType.float64]
+
+# --- Float64 lengths, volumes, times and rates ------------------------------------
+# Each keeps its factor whole; the Float32 `MILLIMETER`, `CUBIC_CENTIMETER`
+# and `MILLISECOND` round theirs.
+comptime MILLIMETER64 = LengthUnit64(0.001, "mm")
+comptime CUBIC_CENTIMETER64 = VolumeUnit64(1.0e-6, "cm^3")
+comptime MILLISECOND64 = DurationUnit64(1.0e-3, "ms")
+comptime MINUTE64 = DurationUnit64(60.0, "min")
+comptime DAY64 = DurationUnit64(86400.0, "d")
+comptime WEEK64 = DurationUnit64(604800.0, "wk")
+# The Julian year of 365.25 days.
+comptime YEAR64 = DurationUnit64(31557600.0, "yr")
+comptime PER_SECOND64 = FrequencyUnit64(1.0, "1/s")
+comptime PER_MINUTE64 = FrequencyUnit64(1.0 / 60.0, "1/min")
+comptime PER_DAY64 = FrequencyUnit64(1.0 / 86400.0, "1/d")
+comptime PER_YEAR64 = FrequencyUnit64(1.0 / 31557600.0, "1/yr")
+comptime SQUARE_METER_PER_SECOND = DiffusivityUnit64(1.0, "m^2/s")

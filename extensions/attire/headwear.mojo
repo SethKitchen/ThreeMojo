@@ -62,7 +62,13 @@ from extensions.attire.kinds import (
 )
 from extensions.attire.last import FootLast
 from core.search import first_match
-from extensions.attire.mesh_ops import ACCENT, MeshWriter, cut, merge
+from extensions.attire.mesh_ops import (
+    ACCENT,
+    MeshWriter,
+    cut,
+    merge,
+    cap_corner,
+)
 from extensions.attire.skirt import skirt_scale
 from extensions.humanoid.rig.joints import HEAD, HumanoidRig
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
@@ -498,18 +504,6 @@ def _tube(
         hat.writer.triangle(first[last] + s, first[last] + (s + 1) % sides, tip)
 
 
-def _corner(ring: Int, sector: Int, rings: Int, sectors: Int) -> Int:
-    """Return the vertex of a cast sphere at a ring and a sector.
-
-    A pole is one vertex. The sectors wrap round.
-    """
-    if ring == 0:
-        return 0
-    if ring == rings:
-        return 1 + (rings - 1) * sectors
-    return 1 + (ring - 1) * sectors + sector % sectors
-
-
 def _helmet(
     mut hat: _Hat,
     frame: HeadFrame,
@@ -601,10 +595,12 @@ def _helmet(
         _ = hat.vertex(lining[k], linings[k], False)
     for ring in range(frame.rings):  # pragma: no branch
         for sector in range(frame.sectors):  # pragma: no branch
-            var a = _corner(ring, sector, frame.rings, frame.sectors)
-            var b = _corner(ring, sector + 1, frame.rings, frame.sectors)
-            var c2 = _corner(ring + 1, sector, frame.rings, frame.sectors)
-            var d2 = _corner(ring + 1, sector + 1, frame.rings, frame.sectors)
+            var a = cap_corner(ring, sector, frame.rings, frame.sectors)
+            var b = cap_corner(ring, sector + 1, frame.rings, frame.sectors)
+            var c2 = cap_corner(ring + 1, sector, frame.rings, frame.sectors)
+            var d2 = cap_corner(
+                ring + 1, sector + 1, frame.rings, frame.sectors
+            )
             if ring > 0:
                 hat.writer.triangle(a, b, c2)
                 hat.writer.triangle(count + a, count + c2, count + b)

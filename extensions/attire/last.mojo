@@ -35,7 +35,13 @@ This is not a three.js port. See Extensions.
 from std.math import cos, pi, sin, sqrt
 
 from core.buffer_geometry import POSITION, BufferGeometry
-from extensions.attire.mesh_ops import MeshWriter, cut, merge
+from extensions.attire.mesh_ops import (
+    MeshWriter,
+    cut,
+    merge,
+    nearest_point,
+    cap_corner,
+)
 from extensions.attire.skirt import leg_side, skirt_scale, slice_segments
 from extensions.humanoid.rig.joints import (
     HIPS,
@@ -254,18 +260,6 @@ def foot_lasts(
     return lasts^
 
 
-def _nearest(points: List[Vector3], p: Vector3) -> Int:
-    """Return the index of the point nearest `p`, or -1 for none."""
-    var best = -1
-    var closest = Float32(1e30)
-    for k in range(len(points)):
-        var d = (points[k] - p).length_sq()
-        if d < closest:
-            closest = d
-            best = k
-    return best
-
-
 def _direction(last: FootLast, ring: Int, sector: Int) -> Vector3:
     """Return the unit direction of one vertex of the stretched sphere."""
     var down = Float32(pi) * Float32(ring) / Float32(LAST_RINGS)
@@ -278,18 +272,6 @@ def _direction(last: FootLast, ring: Int, sector: Int) -> Vector3:
     # The box of four points or more has some size: the length is not
     # zero.
     return d * (1 / max(d.length(), Float32(1e-12)))
-
-
-def _corner(ring: Int, sector: Int) -> Int:
-    """Return the vertex of the stretched sphere at a ring and a sector.
-
-    A pole is one vertex. The sectors wrap round.
-    """
-    if ring == 0:
-        return 0
-    if ring == LAST_RINGS:
-        return 1 + (LAST_RINGS - 1) * LAST_SECTORS
-    return 1 + (ring - 1) * LAST_SECTORS + sector % LAST_SECTORS
 
 
 def last_mesh(last: FootLast, piece: BufferGeometry) raises -> BufferGeometry:
@@ -346,7 +328,7 @@ def last_mesh(last: FootLast, piece: BufferGeometry) raises -> BufferGeometry:
             var p = last.center + direction * (
                 last.cast(direction) + LAST_STAND
             )
-            var near = _nearest(points, p)
+            var near = nearest_point(points, p)
             var four = List[Int](length=4, fill=0)
             var share = List[Float32](length=4, fill=0)
             if near >= 0:
@@ -358,10 +340,10 @@ def last_mesh(last: FootLast, piece: BufferGeometry) raises -> BufferGeometry:
             heights.append(p.y)
     for ring in range(LAST_RINGS):  # pragma: no branch
         for sector in range(LAST_SECTORS):  # pragma: no branch
-            var a = _corner(ring, sector)
-            var b = _corner(ring, sector + 1)
-            var c = _corner(ring + 1, sector)
-            var d = _corner(ring + 1, sector + 1)
+            var a = cap_corner(ring, sector, LAST_RINGS, LAST_SECTORS)
+            var b = cap_corner(ring, sector + 1, LAST_RINGS, LAST_SECTORS)
+            var c = cap_corner(ring + 1, sector, LAST_RINGS, LAST_SECTORS)
+            var d = cap_corner(ring + 1, sector + 1, LAST_RINGS, LAST_SECTORS)
             # Each quad is two triangles. At a pole one of them has two
             # corners on the pole, and is left out.
             if ring > 0:

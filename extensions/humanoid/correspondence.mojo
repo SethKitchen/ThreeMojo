@@ -60,6 +60,8 @@ from extensions.humanoid.fidelity import (
     fingerprint_hex,
     fnv1a_step,
     json_fingerprint,
+    fnv1a_int,
+    nearest_vertices,
 )
 from extensions.humanoid.rig.joints import (
     CHEST,
@@ -276,20 +278,11 @@ def topology_digest(geometry: BufferGeometry) raises -> String:
     Raises:
         Error: If the mesh has no positions.
     """
-    var hash = _fnv_int(FNV1A_OFFSET, geometry.vertex_count())
-    hash = _fnv_int(hash, len(geometry.index))
+    var hash = fnv1a_int(FNV1A_OFFSET, geometry.vertex_count())
+    hash = fnv1a_int(hash, len(geometry.index))
     for entry in geometry.index:  # pragma: no branch
-        hash = _fnv_int(hash, entry)
+        hash = fnv1a_int(hash, entry)
     return fingerprint_hex(hash)
-
-
-def _fnv_int(hash: UInt64, value: Int) -> UInt64:
-    """Fold eight little-endian bytes of `value` into a digest."""
-    var state = hash
-    var bits = UInt64(value)
-    for at in range(8):  # pragma: no branch
-        state = fnv1a_step(state, UInt8((bits >> UInt64(8 * at)) & 0xFF))
-    return state
 
 
 struct RegionMap(Movable):
@@ -372,14 +365,6 @@ def region_map(
     return RegionMap(regions^, clearance^)
 
 
-def _key(p: Vector3) -> Int:
-    """Return the search cell of a point, as one integer."""
-    var i = Int(p.x / _CELL + 4096)
-    var j = Int(p.y / _CELL + 4096)
-    var k = Int(p.z / _CELL + 4096)
-    return (i * 8192 + j) * 8192 + k
-
-
 def lod_map(full: BufferGeometry, reduced: BufferGeometry) raises -> List[Int]:
     """Map each vertex of a reduced mesh to the nearest full-mesh vertex.
 
@@ -397,51 +382,10 @@ def lod_map(full: BufferGeometry, reduced: BufferGeometry) raises -> List[Int]:
         Error: If either mesh has no positions, or the full mesh has no
             vertices while the reduced one has some.
     """
-    ref source = full.attribute_view(String(POSITION))
-    ref target = reduced.attribute_view(String(POSITION))
-    if source.count() == 0 and target.count() > 0:
+    var sources = full.attribute_view(String(POSITION)).count()
+    if sources == 0 and reduced.attribute_view(String(POSITION)).count() > 0:
         raise Error("A LOD map needs full-mesh vertices")
-    var cells = Dict[Int, List[Int]]()
-    for v in range(source.count()):  # pragma: no branch
-        var key = _key(source.vector3(v))
-        if key not in cells:
-            cells[key] = List[Int]()
-        cells[key].append(v)
-    var nearest = List[Int](capacity=target.count())
-    for v in range(target.count()):  # pragma: no branch
-        var p = target.vector3(v)
-        var best = 0
-        var closest = Float32(1e30)
-        var ring = 0
-        while True:
-            for dx in range(-ring, ring + 1):  # pragma: no branch
-                for dy in range(-ring, ring + 1):  # pragma: no branch
-                    for dz in range(-ring, ring + 1):  # pragma: no branch
-                        # Only the shell of this ring is new.
-                        if max(abs(dx), max(abs(dy), abs(dz))) < ring:
-                            continue
-                        var key = _key(
-                            p
-                            + Vector3(
-                                Float32(dx) * _CELL,
-                                Float32(dy) * _CELL,
-                                Float32(dz) * _CELL,
-                            )
-                        )
-                        if key not in cells:
-                            continue
-                        for s in cells[key]:  # pragma: no branch
-                            var d = (source.vector3(s) - p).length()
-                            if d < closest:
-                                closest = d
-                                best = s
-            # An unvisited cell is at least this far away. One extra cell
-            # absorbs the rounding of the cell key.
-            if closest <= Float32(ring - 1) * _CELL:
-                break
-            ring += 1
-        nearest.append(best)
-    return nearest^
+    return nearest_vertices(full, reduced, _CELL, 0)
 
 
 def lod_shift(
@@ -1173,9 +1117,9 @@ def lod_payload(map: List[Int], shift: Length) raises -> UserData:
     Raises:
         Error: If a value cannot be written.
     """
-    var hash = _fnv_int(FNV1A_OFFSET, len(map))
+    var hash = fnv1a_int(FNV1A_OFFSET, len(map))
     for entry in map:  # pragma: no branch
-        hash = _fnv_int(hash, entry)
+        hash = fnv1a_int(hash, entry)
     var data = UserData()
     data.set_number("entries", Float64(len(map)))
     data.set_string("entries_digest", fingerprint_hex(hash))

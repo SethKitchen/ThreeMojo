@@ -23,6 +23,9 @@ from std.testing import (
 from extensions.numerics.dense import (
     DenseMatrix,
     cholesky,
+    cholesky_inverse,
+    cholesky_solve,
+    inverse,
     solve,
     solve_lower,
     solve_lower_transposed,
@@ -255,6 +258,39 @@ def test_cholesky_and_triangular_solves() raises:
         _ = solve_lower(DenseMatrix(2, 1), b)
     with assert_raises(contains="matching sizes"):
         _ = solve_lower_transposed(DenseMatrix(2, 1), b)
+
+
+def test_cholesky_solve_and_inverses() raises:
+    # A = [[4, 2], [2, 3]] has the inverse [[3, -2], [-2, 4]] / 8.
+    var a = DenseMatrix(2, 2)
+    a.set(0, 0, 4)
+    a.set(0, 1, 2)
+    a.set(1, 0, 2)
+    a.set(1, 1, 3)
+    var b: List[Float64] = [2, 1]
+    var x = cholesky_solve(a, b)
+    assert_almost_equal(x[0], 0.5, atol=1e-15)
+    assert_almost_equal(x[1], 0.0, atol=1e-15)
+    var expected: List[Float64] = [0.375, -0.25, -0.25, 0.5]
+    var spd = cholesky_inverse(a)
+    var general = inverse(a)
+    for i in range(4):
+        assert_almost_equal(spd.data[i], expected[i], atol=1e-15)
+        assert_almost_equal(general.data[i], expected[i], atol=1e-15)
+    # A matrix with no rows has an empty inverse.
+    assert_equal(cholesky_inverse(DenseMatrix(0, 0)).rows, 0)
+    assert_equal(inverse(DenseMatrix(0, 0)).rows, 0)
+    var indefinite = DenseMatrix(2, 2)
+    indefinite.set(0, 1, 1)
+    indefinite.set(1, 0, 1)
+    with assert_raises(contains="positive definite"):
+        _ = cholesky_solve(indefinite, b)
+    with assert_raises(contains="positive definite"):
+        _ = cholesky_inverse(indefinite)
+    with assert_raises(contains="square"):
+        _ = inverse(DenseMatrix(2, 3))
+    with assert_raises(contains="singular"):
+        _ = inverse(DenseMatrix(2, 2))
 
 
 def test_cholesky_refuses() raises:

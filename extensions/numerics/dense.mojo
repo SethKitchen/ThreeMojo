@@ -364,6 +364,82 @@ def solve_lower_transposed(
     return x^
 
 
+def cholesky_solve(a: DenseMatrix, b: List[Float64]) raises -> List[Float64]:
+    """Solve A x = b for a symmetric positive-definite A by its Cholesky
+    factor.
+
+    Args:
+        a: The square matrix. Only its lower triangle is read.
+        b: The right-hand side.
+
+    Returns:
+        The solution x.
+
+    Raises:
+        Error: If the matrix is not square or not positive definite, or the
+            sizes differ.
+    """
+    var factor = cholesky(a)
+    return solve_lower_transposed(factor, solve_lower(factor, b))
+
+
+def cholesky_inverse(a: DenseMatrix) raises -> DenseMatrix:
+    """Return the inverse of a symmetric positive-definite matrix.
+
+    The factor is taken once, and each column of the inverse solves against
+    one column of the identity. The covariance of a fit is the inverse of
+    its information matrix.
+
+    Args:
+        a: The square matrix. Only its lower triangle is read.
+
+    Returns:
+        The inverse.
+
+    Raises:
+        Error: If the matrix is not square or not positive definite.
+    """
+    var factor = cholesky(a)
+    var n = a.rows
+    var out = DenseMatrix(n, n)
+    for c in range(n):
+        var unit = zeros(n)
+        unit[c] = 1
+        var column = solve_lower_transposed(factor, solve_lower(factor, unit))
+        # The outer loop runs only for a positive n, so this one runs.
+        for r in range(n):  # pragma: no branch
+            out.data[r * n + c] = column[r]
+    return out^
+
+
+def inverse(a: DenseMatrix) raises -> DenseMatrix:
+    """Return the inverse of a nonsingular square matrix.
+
+    Each column of the inverse solves against one column of the identity by
+    `solve`.
+
+    Args:
+        a: The square matrix.
+
+    Returns:
+        The inverse.
+
+    Raises:
+        Error: If the matrix is not square or is singular.
+    """
+    if a.rows != a.cols:
+        raise Error("An inverse needs a square matrix")
+    var n = a.rows
+    var out = DenseMatrix(n, n)
+    for c in range(n):
+        var unit = zeros(n)
+        unit[c] = 1
+        var column = solve(a, unit)
+        for r in range(n):  # pragma: no branch
+            out.data[r * n + c] = column[r]
+    return out^
+
+
 struct EigenPairs(Movable):
     """Eigenvalues in ascending order, with one eigenvector per column."""
 

@@ -35,7 +35,7 @@ This is not a three.js port. See Extensions.
     outfit.add(wizard_hat())
 """
 
-from extensions.attire.cover import Cover
+from extensions.attire.cover import Cover, reach_both
 from extensions.attire.garment import Garment, forged
 from extensions.attire.kinds import (
     ACCENT_DYE,
@@ -99,14 +99,6 @@ comptime ERMINE = Color(236, 232, 222)
 """The white of the fur along a royal mantle's edge."""
 
 
-def _both(
-    mut cover: Cover, right: Joint, left: Joint, end: Float32, start: Float32
-) raises:
-    """Cover the same span of a joint on each side."""
-    cover.reach_to(right, end, start)
-    cover.reach_to(left, end, start)
-
-
 def _trunk(mut cover: Cover) raises:
     """Cover the hips, the spine and the chest."""
     cover.reach_to(HIPS)
@@ -126,9 +118,9 @@ def smock() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.15)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.7, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.5, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.7, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.5, 0)
     return Garment(
         "smock",
         TORSO_SLOT,
@@ -178,8 +170,8 @@ def trousers() raises -> Garment:
     """
     var cover = Cover()
     cover.reach_to(HIPS, 0.6)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.9, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.9, 0)
     return Garment(
         "trousers",
         LEGS_SLOT,
@@ -203,7 +195,7 @@ def fur_kilt() raises -> Garment:
     """
     var cover = Cover()
     cover.reach_to(HIPS, 0.45)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.5, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.5, 0)
     return Garment(
         "fur kilt",
         WAIST_SLOT,
@@ -221,7 +213,7 @@ def _mantle(name: String, fabric: FabricKind, dye: Color) raises -> Garment:
     var cover = Cover()
     cover.reach_to(CHEST, 1, 0.7)
     cover.reach_to(NECK, 0.45)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.3, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.3, 0)
     return Garment(
         name,
         SHOULDERS_SLOT,
@@ -272,10 +264,10 @@ def wizard_robe() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.25)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 1, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.95, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 1, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.95, 0)
     var robe = Garment(
         "wizard robe",
         TORSO_SLOT,
@@ -304,10 +296,10 @@ def cassock() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.6)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.9, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.85, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.9, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.85, 0)
     var robe = Garment(
         "cassock",
         TORSO_SLOT,
@@ -329,9 +321,9 @@ def _boots(
 ) raises -> Garment:
     """Return boots from a point down the shin to the toes."""
     var cover = Cover()
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 1, start)
-    _both(cover, RIGHT_FOOT, LEFT_FOOT, 1, 0)
-    _both(cover, RIGHT_TOES, LEFT_TOES, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 1, start)
+    reach_both(cover, RIGHT_FOOT, LEFT_FOOT, 1, 0)
+    reach_both(cover, RIGHT_TOES, LEFT_TOES, 1, 0)
     return Garment(
         name,
         FEET_SLOT,
@@ -499,7 +491,7 @@ def hood_cape() raises -> Garment:
     var cover = Cover()
     cover.reach_to(CHEST, 1, 0.4)
     cover.reach_to(NECK, 0.5)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.45, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.45, 0)
     return Garment(
         "hood cape",
         SHOULDERS_SLOT,
