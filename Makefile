@@ -161,6 +161,21 @@ $(info Affected since $(AFFECTED): $(words $(CPU_TESTS)) suites, \
   $(words $(CPU_ENTRY_POINTS)) entry points, $(words $(COVERED)) measured \
   modules, $(words $(FORMATTED)) changed files.)
 endif
+DOMAIN ?=
+ifneq ($(strip $(DOMAIN)),)
+domain_select = $(shell $(TOOL) domain_scope --domain $(DOMAIN) $(1) || echo DOMAIN_ERROR)
+FORMATTED        := $(call domain_select,$(FORMATTED))
+CPU_ENTRY_POINTS := $(call domain_select,$(CPU_ENTRY_POINTS))
+CPU_DOC_SOURCES  := $(call domain_select,$(CPU_DOC_SOURCES))
+CPU_TESTS        := $(call domain_select,$(CPU_TESTS))
+COMPILE_FAIL_RUN := $(call domain_select,$(COMPILE_FAIL_RUN))
+COVERED          := $(call domain_select,$(COVERED))
+ifneq ($(filter DOMAIN_ERROR,$(FORMATTED) $(CPU_ENTRY_POINTS) $(CPU_DOC_SOURCES) $(CPU_TESTS) $(COMPILE_FAIL_RUN) $(COVERED)),)
+$(error tools/domain_scope.mojo could not select DOMAIN=$(DOMAIN))
+endif
+$(info Selected domain $(DOMAIN): $(words $(CPU_TESTS)) suites, \
+  $(words $(COVERED)) measured modules.)
+endif
 # What the coverage build copies through uninstrumented: excluded libraries,
 # maintained benchmark and tool modules imported by tests, and in an AFFECTED run every
 # library the change does not reach. Explicitly measured helpers stay instrumented.
@@ -293,6 +308,7 @@ HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(TOOLCHAIN)) \
           --setting=$(call quote,native-tests:$(NATIVE_TOOLCHAIN)) \
           --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
+          --setting=$(call quote,domain:$(DOMAIN)) \
           $(call list_setting,cpu-tests,$(CPU_TESTS)) \
           --setting=$(call quote,shard:$(SHARD)) \
           --setting=$(call quote,lint-shard:$(LINT_SHARD)) \

@@ -27,7 +27,11 @@ Every feature has one GitHub issue. The [README checklist](README.md#features) l
 Keep each pull request focused on one correction. Use the affected test subset
 for that change. Inspect the selection with `AFFECTED=<base-ref>` before a run.
 Shared imports can still select the full suite. Do not drop selected tests or
-weaken coverage checks to make a run smaller.
+weaken coverage checks to make a run smaller. For local work inside one
+extension package, pass `DOMAIN=<name>` to scope lint, tests and coverage to
+`extensions/<name>/` and its consumers. Core modules must not import
+`extensions.*`, and cross-extension imports must follow the layering table in
+`tools/check_repository_contracts.mojo`.
 
 Do not edit the root Makefile for routine work. The Makefile finds library
 modules, test suites and helper libraries from their names. A helper library

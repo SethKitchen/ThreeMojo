@@ -12,6 +12,7 @@ from tools.check_repository_contracts import (
     check_file_docstrings,
     check_repository,
 )
+from tools.domain_scope import select_domain
 
 # Quote the CI workflow path so `ci_scope` runs this CPU smoke and contract
 # suite whenever `.github/workflows/ci.yml` is edited on a pull request.
@@ -26,6 +27,13 @@ def test_current_repository_satisfies_all_contracts() raises:
     var v = Vector3(3.0, 4.0, 0.0)
     assert_equal(v.length(), Float32(5.0))
     assert_true(String(WORKFLOW).endswith("ci.yml"))
+    var warp_suites = select_domain(
+        ".",
+        "warp",
+        ["tests/test_warp_solver.mojo", "tests/test_zip.mojo"],
+    )
+    assert_equal(len(warp_suites), 1)
+    assert_equal(warp_suites[0], "tests/test_warp_solver.mojo")
 
 
 def test_missing_docstrings_missing_compile_fail_and_bad_imports_fail() raises:

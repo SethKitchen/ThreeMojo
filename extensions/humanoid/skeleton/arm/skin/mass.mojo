@@ -22,11 +22,13 @@ from extensions.anatomy.soft_tissue import (
     SoftTissue,
     skin_tissue,
 )
+from extensions.humanoid.skeleton.limb_envelope import (
+    classify_limb_dermal,
+    sample_limb_dermal_mass,
+)
 from extensions.humanoid.skeleton.soft_tissue import (
     SOFT_STEP,
     SoftOccupancy,
-    classify_soft,
-    sample_soft_mass,
 )
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
@@ -51,7 +53,7 @@ def arm_skin_occupancy(
         Error: If `dimensions.validate` refuses the copy, or `side` is
             not valid.
     """
-    return classify_soft(ArmSkinLayerField(dimensions, side).distance(point))
+    return classify_limb_dermal(ArmSkinLayerField(dimensions, side), point)
 
 
 def arm_skin_mass(
@@ -96,6 +98,6 @@ def arm_skin_mass_from_dimensions(
             out of range, or `tissue` fails `validate`.
     """
     var field = ArmSkinLayerField(dimensions, RIGHT)
-    return sample_soft_mass(
+    return sample_limb_dermal_mass(
         field, field.low, field.high, tissue, step, "arm skin"
     )
