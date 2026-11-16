@@ -1122,6 +1122,11 @@ struct LDrawBuilder(Movable):
         self.model.building_steps = step + 1
 
     def take(deinit self) -> LDrawModel:
+        """Consume the builder and return the completed LDraw model.
+
+        Returns:
+            The built `LDrawModel`.
+        """
         return self.model^
 
 

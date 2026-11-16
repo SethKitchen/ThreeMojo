@@ -9,6 +9,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_background_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 33,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'BackgroundKind'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_base_style_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -42,6 +52,26 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_bind_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'BindMode'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_bind_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'BindType'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_blend_equation_is_not_a_bare_int.mojo": {
     "errors": [
@@ -736,6 +766,16 @@
       "candidate not viable: value passed to 'id' cannot be converted from 'String' to 'ControllerId'"
     ]
   },
+  "tests/compile_fail/a_controller_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 33,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ControllerType'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_coordinate_system_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -999,6 +1039,26 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_device_change_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 35,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'DeviceChangeKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_device_class_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'DeviceClass'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_differential_type_is_not_a_bare_int.mojo": {
     "errors": [
@@ -1266,6 +1326,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_draw_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'DrawKind'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_draw_mode_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1285,6 +1355,16 @@
         "column": 27,
         "line": 13,
         "message": "cannot implicitly convert 'IntLiteral[3]' value to 'DrawRange'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_driver_signature_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 34,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'DriverSignature'"
       }
     ],
     "notes": []
@@ -1392,6 +1472,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_face_style_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FaceStyle'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_facial_expression_is_not_a_bare_int.mojo": {
     "errors": [
@@ -1507,6 +1597,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_foe_state_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FoeState'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_fog_density_is_not_a_bare_float.mojo": {
     "errors": [
@@ -1646,6 +1746,56 @@
         "column": 29,
         "line": 12,
         "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FurnitureKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_axis_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'GamepadAxis'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_button_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 32,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'GamepadButton'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_button_label_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 37,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'GamepadButtonLabel'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_event_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 35,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'GamepadEventKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_gamepad_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'GamepadType'"
       }
     ],
     "notes": []
@@ -1935,6 +2085,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_hardware_bus_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'HardwareBus'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_hazard_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2053,6 +2213,26 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_hid_bus_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'HidBus'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_hid_driver_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 32,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'HidDriverKind'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_hinge_limit_is_not_a_bare_number.mojo": {
     "errors": [
       {
@@ -2140,6 +2320,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_joystick_event_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 36,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'JoystickEventKind'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_json_kind_is_not_a_bare_int.mojo": {
     "errors": [
@@ -2480,6 +2670,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_mapping_priority_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 34,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'MappingPriority'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_mark_lane_change_is_not_a_bare_int.mojo": {
     "errors": [
@@ -3289,6 +3489,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_product_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ProductId'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_projection_type_is_not_a_bare_int.mojo": {
     "errors": [
@@ -4531,6 +4741,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_track_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'TrackKind'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_track_target_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4812,6 +5032,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_vendor_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'VendorId'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_vertex_id_is_not_a_bare_int.mojo": {
     "errors": [
@@ -5773,6 +6003,26 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/an_asset_license_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'AssetLicense'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_asset_role_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'AssetRole'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/an_astc_profile_is_not_a_bare_int.mojo": {
     "errors": [

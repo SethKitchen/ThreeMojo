@@ -59,7 +59,11 @@ A triangle covers a pixel only when the pixel's sample is inside the snapped tri
 
 `tests/test_gpu_layout.mojo` checks each covered pixel of a triangle field against the bins. `tests/test_gpu.mojo` compares a field of thin, blended triangles on both backends.
 
-A triangle with a corner that is not finite, or that is larger than 2^24 pixels, goes in every tile. The kernel then decides it as it did before. When the lists would hold more than `BIN_LIMIT` entries, 2^27, `draw` does not bin the frame. Each pixel then tests every triangle. Segments, points and splats are not binned.
+A triangle whose three finite corners all lie off one side of the image covers no tile. A remaining triangle with a nonfinite corner, or one past 2^24 pixels, goes in every tile. When the lists would hold more than `BIN_LIMIT` entries, 2^27, `draw` walks every triangle per pixel and increments `GpuRenderer.bin_overflows`. Segments, points and splats are not binned.
+
+Point and splat device buffers use 32-bit indices, up to `2^31 - 1` floats. `draw` refuses larger buffers before it writes to the device. `GpuSplats` keeps its device buffer capacities across frames and reallocates only when the pixel or splat count grows.
+
+`GpuComposer` keeps the frame on the host across consecutive host passes and uploads lazily before a device pass or mask. Hosted CI compiles all GPU entry points for `sm_80` and checks Metal AIR signatures. Run `make check-gpu` on a machine with a GPU to execute device parity suites.
 
 ### Multisampled targets on the GPU
 

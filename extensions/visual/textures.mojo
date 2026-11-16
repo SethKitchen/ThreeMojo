@@ -18,7 +18,7 @@ many meters a tile covers.
 """
 
 from std.math import floor, sqrt
-from extensions.carla.render_textures import (
+from extensions.visual.noise import (
     SurfaceMaps,
     hash2,
     normal_map,

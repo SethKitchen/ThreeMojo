@@ -382,14 +382,15 @@ def test_text_helpers_follow_the_regular_expressions() raises:
 
 def test_lint_tools_and_native_gates_have_explicit_conditions() raises:
     var jobs = _jobs()
-    # The Mac lints one file at a time, so its hang guard is longer.
-    for guard in [("lint", "240"), ("lint-macos", "330")]:
+    # macOS lint is sharded three ways so each shard stays well below 150m.
+    for guard in [("lint", "240"), ("lint-macos", "150")]:
         var name = guard[0]
         var job = jobs[name]
         assert_true(
             _has_line(job, "    timeout-minutes: " + guard[1]), String(name)
         )
         assert_equal(job.find("test-tools"), -1)
+        var suffix = " && matrix.shard == 1" if name == "lint-macos" else ""
         for pair in [
             ("coverage_tools", "test-coverage-tool"),
             ("portability", "test-portability"),
@@ -398,7 +399,9 @@ def test_lint_tools_and_native_gates_have_explicit_conditions() raises:
             var pattern = (
                 "if: needs.scope.outputs.run_"
                 + pair[0]
-                + " == 'true'\n        run: "
+                + " == 'true'"
+                + suffix
+                + "\n        run: "
                 + RUN
                 + pair[1]
             )
@@ -437,8 +440,16 @@ def test_tool_regressions_run_once_on_both_platforms() raises:
 def test_macos_lint_preserves_name_and_serializes_compilers() raises:
     var jobs = _jobs()
     var job = jobs["lint-macos"]
-    assert_true(job.find("name: check-cpu (macOS, Apple Silicon) lint") >= 0)
-    assert_true(job.find("run -- lint-cpu JOBS=1") >= 0)
+    assert_true(
+        job.find(
+            "name: check-cpu (macOS, Apple Silicon) lint ${{ matrix.shard }}/3"
+        )
+        >= 0
+    )
+    assert_true(job.find("shard: [1, 2, 3]") >= 0)
+    assert_true(
+        job.find("run -- lint-cpu LINT_SHARD=${{ matrix.shard }}/3 JOBS=1") >= 0
+    )
     assert_true(job.find("run -- test-coverage-tool JOBS=1") >= 0)
     assert_true(job.find("run -- test-portability JOBS=1") >= 0)
     assert_equal(jobs["cpu-macos"].find("part: lint"), -1)
@@ -536,7 +547,9 @@ def test_compiler_metadata_artifact_is_bounded_scoped_and_uploaded_early() raise
     var job = jobs["cpu"]
     var block = (
         "      - name: Preserve compiler metadata before CPU compilation\n"
-        + "        uses: actions/upload-artifact@v4\n"
+        + "        uses:"
+        " actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #"
+        " v4\n"
         + "        with:\n"
         + "          name: compiler-metadata-${{ matrix.shard }}-attempt-${{"
         " github.run_attempt }}\n"
@@ -547,7 +560,13 @@ def test_compiler_metadata_artifact_is_bounded_scoped_and_uploaded_early() raise
     assert_equal(job.count(block), 1)
     assert_true(job.find("> compiler-metadata.json") < job.find(block))
     assert_true(job.find(block) < job.find("- name: test-cpu"))
-    assert_equal(job.count("uses: actions/upload-artifact@v4"), 1)
+    assert_equal(
+        job.count(
+            "uses:"
+            " actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+        ),
+        1,
+    )
     for entry in jobs.items():
         if entry.key != "cpu":
             assert_equal(entry.value.find("compiler-metadata.json"), -1)
@@ -620,7 +639,14 @@ def test_full_inventory_uses_hash_bound_artifact_not_large_environment_value() r
     for name in names:
         var job = jobs[name]
         assert_true(job.find("name: ci-selection") >= 0, name)
-        assert_true(job.find("uses: actions/download-artifact@v4") >= 0, name)
+        assert_true(
+            job.find(
+                "uses:"
+                " actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"
+            )
+            >= 0,
+            name,
+        )
         assert_true(
             job.find(
                 "CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}"
@@ -741,6 +767,26 @@ def test_coverage_keeps_all_shards_and_its_report_dependency() raises:
         )
         >= 0
     )
+
+
+def test_every_github_action_uses_a_full_commit_sha() raises:
+    var text = _workflow()
+    var seen = 0
+    for line in _lines(text):
+        var trimmed = String(line.strip())
+        if trimmed.startswith("- uses: ") or trimmed.startswith("uses: "):
+            seen += 1
+            var at = trimmed.find("@")
+            assert_true(at > 0, trimmed)
+            var rest = String(trimmed[byte = at + 1 :])
+            var space = rest.find(" ")
+            var sha = rest if space < 0 else String(rest[byte=:space])
+            assert_equal(sha.byte_length(), 40, trimmed)
+            for b in sha.as_bytes():
+                assert_true(
+                    (b >= 48 and b <= 57) or (b >= 97 and b <= 102), trimmed
+                )
+    assert_true(seen >= 30)
 
 
 def main() raises:

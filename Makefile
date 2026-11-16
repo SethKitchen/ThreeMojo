@@ -220,6 +220,16 @@ ifneq ($(filter SHARD_ERROR,$(TEST_SUITES)),)
 $(error tools/shard.mojo could not split the suites for SHARD=$(SHARD): it takes I/N with 1 <= I <= N and readable suites)
 endif
 endif
+LINT_SHARD ?=
+ifneq ($(strip $(LINT_SHARD)),)
+LINT_CPU_ENTRIES := $(shell $(TOOL) shard $(LINT_SHARD) $(filter-out $(CPU_TESTS),$(CPU_ENTRY_POINTS)) \
+                      || echo SHARD_ERROR)
+LINT_CPU_DOCS    := $(shell $(TOOL) shard $(LINT_SHARD) $(CPU_DOC_SOURCES) \
+                      || echo SHARD_ERROR)
+ifneq ($(filter SHARD_ERROR,$(LINT_CPU_ENTRIES) $(LINT_CPU_DOCS)),)
+$(error tools/shard.mojo could not split lint sources for LINT_SHARD=$(LINT_SHARD))
+endif
+endif
 # Instrumented runtime can outweigh compilation by minutes. Keep CPU
 # placement unchanged; coverage uses measured compile-and-run costs and
 # starts the longest captures first. Every affected suite is still present.
@@ -285,6 +295,7 @@ HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
           $(call list_setting,cpu-tests,$(CPU_TESTS)) \
           --setting=$(call quote,shard:$(SHARD)) \
+          --setting=$(call quote,lint-shard:$(LINT_SHARD)) \
           --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
           $(call list_setting,cpu-entries,$(CPU_ENTRY_POINTS)) \
           $(call list_setting,cpu-docs,$(CPU_DOC_SOURCES)) \
@@ -346,7 +357,7 @@ help:
 	@echo "  make fmt-check  verify formatting, changing nothing"
 	@echo "  make coverage   line / branch / condition / MC-DC coverage"
 	@echo "  make compile-fail  assert unit errors are rejected"
-	@echo "  make docstrings strict docstring audit (not part of check)"
+	@echo "  make docstrings check public symbol docstrings (in repository-check)"
 	@echo "  make docs-check check the documentation against the writing rules"
 	@echo "  make wiki-publish  copy docs/wiki/ to the GitHub wiki"
 	@echo "  make example    render out/triangle.png"
@@ -506,9 +517,9 @@ lint: lint-cpu lint-gpu
 # On failure, name the source and quote the actual argv; keep normal output quiet.
 lint-cpu: $(LINT_CPU_STAMP)
 $(LINT_CPU_STAMP):
-	@printf '%s\n' $(filter-out $(CPU_TESTS),$(CPU_ENTRY_POINTS)) \
+	@printf '%s\n' $(if $(strip $(LINT_SHARD)),$(LINT_CPU_ENTRIES),$(filter-out $(CPU_TESTS),$(CPU_ENTRY_POINTS))) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'source=$$1; set -- $(MOJO) build $(MOJOFLAGS) $(LINT_CPU_BUILD_FLAGS) \
+	      sh -c '[ -z "$$1" ] && exit 0; source=$$1; set -- $(MOJO) build $(MOJOFLAGS) $(LINT_CPU_BUILD_FLAGS) \
 	               --Werror -o /dev/null "$$source"; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
 	               $$THREEMOJO_SHELL_LOG start lint-build-start: "$$@"; \
@@ -524,9 +535,9 @@ $(LINT_CPU_STAMP):
 	             printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
 	  || exit 1
-	@printf '%s\n' $(CPU_DOC_SOURCES) \
+	@printf '%s\n' $(if $(strip $(LINT_SHARD)),$(LINT_CPU_DOCS),$(CPU_DOC_SOURCES)) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'source=$$1; set -- $(MOJO) doc $(MOJOFLAGS) \
+	      sh -c '[ -z "$$1" ] && exit 0; source=$$1; set -- $(MOJO) doc $(MOJOFLAGS) \
 	               --Werror -o /dev/null "$$source"; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
 	               $$THREEMOJO_SHELL_LOG start lint-doc-start: "$$@"; \
@@ -780,17 +791,10 @@ fmt:
 	[ $$rc -eq 0 ] || exit 1; \
 	echo "Formatted $(words $(FORMATTED)) files."
 
-# Opt-in: demands Args/Returns/Raises sections and a docstring on every public
-# symbol, stdlib-style. Strict enough that it is not part of `make check`.
+# Enforces docstrings on every public struct, trait, function and method in
+# LIB_DIRS; `lint-cpu` also checks docstring section formatting via `mojo doc`.
 docstrings:
-	@fail=0; \
-	for f in $(DOC_SOURCES); do \
-	  $(call run,$(MOJO) doc $(MOJOFLAGS) --Werror \
-	    --diagnose-missing-doc-strings -o /dev/null "$$f"); \
-	  [ $$rc -eq 0 ] || fail=1; \
-	done; \
-	if [ $$fail -ne 0 ]; then exit 1; fi; \
-	echo "Docstrings complete."
+	@$(TOOL) check_repository_contracts
 
 bench:
 	@$(call run,$(MOJO) run $(MOJOFLAGS) bench/raster_bench.mojo); \
@@ -979,6 +983,7 @@ repository-check:
 	@$(MOJO) run $(MOJOFLAGS) tools/fixture_manifest.mojo
 	@$(TOOL) example_inputs --check-repository
 	@$(TOOL) ci_scope check-workflow
+	@$(TOOL) check_repository_contracts
 
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test.
