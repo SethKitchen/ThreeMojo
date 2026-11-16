@@ -616,6 +616,10 @@ def test_bins_keep_unsnappable_triangles_and_drop_offscreen_ones() raises:
     corners.append(_red(1, 1))
     corners.append(_red(6, 1))
     corners.append(_red(1, 6))
+    # Far off-screen beyond `_SNAP_LIMIT` on the left: culled from all tiles.
+    corners.append(_red(-5.0e7, 1))
+    corners.append(_red(-4.0e7, 1))
+    corners.append(_red(-4.0e7, 6))
     var bins = bin_triangles(corners, 40, 20, 0)
     assert_equal(bins[0], Int32(1))
     # Three by two tiles.
@@ -624,6 +628,7 @@ def test_bins_keep_unsnappable_triangles_and_drop_offscreen_ones() raises:
         assert_true(_binned(bins, 0, tile, 1))
         assert_true(_binned(bins, 0, tile, 2))
         assert_equal(_binned(bins, 0, tile, 3), tile == 0)
+        assert_false(_binned(bins, 0, tile, 4))
 
 
 def test_bins_fall_back_to_every_triangle_past_their_limit() raises:

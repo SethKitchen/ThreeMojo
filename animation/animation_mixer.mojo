@@ -351,6 +351,8 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
+from std.collections import Dict
+from std.hash import Hasher
 from std.math import inf, isfinite, pi
 from units.si import Angle, DEGREE, Duration, Length, METER, RADIAN, SECOND
 
@@ -2396,6 +2398,27 @@ struct AnimationAction(Copyable, Movable):
         return self._update_weight(time)
 
 
+@fieldwise_init
+struct _BindingKey(Copyable, Equatable, Hashable, ImplicitlyCopyable, Movable):
+    """Hash key for a bound `(index, kind, slot)` `TrackTarget`."""
+
+    var index: Int
+    var kind: Int
+    var slot: Int
+
+    def __eq__(self, other: Self) -> Bool:
+        if self.index != other.index:
+            return False
+        if self.kind != other.kind:
+            return False
+        return self.slot == other.slot
+
+    def __hash__[H: Hasher](self, mut hasher: H):
+        self.index.__hash__(hasher)
+        self.kind.__hash__(hasher)
+        self.slot.__hash__(hasher)
+
+
 struct AnimationMixer(Movable):
     """The actions playing, what they held before, and what writes their
     pose into a scene."""
@@ -2424,6 +2447,8 @@ struct AnimationMixer(Movable):
     # once. A string pile holds a place here, so a string mixes as a flag
     # does.
     var strings: List[String]
+    var _string_index: Dict[String, Int]
+    var _binding_index: Dict[_BindingKey, Int]
 
     def __init__(out self, root: NodeId = NO_PARENT):
         """Create a mixer with nothing playing.
@@ -2440,6 +2465,8 @@ struct AnimationMixer(Movable):
         self.root = root
         self.uncached = List[Bool]()
         self.strings = List[String]()
+        self._string_index = Dict[String, Int]()
+        self._binding_index = Dict[_BindingKey, Int]()
 
     def add(
         mut self, var action: AnimationAction, root: NodeId = NO_PARENT
@@ -2626,15 +2653,23 @@ struct AnimationMixer(Movable):
             if self.bindings[slot].driven:
                 kept.append(self.bindings[slot].copy())
         self.bindings = kept^
+        self._binding_index = Dict[_BindingKey, Int]()
+        for slot in range(len(self.bindings)):
+            var t = self.bindings[slot].target()
+            self._binding_index[
+                _BindingKey(t.index, t.kind.value, t.slot)
+            ] = slot
 
     def _intern(mut self, text: String) -> Float32:
         """Return the place of a string in the mixer's strings, adding it
         the first time it is seen."""
-        for place in range(len(self.strings)):
-            if self.strings[place] == text:
-                return Float32(place)
+        var found = self._string_index.find(text)
+        if found:
+            return Float32(found.value())
+        var place = len(self.strings)
         self.strings.append(text)
-        return Float32(len(self.strings) - 1)
+        self._string_index[text] = place
+        return Float32(place)
 
     def binding_count(self) -> Int:
         """Return how many node properties the mixer has taken over."""
@@ -2768,10 +2803,9 @@ struct AnimationMixer(Movable):
     def _binding(self, target: TrackTarget) -> Int:
         """Return where the binding for one property is, or minus one when
         the mixer has not taken it over yet."""
-        for slot in range(len(self.bindings)):  # pragma: no branch
-            if self.bindings[slot].target() == target:
-                return slot
-        return -1
+        return self._binding_index.get(
+            _BindingKey(target.index, target.kind.value, target.slot), -1
+        )
 
     def _bind(
         mut self,
@@ -2818,8 +2852,12 @@ struct AnimationMixer(Movable):
             target.index, target.kind.value, original^, target.slot
         )
         made.driven = True
+        var added = len(self.bindings)
         self.bindings.append(made^)
-        return len(self.bindings) - 1
+        self._binding_index[
+            _BindingKey(target.index, target.kind.value, target.slot)
+        ] = added
+        return added
 
     def update(mut self, mut scene: Scene, delta: Duration) raises:
         """Move every playing action on by `delta`, and write what the

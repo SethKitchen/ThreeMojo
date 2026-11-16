@@ -20,6 +20,7 @@ not list directories.
 """
 
 from std.ffi import c_int, external_call
+from std.os import stat
 from std.os.path import realpath
 from std.pathlib import Path
 from std.sys import CompilationTarget, argv, exit, stderr
@@ -337,6 +338,7 @@ def _response(
     body: List[UInt8],
     send_body: Bool,
     extra: String = "",
+    explicit_length: Int = -1,
 ) -> List[UInt8]:
     """Build one HTTP/1.1 response with the isolation headers.
 
@@ -347,10 +349,13 @@ def _response(
         body: The body. `Content-Length` is its length even for `HEAD`.
         send_body: False for `HEAD`.
         extra: More header lines, each ending in `\\r\\n`.
+        explicit_length: Optional explicit `Content-Length` when `body` was
+            not read on `HEAD`.
 
     Returns:
         The response bytes.
     """
+    var total_length = explicit_length if explicit_length >= 0 else len(body)
     var head = (
         "HTTP/1.1 "
         + String(status)
@@ -359,18 +364,19 @@ def _response(
         + "\r\nContent-Type: "
         + content_type
         + "\r\nContent-Length: "
-        + String(len(body))
+        + String(total_length)
         + "\r\nCross-Origin-Opener-Policy: same-origin\r\n"
         + "Cross-Origin-Embedder-Policy: require-corp\r\n"
         + "Cache-Control: no-store\r\nConnection: close\r\n"
         + extra
         + "\r\n"
     )
-    var out = List[UInt8]()
+    var out = List[UInt8](
+        capacity=head.byte_length() + (len(body) if send_body else 0)
+    )
     _extend(out, head)
     if send_body:
-        for byte in body:
-            out.append(byte)
+        out.extend(Span(body))
     return out^
 
 
@@ -572,8 +578,18 @@ def http_response(root: String, request: List[UInt8]) raises -> List[UInt8]:
     var real = realpath(location)
     if not _inside(base, real):
         return _text_response(404, "Not Found", "404 Not Found\n", send_body)
+    if not send_body:
+        var size = Int(stat(real).st_size)
+        return _response(
+            200,
+            "OK",
+            _content_type(real),
+            List[UInt8](),
+            False,
+            explicit_length=size,
+        )
     var body = Path(real).read_bytes()
-    return _response(200, "OK", _content_type(real), body, send_body)
+    return _response(200, "OK", _content_type(real), body, True)
 
 
 def answer(root: String, fd: Int) raises:

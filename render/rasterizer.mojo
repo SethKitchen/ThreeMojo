@@ -4101,6 +4101,7 @@ def rasterize_shaded(
     volumes: Data3DTextureStore = Data3DTextureStore(),
     arrays: DataArrayTextureStore = DataArrayTextureStore(),
     checked: Bool = False,
+    precomputed_ramp: Optional[Pointer[List[Float32], ImmutAnyOrigin]] = None,
 ) raises:
     """Fill a triangle whose corners each carry their own color.
 
@@ -4182,6 +4183,8 @@ def rasterize_shaded(
             state, maps and transmission of its surface, as
             `rasterize_frame` asks them once a surface; False, the default,
             to ask them here.
+        precomputed_ramp: Optional cached gradient ramp built once per
+            `Surface` by `rasterize_frame`.
 
     Raises:
         Error: If the mode is none of the three, the fog view holds a kind
@@ -4219,9 +4222,10 @@ def rasterize_shaded(
     # opening the texture per light per pixel would buy nothing. Empty for
     # a triangle that names no ramp, which is three.js's fallback. The uv
     # debug view shades nothing and reads none.
-    var ramp = List[Float32]()
-    if a.gradient_map != NO_TEXTURE and mode != SHADE_UV:
-        ramp = gradient_ramp(textures.get(a.gradient_map))
+    var local_ramp = List[Float32]()
+    if not precomputed_ramp:
+        if a.gradient_map != NO_TEXTURE and mode != SHADE_UV:
+            local_ramp = gradient_ramp(textures.get(a.gradient_map))
 
     # Whether this surface composites, decided by the material and carried
     # here rather than inferred from a color. It changes two things
@@ -4756,11 +4760,29 @@ def rasterize_shaded(
                     # surface is read at the two pixels beside it. A ramp
                     # of the material's own has no edge to soften.
                     var beside = SurfaceSteps()
-                    if len(ramp) == 0:
-                        beside = surface_steps(nodes)
-                    arriving = lighting.toon_at(
-                        facing, spot, ramp, a.receives_shadow, shape, beside
-                    )
+                    if precomputed_ramp:
+                        ref cached = precomputed_ramp.value()[]
+                        if len(cached) == 0:
+                            beside = surface_steps(nodes)
+                        arriving = lighting.toon_at(
+                            facing,
+                            spot,
+                            cached,
+                            a.receives_shadow,
+                            shape,
+                            beside,
+                        )
+                    else:
+                        if len(local_ramp) == 0:
+                            beside = surface_steps(nodes)
+                        arriving = lighting.toon_at(
+                            facing,
+                            spot,
+                            local_ramp,
+                            a.receives_shadow,
+                            shape,
+                            beside,
+                        )
                 elif a.kind == GOURAUD:
                     # Lit at the corners, and the direct light darkened
                     # here by the shadows; see `gouraud_light`.
@@ -7458,10 +7480,72 @@ def _lit_by(
     ]()
 
 
+def _bucket_band_triangles(
+    draws: List[Draw],
+    triangle_rows: List[Int],
+    bands: Int,
+    height: Int,
+) -> Tuple[List[Int], List[Int]]:
+    """Bucket each `DRAW_TRIANGLES` draw's triangles into horizontal bands."""
+    var buckets = len(draws) * bands
+    var counts = List[Int](length=buckets, fill=0)
+    for draw_index in range(len(draws)):
+        ref draw = draws[draw_index]
+        if draw.kind != DRAW_TRIANGLES:
+            continue
+        var past = draw.first + draw.count
+        for triangle in range(draw.first, past):
+            var rc0 = max(0, triangle_rows[triangle * 2])
+            var rc1 = min(height - 1, triangle_rows[triangle * 2 + 1])
+            if rc0 > rc1:
+                continue
+            var first_band = (rc0 * bands) // height
+            for b in range(first_band, bands):  # pragma: no branch
+                var b_first = b * height // bands
+                if b_first > rc1:
+                    break
+                var b_last = (b + 1) * height // bands - 1
+                if b_last >= rc0:
+                    counts[draw_index * bands + b] += 1
+    var starts = List[Int](length=buckets + 1, fill=0)
+    var cursor = List[Int](length=buckets, fill=0)
+    var total = 0
+    for slot in range(buckets):
+        starts[slot] = total
+        cursor[slot] = total
+        total += counts[slot]
+    starts[buckets] = total
+    var indices = List[Int](length=total, fill=0)
+    for draw_index in range(len(draws)):
+        ref draw = draws[draw_index]
+        if draw.kind != DRAW_TRIANGLES:
+            continue
+        var past = draw.first + draw.count
+        for triangle in range(draw.first, past):
+            var rc0 = max(0, triangle_rows[triangle * 2])
+            var rc1 = min(height - 1, triangle_rows[triangle * 2 + 1])
+            if rc0 > rc1:
+                continue
+            var first_band = (rc0 * bands) // height
+            for b in range(first_band, bands):  # pragma: no branch
+                var b_first = b * height // bands
+                if b_first > rc1:
+                    break
+                var b_last = (b + 1) * height // bands - 1
+                if b_last >= rc0:
+                    var slot = draw_index * bands + b
+                    indices[cursor[slot]] = triangle
+                    cursor[slot] += 1
+    return (starts^, indices^)
+
+
 __async def _frame_band(
     corners: Pointer[Corner, ImmutAnyOrigin],
     surfaces: Pointer[Surface, ImmutAnyOrigin],
-    triangle_rows: MutPointer[Int, MutAnyOrigin],
+    surface_ramps: Pointer[List[Float32], ImmutAnyOrigin],
+    band_starts: Pointer[Int, ImmutAnyOrigin],
+    band_triangles: Pointer[Int, ImmutAnyOrigin],
+    bands: Int,
     segments: Pointer[RasterVertex, ImmutAnyOrigin],
     segment_rows: MutPointer[Int, MutAnyOrigin],
     points: Pointer[RasterVertex, ImmutAnyOrigin],
@@ -7501,8 +7585,7 @@ __async def _frame_band(
     blending correct: the sort `Renderer.prepare_frame` did still holds
     row by row.
 
-    The row pairs are from `_rows_of`: a primitive whose rows miss the
-    band is skipped on two compares, without reading its corners.
+    Triangles are pre-bucketed into `band_triangles` per `(draw, band)`.
 
     A task cannot raise, so an error is written into this band's slot and
     raised by `rasterize_frame` once every band has finished.
@@ -7521,18 +7604,17 @@ __async def _frame_band(
                     )
                 continue
             if draw.kind == DRAW_TRIANGLES:
-                for triangle in range(draw.first, past):
-                    if (
-                        triangle_rows[unsafe_offset=triangle * 2] > last_row
-                        or triangle_rows[unsafe_offset=triangle * 2 + 1]
-                        < first_row
-                    ):
-                        continue
+                var slot = index * bands + band
+                var t_start = band_starts[unsafe_offset=slot]
+                var t_end = band_starts[unsafe_offset=slot + 1]
+                for pos in range(t_start, t_end):
+                    var triangle = band_triangles[unsafe_offset=pos]
                     # The whole corners are put together here, where they
                     # stay in the cache for the one triangle, from the slim
                     # ones the frame holds.
                     ref first = corners[unsafe_offset=triangle * 3]
                     ref look = surfaces[unsafe_offset=first.surface]
+                    var ramp_ptr = surface_ramps.unsafe_offset(first.surface)
                     rasterize_shaded(
                         joined(first, look),
                         joined(corners[unsafe_offset=triangle * 3 + 1], look),
@@ -7550,6 +7632,7 @@ __async def _frame_band(
                         volumes[],
                         arrays[],
                         checked=True,
+                        precomputed_ramp=ramp_ptr,
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -8039,6 +8122,11 @@ def rasterize_frame(
     )
 
 
+def _immut_ptr[T: AnyType](items: List[T]) -> Pointer[T, ImmutAnyOrigin]:
+    """Return an immutable pointer to `items`'s backing storage."""
+    return items.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+
+
 def _draw_frame(
     corners: List[Corner],
     surfaces: List[Surface],
@@ -8077,6 +8165,16 @@ def _draw_frame(
     transmission.check_volume_depth(
         needs_depth and mode != SHADE_UV, target.width, target.height
     )
+    var surface_ramps = List[List[Float32]](capacity=len(surfaces))
+    for s_idx in range(len(surfaces)):
+        var s_ramp = List[Float32]()
+        if mode != SHADE_UV:
+            if surfaces[s_idx].gradient_map != NO_TEXTURE:
+                s_ramp = gradient_ramp(
+                    textures.get(surfaces[s_idx].gradient_map)
+                )
+        surface_ramps.append(s_ramp^)
+    var ramps_base = _immut_ptr(surface_ramps)
     var bands = min(workers, target.height)
     if bands == 1:
         for index in range(len(draws)):
@@ -8090,6 +8188,7 @@ def _draw_frame(
                 for triangle in range(draw.first, past):
                     ref first = corners[triangle * 3]
                     ref look = surfaces[first.surface]
+                    var ramp_ptr = ramps_base.unsafe_offset(first.surface)
                     rasterize_shaded(
                         joined(first, look),
                         joined(corners[triangle * 3 + 1], look),
@@ -8113,6 +8212,7 @@ def _draw_frame(
                         volumes=volumes,
                         arrays=arrays,
                         checked=True,
+                        precomputed_ramp=ramp_ptr,
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -8149,6 +8249,11 @@ def _draw_frame(
     # which is what makes handing it to a coroutine sound.
     var errors = List[String](length=bands, fill=String(""))
     var triangle_rows = _rows_of_corners(corners)
+    var bucketed = _bucket_band_triangles(
+        draws, triangle_rows, bands, target.height
+    )
+    var band_starts = bucketed[0].copy()
+    var band_triangles = bucketed[1].copy()
     var segment_rows = _rows_of(segments, 2, max(0, line_width - 1))
     var point_rows = _point_rows(points)
     var group = TaskGroup()
@@ -8159,7 +8264,10 @@ def _draw_frame(
             _frame_band(
                 corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 surfaces.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
-                triangle_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                ramps_base,
+                _immut_ptr(band_starts),
+                _immut_ptr(band_triangles),
+                bands,
                 segments.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 segment_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 points.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
@@ -8190,6 +8298,9 @@ def _draw_frame(
     # pairs through pointers the compiler cannot see: these reads are what
     # keep the lists alive until every band has finished with them.
     _ = len(triangle_rows)
+    _ = len(surface_ramps)
+    _ = len(band_starts)
+    _ = len(band_triangles)
     _ = len(segment_rows)
     _ = len(point_rows)
     _ = len(splats)

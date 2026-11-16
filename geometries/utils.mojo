@@ -35,6 +35,7 @@ limits, and explicit zero and nonfinite rules.
 from core.ordinal import require_positive
 from math.finite import require_non_negative_finite
 from math.norm import rounded_dot3, rounded_product
+from std.hash import Hasher
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -198,6 +199,48 @@ def merge_geometries(
     return merged^
 
 
+struct _VertexKey(Copyable, Equatable, Hashable, Movable):
+    """Quantized attribute integers for one vertex slot in `merge_vertices`."""
+
+    var words: List[Int]
+
+    def __init__(out self, var words: List[Int]):
+        self.words = words^
+
+    def __eq__(self, other: Self) -> Bool:
+        if len(self.words) != len(other.words):
+            return False
+        for index in range(len(self.words)):
+            if self.words[index] != other.words[index]:
+                return False
+        return True
+
+    def __hash__[H: Hasher](self, mut hasher: H):
+        for index in range(len(self.words)):
+            self.words[index].__hash__(hasher)
+
+
+@fieldwise_init
+struct _CreasePoint(Copyable, Equatable, Hashable, ImplicitlyCopyable, Movable):
+    """Quantized 3D position key for `to_creased_normals`."""
+
+    var x: Int
+    var y: Int
+    var z: Int
+
+    def __eq__(self, other: Self) -> Bool:
+        if self.x != other.x:
+            return False
+        if self.y != other.y:
+            return False
+        return self.z == other.z
+
+    def __hash__[H: Hasher](self, mut hasher: H):
+        self.x.__hash__(hasher)
+        self.y.__hash__(hasher)
+        self.z.__hash__(hasher)
+
+
 def merge_vertices(
     geometry: BufferGeometry, tolerance: Float64 = DEFAULT_TOLERANCE
 ) raises -> BufferGeometry:
@@ -241,24 +284,28 @@ def merge_vertices(
     var multiplier = 10.0 ** log10(1.0 / step)
     var additive = step * 0.5 * multiplier
     var count = geometry.stream_length()
-    var seen = Dict[String, Int]()
+    var stride = 0
+    for name in range(geometry.attribute_count()):
+        stride += geometry.values[name].item_size
+    var seen = Dict[_VertexKey, Int]()
     var kept = List[Int]()
-    var index = List[Int]()
+    var index = List[Int](capacity=count)
     for slot in range(count):
         var vertex = geometry.vertex_at(slot)
-        var key = String()
+        var words = List[Int](capacity=stride)
         # `vertex_at` needs positions, so there is an attribute at least.
         for name in range(geometry.attribute_count()):  # pragma: no branch
             ref attribute = geometry.values[name]
             # An item size is positive: `BufferAttribute` refuses others.
             for offset in range(attribute.item_size):  # pragma: no branch
                 var number = Float64(attribute.component(vertex, offset))
-                key += String(truncated(number * multiplier + additive))
-                key += ","
-        if key in seen:
-            index.append(seen[key])
+                words.append(truncated(number * multiplier + additive))
+        var key = _VertexKey(words^)
+        var found = seen.find(key)
+        if found:
+            index.append(found.value())
         else:
-            seen[key] = len(kept)
+            seen[key^] = len(kept)
             index.append(len(kept))
             kept.append(vertex)
     var welded = BufferGeometry()
@@ -319,21 +366,12 @@ def _crease_normal(a: Vector3, b: Vector3, c: Vector3) -> _Vector:
     )
 
 
-def _crease_key(point: Vector3) -> String:
-    """Return the key a position is found by in `to_creased_normals`.
-
-    Args:
-        point: The position.
-
-    Returns:
-        Its three coordinates scaled by `CREASE_HASH` and truncated.
-    """
-    return (
-        String(truncated(Float64(point.x) * CREASE_HASH))
-        + ","
-        + String(truncated(Float64(point.y) * CREASE_HASH))
-        + ","
-        + String(truncated(Float64(point.z) * CREASE_HASH))
+def _crease_point(point: Vector3) -> _CreasePoint:
+    """Return the integer position key for `to_creased_normals`."""
+    return _CreasePoint(
+        truncated(Float64(point.x) * CREASE_HASH),
+        truncated(Float64(point.y) * CREASE_HASH),
+        truncated(Float64(point.z) * CREASE_HASH),
     )
 
 
@@ -380,9 +418,9 @@ def to_creased_normals(
     var result = geometry.to_non_indexed()
     var count = result.vertex_count()
     var faces = count // 3
-    var normals = List[_Vector]()
-    var keys = List[String]()
-    var sharing = Dict[String, List[Int]]()
+    var normals = List[_Vector](capacity=faces)
+    var keys = List[_CreasePoint](capacity=faces * 3)
+    var sharing = Dict[_CreasePoint, List[Int]]()
     ref positions = result.attribute_view(String(POSITION))
     for face in range(faces):
         var a = positions.vector3(face * 3)
@@ -393,7 +431,7 @@ def to_creased_normals(
         var normal = _crease_normal(a, b, c)
         normals.append(normal)
         for corner in [a, b, c]:  # pragma: no branch
-            var key = _crease_key(corner)
+            var key = _crease_point(corner)
             if key not in sharing:
                 sharing[key] = List[Int]()
             sharing[key].append(face)

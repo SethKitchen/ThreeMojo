@@ -4540,6 +4540,31 @@ def _tile_span(
     var high_x = Int.MIN
     var low_y = Int.MAX
     var high_y = Int.MIN
+    var all_finite = True
+    var min_fx = Float32.MAX
+    var max_fx = -Float32.MAX
+    var min_fy = Float32.MAX
+    var max_fy = -Float32.MAX
+    for corner in range(3):
+        ref v = corners[triangle * 3 + corner]
+        if isfinite(v.x) and isfinite(v.y):
+            min_fx = min(min_fx, v.x)
+            max_fx = max(max_fx, v.x)
+            min_fy = min(min_fy, v.y)
+            max_fy = max(max_fy, v.y)
+        else:
+            all_finite = False
+    if all_finite and (
+        max_fx < Float32(0.5)
+        or min_fx > Float32(width) - Float32(0.5)
+        or max_fy < Float32(0.5)
+        or min_fy > Float32(height) - Float32(0.5)
+    ):
+        spans[at] = 1
+        spans[at + 1] = 0
+        spans[at + 2] = 1
+        spans[at + 3] = 0
+        return
     for corner in range(3):
         ref vertex = corners[triangle * 3 + corner]
         if not (abs(vertex.x) <= _SNAP_LIMIT and abs(vertex.y) <= _SNAP_LIMIT):
@@ -10135,6 +10160,8 @@ struct GpuRenderer(Movable):
     # the first draw after it that has none: `painted` says which.
     var backdrop: DeviceBuffer[DType.uint8]
     var painted: Bool
+    # How many frames exceeded `BIN_LIMIT` and fell back to unbinned walking.
+    var bin_overflows: Int
     # How many bytes the backdrop buffer holds past the backdrop's own
     # pixels, for the transmission target a draw passes; see
     # `TRANSMISSION_HEADER`. Zero until a draw passes one, and grown to fit.
@@ -10197,6 +10224,7 @@ struct GpuRenderer(Movable):
         self.width = width
         self.height = height
         self.drawn = False
+        self.bin_overflows = 0
         self.depth_mode = STANDARD_DEPTH
         self.context = DeviceContext()
         self.pixels = self.context.enqueue_create_buffer[DType.uint8](
@@ -11027,9 +11055,12 @@ struct GpuRenderer(Movable):
                 first = splat_offset + first * (SPLAT_FLOATS + 1)
             flat_draws.append(Int32(first))
             flat_draws.append(Int32(order[index].count))
-        flat_draws.extend(
-            bin_triangles(corners, self.width, self.height, len(flat_draws))
+        var binned = bin_triangles(
+            corners, self.width, self.height, len(flat_draws)
         )
+        if len(binned) == 1 and binned[0] == 0:
+            self.bin_overflows += 1
+        flat_draws.extend(binned^)
         if len(flat_draws) > self.draw_room:
             self.context.synchronize()
             self.draw_list = self.context.enqueue_create_buffer[DType.int32](
@@ -13566,8 +13597,8 @@ struct GpuComposer(Movable):
             renderer.background,
             outputs=frame_outputs(composer.passes),
         )
-        self.upload(frame)
         self.round_trips = 0
+        var device_current = False
         var mask_active = False
         for index in range(composer.pass_count()):
             check_pass(composer.passes[index])
@@ -13579,8 +13610,14 @@ struct GpuComposer(Movable):
                 continue
             var masked = mask_active and kind != MASK
             if masked:
+                if not device_current:
+                    self.upload(frame)
+                    device_current = True
                 self._save()
             if self._on_device(composer.passes[index], assets):
+                if not device_current:
+                    self.upload(frame)
+                    device_current = True
                 # The device frame keeps its data pixels straight, as the
                 # host frame does, and premultiplies them around a pass
                 # that reads light, as `EffectComposer.run_step` does.
@@ -13600,17 +13637,22 @@ struct GpuComposer(Movable):
                 if wraps:
                     self._data_alpha(False)
             else:
-                self.download(frame)
+                if device_current:
+                    self.download(frame)
+                    device_current = False
                 composer.run_step(
                     index, frame, renderer, scene, assets, camera, delta_time
                 )
-                self.upload(frame)
                 self.round_trips += 1
             if kind == MASK:
                 mask_active = True
             elif masked:
+                if not device_current:
+                    self.upload(frame)
+                    device_current = True
                 self._keep_outside_mask()
-        self.download(frame)
+        if device_current:
+            self.download(frame)
         return frame.resolve(renderer.workers, NO_TONE_MAPPING, 1.0)
 
 
@@ -13880,6 +13922,8 @@ struct GpuSplats(Movable):
     var depth: DeviceBuffer[DType.float32]
     var flags: DeviceBuffer[DType.int32]
     var splats: DeviceBuffer[DType.float32]
+    var pixel_capacity: Int
+    var splat_capacity: Int
     var context: DeviceContext
 
     def __deinit__(deinit self):
@@ -13906,6 +13950,8 @@ struct GpuSplats(Movable):
         self.depth = self.context.enqueue_create_buffer[DType.float32](4)
         self.flags = self.context.enqueue_create_buffer[DType.int32](4)
         self.splats = self.context.enqueue_create_buffer[DType.float32](4)
+        self.pixel_capacity = 1
+        self.splat_capacity = 4
 
     def draw(
         mut self, mut target: RenderTarget, splats: List[ProjectedSplat]
@@ -13937,16 +13983,26 @@ struct GpuSplats(Movable):
         var flat = List[Float32](capacity=len(splats) * SPLAT_FLOATS)
         for index in range(len(splats)):
             splats[index].append_to(flat)
-        # A launch in flight may still read the old buffers.
-        self.context.synchronize()
-        self.colors = self.context.enqueue_create_buffer[DType.float32](
-            pixels * 4
-        )
-        self.depth = self.context.enqueue_create_buffer[DType.float32](pixels)
-        self.flags = self.context.enqueue_create_buffer[DType.int32](pixels)
-        self.splats = self.context.enqueue_create_buffer[DType.float32](
-            max(len(flat), 4)
-        )
+        # Grow device buffers only when the pixel or splat count grows.
+        var needed_splats = max(len(flat), 4)
+        if pixels > self.pixel_capacity or needed_splats > self.splat_capacity:
+            self.context.synchronize()
+            if pixels > self.pixel_capacity:
+                self.colors = self.context.enqueue_create_buffer[DType.float32](
+                    pixels * 4
+                )
+                self.depth = self.context.enqueue_create_buffer[DType.float32](
+                    pixels
+                )
+                self.flags = self.context.enqueue_create_buffer[DType.int32](
+                    pixels
+                )
+                self.pixel_capacity = pixels
+            if needed_splats > self.splat_capacity:
+                self.splats = self.context.enqueue_create_buffer[DType.float32](
+                    needed_splats
+                )
+                self.splat_capacity = needed_splats
         with self.colors.map_to_host() as host:
             unsafe_memcpy(
                 dest=host.unsafe_ptr(), src=light.unsafe_ptr(), count=pixels * 4

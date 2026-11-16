@@ -24,6 +24,8 @@ from geometries.utils import (
     DEFAULT_TOLERANCE,
     EPSILON,
     KEY_LIMIT,
+    _CreasePoint,
+    _VertexKey,
     merge_geometries,
     merge_vertices,
     to_creased_normals,
@@ -836,6 +838,16 @@ def test_a_crease_that_is_not_an_angle_is_refused() raises:
         )
     with assert_raises(contains="position"):
         _ = to_creased_normals(BufferGeometry())
+
+
+def test_quantized_vertex_and_crease_keys_compare_every_lane() raises:
+    assert_true(_VertexKey([1, 2]) == _VertexKey([1, 2]))
+    assert_false(_VertexKey([1]) == _VertexKey([1, 2]))
+    assert_false(_VertexKey([1, 2]) == _VertexKey([1, 3]))
+    assert_true(_CreasePoint(1, 2, 3) == _CreasePoint(1, 2, 3))
+    assert_false(_CreasePoint(0, 2, 3) == _CreasePoint(1, 2, 3))
+    assert_false(_CreasePoint(1, 0, 3) == _CreasePoint(1, 2, 3))
+    assert_false(_CreasePoint(1, 2, 0) == _CreasePoint(1, 2, 3))
 
 
 def main() raises:
