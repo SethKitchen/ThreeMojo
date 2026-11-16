@@ -260,7 +260,7 @@ The tests compare the module with lifelines 0.30.3, a Python library, on the tri
 
 The tests compare `nnt` with statsmodels on the 6-MP trial at 10, 15 and 20 weeks. `assets/survival/make_nnt.py` writes the values. Each survival agrees with statsmodels' `SurvfuncRight` to 1e-14. The test builds the standard error of the difference from the Greenwood errors of statsmodels. The error, the interval and the NNT agree with it to 1e-13.
 
-The tests compare `parametric` with mpmath fits at 40 digits, on the two arms of the 6-MP trial and on two synthetic groups. One synthetic group has a rising hazard, and the other a falling hazard. `tools/make_parametric.mojo` writes the groups. `assets/parametric/make_parametric.py` writes the fits, and checks that lifelines' `ExponentialFitter` and `WeibullFitter` agree with them to a relative 1e-5.
+The tests compare `parametric` with reference fits at about 32 digits, on the two arms of the 6-MP trial and on two synthetic groups. One synthetic group has a rising hazard, and the other a falling hazard. `tools/make_parametric.mojo` writes the groups. `tools/reference_parametric.mojo` fits them in double-double arithmetic, with no import of the library. `assets/parametric/make_parametric.py` writes the fits of lifelines' `ExponentialFitter` and `WeibullFitter`. They must agree with the reference to a relative 1e-5.
 
 - The exponential scale, its standard error and the log-likelihood agree to a relative 1e-14.
 - The Weibull scale and shape agree to a relative 1e-13, and their standard errors to 1e-12. The covariance agrees to 1e-11, and the log-likelihood to 1e-14.
@@ -270,7 +270,7 @@ The tests compare `parametric` with mpmath fits at 40 digits, on the two arms of
 
 lifelines fits both models by a search that stops early. Its Weibull scale and shape are off by about 1e-6, relative, and its exponential scale by 5e-8. The exponential scale has the closed form `sum t / d`, so the module does not search for it.
 
-The tests compare `aft` with fits of four groups. They are the 6-MP trial, a synthetic cohort of 150 patients with three covariates, and two small groups. The first Newton step of each small group must be halved. `tools/make_aft.mojo` writes the groups. `assets/aft/make_aft.py` fits each with lifelines' `WeibullAFTFitter`, then solves its score equations from that fit at 40 digits with mpmath. lifelines agrees with the result to 1e-4.
+The tests compare `aft` with fits of four groups. They are the 6-MP trial, a synthetic cohort of 150 patients with three covariates, and two small groups. The first Newton step of each small group must be halved. `tools/make_aft.mojo` writes the groups. `tools/reference_aft.mojo` solves their score equations at about 32 digits, in double-double arithmetic, from the exponential fit. `assets/aft/make_aft.py` writes the fits of lifelines' `WeibullAFTFitter`, which must agree with the reference to 1e-4.
 
 - The intercept, the coefficients and `ln rho` agree to 1e-12, and their standard errors to 1e-10.
 - The log-likelihood agrees to 1e-13. The likelihood ratio test agrees to 1e-10, and its p value from scipy to 1e-9.

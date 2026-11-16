@@ -140,7 +140,9 @@ A fixture has three parts:
 
 A script can give a model to a library fit or solver. It can prepare the inputs of a library call, such as weights. It must not find a result by a formula of its own. Put that formula in the test, with a comment that names its source.
 
-When no library gives a value, check it in the test by hand or against a published table. For example, the Phase II tests use the table of Simon (1989). A script can use mpmath, because Mojo has no arbitrary precision.
+When no library gives a value, check it in the test by hand or against a published table. For example, the Phase II tests use the table of Simon (1989).
+
+When a reference needs more digits than a double holds, write it in Mojo as `tools/reference_NAME.mojo`. Use the double-double arithmetic of `tools/_double_double.mojo`, which gives about 32 digits. The tool must not import the library that it checks. Add a tool test that checks that its file is current. `tools/reference_parametric.mojo` and `tools/reference_aft.mojo` are examples.
 
 Name the library versions in the docstring of the script. Name the script in the docstring of the test and on the wiki page.
 

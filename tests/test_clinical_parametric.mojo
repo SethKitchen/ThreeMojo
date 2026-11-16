@@ -5,9 +5,12 @@
 
 """Exponential and Weibull fits of censored times.
 
-`assets/parametric/parametric_expected.txt` holds mpmath fits of four
-groups, checked against lifelines. See
-`tools/make_parametric.mojo` and `assets/parametric/make_parametric.py`.
+`assets/parametric/parametric_expected.txt` holds double-double fits of
+four groups, from `tools/reference_parametric.mojo`.
+`assets/parametric/parametric_lifelines.txt` holds the fits of lifelines
+and the p values of scipy, from `assets/parametric/make_parametric.py`.
+The reference must agree with lifelines to lifelines' own tolerance. See
+`tools/make_parametric.mojo`.
 """
 
 from extensions.clinical.parametric import (
@@ -81,9 +84,13 @@ def _groups() raises -> List[_Group]:
     return out^
 
 
-def _expected(name: String, kind: String) raises -> List[List[Float64]]:
+def _expected(
+    name: String,
+    kind: String,
+    path: String = "assets/parametric/parametric_expected.txt",
+) raises -> List[List[Float64]]:
     var out = List[List[Float64]]()
-    var text = open("assets/parametric/parametric_expected.txt", "r").read()
+    var text = open(path, "r").read()
     for line in text.splitlines():
         var parts = line.split(" ")
         if String(parts[0]) != name or String(parts[1]) != kind:
@@ -123,9 +130,10 @@ def test_weibull() raises:
         _close(fit.log_likelihood(u), row[5], 1e-14)
         assert_equal(fit.parameters, 2)
         var test = constant_hazard_test(group.times, group.events)
-        var expected = _expected(group.name, "test")[0].copy()
-        _close(test[0], expected[0], 1e-11)
-        _close(test[1], expected[1], 1e-11)
+        var statistic = _expected(group.name, "test")[0][0]
+        _close(test[0], statistic, 1e-11)
+        var p = _expected(group.name, "test", LIFELINES)[0][0]
+        _close(test[1], p, 1e-11)
         var median = _expected(group.name, "median")[0].copy()
         _close(fit.median().to(u), median[0], 1e-13)
         var band = fit.quantile_interval(0.5)
@@ -148,6 +156,36 @@ def test_weibull() raises:
             # Events for each unit of the group's time.
             var seconds = Duration64(1.0, u).to(SECOND)
             _close(fit.hazard(t).to(PER_SECOND) * seconds, p[5], 1e-13)
+
+
+comptime LIFELINES = "assets/parametric/parametric_lifelines.txt"
+
+
+def test_reference_against_lifelines() raises:
+    # lifelines fits by a search that stops early: the scales and shapes
+    # agree to 1e-5, the errors to 1e-4 and the covariance to 1e-3.
+    for name in ["drug", "placebo", "rising", "falling"]:
+        var exponential = _expected(name, "exponential")[0].copy()
+        var theirs = _expected(name, "exponential", LIFELINES)[0].copy()
+        _close(theirs[0], exponential[0], 1e-5)
+        _close(theirs[1], exponential[1], 1e-4)
+        _close(theirs[2], exponential[2], 1e-10)
+        var weibull = _expected(name, "weibull")[0].copy()
+        var fit = _expected(name, "weibull", LIFELINES)[0].copy()
+        _close(fit[0], weibull[0], 1e-5)
+        _close(fit[1], weibull[1], 1e-5)
+        _close(fit[2], weibull[2] * weibull[2], 1e-4)
+        _close(fit[3], weibull[3] * weibull[3], 1e-4)
+        _close(fit[4], weibull[4], 1e-3)
+        _close(fit[5], weibull[5], 1e-10)
+        _close(fit[6], _expected(name, "median")[0][0], 1e-5)
+        var probes = _expected(name, "at")
+        var points = _expected(name, "at", LIFELINES)
+        assert_equal(len(points), 4)
+        for i in range(4):
+            assert_equal(points[i][0], probes[i][0])
+            assert_almost_equal(points[i][1], probes[i][1], atol=1e-5)
+            _close(points[i][2], probes[i][2], 1e-3)
 
 
 def test_by_hand() raises:

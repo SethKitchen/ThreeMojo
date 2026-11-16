@@ -5,9 +5,11 @@
 
 """Weibull accelerated failure time regression.
 
-`assets/aft/aft_expected.txt` holds the fits of four groups by lifelines,
-solved to 40 digits by mpmath. See `tools/make_aft.mojo` and
-`assets/aft/make_aft.py`.
+`assets/aft/aft_expected.txt` holds double-double fits of four groups,
+from `tools/reference_aft.mojo`. `assets/aft/aft_lifelines.txt` holds the
+fits of lifelines and the p values of scipy, from `assets/aft/make_aft.py`.
+The reference must agree with lifelines to lifelines' own tolerance. See
+`tools/make_aft.mojo`.
 """
 
 from extensions.clinical.aft import WeibullRegression, weibull_regression
@@ -61,9 +63,14 @@ def _group(name: String) raises -> _Group:
     return out^
 
 
-def _expected(name: String, kind: String) raises -> List[List[Float64]]:
+comptime LIFELINES = "assets/aft/aft_lifelines.txt"
+
+
+def _expected(
+    name: String, kind: String, path: String = "assets/aft/aft_expected.txt"
+) raises -> List[List[Float64]]:
     var out = List[List[Float64]]()
-    var text = open("assets/aft/aft_expected.txt", "r").read()
+    var text = open(path, "r").read()
     for line in text.splitlines():
         var parts = line.split(" ")
         if String(parts[0]) != name or String(parts[1]) != kind:
@@ -105,7 +112,7 @@ def _check(name: String, count: Int, steps: Int) raises:
     _close(model.log_likelihood(unit), fit[1], 1e-13)
     var test = model.likelihood_ratio()
     _close(test[0], fit[2], 1e-10)
-    _close(test[1], fit[3], 1e-9)
+    _close(test[1], _expected(name, "fit", LIFELINES)[0][1], 1e-9)
     for probe in _expected(name, "median"):
         var row = List[Float64](probe[0:count])
         _close(model.median(row).to(unit), probe[count], 1e-12)
@@ -113,9 +120,32 @@ def _check(name: String, count: Int, steps: Int) raises:
         _close(model.survival(row, t), probe[count + 2], 1e-12)
 
 
-def test_against_lifelines() raises:
+def test_against_the_reference() raises:
     _check("trial", 1, 12)
     _check("cohort", 3, 12)
+
+
+def test_reference_against_lifelines() raises:
+    # lifelines stops its search early: the coefficients, the log of the
+    # shape and the errors agree to 1e-4, the log-likelihood to 1e-9 and
+    # the medians to 1e-4.
+    for name in ["trial", "cohort", "spread", "tiny"]:
+        var b = _expected(name, "coefficients")[0].copy()
+        var theirs = _expected(name, "coefficients", LIFELINES)[0].copy()
+        var e = _expected(name, "errors")[0].copy()
+        var errors = _expected(name, "errors", LIFELINES)[0].copy()
+        assert_equal(len(theirs), len(b))
+        for i in range(len(b)):
+            _close(theirs[i], b[i], 1e-4)
+            _close(errors[i], e[i], 1e-4)
+        var fit = _expected(name, "fit")[0].copy()
+        _close(_expected(name, "fit", LIFELINES)[0][0], fit[1], 1e-9)
+        var medians = _expected(name, "median", LIFELINES)[0].copy()
+        var probes = _expected(name, "median")
+        assert_equal(len(medians), 3)
+        for i in range(3):
+            var count = len(probes[i]) - 3
+            _close(medians[i], probes[i][count], 1e-4)
 
 
 def test_halved_steps() raises:

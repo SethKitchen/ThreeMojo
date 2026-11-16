@@ -18,7 +18,8 @@ an event or 0, and the covariates. The groups are:
 - `spread` and `tiny`: two small groups of 6 and 4 patients, in days,
   that make the first Newton step too long.
 
-`assets/aft/make_aft.py` then writes the fits of lifelines and mpmath.
+`tools/reference_aft.mojo` then writes the reference fits at about 32
+digits, and `assets/aft/make_aft.py` the fits of lifelines.
 """
 
 from extensions.numerics.elementary import precise_exp, precise_power

@@ -12,8 +12,9 @@ are the 6-MP and placebo arms of the trial of Freireich and others
 (1963) in weeks, and two synthetic groups in days: 60 Weibull times of
 scale 10 and shape 1.6 censored uniformly up to 25 days, and 40 of scale
 8 and shape 0.7 censored up to 30 days, to 0.01.
-`assets/parametric/make_parametric.py` then writes the fits of mpmath,
-checked against lifelines.
+`tools/reference_parametric.mojo` then writes the reference fits at about
+32 digits, and `assets/parametric/make_parametric.py` the fits of
+lifelines.
 """
 
 from extensions.numerics.elementary import precise_power

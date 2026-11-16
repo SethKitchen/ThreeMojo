@@ -3,175 +3,110 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Write exponential and Weibull fits of censored times, with mpmath, and
-check them against lifelines.
+"""Write lifelines' exponential and Weibull fits of censored times, and
+scipy's p values of the reference statistics.
 
     mojo run -I . tools/make_parametric.mojo
+    mojo run -I . tools/reference_parametric.mojo
     cd assets/parametric && python3 make_parametric.py
 
-Run it with scipy 1.18.1, mpmath 1.4.1 and lifelines 0.30.3.
-`tools/make_parametric.mojo` writes the groups, `parametric_data.txt`: the
-6-MP and placebo arms of the trial of Freireich and others (1963) in
-weeks, and two synthetic groups in days, with a Weibull shape of 1.6 and
-of 0.7 and uniform censoring. A time with a `+` is censored. This script
-writes `parametric_expected.txt` beside it.
+Run it with scipy 1.18.1 and lifelines 0.30.3. `tools/make_parametric.mojo`
+writes the groups, `parametric_data.txt`: the 6-MP and placebo arms of the
+trial of Freireich and others (1963) in weeks, and two synthetic groups in
+days, with a Weibull shape of 1.6 and of 0.7 and uniform censoring. A time
+with a `+` is censored. `tools/reference_parametric.mojo` writes the fits
+at about 32 digits, `parametric_expected.txt`. This script writes
+`parametric_lifelines.txt` beside them.
 
-mpmath finds each fit at 40 digits. The Weibull shape is the root of the
-profile score `d / rho + sum_e ln t - d sum t^rho ln t / sum t^rho`, and
-the scale is `(sum t^rho / d)^(1 / rho)`. The variances are the inverse
-of the observed information in (scale, shape). lifelines'
-`ExponentialFitter` and `WeibullFitter` must agree with the fits to a
-relative 1e-5: lifelines fits both by a search that stops early, though
-the exponential fit has the closed form `sum t / d`.
+lifelines fits by a search that stops early, so the test compares it with
+the reference to lifelines' own tolerance. For each group, the file holds
+these lines, in the unit of the group:
 
-For each group, `parametric_expected.txt` holds these lines, in the unit
-of the group:
-
-- `exponential`: the scale, its standard error and the log-likelihood;
-- `weibull`: the scale, the shape, their standard errors, their
-  covariance and the log-likelihood;
-- `test`: the likelihood ratio statistic of shape 1 and its p value from
-  scipy's `chi2.sf`;
-- `median`: the Weibull median and the ends of its 95 percent interval,
-  by the delta method on the log of the time;
-- `quantile`: the same at a survival of 0.2;
-- `at`: a time, the Weibull survival there, its delta-method standard
-  error as lifelines gives it, the ends of its interval on the scale of
-  the log cumulative hazard, and the hazard in events for each unit of
-  time.
+- `exponential`: the scale of `ExponentialFitter`, its standard error and
+  the log-likelihood;
+- `weibull`: the scale and the shape of `WeibullFitter`, its variance
+  matrix by `(0, 0)`, `(1, 1)` and `(0, 1)`, the log-likelihood and the
+  median;
+- `test`: scipy's `chi2.sf` of the reference statistic, on one degree of
+  freedom;
+- `at`: a probe time of the reference, the survival of lifelines there,
+  and the half width of its 95 percent interval over z, which is its
+  standard error.
 """
 
 import os
 
-import mpmath
 import scipy.stats
 from lifelines import ExponentialFitter, WeibullFitter
 
-mpmath.mp.dps = 40
 HERE = os.path.dirname(os.path.abspath(__file__))
-Z = mpmath.sqrt(2) * mpmath.erfinv(mpmath.mpf("0.95"))
-
-PROBES = {
-    "drug": ["5", "10", "20", "40"],
-    "placebo": ["1", "5", "10", "20"],
-    "rising": ["0.5", "5", "10", "30"],
-    "falling": ["0.1", "2", "10", "40"],
-}
-GROUPS = []
-with open(os.path.join(HERE, "parametric_data.txt")) as data:
-    for line in data:
-        name, unit, text = line.rstrip("\n").split(" ", 2)
-        GROUPS.append((name, unit, text, PROBES[name]))
+Z = scipy.stats.norm.ppf(0.975)
 
 
 def read(text):
-    times = [mpmath.mpf(t.rstrip("+")) for t in text.split()]
+    times = [float(t.rstrip("+")) for t in text.split()]
     events = [not t.endswith("+") for t in text.split()]
     return times, events
-
-
-def weibull(times, events):
-    d = sum(events)
-    logs = sum(mpmath.log(t) for t, e in zip(times, events) if e)
-
-    def score(rho):
-        a = sum(t**rho for t in times)
-        b = sum(t**rho * mpmath.log(t) for t in times)
-        return d / rho + logs - d * b / a
-
-    rho = mpmath.findroot(score, mpmath.mpf(1))
-    lam = (sum(t**rho for t in times) / d) ** (1 / rho)
-    w = [(t / lam) ** rho for t in times]
-    ln = [mpmath.log(t / lam) for t in times]
-    info = mpmath.matrix(
-        [
-            [rho**2 * d / lam**2, -rho * sum(wi * li for wi, li in zip(w, ln)) / lam],
-            [-rho * sum(wi * li for wi, li in zip(w, ln)) / lam, d / rho**2 + sum(wi * li * li for wi, li in zip(w, ln))],
-        ]
-    )
-    variance = info**-1
-    ll = d * mpmath.log(rho) - d * mpmath.log(lam) + (rho - 1) * sum(
-        l for l, e in zip(ln, events) if e
-    ) - sum(w)
-    return lam, rho, variance, ll
-
-
-def quantile(lam, rho, v, p):
-    q = mpmath.log(1 / mpmath.mpf(p))
-    t = lam * q ** (1 / rho)
-    g = [1 / lam, -mpmath.log(q) / rho**2]
-    var = g[0] ** 2 * v[0, 0] + 2 * g[0] * g[1] * v[0, 1] + g[1] ** 2 * v[1, 1]
-    se = mpmath.sqrt(var)
-    return t, t * mpmath.exp(-Z * se), t * mpmath.exp(Z * se)
-
-
-def at(lam, rho, v, t):
-    h = (t / lam) ** rho
-    s = mpmath.exp(-h)
-    ln = mpmath.log(t / lam)
-    # The gradient of S, then of ln H, in (scale, shape).
-    gs = [s * rho * h / lam, -s * h * ln]
-    se_s = mpmath.sqrt(gs[0] ** 2 * v[0, 0] + 2 * gs[0] * gs[1] * v[0, 1] + gs[1] ** 2 * v[1, 1])
-    gl = [-rho / lam, ln]
-    se_l = mpmath.sqrt(gl[0] ** 2 * v[0, 0] + 2 * gl[0] * gl[1] * v[0, 1] + gl[1] ** 2 * v[1, 1])
-    lower = mpmath.exp(-h * mpmath.exp(Z * se_l))
-    upper = mpmath.exp(-h * mpmath.exp(-Z * se_l))
-    hazard = rho / lam * (t / lam) ** (rho - 1)
-    return s, se_s, lower, upper, hazard
-
-
-def close(a, b, tolerance):
-    assert abs(a - b) <= tolerance * abs(b), (a, b)
 
 
 def words(values):
     return " ".join(repr(float(v)) for v in values)
 
 
-expected = []
-for name, unit, text, probes in GROUPS:
-    times, events = read(text)
-    d = sum(events)
-    total = sum(times)
-    lam_e = total / d
-    se_e = lam_e / mpmath.sqrt(d)
-    ll_e = -d * mpmath.log(lam_e) - total / lam_e
-    lam, rho, v, ll = weibull(times, events)
-    statistic = 2 * (ll - ll_e)
-    p = scipy.stats.chi2.sf(float(statistic), 1)
+reference = {}
+with open(os.path.join(HERE, "parametric_expected.txt")) as data:
+    for line in data:
+        name, kind, *values = line.split()
+        reference.setdefault((name, kind), []).append([float(v) for v in values])
 
-    floats = [float(t) for t in times]
-    exponential = ExponentialFitter().fit(floats, events)
-    close(exponential.lambda_, float(lam_e), 1e-5)
-    close(exponential.summary.loc["lambda_", "se(coef)"], float(se_e), 1e-4)
-    close(exponential.log_likelihood_, float(ll_e), 1e-10)
-    fitter = WeibullFitter().fit(floats, events)
-    close(fitter.lambda_, float(lam), 1e-5)
-    close(fitter.rho_, float(rho), 1e-5)
-    close(fitter.log_likelihood_, float(ll), 1e-10)
-    matrix = fitter.variance_matrix_.values
-    close(matrix[0, 0], float(v[0, 0]), 1e-4)
-    close(matrix[1, 1], float(v[1, 1]), 1e-4)
-    close(matrix[0, 1], float(v[0, 1]), 1e-3)
-    close(fitter.median_survival_time_, float(quantile(lam, rho, v, "0.5")[0]), 1e-5)
+lines = []
+with open(os.path.join(HERE, "parametric_data.txt")) as data:
+    for line in data:
+        name, unit, text = line.rstrip("\n").split(" ", 2)
+        times, events = read(text)
+        exponential = ExponentialFitter().fit(times, events)
+        lines.append(
+            "%s exponential %s"
+            % (
+                name,
+                words(
+                    [
+                        exponential.lambda_,
+                        exponential.summary.loc["lambda_", "se(coef)"],
+                        exponential.log_likelihood_,
+                    ]
+                ),
+            )
+        )
+        fitter = WeibullFitter().fit(times, events)
+        matrix = fitter.variance_matrix_.values
+        lines.append(
+            "%s weibull %s"
+            % (
+                name,
+                words(
+                    [
+                        fitter.lambda_,
+                        fitter.rho_,
+                        matrix[0, 0],
+                        matrix[1, 1],
+                        matrix[0, 1],
+                        fitter.log_likelihood_,
+                        fitter.median_survival_time_,
+                    ]
+                ),
+            )
+        )
+        statistic = reference[(name, "test")][0][0]
+        lines.append("%s test %s" % (name, words([scipy.stats.chi2.sf(statistic, 1)])))
+        for row in reference[(name, "at")]:
+            t = row[0]
+            point = WeibullFitter().fit(times, events, timeline=[t])
+            frame = point.confidence_interval_survival_function_.values[0]
+            survival = point.survival_function_at_times(t).iloc[0]
+            lines.append(
+                "%s at %s" % (name, words([t, survival, (frame[1] - frame[0]) / (2 * Z)]))
+            )
 
-    expected.append("%s exponential %s" % (name, words([lam_e, se_e, ll_e])))
-    expected.append(
-        "%s weibull %s"
-        % (name, words([lam, rho, mpmath.sqrt(v[0, 0]), mpmath.sqrt(v[1, 1]), v[0, 1], ll]))
-    )
-    expected.append("%s test %s" % (name, words([statistic, p])))
-    expected.append("%s median %s" % (name, words(quantile(lam, rho, v, "0.5"))))
-    expected.append("%s quantile %s" % (name, words(quantile(lam, rho, v, "0.2"))))
-    for probe in probes:
-        t = mpmath.mpf(probe)
-        s, se_s, lower, upper, hazard = at(lam, rho, v, t)
-        # lifelines gives S -+ z se on its timeline; ask at this time.
-        point = WeibullFitter().fit(floats, events, timeline=[float(t)])
-        frame = point.confidence_interval_survival_function_.values[0]
-        close((frame[1] - frame[0]) / (2 * float(Z)), float(se_s), 1e-3)
-        assert abs(float(point.survival_function_at_times(float(t)).iloc[0]) - float(s)) <= 1e-5
-        expected.append("%s at %s" % (name, words([t, s, se_s, lower, upper, hazard])))
-
-with open(os.path.join(HERE, "parametric_expected.txt"), "w") as out:
-    out.write("\n".join(expected) + "\n")
+with open(os.path.join(HERE, "parametric_lifelines.txt"), "w") as out:
+    out.write("\n".join(lines) + "\n")
