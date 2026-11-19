@@ -463,8 +463,9 @@ def receive_message(
     var flags = c_int(
         MSG_CMSG_CLOEXEC
     ) if CompilationTarget.is_linux() else c_int(0)
-    var count = -1
-    var err = 0
+    # The loop runs once at least, so it gives both their first values.
+    var count: Int
+    var err: Int
     while True:  # pragma: no branch
         store_little_endian(header, 40, len(control), 8)
         count = libc.call["recvmsg", Int](
