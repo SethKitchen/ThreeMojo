@@ -387,6 +387,7 @@ from render.texture import (
 from loaders.image_batch import TextureDecodeSource, decode_textures
 from render.texture_store import TextureId
 from std.memory import bitcast
+from std.os import stat
 from std.pathlib import Path
 from units.si import Angle, Duration, Length, METER, NANOMETER, RADIAN, SECOND
 
@@ -1168,14 +1169,22 @@ def _uri_bytes(
     uri: String, directory: String, limit: Int = MAX_GLTF_BUFFER_BYTES
 ) raises -> List[UInt8]:
     """Return the bytes a URI names: decoded from a `data:` URI, or read
-    from a file beside the document, its percent escapes decoded."""
+    from a file beside the document, its percent escapes decoded. A file
+    larger than `limit` is refused before it is read."""
     if uri.startswith("data:"):
         return _data_uri_bytes(uri, limit)
     if uri.find(":") >= 0:
         raise Error("glTF: only a data URI or a relative path is read: " + uri)
     var decoded = _percent_decoded(uri)
     var resolved = confined_path(directory, decoded, "glTF")
-    return Path(resolved).read_bytes()
+    var file = Path(resolved)
+    # A file that is not there fails in `read_bytes`, with its own message.
+    if file.exists():
+        if Int(stat(resolved).st_size) > limit:
+            raise Error(
+                "glTF: a file exceeds the buffer byte limit: " + decoded
+            )
+    return file.read_bytes()
 
 
 struct _DracoPrimitive(Movable):

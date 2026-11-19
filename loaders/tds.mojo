@@ -457,7 +457,10 @@ struct _Loader[origin: Origin[mut=False]]:
         if not Bool(map):
             raise Error("3DS: a map with no file")
         var made = map.value().copy()
-        var file = Path(confined_path(self.resource_path, made.file, "3DS"))
+        # A map can be in a folder beside the model's, as the fixture's is.
+        var file = Path(
+            confined_path(self.resource_path, made.file, "3DS", True)
+        )
         if file.exists():
             var texture = texture_from(
                 decode_image(file.read_bytes()),

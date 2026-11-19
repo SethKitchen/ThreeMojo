@@ -51,13 +51,19 @@ def confined_path(
 ) raises -> String:
     """Join a relative companion path onto `directory` and keep it inside.
 
+    The containment root is `directory`. When `allow_sibling_dir` is true
+    and `directory` is not empty, the root is the parent of `directory`, so
+    that a companion can be in a sibling folder, as in `../brick.png`. The
+    rule does not depend on the working directory. It is the same for a
+    relative `directory` and an absolute one.
+
     Args:
         directory: The base folder, or empty for the current directory.
         relative: The relative companion path from an untrusted document.
         label: The caller's prefix for error messages.
-        allow_sibling_dir: True when a relative `directory` under the
-            working tree may step to a sibling folder such as `../brick.png`
-            while still staying inside the working tree root.
+        allow_sibling_dir: True when the path can step up one folder from
+            `directory`, to a sibling folder. An empty `directory` has no
+            sibling folder.
 
     Returns:
         The joined path inside the containment root.
@@ -77,26 +83,33 @@ def confined_path(
         raise Error(label + ": a relative path has a backslash: " + relative)
     if ":" in relative:
         raise Error(label + ": only a relative path is read: " + relative)
-    var can_step_up = False
+    # How many folders the walk is below the containment root. A sibling
+    # folder is one step up from `directory`, so the walk starts one folder
+    # below the root when a sibling folder is allowed.
+    var depth = 0
     if allow_sibling_dir:
         if directory != "":
-            if not directory.startswith("/"):
-                can_step_up = True
+            depth = 1
     var parts = List[String]()
+    var names_file = False
     for raw in relative.split("/"):  # pragma: no branch
         var part = String(raw)
         if part == "..":
-            if not can_step_up:
+            if depth == 0:
                 raise Error(
                     label
                     + ": a relative path leaves its directory: "
                     + relative
                 )
+            depth -= 1
+            names_file = False
             parts.append(part^)
         elif part != "":
             if part != ".":
+                depth += 1
+                names_file = True
                 parts.append(part^)
-    if len(parts) == 0:
+    if not names_file:
         raise Error(label + ": a relative path names no file: " + relative)
     var clean = "/".join(parts)
     var joined = clean
@@ -105,35 +118,19 @@ def confined_path(
             joined = directory + clean
         else:
             joined = directory + "/" + clean
-    if can_step_up:
-        var depth = 0
-        for segment in joined.split("/"):  # pragma: no branch
-            var item = String(segment)
-            if item == "":
-                continue
-            if item == ".":
-                continue
-            if item == "..":
-                if depth == 0:
-                    raise Error(
-                        label
-                        + ": a companion path leaves its root: "
-                        + relative
-                    )
-                depth -= 1
-            else:
-                depth += 1
+    # The walk above reads the text only. A symbolic link can still lead
+    # out, so the real path of a file that exists must be under the real
+    # path of the same root.
     if Path(joined).exists():
         var root = "."
-        if not can_step_up:
-            if directory != "":
-                root = directory
-        var base_real = realpath(root)
-        var prefix = base_real
+        if directory != "":
+            root = directory
+            if allow_sibling_dir:
+                root = directory + "/.."
+        var prefix = realpath(root)
         if not prefix.endswith("/"):
             prefix += "/"
-        var target_real = realpath(joined)
-        if not target_real.startswith(prefix):
+        if not realpath(joined).startswith(prefix):
             raise Error(
                 label + ": a companion path leaves its root: " + relative
             )

@@ -71,7 +71,7 @@ from materials.node_program import (
 )
 from std.math import nan
 from std.os import remove, symlink
-from std.pathlib import Path
+from std.pathlib import Path, cwd
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -457,6 +457,11 @@ def test_confined_path_refuses_escapes_and_symbolic_links() raises:
     write_file(root + "/outside.bin", Span(outside_bytes))
     write_file(sub + "/inside.bin", Span(inside_bytes))
     symlink(root + "/outside.bin", sub + "/escape_link.bin")
+    # A second folder beside `root`, and a link from `sub` to a file in it.
+    var other = temporary_path("confined_other")
+    make_dirs(other)
+    write_file(other + "/far.bin", Span(outside_bytes))
+    symlink(other + "/far.bin", sub + "/far_link.bin")
 
     try:
         assert_equal(confined_path("", "a/./b.png", "T"), "a/b.png")
@@ -477,8 +482,43 @@ def test_confined_path_refuses_escapes_and_symbolic_links() raises:
             "./assets/mtl/../brick.png",
         )
         assert_equal(confined_path("", "inside.bin", "T", True), "inside.bin")
-        with assert_raises():
-            _ = confined_path(sub, "../outside.bin", "T", True)
+        # A sibling folder is one step up. The rule is the same for an
+        # absolute folder and a relative one.
+        assert_equal(
+            confined_path(sub, "../outside.bin", "T", True),
+            sub + "/../outside.bin",
+        )
+        assert_equal(
+            confined_path(sub + "/", "../sub/inside.bin", "T", True),
+            sub + "/../sub/inside.bin",
+        )
+        # Two steps up leave the parent, with a sibling allowed or not.
+        with assert_raises(contains="leaves its directory"):
+            _ = confined_path(sub, "../../outside.bin", "T", True)
+        with assert_raises(contains="leaves its directory"):
+            _ = confined_path(sub, "a/../../../outside.bin", "T", True)
+        # A folder that is named from above the working directory keeps its
+        # own files.
+        var above = "../" + path_name(String(cwd())) + "/assets/mtl/"
+        assert_equal(
+            confined_path(above, "first.mtl", "T", True), above + "first.mtl"
+        )
+        assert_equal(
+            confined_path(above, "first.mtl", "T"), above + "first.mtl"
+        )
+        # A step down and back up stays inside the folder.
+        assert_equal(
+            confined_path(sub, "a/../inside.bin", "T"),
+            sub + "/a/../inside.bin",
+        )
+        # A path that ends on a step up names a folder, not a file.
+        with assert_raises(contains="names no file"):
+            _ = confined_path(sub, "a/..", "T")
+        with assert_raises(contains="names no file"):
+            _ = confined_path(sub, "..", "T", True)
+        # A link that leaves the parent folder is refused for a sibling also.
+        with assert_raises(contains="leaves its root"):
+            _ = confined_path(sub, "far_link.bin", "T", True)
         with assert_raises():
             _ = confined_path(
                 "assets/mtl/", "../../../../etc/passwd", "T", True
@@ -510,12 +550,22 @@ def test_confined_path_refuses_escapes_and_symbolic_links() raises:
         ]:
             with assert_raises():
                 _ = confined_path(sub, String(bad), "T")
+        # A file is read whole when it fits the limit, and it is refused
+        # before the read when it does not. A file that is not there fails
+        # in the read.
+        assert_equal(len(_uri_bytes("inside.bin", sub + "/")), 2)
+        assert_equal(len(_uri_bytes("inside.bin", sub + "/", 2)), 2)
+        with assert_raises(contains="exceeds the buffer byte limit"):
+            _ = _uri_bytes("inside.bin", sub + "/", 1)
+        with assert_raises():
+            _ = _uri_bytes("missing.bin", sub + "/")
         with assert_raises():
             _ = _uri_bytes("../outside.bin", sub + "/")
         with assert_raises():
             _ = _uri_bytes("..%2foutside.bin", sub + "/")
     finally:
         remove(sub + "/escape_link.bin")
+        remove(sub + "/far_link.bin")
 
 
 def test_gltf_buffer_limits_and_truncation() raises:

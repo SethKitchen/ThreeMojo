@@ -40,8 +40,11 @@ from math.finite import require_finite
 # list counts as one level, so each recursive call has a bounded stack.
 comptime _MAX_VALUE_NESTING = 256
 
-comptime MAX_STEP_ENTITIES = 262144
-"""The largest number of entities a STEP `DATA` section may hold."""
+comptime MAX_STEP_ENTITIES = 16777216
+"""The largest number of entities a STEP `DATA` section can hold by default:
+2^24. An IFC file of a large building holds some millions of entities, so the
+default is above that. A caller that reads untrusted files can pass a smaller
+`max_entities` to `parse`."""
 
 
 @fieldwise_init
