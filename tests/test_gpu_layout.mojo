@@ -566,6 +566,18 @@ def _field() -> List[RasterVertex]:
     corners.append(_red(0, 15.5))
     corners.append(_red(36.5, 16.5))
     corners.append(_red(0, 16.5))
+    # In the half pixel after the last sample, at x = 36.5 and at y = 20.5.
+    # Each corner below snaps onto that sample, so the last column and the
+    # last row are covered, in both windings.
+    corners.append(_red(36.515625, 2))
+    corners.append(_red(36.515625, 12))
+    corners.append(_red(40, 7))
+    corners.append(_red(36.515625, 2))
+    corners.append(_red(40, 7))
+    corners.append(_red(36.515625, 12))
+    corners.append(_red(3, 20.515625))
+    corners.append(_red(15, 20.515625))
+    corners.append(_red(9, 25))
     return corners^
 
 
@@ -620,6 +632,20 @@ def test_bins_keep_unsnappable_triangles_and_drop_offscreen_ones() raises:
     corners.append(_red(-5.0e7, 1))
     corners.append(_red(-4.0e7, 1))
     corners.append(_red(-4.0e7, 6))
+    # The same on the right, above and below.
+    corners.append(_red(5.0e7, 1))
+    corners.append(_red(4.0e7, 1))
+    corners.append(_red(4.0e7, 6))
+    corners.append(_red(1, -5.0e7))
+    corners.append(_red(6, -4.0e7))
+    corners.append(_red(1, -4.0e7))
+    corners.append(_red(1, 5.0e7))
+    corners.append(_red(6, 4.0e7))
+    corners.append(_red(1, 4.0e7))
+    # Too large to snap, and not wholly past a side: it is in every tile.
+    corners.append(_red(-5.0e7, 1))
+    corners.append(_red(5.0e7, 1))
+    corners.append(_red(1, 6))
     var bins = bin_triangles(corners, 40, 20, 0)
     assert_equal(bins[0], Int32(1))
     # Three by two tiles.
@@ -629,6 +655,10 @@ def test_bins_keep_unsnappable_triangles_and_drop_offscreen_ones() raises:
         assert_true(_binned(bins, 0, tile, 2))
         assert_equal(_binned(bins, 0, tile, 3), tile == 0)
         assert_false(_binned(bins, 0, tile, 4))
+        assert_false(_binned(bins, 0, tile, 5))
+        assert_false(_binned(bins, 0, tile, 6))
+        assert_false(_binned(bins, 0, tile, 7))
+        assert_true(_binned(bins, 0, tile, 8))
 
 
 def test_bins_fall_back_to_every_triangle_past_their_limit() raises:

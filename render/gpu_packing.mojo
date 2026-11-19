@@ -1698,11 +1698,17 @@ def _tile_span(
             max_fy = max(max_fy, v.y)
         else:
             all_finite = False
+    # A triangle wholly past one side of the image covers no pixel, however
+    # large its corners are. `snap` never decreases, so a corner left of
+    # x = 0 snaps left of the first sample, and a corner right of x = width
+    # snaps right of the last sample. A corner in the half pixel between an
+    # edge of the image and its nearest sample can snap onto that sample.
+    # The exact test below decides such a triangle.
     if all_finite and (
-        max_fx < Float32(0.5)
-        or min_fx > Float32(width) - Float32(0.5)
-        or max_fy < Float32(0.5)
-        or min_fy > Float32(height) - Float32(0.5)
+        max_fx < Float32(0)
+        or min_fx > Float32(width)
+        or max_fy < Float32(0)
+        or min_fy > Float32(height)
     ):
         spans[at] = 1
         spans[at + 1] = 0
