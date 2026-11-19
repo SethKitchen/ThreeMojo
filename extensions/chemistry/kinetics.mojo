@@ -27,6 +27,7 @@ coefficient, D_e the diffusivity in the ash and k_s the surface rate
 constant.
 """
 
+from math.finite import require_positive_finite
 from std.math import exp, isfinite, log
 from extensions.chemistry.quantities import (
     GAS_CONSTANT,
@@ -36,6 +37,7 @@ from extensions.chemistry.requirement import Constraint
 from loaders.js_number import js_to_fixed
 from units.quantity import Unit
 from units.si import (
+    Diffusivity64,
     Duration64,
     Frequency64,
     Length64,
@@ -44,12 +46,8 @@ from units.si import (
 )
 from units.quantity import Quantity
 from units.temperature import Temperature64
+from extensions.numerics.search import bisect
 
-# A diffusivity: square meters per second.
-comptime Diffusivity64 = Quantity[2, 0, -1, 0, 0, DType.float64]
-comptime SQUARE_METER_PER_SECOND = Unit[2, 0, -1, 0, 0, DType.float64](
-    1.0, "m^2/s"
-)
 # Bisection steps for a conversion.
 comptime _BISECTIONS = 60
 
@@ -59,12 +57,6 @@ struct Concentration64(ImplicitlyCopyable, Writable):
     """An amount of substance per volume, in mol/m^3."""
 
     var value: Float64
-
-
-def _require_positive(value: Float64, message: String) raises:
-    """Refuse a value that is not finite and positive."""
-    if not (isfinite(value) and value > 0):
-        raise Error(message)
 
 
 @fieldwise_init
@@ -84,7 +76,7 @@ struct Arrhenius(ImplicitlyCopyable):
                 positive, or the activation energy is negative or not
                 finite.
         """
-        _require_positive(
+        require_positive_finite(
             self.pre_exponential.value,
             "A pre-exponential factor must be finite and positive",
         )
@@ -106,7 +98,7 @@ struct Arrhenius(ImplicitlyCopyable):
                 above absolute zero.
         """
         self.check()
-        _require_positive(
+        require_positive_finite(
             temperature.kelvin, "A temperature must be above absolute zero"
         )
         var rt = GAS_CONSTANT.value * temperature.kelvin
@@ -130,7 +122,9 @@ struct Arrhenius(ImplicitlyCopyable):
         self.check()
         if self.activation.value == 0:
             raise Error("A rate with no activation energy does not vary")
-        _require_positive(rate.value, "A rate must be finite and positive")
+        require_positive_finite(
+            rate.value, "A rate must be finite and positive"
+        )
         if rate.value >= self.pre_exponential.value:
             raise Error("A rate must be below the pre-exponential factor")
         var ratio = log(self.pre_exponential.value / rate.value)
@@ -171,7 +165,9 @@ struct RateAtLeast(Constraint):
                 and positive.
         """
         law.check()
-        _require_positive(minimum.value, "A rate must be finite and positive")
+        require_positive_finite(
+            minimum.value, "A rate must be finite and positive"
+        )
         self.law = law
         self.minimum = minimum
 
@@ -293,7 +289,7 @@ struct ShrinkingCore(ImplicitlyCopyable):
             surface_rate.value,
         ]
         for v in values:  # pragma: no branch
-            _require_positive(v, "A sphere's property must be positive")
+            require_positive_finite(v, "A sphere's property must be positive")
         var r = radius.value
         var base = solid_density.value * r / (stoichiometry * gas.value)
         return ShrinkingCore(
@@ -341,12 +337,8 @@ struct ShrinkingCore(ImplicitlyCopyable):
             raise Error("A time must be finite and not negative")
         if time.value >= self.time_to(1).value:
             return 1
-        var lo = Float64(0)
-        var hi = Float64(1)
-        for _ in range(_BISECTIONS):  # pragma: no branch
-            var mid = 0.5 * (lo + hi)
-            if self.time_to(mid).value < time.value:
-                lo = mid
-            else:
-                hi = mid
-        return 0.5 * (lo + hi)
+
+        def below(share: Float64) raises capturing -> Bool:
+            return self.time_to(share).value < time.value
+
+        return bisect[below](0.0, 1.0, _BISECTIONS)

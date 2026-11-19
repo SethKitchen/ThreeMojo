@@ -714,6 +714,18 @@
       "candidate not viable: value passed to 'id' cannot be converted from 'IntLiteral[1]' to 'ConId'"
     ]
   },
+  "tests/compile_fail/a_connectivity_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'require_connectivity': value passed to 'connectivity' cannot be converted from 'IntLiteral[2]' to 'Connectivity'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_construction_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1060,6 +1072,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_dicom_node_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 19,
+        "message": "invalid call to 'text': value passed to 'node' cannot be converted from 'IntLiteral[0]' to 'DicomNode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_differential_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1118,6 +1142,18 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'mode' cannot be converted from 'IntLiteral[3]' to 'UpscaleMode'"
+    ]
+  },
+  "tests/compile_fail/a_dof_axis_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_dof_axis': value passed to 'axis' cannot be converted from 'IntLiteral[0]' to 'DofAxis'"
+      }
+    ],
+    "notes": [
+      "function declared here"
     ]
   },
   "tests/compile_fail/a_dof_is_not_a_bare_int.mojo": {
@@ -1501,6 +1537,66 @@
         "line": 25,
         "column": 24,
         "message": "invalid call to 'failure_motion': value passed to 'mode' cannot be converted from 'IntLiteral[1]' to 'FailureMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_fem_capacity_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_capacity': value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'CapacityKind'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_fem_element_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "invalid call to 'require_element': value passed to 'element' cannot be converted from 'IntLiteral[0]' to 'ElementId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_fem_element_order_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'require_order': value passed to 'order' cannot be converted from 'IntLiteral[1]' to 'ElementOrder'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_fem_material_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 70,
+        "message": "invalid call to 'add_element': value passed to 'material' cannot be converted from 'IntLiteral[0]' to 'MaterialId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_fem_node_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "invalid call to 'require_node': value passed to 'node' cannot be converted from 'IntLiteral[0]' to 'NodeId'"
       }
     ],
     "notes": [
@@ -2841,6 +2937,54 @@
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'MissileKind'"
     ]
   },
+  "tests/compile_fail/a_molecule_atom_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 33,
+        "message": "invalid call to 'require_atom': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'AtomId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_molecule_chain_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 34,
+        "message": "invalid call to 'require_chain': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'ChainId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_molecule_model_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 34,
+        "message": "invalid call to 'require_model': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'ModelId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_molecule_residue_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 36,
+        "message": "invalid call to 'require_residue': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'ResidueId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_mood_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3350,6 +3494,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_photometric_interpretation_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "invalid call to 'require_photometric': value passed to 'photometric' cannot be converted from 'IntLiteral[0]' to 'Photometric'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_pipe_run_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3362,6 +3518,18 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'run' cannot be converted from 'IntLiteral[1]' to 'PipeRun'"
+    ]
+  },
+  "tests/compile_fail/a_pixel_representation_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "invalid call to 'require_representation': value passed to 'representation' cannot be converted from 'IntLiteral[0]' to 'PixelRepresentation'"
+      }
+    ],
+    "notes": [
+      "function declared here"
     ]
   },
   "tests/compile_fail/a_plant_detail_is_not_a_bare_int.mojo": {
@@ -3598,6 +3766,18 @@
       "candidate not viable: value passed to 'near' cannot be converted from 'FloatLiteral[0.10000000000000001]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
     ]
   },
+  "tests/compile_fail/a_recist_response_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_response': value passed to 'response' cannot be converted from 'IntLiteral[2]' to 'ResponseCategory'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_recorder_packet_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3641,6 +3821,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_registration_metric_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 20,
+        "message": "invalid call to 'require_metric': value passed to 'metric' cannot be converted from 'IntLiteral[1]' to 'RegistrationMetric'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_render_detail_is_not_a_bare_int.mojo": {
     "errors": [
@@ -3717,6 +3909,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_ribbon_coloring_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_coloring': value passed to 'coloring' cannot be converted from 'IntLiteral[0]' to 'RibbonColoring'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_road_geometry_kind_is_not_a_bare_int.mojo": {
     "errors": [
@@ -3893,6 +4097,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_secondary_structure_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "invalid call to 'require_secondary': value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'SecondaryKind'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_section_id_is_not_a_bare_int.mojo": {
     "errors": [
@@ -4113,6 +4329,18 @@
         "column": 33,
         "line": 12,
         "message": "invalid call to 'skinned_morph_target': value passed to 'mesh' cannot be converted from 'IntLiteral[3]' to 'SkinnedMeshIndex'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_slab_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "invalid call to 'require_slab_mode': value passed to 'mode' cannot be converted from 'IntLiteral[0]' to 'SlabMode'"
       }
     ],
     "notes": [
@@ -4478,6 +4706,18 @@
       "candidate not viable: value passed to 'surface' cannot be converted from 'IntLiteral[0]' to 'SurfaceClass'"
     ]
   },
+  "tests/compile_fail/a_surface_coloring_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "invalid call to 'require_surface_coloring': value passed to 'coloring' cannot be converted from 'IntLiteral[0]' to 'SurfaceColoring'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_surface_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4637,6 +4877,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_tofts_model_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "invalid call to 'require_tofts_model': value passed to 'model' cannot be converted from 'IntLiteral[1]' to 'ToftsModel'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_tone_mapping_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4788,6 +5040,18 @@
         "column": 47,
         "line": 15,
         "message": "invalid call to 'set_traffic_light_state': value passed to 'state' cannot be converted from 'IntLiteral[0]' to 'TrafficLightState'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_transfer_syntax_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 20,
+        "message": "invalid call to 'require_syntax': value passed to 'syntax' cannot be converted from 'IntLiteral[0]' to 'TransferSyntax'"
       }
     ],
     "notes": [
@@ -5135,6 +5399,30 @@
         "column": 39,
         "line": 12,
         "message": "invalid call to 'compressed_format_of': value passed to 'format' cannot be converted from 'IntLiteral[131]' to 'VkFormat'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_volume_render_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_mode': value passed to 'mode' cannot be converted from 'IntLiteral[0]' to 'RenderMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_volume_slice_axis_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_axis': value passed to 'axis' cannot be converted from 'IntLiteral[0]' to 'SliceAxis'"
       }
     ],
     "notes": [
@@ -5610,6 +5898,19 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/an_absorbed_dose_is_not_a_length.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 36,
+        "message": "invalid call to 'volume_at_dose': value passed to 'dose' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(2), Int(0), Int(-2), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(2)'",
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/an_activity_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -5701,6 +6002,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/an_alignment_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "invalid call to 'require_alignment_mode': value passed to 'mode' cannot be converted from 'IntLiteral[1]' to 'AlignmentMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/an_alpha_mode_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -5725,6 +6038,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/an_alt_loc_policy_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 20,
+        "message": "invalid call to 'require_policy': value passed to 'policy' cannot be converted from 'IntLiteral[0]' to 'AltLocPolicy'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/an_anatomy_mode_is_not_a_bare_int.mojo": {
     "errors": [
@@ -6050,6 +6375,18 @@
       "candidate not viable: value passed to 'athleticism' cannot be converted from 'IntLiteral[0]' to 'Athleticism'"
     ]
   },
+  "tests/compile_fail/an_atom_record_group_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'require_group': value passed to 'group' cannot be converted from 'IntLiteral[0]' to 'AtomGroup'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/an_atomic_op_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -6093,6 +6430,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/an_edge_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "invalid call to 'require_edge_mode': value passed to 'mode' cannot be converted from 'IntLiteral[1]' to 'EdgeMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/an_edge_ramp_is_not_a_bare_int.mojo": {
     "errors": [
@@ -6156,6 +6505,18 @@
         "column": 33,
         "line": 12,
         "message": "invalid call to 'decode_endpoints': value passed to 'endpoint_mode' cannot be converted from 'IntLiteral[0]' to 'EndpointMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_ensemble_fit_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'require_ensemble_fit': value passed to 'fit' cannot be converted from 'IntLiteral[1]' to 'EnsembleFit'"
       }
     ],
     "notes": [
@@ -6328,6 +6689,18 @@
         "column": 23,
         "line": 13,
         "message": "invalid call to 'light_units': value passed to 'illuminance' cannot be converted from 'FloatLiteral[2.0E+4]' to 'Illuminance'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_image_label_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'require_label': value passed to 'label' cannot be converted from 'IntLiteral[0]' to 'LabelId'"
       }
     ],
     "notes": [

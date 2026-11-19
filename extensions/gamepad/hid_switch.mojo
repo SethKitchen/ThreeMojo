@@ -91,6 +91,7 @@ from extensions.gamepad.joystick import (
     SensorType,
 )
 from units.si import Duration64, Frequency, PER_SECOND, SECOND
+from extensions.gamepad.names import hex2
 
 # How often rumble can be written, and how often a long rumble must be
 # written again to keep the motors running.
@@ -291,21 +292,6 @@ def encode_rumble_low_amplitude(amplitude: Int) -> Int:
     """
     var index = _amplitude_index(amplitude)
     return ((index & 1) << 15) | (0x40 + index // 2)
-
-
-def _hex2(value: UInt8) -> String:
-    """Write a byte as two lowercase hexadecimal digits, as `%.2x` does.
-
-    Args:
-        value: The byte.
-
-    Returns:
-        The digits.
-    """
-    comptime DIGITS = "0123456789abcdef"
-    return String(DIGITS[byte=Int(value >> 4)]) + String(
-        DIGITS[byte=Int(value & 15)]
-    )
 
 
 def _is_other_nintendo_driver(product: Int) -> Bool:
@@ -808,9 +794,9 @@ struct SwitchDriver(Movable):
                     ProductId(USB_PRODUCT_NINTENDO_SEGA_GENESIS_CONTROLLER),
                 )
         device.guid.data[15] = UInt8(self.controller_type)
-        var serial = _hex2(self.mac_address[0])
+        var serial = hex2(self.mac_address[0])
         for index in range(1, 6):  # pragma: no branch
-            serial += "-" + _hex2(self.mac_address[index])
+            serial += "-" + hex2(self.mac_address[index])
         device.set_serial(serial)
 
     @staticmethod

@@ -38,6 +38,8 @@ from extensions.village.combat import (
     QUICK_SHOT,
     SPELL_BOLT,
     CombatMove,
+    flat_distance,
+    flat_direction,
 )
 from extensions.village.styles import (
     ARCHERY,
@@ -145,22 +147,6 @@ def role_style(role: PartyRole) raises -> FightingStyle:
     return styles[role.value]
 
 
-def _flat(a: Vector3, b: Vector3) -> Float32:
-    """Return how far apart two points are on the ground."""
-    var dx = b.x - a.x
-    var dz = b.z - a.z
-    return sqrt(dx * dx + dz * dz)
-
-
-def _toward(a: Vector3, b: Vector3) -> Vector3:
-    """Return the way from one point to another on the ground, of length
-    one, or of no length when they meet."""
-    var gap = _flat(a, b)
-    if gap < 1.0e-4:
-        return Vector3(0, 0, 0)
-    return Vector3((b.x - a.x) / gap, 0, (b.z - a.z) / gap)
-
-
 def escape(zone: Zone, at: Vector3) -> Vector3:
     """Return the shortest way out of a zone.
 
@@ -174,7 +160,7 @@ def escape(zone: Zone, at: Vector3) -> Vector3:
         on. A member right at a circle's middle steps along plus x.
     """
     if zone.shape == CIRCLE:
-        var out = _toward(zone.at, at)
+        var out = flat_direction(zone.at, at, Vector3(0, 0, 0))
         if out.length() < 0.5:
             return Vector3(1, 0, 0)
         return out
@@ -305,7 +291,7 @@ struct PartyMind(Copyable, Movable):
             var f = sight.facing
             var way = Vector3(f.x * c - f.z * s, 0, f.x * s + f.z * c)
             return foe + way * ARCHER_SPOT
-        var back = _toward(foe, sight.leader)
+        var back = flat_direction(foe, sight.leader, Vector3(0, 0, 0))
         if back.length() < 0.5:
             back = sight.facing
         return sight.leader + back * HEALER_SPOT
@@ -344,13 +330,17 @@ struct PartyMind(Copyable, Movable):
         self.mend_wait = max(Float32(0), self.mend_wait - seconds)
         var out = still_intent()
         if not sight.fighting or not sight.target:
-            var gap = _flat(sight.at, sight.leader)
+            var gap = flat_distance(sight.at, sight.leader)
             if gap > FOLLOW_GAP:
-                out.way = _toward(sight.at, sight.leader)
+                out.way = flat_direction(
+                    sight.at, sight.leader, Vector3(0, 0, 0)
+                )
                 out.run = gap > 2 * FOLLOW_GAP
             if sight.fallen and self.role == HEALER:
-                out.way = _toward(sight.at, sight.fallen.value())
-                out.revive = _flat(sight.at, sight.fallen.value()) < 1.5
+                out.way = flat_direction(
+                    sight.at, sight.fallen.value(), Vector3(0, 0, 0)
+                )
+                out.revive = flat_distance(sight.at, sight.fallen.value()) < 1.5
             return out
         var foe = sight.target.value()
         out.face = foe
@@ -370,8 +360,8 @@ struct PartyMind(Copyable, Movable):
                 return out
         if sight.stack:
             var there = sight.stack.value()
-            if _flat(sight.at, there) > 1.2:
-                out.way = _toward(sight.at, there)
+            if flat_distance(sight.at, there) > 1.2:
+                out.way = flat_direction(sight.at, there, Vector3(0, 0, 0))
                 out.run = True
                 return out
         if self.role == TANK and not sight.targeted and self.taunt_wait <= 0:
@@ -383,9 +373,9 @@ struct PartyMind(Copyable, Movable):
                 self.mend_wait = MEND_EVERY
                 return out
         var spot = self.spot(sight)
-        var off = _flat(sight.at, spot)
+        var off = flat_distance(sight.at, spot)
         if off > SPOT_NEAR:
-            out.way = _toward(sight.at, spot)
+            out.way = flat_direction(sight.at, spot, Vector3(0, 0, 0))
             out.run = off > 3
             if self.role == TANK or self.role == STRIKER:
                 return out

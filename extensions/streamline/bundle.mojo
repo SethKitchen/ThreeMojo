@@ -64,6 +64,7 @@ from render.framebuffer import FloatColor
 from std.math import isfinite
 from std.memory import bitcast
 from units.si import METER, RADIAN
+from loaders.bytes import little_u32
 
 comptime BUNDLE_VERSION = 1
 """The version of the frame file that this module writes."""
@@ -88,16 +89,6 @@ def _put(mut bytes: List[UInt8], at: Int, word: UInt32):
     bytes[at + 1] = UInt8((word >> 8) & 0xFF)
     bytes[at + 2] = UInt8((word >> 16) & 0xFF)
     bytes[at + 3] = UInt8(word >> 24)
-
-
-def _get(bytes: List[UInt8], at: Int) -> UInt32:
-    """Read a word, least significant byte first."""
-    return (
-        UInt32(bytes[at])
-        | (UInt32(bytes[at + 1]) << 8)
-        | (UInt32(bytes[at + 2]) << 16)
-        | (UInt32(bytes[at + 3]) << 24)
-    )
 
 
 def _grow(mut bytes: List[UInt8], words: Int) -> Int:
@@ -495,10 +486,10 @@ def decode_result(
     """
     if len(bytes) < _RESULT_HEADER or not _has_magic(bytes, "TMSR"):
         raise Error("This is not a Streamline result")
-    if Int(_get(bytes, 4)) != RESULT_VERSION:
+    if Int(little_u32(bytes, 4)) != RESULT_VERSION:
         raise Error("The result's version is not " + String(RESULT_VERSION))
-    var width = Int(_get(bytes, 8))
-    var height = Int(_get(bytes, 12))
+    var width = Int(little_u32(bytes, 8))
+    var height = Int(little_u32(bytes, 12))
     if width != output.width or height != output.height:
         raise Error(
             "The result is "
@@ -516,10 +507,10 @@ def decode_result(
     var at = _RESULT_HEADER
     for _ in range(width * height):  # pragma: no branch
         var color = FloatColor(
-            bitcast[DType.float32](_get(bytes, at)),
-            bitcast[DType.float32](_get(bytes, at + 4)),
-            bitcast[DType.float32](_get(bytes, at + 8)),
-            bitcast[DType.float32](_get(bytes, at + 12)),
+            bitcast[DType.float32](little_u32(bytes, at)),
+            bitcast[DType.float32](little_u32(bytes, at + 4)),
+            bitcast[DType.float32](little_u32(bytes, at + 8)),
+            bitcast[DType.float32](little_u32(bytes, at + 12)),
         )
         if not (
             isfinite(color.r)

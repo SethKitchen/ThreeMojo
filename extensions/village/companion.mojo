@@ -37,7 +37,12 @@ from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.attire.mix import RANGER, dressed_as
 from extensions.village.clothes import calling_groom
-from extensions.village.combat import Blow, FighterParameters
+from extensions.village.combat import (
+    Blow,
+    FighterParameters,
+    flat_distance,
+    flat_direction,
+)
 from extensions.village.foes import Bandit
 from extensions.village.interior import Doorway
 from math.vector3 import Vector3
@@ -114,13 +119,6 @@ comptime ALLY_Z = Float32(1.5)
 """How far behind the player's start she starts, in meters."""
 
 
-def _flat_gap(a: Vector3, b: Vector3) -> Float32:
-    """Return how far apart two points are on the ground."""
-    var dx = b.x - a.x
-    var dz = b.z - a.z
-    return sqrt(dx * dx + dz * dz)
-
-
 def _through(at: Vector3, door: Doorway, depth: Float32) -> Vector3:
     """Return the spot she walks to through a door: `depth` past its
     middle, positive inward.
@@ -143,15 +141,6 @@ def _through(at: Vector3, door: Doorway, depth: Float32) -> Vector3:
     return middle + into * (min(abs(depth), deep + side) * sense)
 
 
-def _toward(a: Vector3, b: Vector3) -> Vector3:
-    """Return the way from one point to another on the ground, of length
-    one, or +z when they meet."""
-    var gap = _flat_gap(a, b)
-    if gap < 1.0e-4:
-        return Vector3(0, 0, 1)
-    return Vector3((b.x - a.x) / gap, 0, (b.z - a.z) / gap)
-
-
 def nearest_door(doors: List[Doorway], player: Vector3) -> Int:
     """Return the door nearest the player on the ground.
 
@@ -165,7 +154,7 @@ def nearest_door(doors: List[Doorway], player: Vector3) -> Int:
     var best = 0
     var nearest = Float32(1.0e30)
     for k in range(len(doors)):  # pragma: no branch
-        var gap = _flat_gap(doors[k].middle(), player)
+        var gap = flat_distance(doors[k].middle(), player)
         if gap < nearest:
             nearest = gap
             best = k
@@ -200,7 +189,7 @@ def climb_step(at: Vector3, way: List[Vector3], step: Int) -> Int:
                 next = k
                 break
     ref to = way[next]
-    var there = _flat_gap(at, to) < CLIMB_REACH
+    var there = flat_distance(at, to) < CLIMB_REACH
     if there and abs(to.y - at.y) < CLIMB_REACH:
         next = min(next + 1, last)
     return next
@@ -244,11 +233,11 @@ def follow_point(
     var middle = door.middle()
     var into = Vector3(door.swing_x, 0, door.swing_z)
     var spot = middle - into * DOOR_OUTSIDE
-    if _flat_gap(at, middle) < DOOR_REACH:
+    if flat_distance(at, middle) < DOOR_REACH:
         spot = _through(at, door, DOOR_INSIDE)
     # She stops `keep` from what she follows: the point lies that far past
     # the spot, so she stops at the spot.
-    return spot + _toward(at, spot) * keep
+    return spot + flat_direction(at, spot, Vector3(0, 0, 1)) * keep
 
 
 @fieldwise_init
@@ -332,7 +321,7 @@ def ally_goal(
     var upstairs = False
     if len(way) > 0:
         ref foot = way[0]
-        var at_foot = _flat_gap(at, foot) < CLIMB_REACH
+        var at_foot = flat_distance(at, foot) < CLIMB_REACH
         at_foot = at_foot and abs(at.y - foot.y) < CLIMB_REACH
         var over = at.y > foot.y + CLIMB_REACH
         upstairs = not at_foot and (over or (going and climb.down))
@@ -345,19 +334,28 @@ def ally_goal(
         var step = climb.step if climb.down == down else -1
         var next = climb_step(at, way, step)
         ref to = way[next]
-        return (to + _toward(at, to) * keep, Climb(next, down))
+        return (
+            to + flat_direction(at, to, Vector3(0, 0, 1)) * keep,
+            Climb(next, down),
+        )
     ref door = doors[house]
     var middle = door.middle()
     var into = Vector3(door.swing_x, 0, door.swing_z)
     if not leaving:
-        if _flat_gap(at, middle) < DOOR_CLEAR:
+        if flat_distance(at, middle) < DOOR_CLEAR:
             var clear = middle + into * DOOR_INSIDE
-            return (clear + _toward(at, clear) * keep, no_climb())
+            return (
+                clear + flat_direction(at, clear, Vector3(0, 0, 1)) * keep,
+                no_climb(),
+            )
         return (goal, no_climb())
     var spot = middle + into * DOOR_INSIDE
-    if _flat_gap(at, middle) < DOOR_REACH:
+    if flat_distance(at, middle) < DOOR_REACH:
         spot = _through(at, door, -DOOR_OUTSIDE)
-    return (spot + _toward(at, spot) * keep, no_climb())
+    return (
+        spot + flat_direction(at, spot, Vector3(0, 0, 1)) * keep,
+        no_climb(),
+    )
 
 
 def around_pond(
@@ -402,7 +400,7 @@ def around_pond(
     # middle.
     var side = off / gap if gap > 1.0e-4 else Vector3(-way.z, 0, way.x) / long
     var round = Vector3(middle.x, at.y, middle.z) + side * (reach + POND_MARGIN)
-    return round + _toward(at, round) * keep
+    return round + flat_direction(at, round, Vector3(0, 0, 1)) * keep
 
 
 def flank_spot(target: Vector3, player: Vector3, at: Vector3) -> Vector3:
@@ -417,7 +415,7 @@ def flank_spot(target: Vector3, player: Vector3, at: Vector3) -> Vector3:
         The point on the ground `KEEP` from the foe, `FLANK` off the line
         from the foe to the player, on her side of that line.
     """
-    var back = _toward(target, player)
+    var back = flat_direction(target, player, Vector3(0, 0, 1))
     var cross = back.x * (at.z - target.z) - back.z * (at.x - target.x)
     var turn = FLANK.to(RADIAN)
     if cross < 0:
@@ -517,21 +515,21 @@ struct Companion(Copyable, Movable):
         self.cast_wait = max(Float32(0), self.cast_wait - seconds)
         self.mend_wait = max(Float32(0), self.mend_wait - seconds)
         var out = AllyIntent(Vector3(0, 0, 0), False, None, False, False)
-        var near = _flat_gap(sight.at, sight.player)
-        var home = _toward(sight.at, sight.player)
+        var near = flat_distance(sight.at, sight.player)
+        var home = flat_direction(sight.at, sight.player, Vector3(0, 0, 1))
         if sight.fighting:
             self.charge(ASSIST_RATE * seconds)
         if sight.fighting and sight.target:
             var target = sight.target.value()
-            var gap = _flat_gap(sight.at, target)
+            var gap = flat_distance(sight.at, target)
             var spot = flank_spot(target, sight.player, sight.at)
-            var off = _flat_gap(sight.at, spot)
+            var off = flat_distance(sight.at, spot)
             out.face = target
             if near > LEASH:
                 out.way = home
                 out.run = True
             elif off > SPOT_NEAR:
-                out.way = _toward(sight.at, spot)
+                out.way = flat_direction(sight.at, spot, Vector3(0, 0, 1))
                 out.run = off > 4
             if sight.free and self.cast_wait <= 0 and gap <= CAST_RANGE:
                 out.cast = True

@@ -38,7 +38,7 @@ This is not a three.js port. See Extensions.
     outfit.add(apron())
 """
 
-from extensions.attire.cover import Cover
+from extensions.attire.cover import Cover, reach_both
 from extensions.attire.garment import Garment
 from extensions.attire.kinds import (
     BISHOP_SLEEVE,
@@ -94,14 +94,6 @@ comptime GOLD_LACE = Color(214, 178, 96)
 """The color of gold lace and braid."""
 
 
-def _both(
-    mut cover: Cover, right: Joint, left: Joint, end: Float32, start: Float32
-) raises:
-    """Cover the same span of a joint on each side."""
-    cover.reach_to(right, end, start)
-    cover.reach_to(left, end, start)
-
-
 def _trunk(mut cover: Cover, neck: Float32) raises:
     """Cover the hips, the spine, the chest and the neck to a share."""
     cover.reach_to(HIPS)
@@ -112,8 +104,8 @@ def _trunk(mut cover: Cover, neck: Float32) raises:
 
 def _sleeves(mut cover: Cover, forearm: Float32) raises:
     """Cover each upper arm, and each forearm to a share."""
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, forearm, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, forearm, 0)
 
 
 def chemise() raises -> Garment:
@@ -131,7 +123,7 @@ def chemise() raises -> Garment:
     var cover = Cover()
     _trunk(cover, 0.08)
     _sleeves(cover, 0.9)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.45, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.45, 0)
     return Garment(
         "chemise",
         TORSO_SLOT,
@@ -161,7 +153,7 @@ def laced_shirt() raises -> Garment:
     var cover = Cover()
     _trunk(cover, 0.22)
     _sleeves(cover, 0.88)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.25, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.25, 0)
     return Garment(
         "laced shirt",
         TORSO_SLOT,
@@ -186,8 +178,8 @@ def skirt() raises -> Garment:
     """
     var cover = Cover()
     cover.reach_to(HIPS, 1, 0.45)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.85, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.85, 0)
     return Garment(
         "skirt",
         LEGS_SLOT,
@@ -211,8 +203,8 @@ def apron() raises -> Garment:
     """
     var cover = Cover()
     cover.reach_to(HIPS, 1, 0.5)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.55, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.55, 0)
     return Garment(
         "apron",
         WAIST_SLOT,
@@ -265,7 +257,7 @@ def doublet() raises -> Garment:
     var cover = Cover()
     _trunk(cover, 0.38)
     _sleeves(cover, 0.88)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.14, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.14, 0)
     var coat = Garment(
         "doublet",
         TORSO_SLOT,
@@ -294,7 +286,7 @@ def waistcoat() raises -> Garment:
     """
     var cover = Cover()
     _trunk(cover, 0.05)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.12, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.12, 0)
     var vest = Garment(
         "waistcoat",
         TORSO_SLOT,
@@ -322,8 +314,8 @@ def frock_coat() raises -> Garment:
     var cover = Cover()
     _trunk(cover, 0.32)
     _sleeves(cover, 0.86)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.3, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.3, 0)
     var coat = Garment(
         "frock coat",
         TORSO_SLOT,
@@ -353,8 +345,8 @@ def long_coat() raises -> Garment:
     var cover = Cover()
     _trunk(cover, 0.32)
     _sleeves(cover, 0.86)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.4, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.4, 0)
     var coat = Garment(
         "long coat",
         TORSO_SLOT,
@@ -383,8 +375,8 @@ def open_robe() raises -> Garment:
     var cover = Cover()
     _trunk(cover, 0.3)
     _sleeves(cover, 0.86)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.85, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.85, 0)
     var robe = Garment(
         "open robe",
         TORSO_SLOT,
@@ -415,8 +407,8 @@ def ball_gown() raises -> Garment:
     var cover = Cover()
     _trunk(cover, 0)
     _sleeves(cover, 0.4)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 1, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 1, 0)
     var gown = Garment(
         "ball gown",
         TORSO_SLOT,

@@ -36,6 +36,7 @@ from extensions.humanoid.fidelity import (
     HumanoidUse,
     humanoid_provenance,
     require_humanoid_use,
+    nearest_vertices,
 )
 from core.user_data import UserData
 from extensions.humanoid.rig.joints import (
@@ -290,14 +291,6 @@ struct GameHumanoid(Movable):
             scene.node(node).visible = near
 
 
-def _key(p: Vector3) -> Int:
-    """Return the cell of the grid a point falls in, as one integer."""
-    var i = Int(p.x / CARRY_CELL + 4096)
-    var j = Int(p.y / CARRY_CELL + 4096)
-    var k = Int(p.z / CARRY_CELL + 4096)
-    return (i * 8192 + j) * 8192 + k
-
-
 def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
     """Give a decimated mesh the colors, the thinness and the normals of
     the mesh it was decimated from, each vertex those of the nearest
@@ -319,52 +312,10 @@ def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
         Error: If either mesh has no positions, or a nonempty target
             has no source vertices.
     """
-    ref from_points = source.attribute_view(String(POSITION))
-    ref to_points = target.attribute_view(String(POSITION))
-    if from_points.count() == 0 and to_points.count() > 0:
+    var sources = source.attribute_view(String(POSITION)).count()
+    if sources == 0 and target.attribute_view(String(POSITION)).count() > 0:
         raise Error("Attribute transfer needs source vertices")
-    var cells = Dict[Int, List[Int]]()
-    for v in range(from_points.count()):
-        var key = _key(from_points.vector3(v))
-        if key not in cells:
-            cells[key] = List[Int]()
-        cells[key].append(v)
-    var nearest = List[Int](capacity=to_points.count())
-    for v in range(to_points.count()):
-        var p = to_points.vector3(v)
-        var best = 0
-        var closest = Float32(1e30)
-        var ring = 1
-        while True:
-            for dx in range(-ring, ring + 1):  # pragma: no branch
-                for dy in range(-ring, ring + 1):  # pragma: no branch
-                    for dz in range(-ring, ring + 1):  # pragma: no branch
-                        if (
-                            ring > 1
-                            and max(abs(dx), max(abs(dy), abs(dz))) < ring
-                        ):
-                            continue
-                        var key = _key(
-                            p
-                            + Vector3(
-                                Float32(dx) * CARRY_CELL,
-                                Float32(dy) * CARRY_CELL,
-                                Float32(dz) * CARRY_CELL,
-                            )
-                        )
-                        if key not in cells:
-                            continue
-                        for s in cells[key]:  # pragma: no branch
-                            var d = (from_points.vector3(s) - p).length()
-                            if d < closest:
-                                closest = d
-                                best = s
-            # An unvisited cell is at least this far away. Leave one
-            # extra cell for the grid key's floating-point rounding.
-            if closest <= Float32(ring - 1) * CARRY_CELL:
-                break
-            ring += 1
-        nearest.append(best)
+    var nearest = nearest_vertices(source, target, CARRY_CELL, 1)
     var names: List[String] = [String(COLOR), String(THINNESS)]
     for name in names:  # pragma: no branch
         if not source.has_attribute(name):

@@ -28,9 +28,7 @@ from extensions.chemistry.catalog import magnesium, magnesium_gas
 from extensions.chemistry.kinetics import (
     Arrhenius,
     Concentration64,
-    Diffusivity64,
     RateAtLeast,
-    SQUARE_METER_PER_SECOND,
     ShrinkingCore,
 )
 from extensions.chemistry.quantities import (
@@ -52,12 +50,14 @@ from extensions.chemistry.transport import (
 )
 from extensions.chemistry.window import met_intervals
 from units.si import (
+    HOUR,
+    MILLIMETER,
+    SQUARE_METER_PER_SECOND,
     Area64,
+    Diffusivity64,
     Duration64,
     Frequency64,
-    HOUR,
     Length64,
-    MILLIMETER,
     Mass64,
     Pressure64,
     SpecificHeatCapacity64,

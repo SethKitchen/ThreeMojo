@@ -26,11 +26,6 @@ from units.si import Pressure64
 from units.temperature import CELSIUS, Temperature64
 
 
-def _celsius(value: Float64) -> Temperature64:
-    """Return a temperature given in degrees Celsius."""
-    return Temperature64(value, CELSIUS)
-
-
 def lime_burning() raises -> Step:
     """Return the burning of limestone to quicklime.
 
@@ -45,7 +40,7 @@ def lime_burning() raises -> Step:
         Pressure64(1, ATMOSPHERE),
         Temperature64(800),
         Temperature64(1200),
-        _celsius(900),
+        Temperature64(900, CELSIUS),
     )
     step.add(
         proceeds(

@@ -46,6 +46,7 @@ from extensions.humanoid.fidelity import (
     fnv1a_step,
     json_fingerprint,
     spec_fingerprint,
+    fnv1a_int,
 )
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -1512,25 +1513,16 @@ def geometry_digest(geometry: BufferGeometry) raises -> String:
         Error: If the mesh has no positions.
     """
     ref positions = geometry.attribute_view(String(POSITION))
-    var hash = _fnv_int(FNV1A_OFFSET, positions.count())
+    var hash = fnv1a_int(FNV1A_OFFSET, positions.count())
     for v in range(positions.count()):  # pragma: no branch
         for c in range(3):  # pragma: no branch
             hash = _fnv_bits(
                 hash, bitcast[DType.uint32](positions.component(v, c))
             )
-    hash = _fnv_int(hash, len(geometry.index))
+    hash = fnv1a_int(hash, len(geometry.index))
     for entry in geometry.index:  # pragma: no branch
-        hash = _fnv_int(hash, entry)
+        hash = fnv1a_int(hash, entry)
     return fingerprint_hex(hash)
-
-
-def _fnv_int(hash: UInt64, value: Int) -> UInt64:
-    """Fold eight little-endian bytes of `value` into a digest."""
-    var state = hash
-    var bits = UInt64(value)
-    for at in range(8):  # pragma: no branch
-        state = fnv1a_step(state, UInt8((bits >> UInt64(8 * at)) & 0xFF))
-    return state
 
 
 def _fnv_bits(hash: UInt64, bits: UInt32) -> UInt64:

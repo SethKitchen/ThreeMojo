@@ -17,6 +17,13 @@ The US customary factors follow from the exact international pound force,
 """
 
 from units.quantity import Quantity, Unit
+from units.si import (
+    AngleUnit64,
+    ForceUnit64,
+    LengthUnit64,
+    LineLoadUnit64,
+    PressureUnit64,
+)
 
 # Force per volume: the unit weight of a soil, of water or of concrete.
 comptime UnitWeight64 = Quantity[-2, 1, -2, 0, 0, DType.float64]
@@ -24,11 +31,6 @@ comptime UnitWeightUnit64 = Unit[-2, 1, -2, 0, 0, DType.float64]
 # Force times length per length: a moment on a unit length of wall.
 comptime MomentPerLength64 = Quantity[1, 1, -2, 0, 0, DType.float64]
 comptime MomentPerLengthUnit64 = Unit[1, 1, -2, 0, 0, DType.float64]
-comptime ForceUnit64 = Unit[1, 1, -2, 0, 0, DType.float64]
-comptime PressureUnit64 = Unit[-1, 1, -2, 0, 0, DType.float64]
-comptime LineLoadUnit64 = Unit[0, 1, -2, 0, 0, DType.float64]
-comptime LengthUnit64 = Unit[1, 0, 0, 0, 0, DType.float64]
-comptime AngleUnit64 = Unit[0, 0, 0, 1, 0, DType.float64]
 
 comptime NEWTON_PER_CUBIC_METER = UnitWeightUnit64(1.0, "N/m^3")
 comptime KILONEWTON_PER_CUBIC_METER = UnitWeightUnit64(1000.0, "kN/m^3")

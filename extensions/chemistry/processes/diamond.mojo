@@ -64,11 +64,6 @@ comptime CEMENTED_CARBIDE = ElasticLayer(
 )
 
 
-def _celsius(value: Float64) -> Temperature64:
-    """Return a temperature given in degrees Celsius."""
-    return Temperature64(value, CELSIUS)
-
-
 def diamond_coating() raises -> Step:
     """Return diamond growth on a cemented carbide tool.
 
@@ -84,7 +79,7 @@ def diamond_coating() raises -> Step:
         Pressure64(30, TORR),
         Temperature64(600),
         Temperature64(1500),
-        _celsius(850),
+        Temperature64(850, CELSIUS),
     )
     step.add(
         proceeds(
@@ -102,7 +97,7 @@ def diamond_coating() raises -> Step:
     step.add(
         above(
             KINETIC,
-            _celsius(700),
+            Temperature64(700, CELSIUS),
             "Below about 700 degC growth is slow and the film is poor.",
             "May (2000), Phil. Trans. R. Soc. A 358",
         )
@@ -110,7 +105,7 @@ def diamond_coating() raises -> Step:
     step.add(
         below(
             ENGINEERING,
-            _celsius(1000),
+            Temperature64(1000, CELSIUS),
             "Hotter, cobalt reaches the surface faster and makes graphite.",
             "diamond-on-carbide practice",
         )
@@ -191,7 +186,7 @@ def hydrogen_filament() raises -> Step:
         Pressure64(30, TORR),
         Temperature64(1500),
         Temperature64(4000),
-        _celsius(2200),
+        Temperature64(2200, CELSIUS),
     )
     step.add(
         proceeds(
@@ -208,7 +203,7 @@ def hydrogen_filament() raises -> Step:
     step.add(
         below(
             ENGINEERING,
-            _celsius(3422),
+            Temperature64(3422, CELSIUS),
             "Tungsten melts at 3422 degC. Stay far below to limit sag.",
             "melting point from the CRC Handbook",
         )

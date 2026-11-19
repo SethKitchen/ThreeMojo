@@ -47,7 +47,7 @@ of the numbers are this port's own choices.
 
 from extensions.carla.quantity_boundary import _finite_si
 
-from extensions.carla.agents import point_in_polygon
+from extensions.carla.agents import point_in_polygon, orient
 from extensions.carla.map import EPSILON, Map
 from extensions.carla.road_info import (
     LANE_BIDIRECTIONAL,
@@ -356,18 +356,11 @@ struct NavPoint(ImplicitlyCopyable, Writable):
         )
 
 
-def _cross(o: Vector3, a: Vector3, b: Vector3) -> Float64:
-    # The z part of (a - o) x (b - o) in the x-y plane.
-    return (Float64(a.x) - Float64(o.x)) * (Float64(b.y) - Float64(o.y)) - (
-        Float64(a.y) - Float64(o.y)
-    ) * (Float64(b.x) - Float64(o.x))
-
-
 def _signed_area(vertices: List[Vector3]) -> Float64:
     var total = 0.0
     # Every caller passes three corners at least.
     for i in range(1, len(vertices) - 1):  # pragma: no branch
-        total += _cross(vertices[0], vertices[i], vertices[i + 1])
+        total += orient(vertices[0], vertices[i], vertices[i + 1])
     return total / 2.0
 
 
@@ -427,7 +420,7 @@ struct NavPolygon(Copyable, Movable):
         for i in range(n):  # pragma: no branch
             var a = self.vertices[i]
             var b = self.vertices[(i + 1) % n]
-            if _cross(a, b, point) < -_ON_EDGE * _distance_2d(a, b):
+            if orient(a, b, point) < -_ON_EDGE * _distance_2d(a, b):
                 return False
         return True
 
@@ -496,9 +489,9 @@ struct NavPolygon(Copyable, Movable):
             var a = self.vertices[0]
             var b = self.vertices[i]
             var c = self.vertices[i + 1]
-            var area = _cross(a, b, c)
-            var u = _cross(point, b, c) / area
-            var v = _cross(a, point, c) / area
+            var area = orient(a, b, c)
+            var u = orient(point, b, c) / area
+            var v = orient(a, point, c) / area
             var w = 1.0 - u - v
             var score = min(u, min(v, w))
             if score > best_score:
@@ -745,8 +738,8 @@ struct NavMesh(Movable):
         for j in range(m):  # pragma: no branch
             var c = self.polygons[q].vertices[j]
             var d = self.polygons[q].vertices[(j + 1) % m]
-            var off_c = abs(_cross(a, b, c)) / length
-            var off_d = abs(_cross(a, b, d)) / length
+            var off_c = abs(orient(a, b, c)) / length
+            var off_d = abs(orient(a, b, d)) / length
             if off_c > Float64(_ALONG) or off_d > Float64(_ALONG):
                 continue
             var tc = _param(a, b, c)
@@ -1076,8 +1069,8 @@ struct NavMesh(Movable):
         while i <= n:
             var l = lefts[i]
             var r = rights[i]
-            if _cross(apex, right, r) >= 0.0:
-                if apex == right or _cross(apex, left, r) < 0.0:
+            if orient(apex, right, r) >= 0.0:
+                if apex == right or orient(apex, left, r) < 0.0:
                     right = r
                     right_i = i
                 else:
@@ -1088,8 +1081,8 @@ struct NavMesh(Movable):
                     right_i = apex_i
                     i = apex_i + 1
                     continue
-            if _cross(apex, left, l) <= 0.0:
-                if apex == left or _cross(apex, right, l) > 0.0:
+            if orient(apex, left, l) <= 0.0:
+                if apex == left or orient(apex, right, l) > 0.0:
                     left = l
                     left_i = i
                 else:
@@ -1173,7 +1166,7 @@ struct NavMesh(Movable):
         var fan = 0.0
         # A polygon has one fan triangle at least.
         for k in range(1, len(poly.vertices) - 1):  # pragma: no branch
-            fan += _cross(
+            fan += orient(
                 poly.vertices[0], poly.vertices[k], poly.vertices[k + 1]
             )
         var t = Float64(random.uniform()) * fan
@@ -1181,7 +1174,7 @@ struct NavMesh(Movable):
         # A polygon has one fan triangle at least.
         for k in range(1, len(poly.vertices) - 1):  # pragma: no branch
             tri = k
-            t -= _cross(
+            t -= orient(
                 poly.vertices[0], poly.vertices[k], poly.vertices[k + 1]
             )
             if t < 0.0:
@@ -1217,10 +1210,10 @@ struct NavMesh(Movable):
 def _intersect(a: Vector3, b: Vector3, p: Vector3, q: Vector3) -> Vector3:
     # Where segment a-b crosses the line of portal p-q, as a point of the
     # portal, in the x-y plane.
-    var denom = _cross(Vector3(0, 0, 0), b - a, q - p)
+    var denom = orient(Vector3(0, 0, 0), b - a, q - p)
     if denom == 0.0:
         return _lerp(p, q, 0.5)
-    var t = _cross(Vector3(0, 0, 0), p - a, b - a) / denom
+    var t = orient(Vector3(0, 0, 0), p - a, b - a) / denom
     return _lerp(p, q, min(max(t, 0.0), 1.0))
 
 

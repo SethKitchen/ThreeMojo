@@ -172,6 +172,7 @@ from extensions.village.combat import (
     move_name,
     outcome_word,
     reaches,
+    flat_distance,
 )
 from extensions.animals.options import CROWD
 from extensions.animals.registry import WOLF
@@ -596,17 +597,10 @@ def pressed(now: MoveInput, before: MoveInput) -> MoveInput:
     )
 
 
-def _flat(a: Vector3, b: Vector3) -> Float32:
-    """Return how far apart two points are on the ground."""
-    var dx = b.x - a.x
-    var dz = b.z - a.z
-    return sqrt(dx * dx + dz * dz)
-
-
 def _way(a: Vector3, b: Vector3) -> Vector3:
     """Return the way from one point to another on the ground, of length
     one, or of no length when they meet."""
-    var gap = max(_flat(a, b), Float32(1.0e-4))
+    var gap = max(flat_distance(a, b), Float32(1.0e-4))
     return Vector3((b.x - a.x) / gap, 0, (b.z - a.z) / gap)
 
 
@@ -1875,7 +1869,7 @@ struct Battle(Movable):
             if not self.standing(index):
                 continue
             var there = self.target_at(index)
-            var gap = _flat(at, there)
+            var gap = flat_distance(at, there)
             if gap > LOCK_RANGE:
                 continue
             var off = wrap_angle(
@@ -1907,7 +1901,7 @@ struct Battle(Movable):
             if index == self.lock or not self.standing(index):
                 continue
             var there = self.target_at(index)
-            if _flat(at, there) > LOCK_RANGE:
+            if flat_distance(at, there) > LOCK_RANGE:
                 continue
             var off = wrap_angle(
                 Angle(yaw_of(there - at).to(RADIAN) - base, RADIAN)
@@ -1951,7 +1945,7 @@ struct Battle(Movable):
             if not self.standing(index):
                 continue
             var there = self.target_at(index)
-            var gap = _flat(at, there)
+            var gap = flat_distance(at, there)
             if gap < nearest and faces(at, look, Angle(AIM_ARC, DEGREE), there):
                 nearest = gap
                 best = index
@@ -2049,7 +2043,7 @@ struct Battle(Movable):
             ref warden = self.wardens[w]
             if warden.boss.defeated():
                 continue
-            var gap = _flat(warden.character.position, player.position)
+            var gap = flat_distance(warden.character.position, player.position)
             if gap > TAUNT_RANGE:
                 continue
             warden.boss.taunt(0)
@@ -2144,7 +2138,7 @@ struct Battle(Movable):
             for other in range(self.targets()):  # pragma: no branch
                 if other == index or not self.standing(other):
                     continue
-                if _flat(self.target_at(other), there) > SHOCK_RADIUS:
+                if flat_distance(self.target_at(other), there) > SHOCK_RADIUS:
                     continue
                 _ = self._strike(scene, other, blow, there, 0, tank)
         elif effect == CHAIN:
@@ -2159,7 +2153,7 @@ struct Battle(Movable):
                 if other == index or not self.standing(other):
                     continue
                 var to = self.target_at(other) + Vector3(0, CHEST, 0)
-                if _flat(to, chest) > CHAIN_RANGE:
+                if flat_distance(to, chest) > CHAIN_RANGE:
                     continue
                 var way = (to - chest) / max((to - chest).length(), 1.0e-3)
                 var spark = Missile(
@@ -2245,7 +2239,7 @@ struct Battle(Movable):
             if not self.wardens[w].boss.link_ready():
                 continue
             var at = self.wardens[w].character.position
-            if _flat(at, player.position) > LINK_RANGE:
+            if flat_distance(at, player.position) > LINK_RANGE:
                 continue
             var heavy = style_move(
                 self.fighter.style, HEAVY_BUTTON, player.grounded, FREE
@@ -2257,7 +2251,7 @@ struct Battle(Movable):
                 ref member = self.members[k]
                 if not member.joined or member.down >= 0:
                     continue
-                if _flat(member.character.position, at) > LINK_REACH:
+                if flat_distance(member.character.position, at) > LINK_REACH:
                     continue
                 members.append(k + 1)
                 var move = style_move(
@@ -2433,14 +2427,16 @@ struct Battle(Movable):
             var goal = feet
             var near = Float32(1.0e9)
             if not self.fighter.defeated():
-                near = _flat(foe.character.position, feet)
+                near = flat_distance(foe.character.position, feet)
             for k in range(len(self.allies)):
                 ref ally = self.allies[k]
                 if ally.down >= 0:
                     continue
                 var there = ally.character.position
                 # She is a quarry only once she is clearly the nearer.
-                var gap = _flat(foe.character.position, there) + ALLY_SHY
+                var gap = (
+                    flat_distance(foe.character.position, there) + ALLY_SHY
+                )
                 if gap < near:
                     near = gap
                     quarry = COMPANION_QUARRY
@@ -2450,7 +2446,7 @@ struct Battle(Movable):
                 if not member.joined or member.down >= 0:
                     continue
                 var there = member.character.position
-                var gap = _flat(foe.character.position, there)
+                var gap = flat_distance(foe.character.position, there)
                 if gap < near:
                     near = gap
                     quarry = k
@@ -2724,7 +2720,7 @@ struct Battle(Movable):
                 if not self.standing(index):
                     continue
                 var there = self.target_at(index)
-                if _flat(wave.at, there) > WAVE_WIDTH / 2:
+                if flat_distance(wave.at, there) > WAVE_WIDTH / 2:
                     continue
                 if abs(there.y - wave.at.y) > REACH_HEIGHT:
                     continue
@@ -2759,7 +2755,7 @@ struct Battle(Movable):
             if not self.standing(index):
                 continue
             var there = self.target_at(index)
-            var gap = _flat(at, there)
+            var gap = flat_distance(at, there)
             if gap < nearest and faces(
                 at, heading, Angle(SHOT_ARC, DEGREE), there
             ):
@@ -2843,7 +2839,7 @@ struct Battle(Movable):
             if not self.standing(index):
                 continue
             var there = self.target_at(index)
-            if _flat(there, player.position) > STORM_RANGE:
+            if flat_distance(there, player.position) > STORM_RANGE:
                 continue
             if magic:
                 var high = there + Vector3(0, STORM_HEIGHT, 0)
@@ -2870,7 +2866,10 @@ struct Battle(Movable):
         self.notes.append("MEND +" + amount)
         for k in range(len(self.allies)):
             ref ally = self.allies[k]
-            if _flat(ally.character.position, player.position) > MEND_RADIUS:
+            if (
+                flat_distance(ally.character.position, player.position)
+                > MEND_RADIUS
+            ):
                 continue
             ref a = ally.fighter
             var more = min(
@@ -2885,7 +2884,7 @@ struct Battle(Movable):
             if not member.joined or member.down >= 0:
                 continue
             var place = member.character.position
-            if _flat(place, player.position) > MEND_RADIUS:
+            if flat_distance(place, player.position) > MEND_RADIUS:
                 continue
             ref m = member.fighter
             var more = min(
@@ -3040,7 +3039,7 @@ struct Battle(Movable):
             var state = foe.brain.state
             if foe.down >= 0 or state == POSTED or state == RETURNING:
                 continue
-            var gap = _flat(foe.character.position, at)
+            var gap = flat_distance(foe.character.position, at)
             if gap < nearest:
                 nearest = gap
                 best = index
@@ -3393,7 +3392,10 @@ struct Battle(Movable):
             ref warden = self.wardens[w]
             if warden.boss.engaged and not warden.boss.defeated():
                 fighting = True
-                if _flat(warden.character.position, player.position) < ENGAGE:
+                if (
+                    flat_distance(warden.character.position, player.position)
+                    < ENGAGE
+                ):
                     self.drawn = True
                     self.calm = 0
             if not warden.boss.defeated():
@@ -3442,7 +3444,9 @@ struct Battle(Movable):
             foe.back += seconds
             if not foe.fighter.defeated():
                 var state = foe.brain.state
-                var near = _flat(foe.character.position, player.position)
+                var near = flat_distance(
+                    foe.character.position, player.position
+                )
                 if near < ENGAGE and state != POSTED and state != RETURNING:
                     engaged = True
                 continue
@@ -3465,7 +3469,8 @@ struct Battle(Movable):
                 scene.node(node).visible = True
         if (
             self.lock >= 0
-            and _flat(player.position, self.target_at(self.lock)) > LOCK_BREAK
+            and flat_distance(player.position, self.target_at(self.lock))
+            > LOCK_BREAK
         ):
             self.lock = -1
         if self.fighter.defeated():
@@ -3696,7 +3701,7 @@ struct Battle(Movable):
                 lowest = part
                 hurt = other.character.position
         for k in range(len(self.members)):
-            var near = _flat(feet, self.members[k].post)
+            var near = flat_distance(feet, self.members[k].post)
             var gone = self.fighter.defeated()
             if not self.members[k].joined and near < JOIN_RANGE and not gone:
                 self.members[k].joined = True
@@ -3855,7 +3860,7 @@ struct Battle(Movable):
             ref member = self.members[k]
             if member.down < 0:
                 continue
-            if _flat(member.character.position, at) > REVIVE_REACH:
+            if flat_distance(member.character.position, at) > REVIVE_REACH:
                 continue
             member.revive += seconds
             if member.revive >= REVIVE_SECONDS:
@@ -3916,7 +3921,7 @@ struct Battle(Movable):
         var at = self.members[k].character.position
         var healed = Float32(0)
         if (
-            _flat(at, player.position) <= MEND_RADIUS
+            flat_distance(at, player.position) <= MEND_RADIUS
             and not self.fighter.defeated()
         ):
             ref f = self.fighter
@@ -3932,7 +3937,7 @@ struct Battle(Movable):
             ref other = self.members[j]
             if other.down >= 0:
                 continue
-            if _flat(at, other.character.position) > MEND_RADIUS:
+            if flat_distance(at, other.character.position) > MEND_RADIUS:
                 continue
             ref o = other.fighter
             var gain = min(
@@ -4069,7 +4074,7 @@ struct Battle(Movable):
                 self._pose_beast(scene, index)
                 continue
             ref foe = self.foes[index]
-            var near = _flat(foe.character.position, feet) <= reach
+            var near = flat_distance(foe.character.position, feet) <= reach
             var turn = (self.frame + index) % FAR_POSE == 0
             pose_person(
                 scene,
@@ -4098,7 +4103,7 @@ struct Battle(Movable):
             warden.puppet.move = shown[0]
             warden.puppet.clock = shown[1]
             warden.puppet.pace = shown[2]
-            var near = _flat(warden.character.position, feet) <= reach
+            var near = flat_distance(warden.character.position, feet) <= reach
             var turn = (self.frame + index) % FAR_POSE == 0
             pose_person(
                 scene,
@@ -4112,7 +4117,7 @@ struct Battle(Movable):
             )
         for index in range(len(self.members)):
             ref member = self.members[index]
-            var near = _flat(member.character.position, feet) <= reach
+            var near = flat_distance(member.character.position, feet) <= reach
             var turn = (self.frame + index + 1) % FAR_POSE == 0
             pose_person(
                 scene,

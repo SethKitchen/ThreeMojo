@@ -63,6 +63,17 @@ Two quantities combine only when their `dtype` is the same. A `Length64` plus a 
 
 A `Unit` holds its factor as a `Float32` by default, so it is safe in GPU code, which has no `Float64`. A unit of either float type converts a quantity of either float type. `FOOT64`, `INCH64` and `DEGREE64` are `Float64` units for factors that a `Float32` rounds. Use them where a `Float64` quantity must keep every digit.
 
+The other `Float64` units live here too, so each extension takes them from one place:
+
+| Kind | Units |
+|---|---|
+| Length and volume | `MILLIMETER64` and `CUBIC_CENTIMETER64` |
+| Time | `MILLISECOND64`, `MINUTE64`, `DAY64`, `WEEK64` and `YEAR64`, the Julian year of 365.25 days |
+| Rate | `PER_SECOND64`, `PER_MINUTE64`, `PER_DAY64` and `PER_YEAR64` |
+| Diffusion | `Diffusivity64`, an area each second, and `SQUARE_METER_PER_SECOND` |
+
+An extension makes its own `Float64` units with the unit types `LengthUnit64`, `AreaUnit64`, `VolumeUnit64`, `InertiaUnit64`, `DurationUnit64`, `FrequencyUnit64`, `AngleUnit64`, `VelocityUnit64`, `ForceUnit64`, `MomentUnit64`, `PressureUnit64`, `LineLoadUnit64` and `DiffusivityUnit64`.
+
 ## Units
 
 A `Unit` is a factor to the canonical unit and a symbol.

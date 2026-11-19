@@ -34,6 +34,8 @@ The reader takes these items:
 
 A number can carry its uncertainty in parentheses, as in `3.5668(2)`. The reader ignores the uncertainty and the occupancy. It reads comments, quoted values and text fields, and it refuses an unknown element or a broken loop with the line number.
 
+The tokens and the tables come from `extensions/chemistry/cif.mojo`, which also reads the mmCIF files of [Molecular structures](Molecular-structures#cif-text). `parse_cif(text)` gives a `CifBlock` of `CifTable` tables. Each table keeps the line of each value, for messages.
+
 ## Place the atoms
 
 A `Crystal` gives:

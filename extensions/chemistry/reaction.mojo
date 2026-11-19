@@ -41,6 +41,7 @@ from extensions.chemistry.quantities import (
 from extensions.chemistry.thermo import Substance
 from units.si import Pressure64
 from units.temperature import Temperature64, TemperatureDifference64
+from extensions.numerics.search import bisect
 
 # Element sums closer to zero than this balance.
 comptime _BALANCE = 1e-9
@@ -258,20 +259,18 @@ struct Reaction(Copyable, Movable, Writable):
             Error: If an end is not physical, the data does not reach an
                 end, or the change has the same sign at both ends.
         """
-        var lo = low.kelvin
-        var hi = high.kelvin
         var g_lo = self.delta_g(low, pressure).value
         var g_hi = self.delta_g(high, pressure).value
         if (g_lo < 0) == (g_hi < 0):
             raise Error("The change has one sign over the search range")
-        for _ in range(_BISECTIONS):  # pragma: no branch
-            var mid = 0.5 * (lo + hi)
-            var g = self.delta_g(Temperature64(mid), pressure).value
-            if (g < 0) == (g_lo < 0):
-                lo = mid
-            else:
-                hi = mid
-        return Temperature64(0.5 * (lo + hi))
+
+        def below(kelvin: Float64) raises capturing -> Bool:
+            var g = self.delta_g(Temperature64(kelvin), pressure).value
+            return (g < 0) == (g_lo < 0)
+
+        return Temperature64(
+            bisect[below](low.kelvin, high.kelvin, _BISECTIONS)
+        )
 
     def equilibrium_pressure(
         self, temperature: Temperature64, low: Pressure64, high: Pressure64
@@ -300,16 +299,14 @@ struct Reaction(Copyable, Movable, Writable):
         var g_hi = self.delta_g(temperature, high).value
         if (g_lo < 0) == (g_hi < 0):
             raise Error("The change has one sign over the search range")
-        var lo = log(low.value)
-        var hi = log(high.value)
-        for _ in range(_BISECTIONS):  # pragma: no branch
-            var mid = 0.5 * (lo + hi)
-            var g = self.delta_g(temperature, Pressure64(exp(mid))).value
-            if (g < 0) == (g_lo < 0):
-                lo = mid
-            else:
-                hi = mid
-        return Pressure64(exp(0.5 * (lo + hi)))
+
+        def below(log_pressure: Float64) raises capturing -> Bool:
+            var g = self.delta_g(temperature, Pressure64(exp(log_pressure)))
+            return (g.value < 0) == (g_lo < 0)
+
+        return Pressure64(
+            exp(bisect[below](log(low.value), log(high.value), _BISECTIONS))
+        )
 
     def delta_g_uncertainty(
         self, temperature: Temperature64

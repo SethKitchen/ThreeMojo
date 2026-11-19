@@ -53,7 +53,14 @@ from std.math import cos, pi, sin, sqrt
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
-from extensions.attire.mesh_ops import COVER, MeshWriter, cut, merge, top_four
+from extensions.attire.mesh_ops import (
+    COVER,
+    MeshWriter,
+    cut,
+    merge,
+    top_four,
+    nearest_kept,
+)
 from extensions.humanoid.rig.joints import (
     HIPS,
     JOINT_COUNT,
@@ -255,12 +262,6 @@ def skirt_top(rig: HumanoidRig) -> Float32:
     return rig.joints[HIPS.value].y - SKIRT_TOP * skirt_scale(rig)
 
 
-def _side_direction(side: Int) -> Vector3:
-    """Return the unit direction of one side, round from the front."""
-    var turn = 2 * Float32(pi) * Float32(side) / Float32(SKIRT_SIDES)
-    return Vector3(sin(turn), 0, cos(turn))
-
-
 def leg_side(piece: BufferGeometry) raises -> List[Bool]:
     """Return, per vertex, whether an arm does not weigh most on it.
 
@@ -439,7 +440,7 @@ def hull_radii(hull: List[Vector3], center: Vector3) -> List[Float32]:
     var radii = List[Float32](capacity=SKIRT_SIDES)
     var count = len(hull)
     for side in range(SKIRT_SIDES):  # pragma: no branch
-        var direction = _side_direction(side)
+        var direction = side_direction(side)
         var far = Float32(0)
         for k in range(count):
             far = max(
@@ -463,7 +464,7 @@ def segment_radii(segments: List[Vector3], center: Vector3) -> List[Float32]:
     """
     var radii = List[Float32](capacity=SKIRT_SIDES)
     for side in range(SKIRT_SIDES):  # pragma: no branch
-        var direction = _side_direction(side)
+        var direction = side_direction(side)
         var far = Float32(0)
         for k in range(len(segments) // 2):
             far = max(
@@ -571,20 +572,6 @@ def skirt_envelope(
     return envelope^
 
 
-def _nearest(placed_points: List[Vector3], legs: List[Bool], p: Vector3) -> Int:
-    """Return the trunk or leg vertex nearest a point, or -1."""
-    var best = -1
-    var closest = Float32(1e30)
-    for v in range(len(placed_points)):
-        if not legs[v]:
-            continue
-        var d = (placed_points[v] - p).length_sq()
-        if d < closest:
-            closest = d
-            best = v
-    return best
-
-
 def skirt_mesh(
     envelope: SkirtEnvelope,
     piece: BufferGeometry,
@@ -646,7 +633,7 @@ def skirt_mesh(
         var fall = clamp((top - y) / max(top - hem, Float32(1e-6)), 0, 1)
         var cover = Float32(0.5) + 0.5 * clamp((y - hem) / SKIRT_HEM_RAMP, 0, 1)
         for side in range(SKIRT_SIDES):  # pragma: no branch
-            var direction = _side_direction(side)
+            var direction = side_direction(side)
             var r = envelope.tucked[side]
             if k >= 0:
                 r = envelope.radii[k * SKIRT_SIDES + side]
@@ -657,7 +644,7 @@ def skirt_mesh(
             # the left, and the two sharing the middle.
             var share = clamp(0.5 + right * (p.x - hips.x) / (2 * split), 0, 1)
             var all = List[Float32](length=JOINT_COUNT, fill=0)
-            var source = _nearest(
+            var source = nearest_kept(
                 points,
                 legs,
                 envelope.center + direction * envelope.radii[side],
@@ -679,7 +666,7 @@ def skirt_mesh(
             # How close the skirt lies over the cloth: along its side's
             # ray from the axis, where the ray crosses the cloth, and to
             # the cloth's nearest vertex, whichever is closer.
-            var below = _nearest(points, under, p)
+            var below = nearest_kept(points, under, p)
             if below >= 0:
                 var gap = (points[below] - p).length()
                 var at = max(k, 0) * SKIRT_SIDES + side
@@ -781,3 +768,16 @@ def hang_skirt(
             below.append(reach - rings.vector3(v).y)
         skirt = cut(skirt, below, 0)
     return merge(kept, skirt)
+
+
+def side_direction(side: Int) -> Vector3:
+    """Return the outward direction of a side of a skirt.
+
+    Args:
+        side: The side, from 0 to `SKIRT_SIDES - 1`.
+
+    Returns:
+        A unit vector in x and z, with side 0 along +z.
+    """
+    var turn = 2 * Float32(pi) * Float32(side) / Float32(SKIRT_SIDES)
+    return Vector3(sin(turn), 0, cos(turn))

@@ -65,7 +65,8 @@ The source is CARLA's simulator plugin, `Carla/Recorder/
 CarlaReplayer.cpp` and `CarlaRecorder.cpp`.
 """
 
-from extensions.carla.actor import ActorId, NO_ACTOR, WALKER_ACTOR, no_rotation
+from extensions.carla.actor import ActorId, NO_ACTOR, WALKER_ACTOR
+from extensions.carla.transform import no_rotation, CarlaTransform
 from extensions.carla.recorder_format import c_fixed, c_general
 from extensions.carla.recorder_packets import (
     LogReader,
@@ -122,7 +123,6 @@ from extensions.carla.replayer_helper import (
     set_camera_position,
     set_walker_speed_centimeters_per_second as set_walker_speed,
 )
-from extensions.carla.transform import CarlaTransform
 from extensions.carla.walker_gait import WalkerGait
 from extensions.carla.world import World
 from std.collections import Dict

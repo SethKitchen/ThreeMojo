@@ -173,6 +173,16 @@
 - [Materials and coatings](Materials-and-coatings)
 - [Crystals and figures](Crystals-and-figures)
 - [Diamond growth](Diamond-growth)
+- [Medical imaging](Medical-imaging)
+- [Molecular structures](Molecular-structures)
+- [Tetrahedral FEM](Tetrahedral-FEM)
+- [Survival analysis](Survival-analysis)
+- [Diagnostic tests](Diagnostic-tests)
+- [Meta-analysis](Meta-analysis)
+- [Epidemic models](Epidemic-models)
+- [Sample size and power](Sample-size-and-power)
+- [Group comparisons](Group-comparisons)
+- [Observational studies](Observational-studies)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)

@@ -51,7 +51,7 @@ This is not a three.js port. See Extensions.
     mail.dyes[PRIMARY_DYE.value] = Color(190, 190, 196)
 """
 
-from extensions.attire.cover import Cover
+from extensions.attire.cover import Cover, reach_both
 from extensions.attire.kinds import (
     CLOSED,
     FITTED_SLEEVE,
@@ -353,25 +353,6 @@ def forged(
     return garment^
 
 
-def _both(
-    mut cover: Cover, right: Joint, left: Joint, end: Float32, start: Float32
-) raises:
-    """Cover the same span of a joint on each side.
-
-    Args:
-        cover: The cover.
-        right: The joint on the right.
-        left: The same joint on the left.
-        end: Where the span ends.
-        start: Where it starts.
-
-    Raises:
-        Error: If the span is refused.
-    """
-    cover.reach_to(right, end, start)
-    cover.reach_to(left, end, start)
-
-
 def _trunk(mut cover: Cover) raises:
     """Cover the hips, the spine and the chest.
 
@@ -401,9 +382,9 @@ def shirt() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.2)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.82, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.2, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.82, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.2, 0)
     return Garment(
         "shirt", TORSO_SLOT, UNDER_LAYER, LINEN, cover^, Color(236, 228, 208)
     )
@@ -451,9 +432,9 @@ def tunic() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.12)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.55, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.35, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.55, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.35, 0)
     # Its skirt hangs round both legs and flares.
     return Garment(
         "tunic",
@@ -479,9 +460,9 @@ def gambeson() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.45)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.82, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.3, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.82, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.3, 0)
     # The quilting is stiff: its skirt flares little.
     return Garment(
         "gambeson",
@@ -507,9 +488,9 @@ def hauberk() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.3)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.8, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.45, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.8, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.45, 0)
     var mail = Garment(
         "hauberk",
         TORSO_SLOT,
@@ -580,9 +561,9 @@ def boots() raises -> Garment:
         Error: If its cover is refused, which a wardrobe garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 1, 0.45)
-    _both(cover, RIGHT_FOOT, LEFT_FOOT, 1, 0)
-    _both(cover, RIGHT_TOES, LEFT_TOES, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 1, 0.45)
+    reach_both(cover, RIGHT_FOOT, LEFT_FOOT, 1, 0)
+    reach_both(cover, RIGHT_TOES, LEFT_TOES, 1, 0)
     # Stiff leather spans the toes.
     return Garment(
         "boots",
@@ -607,8 +588,8 @@ def gloves() raises -> Garment:
         Error: If its cover is refused, which a wardrobe garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_HAND, LEFT_HAND, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 1, 0.75)
+    reach_both(cover, RIGHT_HAND, LEFT_HAND, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 1, 0.75)
     return Garment(
         "gloves", HANDS_SLOT, OUTER_LAYER, LEATHER, cover^, Color(62, 42, 30)
     )
@@ -650,7 +631,7 @@ def fauld() raises -> Garment:
     """
     var cover = Cover()
     cover.reach_to(HIPS, 0.4)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.32, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.32, 0)
     return Garment(
         "fauld",
         WAIST_SLOT,
@@ -676,7 +657,7 @@ def pauldrons() raises -> Garment:
         Error: If its cover is refused, which a wardrobe garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.45, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.45, 0)
     return Garment(
         "pauldrons",
         SHOULDERS_SLOT,
@@ -700,7 +681,7 @@ def vambraces() raises -> Garment:
         Error: If its cover is refused, which a wardrobe garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.9, 0.12)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.9, 0.12)
     return Garment(
         "vambraces",
         ARMS_SLOT,
@@ -722,7 +703,7 @@ def greaves() raises -> Garment:
         Error: If its cover is refused, which a wardrobe garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.92, 0.08)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.92, 0.08)
     return Garment(
         "greaves",
         LEGS_SLOT,
@@ -770,7 +751,7 @@ def surcoat() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.1)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.5, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.5, 0)
     var coat = Garment(
         "surcoat",
         TORSO_SLOT,
@@ -798,8 +779,8 @@ def breeches() raises -> Garment:
     """
     var cover = Cover()
     cover.reach_to(HIPS, 0.6)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.2, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.2, 0)
     # Cut looser than hose, and over them.
     return Garment(
         "breeches",
@@ -825,10 +806,10 @@ def gown() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.1)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.85, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.8, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.85, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.8, 0)
     # A gown falls from the hips and spreads wide by its hem.
     return Garment(
         "gown",
@@ -854,10 +835,10 @@ def robe() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.25)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.95, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
-    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.85, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.95, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    reach_both(cover, RIGHT_SHIN, LEFT_SHIN, 0.85, 0)
     # Heavy, undyed wool, cut loose: it falls straight.
     return Garment(
         "robe",
@@ -885,8 +866,8 @@ def jerkin() raises -> Garment:
     var cover = Cover()
     _trunk(cover)
     cover.reach_to(NECK, 0.1)
-    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.2, 0)
-    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.25, 0)
+    reach_both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.2, 0)
+    reach_both(cover, RIGHT_THIGH, LEFT_THIGH, 0.25, 0)
     return Garment(
         "jerkin",
         TORSO_SLOT,
@@ -960,8 +941,8 @@ def gauntlets() raises -> Garment:
         Error: If its cover is refused, which a wardrobe garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_HAND, LEFT_HAND, 1, 0)
-    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 1, 0.78)
+    reach_both(cover, RIGHT_HAND, LEFT_HAND, 1, 0)
+    reach_both(cover, RIGHT_FOREARM, LEFT_FOREARM, 1, 0.78)
     return Garment(
         "gauntlets",
         HANDS_SLOT,
@@ -983,8 +964,8 @@ def sabatons() raises -> Garment:
         Error: If its cover is refused, which a wardrobe garment's is not.
     """
     var cover = Cover()
-    _both(cover, RIGHT_FOOT, LEFT_FOOT, 1, 0)
-    _both(cover, RIGHT_TOES, LEFT_TOES, 1, 0)
+    reach_both(cover, RIGHT_FOOT, LEFT_FOOT, 1, 0)
+    reach_both(cover, RIGHT_TOES, LEFT_TOES, 1, 0)
     # Each plate rides the foot or the toes: they part at the ball of
     # the foot, as the lames of a sabaton do.
     return Garment(

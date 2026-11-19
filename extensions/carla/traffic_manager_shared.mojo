@@ -26,7 +26,8 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/DataStructures.h`
 and `TrafficManagerLocal.h`.
 """
 
-from extensions.carla.actor import ActorId, NO_ACTOR, no_rotation
+from extensions.carla.actor import ActorId, NO_ACTOR
+from extensions.carla.transform import no_rotation, CarlaTransform
 from extensions.carla.map import Waypoint
 from extensions.carla.physics.vehicle_control import VehicleControl
 from extensions.carla.traffic_manager_map import (
@@ -42,7 +43,6 @@ from extensions.carla.traffic_manager_state import (
     SimulationState,
     TrackTraffic,
 )
-from extensions.carla.transform import CarlaTransform
 from extensions.carla.vehicle import LIGHTS_NONE, VehicleLightState
 from std.collections import Dict, Optional
 from units.si import Length
@@ -271,3 +271,16 @@ struct TrafficManagerShared(Movable):
         )
         self.tl_frame = List[Bool](length=n, fill=False)
         self.control_frame = List[TrafficCommand](length=n, fill=no_command())
+
+
+def drop_value(mut list: List[Int], value: Int):
+    """Remove the first copy of a value from a list, if it holds one.
+
+    Args:
+        list: The list.
+        value: The value to remove.
+    """
+    for i in range(len(list)):
+        if list[i] == value:
+            _ = list.pop(i)
+            return

@@ -18,14 +18,15 @@
   furnace, valid where the Biot number h L / k is below about 0.1.
 """
 
-from std.math import erfc, exp, isfinite, log, pi, sqrt
-from extensions.chemistry.kinetics import Diffusivity64
+from math.finite import require_positive_finite
+from std.math import exp, isfinite, log, pi, sqrt
 from extensions.chemistry.quantities import GAS_CONSTANT, MolarMass64
 from extensions.chemistry.reaction import Reaction, product, reactant
 from extensions.chemistry.thermo import Substance
 from units.quantity import Quantity
 from units.si import (
     Area64,
+    Diffusivity64,
     Duration64,
     Length64,
     Mass64,
@@ -36,20 +37,13 @@ from units.si import (
 )
 from extensions.chemistry.quantities import MolarEnergy64
 from units.temperature import Temperature64
+from extensions.numerics.distributions import inverse_erfc
 
 # A mass flux: kilograms per square meter per second.
 comptime MassFlux64 = Quantity[-2, 1, -1, 0, 0, DType.float64]
 # The range a vapor pressure is searched over, in pascals.
 comptime _P_LOWEST = 1e-30
 comptime _P_HIGHEST = 1e12
-# Bisection steps for an inverse error function.
-comptime _BISECTIONS = 80
-
-
-def _require_positive(value: Float64, message: String) raises:
-    """Refuse a value that is not finite and positive."""
-    if not (isfinite(value) and value > 0):
-        raise Error(message)
 
 
 def vapor_pressure(
@@ -105,8 +99,10 @@ def evaporation_flux(
     for p in pressures:  # pragma: no branch
         if not (isfinite(p) and p >= 0):
             raise Error("A pressure must be finite and not negative")
-    _require_positive(molar_mass.value, "A molar mass must be positive")
-    _require_positive(temperature.kelvin, "A temperature must be positive")
+    require_positive_finite(molar_mass.value, "A molar mass must be positive")
+    require_positive_finite(
+        temperature.kelvin, "A temperature must be positive"
+    )
     if not (coefficient > 0 and coefficient <= 1):
         raise Error("An evaporation coefficient must be above 0, at most 1")
     var root = sqrt(
@@ -136,8 +132,8 @@ def evaporation_time(
     """
     if not (isfinite(mass.value) and mass.value >= 0):
         raise Error("A mass must be finite and not negative")
-    _require_positive(area.value, "An area must be finite and positive")
-    _require_positive(flux.value, "A flux must be finite and positive")
+    require_positive_finite(area.value, "An area must be finite and positive")
+    require_positive_finite(flux.value, "A flux must be finite and positive")
     return Duration64(mass.value / (area.value * flux.value))
 
 
@@ -161,26 +157,15 @@ struct Diffusivity(ImplicitlyCopyable):
             Error: If D0 is not finite and positive, Q is negative or not
                 finite, or the temperature is not positive.
         """
-        _require_positive(self.d0.value, "D0 must be finite and positive")
+        require_positive_finite(self.d0.value, "D0 must be finite and positive")
         var q = self.activation.value
         if not (isfinite(q) and q >= 0):
             raise Error("An activation energy must be finite, not negative")
-        _require_positive(temperature.kelvin, "A temperature must be positive")
+        require_positive_finite(
+            temperature.kelvin, "A temperature must be positive"
+        )
         var rt = GAS_CONSTANT.value * temperature.kelvin
         return Diffusivity64(self.d0.value * exp(-q / rt))
-
-
-def _inverse_erfc(value: Float64) -> Float64:
-    """Return z with erfc(z) = value, for value in (0, 1)."""
-    var lo = Float64(0)
-    var hi = Float64(10)
-    for _ in range(_BISECTIONS):  # pragma: no branch
-        var mid = 0.5 * (lo + hi)
-        if erfc(mid) > value:
-            lo = mid
-        else:
-            hi = mid
-    return 0.5 * (lo + hi)
 
 
 def _require_ratio(ratio: Float64) raises:
@@ -206,10 +191,10 @@ def case_depth(
         Error: If D or the time is not finite and positive, or the ratio is
             not between 0 and 1.
     """
-    _require_positive(diffusivity.value, "A diffusivity must be positive")
-    _require_positive(time.value, "A time must be finite and positive")
+    require_positive_finite(diffusivity.value, "A diffusivity must be positive")
+    require_positive_finite(time.value, "A time must be finite and positive")
     _require_ratio(ratio)
-    var z = _inverse_erfc(ratio)
+    var z = inverse_erfc(ratio)
     return Length64(2 * z * sqrt(diffusivity.value * time.value))
 
 
@@ -230,10 +215,10 @@ def time_to_depth(
         Error: If D or the depth is not finite and positive, or the ratio
             is not between 0 and 1.
     """
-    _require_positive(diffusivity.value, "A diffusivity must be positive")
-    _require_positive(depth.value, "A depth must be finite and positive")
+    require_positive_finite(diffusivity.value, "A diffusivity must be positive")
+    require_positive_finite(depth.value, "A depth must be finite and positive")
     _require_ratio(ratio)
-    var z = _inverse_erfc(ratio)
+    var z = inverse_erfc(ratio)
     var half = depth.value / (2 * z)
     return Duration64(half * half / diffusivity.value)
 
@@ -256,9 +241,11 @@ def biot(
     Raises:
         Error: If a value is not finite and positive.
     """
-    _require_positive(coefficient.value, "A coefficient must be positive")
-    _require_positive(length.value, "A length must be positive")
-    _require_positive(conductivity.value, "A conductivity must be positive")
+    require_positive_finite(coefficient.value, "A coefficient must be positive")
+    require_positive_finite(length.value, "A length must be positive")
+    require_positive_finite(
+        conductivity.value, "A conductivity must be positive"
+    )
     return coefficient.value * length.value / conductivity.value
 
 
@@ -289,10 +276,12 @@ def heating_time(
         Error: If a property is not finite and positive, or the target is
             not strictly between the start and the furnace.
     """
-    _require_positive(mass.value, "A mass must be finite and positive")
-    _require_positive(specific_heat.value, "A specific heat must be positive")
-    _require_positive(coefficient.value, "A coefficient must be positive")
-    _require_positive(area.value, "An area must be finite and positive")
+    require_positive_finite(mass.value, "A mass must be finite and positive")
+    require_positive_finite(
+        specific_heat.value, "A specific heat must be positive"
+    )
+    require_positive_finite(coefficient.value, "A coefficient must be positive")
+    require_positive_finite(area.value, "An area must be finite and positive")
     var a = start.kelvin - furnace.kelvin
     var b = target.kelvin - furnace.kelvin
     # The target lies between the start and the furnace when a and b share

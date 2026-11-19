@@ -18,9 +18,14 @@ across two quads that share an edge when they give the same coordinates
 at that edge.
 """
 
+from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
+from core.object3d import NodeId
+from core.scene import Scene
+from materials.material import MaterialId
 from math.vector3 import Vector3
+from objects.mesh import Mesh
 
 
 def _normal(p0: Vector3, p1: Vector3, p3: Vector3) -> Vector3:
@@ -238,3 +243,42 @@ struct Sheet(Movable):
         geometry.set_attribute(String(UV), BufferAttribute(self.uvs.copy(), 2))
         geometry.set_index(self.index.copy())
         return geometry^
+
+
+def add_sheet(
+    mut scene: Scene,
+    mut assets: Assets,
+    sheet: Sheet,
+    material: MaterialId,
+    parent: NodeId,
+    casts: Bool,
+) raises -> Int:
+    """Add a sheet as a mesh under a node, if it has a triangle.
+
+    Args:
+        scene: The scene that takes the mesh.
+        assets: The assets that take the geometry.
+        sheet: The sheet.
+        material: The material of the mesh.
+        parent: The node to hang the mesh under.
+        casts: True if the mesh casts a shadow. Every sheet receives one.
+
+    Returns:
+        The triangles of the sheet, or 0 for an empty sheet, which adds
+        nothing.
+
+    Raises:
+        Error: If the scene refuses the mesh.
+    """
+    if sheet.triangles() == 0:
+        return 0
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(sheet.geometry()),
+            material,
+            parent,
+            cast_shadow=casts,
+            receive_shadow=True,
+        )
+    )
+    return sheet.triangles()

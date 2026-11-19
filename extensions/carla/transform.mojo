@@ -306,3 +306,12 @@ struct CarlaTransform(ImplicitlyCopyable):
         var turn = Matrix4()
         turn.set(0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1)
         return self.three_matrix() * turn
+
+
+def no_rotation() -> CarlaRotation:
+    """Return the rotation that turns nothing.
+
+    Returns:
+        A pitch, yaw and roll of 0 degrees.
+    """
+    return CarlaRotation(Angle(0, DEGREE), Angle(0, DEGREE), Angle(0, DEGREE))

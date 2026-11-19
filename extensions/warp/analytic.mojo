@@ -120,18 +120,9 @@ def radial(square: Jet, f: Float64, df: Float64, ddf: Float64) -> Jet:
             f,
             (df / (2.0 * r)) * square.gradient,
             (df / (2.0 * r)) * square.hessian
-            + ((ddf - df / r) / (4.0 * s)) * _square_of(square.gradient),
+            + ((ddf - df / r) / (4.0 * s)) * outer_self(square.gradient),
         )
     return Jet(f, square.gradient * 0.0, (ddf / 2.0) * square.hessian)
-
-
-def _square_of(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 16]:
-    """Return a ⊗ a."""
-    var out = SIMD[DType.float64, 16](0)
-    for i in range(4):
-        for j in range(4):
-            out[4 * i + j] = a[i] * a[j]
-    return out
 
 
 def place_jets(
@@ -419,4 +410,20 @@ def christoffel_symbols[
                         - parts.d1[4 * (4 * b + c) + d]
                     )
                 out[16 * a + 4 * b + c] = 0.5 * total
+    return out
+
+
+def outer_self(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 16]:
+    """Return the outer product of a 4-vector with itself.
+
+    Args:
+        a: The vector.
+
+    Returns:
+        The 4 by 4 matrix `a a^T`, row-major.
+    """
+    var out = SIMD[DType.float64, 16](0)
+    for i in range(4):
+        for j in range(4):
+            out[4 * i + j] = a[i] * a[j]
     return out

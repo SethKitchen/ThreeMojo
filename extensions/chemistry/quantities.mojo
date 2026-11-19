@@ -21,7 +21,7 @@ coatings of a process.
 
 from std.math import isfinite
 from units.quantity import Quantity, Unit
-from units.si import Mass64, Pressure64
+from units.si import Mass64, Pressure64, PressureUnit64
 from units.temperature import Temperature64
 
 
@@ -261,7 +261,6 @@ comptime KILOMOLE = AmountUnit(1000.0, "kmol")
 # The molar gas constant. It is exact since the 2019 SI: N_A times k.
 comptime GAS_CONSTANT = MolarEntropy64(8.31446261815324)
 
-comptime PressureUnit64 = Unit[-1, 1, -2, 0, 0, DType.float64]
 # The standard-state pressure of the NASA and IUPAC tables: one bar.
 comptime STANDARD_PRESSURE = Pressure64(1.0e5)
 comptime BAR = PressureUnit64(1.0e5, "bar")
