@@ -141,7 +141,9 @@ static void *take(uint64_t size) {
 }
 
 void *KGEN_CompilerRT_AlignedAlloc(uint64_t alignment, uint64_t size) {
-  if (alignment == 0 || (alignment & (alignment - 1u)) != 0 || alignment > 0x40000000u) {
+  /* An alignment of 0 asks for no alignment, as it did before the checks
+   * below. Every block is aligned to 16 bytes. */
+  if ((alignment & (alignment - 1u)) != 0 || alignment > 0x40000000u) {
     return 0;
   }
   if (size > 0xFFFFFFD0u) return 0;
@@ -252,8 +254,10 @@ float fmaf(float a, float b, float c) { return (float)((double)a * (double)b + (
 float hypotf(float x, float y) { return (float)__builtin_sqrt((double)x * (double)x + (double)y * (double)y); }
 
 /* Sine and cosine: reduce to a quarter turn, then the polynomials of
- * fdlibm's __kernel_sin and __kernel_cos. Good to about 1e-16 for arguments
- * up to about a million, which is far past a water clock. */
+ * fdlibm's __kernel_sin and __kernel_cos. Up to about a million the reduction
+ * is Cody-Waite, good to about 1e-16, which is far past a water clock. Past
+ * that, quarter_turns_large reduces with 96 fraction bits of 2/pi, so that no
+ * finite argument overflows the float-to-integer conversion. */
 static const double PIO2_1 = 1.57079632673412561417e+00;
 static const double PIO2_2 = 6.07710050630396597660e-11;
 static const double PIO2_3 = 2.02226624871116645580e-21;

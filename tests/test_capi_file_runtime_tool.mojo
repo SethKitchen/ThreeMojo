@@ -223,24 +223,37 @@ def test_allocator_wraparound_and_large_angle_sine_stay_safe() raises:
     var until_files = String(text.split("/* ---- 3. Files:")[0])
     var harness = (
         "#include <math.h>\n#include <stdint.h>\n#include <stdio.h>\n"
-        + "static size_t cur_pages = 2;\n"
+        # No memory, and a `memory.grow` that fails and is counted. A
+        # request that passes the size checks asks for memory once. A
+        # request that they refuse must not reach the heap at all.
+        + "static size_t cur_pages = 0;\n"
+        + "static int grow_calls = 0;\n"
         + "unsigned char __heap_base;\n"
         + "#define __builtin_wasm_memory_size(x) cur_pages\n"
-        + "#define __builtin_wasm_memory_grow(x, p) ((size_t)-1)\n"
+        + "#define __builtin_wasm_memory_grow(x, p)"
+        " (grow_calls++, (size_t)-1)\n"
         + until_files.replace("extern unsigned char __heap_base;", "")
         .replace("double sin(double x)", "double mw_sin(double x)")
         .replace("double cos(double x)", "double mw_cos(double x)")
         .replace("sin((double)x)", "mw_sin((double)x)")
         .replace("cos((double)x)", "mw_cos((double)x)")
         + "\nint main(void) {\n"
+        # Three requests of an ordinary size reach the heap, once each.
+        # An alignment of 0 asks for no alignment.
+        + "  if (KGEN_CompilerRT_AlignedAlloc(16, 64) != 0) return 8;\n"
+        + "  if (KGEN_CompilerRT_AlignedAlloc(64, 64) != 0) return 8;\n"
+        + "  if (KGEN_CompilerRT_AlignedAlloc(0, 16) != 0) return 8;\n"
+        + "  if (grow_calls != 3) return 9;\n"
+        # A size that wraps, an alignment that is not a power of two, and
+        # a size that wraps with its alignment are refused first.
         + "  if (KGEN_CompilerRT_AlignedAlloc(16, (uint64_t)-8) != 0) return"
         " 1;\n"
-        + "  if (KGEN_CompilerRT_AlignedAlloc(0, 16) != 0) return 2;\n"
         + "  if (KGEN_CompilerRT_AlignedAlloc(24, 16) != 0) return 3;\n"
         + "  if (KGEN_CompilerRT_AlignedAlloc(64, (uint64_t)-64) != 0) return"
         " 4;\n"
         + "  if (KGEN_CompilerRT_AlignedAlloc(64, 0xFFFFFFC0u) != 0) return"
         " 5;\n"
+        + "  if (grow_calls != 3) return 10;\n"
         + "  double xs[6] = {1e10, 1e18, 1e20, -1e30, 1e150, 1e300};\n"
         + "  for (int i = 0; i < 6; i++) {\n"
         + "    if (fabs(mw_sin(xs[i]) - sin(xs[i])) > 1e-14) return 6;\n"
