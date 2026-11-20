@@ -38,6 +38,7 @@ from extensions.gamepad.hid import (
     HidDeviceInfo,
     HidrawFile,
     _hex_value,
+    _sort_hidraw_names,
     enumerate_hidraw,
     first_top_level_usage,
     hidiocgfeature,
@@ -138,6 +139,45 @@ def test_report_descriptor_usage() raises:
     assert_equal(usage[1], 4)
     # An end before a start leaves the depth below zero: still no usage.
     assert_equal(first_top_level_usage([0xC0, 0xA1, 0x01])[0], 0)
+
+
+def test_hidraw_names_sort_by_number_from_each_order() raises:
+    # A folder lists its nodes in an order that the file system chooses, so
+    # the sort gets each order here, and not from a folder.
+    var mixed: List[String] = [
+        "hidraw10",
+        "hidraw3",
+        "hidraw1",
+        "hidraw2",
+        "hidraw12",
+        "hidraw11",
+    ]
+    # hidraw3 and hidraw1 each move to the front. hidraw2 stops behind
+    # hidraw1, and hidraw11 stops behind hidraw10: names of one length.
+    _sort_hidraw_names(mixed)
+    var expected: List[String] = [
+        "hidraw1",
+        "hidraw2",
+        "hidraw3",
+        "hidraw10",
+        "hidraw11",
+        "hidraw12",
+    ]
+    assert_equal(len(mixed), len(expected))
+    for index in range(len(expected)):
+        assert_equal(mixed[index], expected[index])
+    # A longer name stays behind a shorter one.
+    var sorted_pair: List[String] = ["hidraw2", "hidraw10"]
+    _sort_hidraw_names(sorted_pair)
+    assert_equal(sorted_pair[0], "hidraw2")
+    assert_equal(sorted_pair[1], "hidraw10")
+    # No name and one name have nothing to sort.
+    var none = List[String]()
+    _sort_hidraw_names(none)
+    assert_equal(len(none), 0)
+    var one: List[String] = ["hidraw7"]
+    _sort_hidraw_names(one)
+    assert_equal(one[0], "hidraw7")
 
 
 def test_enumerate_hidraw() raises:

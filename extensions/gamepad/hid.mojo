@@ -478,6 +478,30 @@ def read_hidraw_info(
     )
 
 
+def _sort_hidraw_names(mut names: List[String]):
+    """Sort hidraw node names by their numbers: hidraw2 before hidraw10.
+
+    A shorter name has a smaller number, and names of one length sort as
+    text. A folder gives its names in an order that the file system
+    chooses. So the sort is apart from the folder read, and a test can give
+    it each order.
+
+    Args:
+        names: The names. They are sorted in place.
+    """
+    for index in range(1, len(names)):
+        var at = index
+        while at > 0 and (
+            names[at - 1].byte_length() > names[at].byte_length()
+            or (
+                names[at - 1].byte_length() == names[at].byte_length()
+                and names[at - 1] > names[at]
+            )
+        ):
+            names.swap_elements(at - 1, at)
+            at -= 1
+
+
 def enumerate_hidraw(
     class_dir: String = "/sys/class/hidraw", dev_dir: String = "/dev"
 ) -> List[HidDeviceInfo]:
@@ -497,18 +521,7 @@ def enumerate_hidraw(
                 names.append(name)
     except:
         pass
-    # hidraw2 before hidraw10.
-    for index in range(1, len(names)):
-        var at = index
-        while at > 0 and (
-            names[at - 1].byte_length() > names[at].byte_length()
-            or (
-                names[at - 1].byte_length() == names[at].byte_length()
-                and names[at - 1] > names[at]
-            )
-        ):
-            names.swap_elements(at - 1, at)
-            at -= 1
+    _sort_hidraw_names(names)
     var found = List[HidDeviceInfo]()
     for name in names:
         var info = read_hidraw_info(class_dir, name, dev_dir)
