@@ -86,7 +86,9 @@ The device takes the same inputs that `Renderer.render` gives the CPU rasterizer
 
 An antialiased frame is different in one way. The device draws at `SUPERSAMPLE` times the size and averages the encoded bytes. The CPU averages the linear light before the tone curve. So an edge pixel can differ by a few levels.
 
-`tests/test_vegetation_gpu.mojo` compares a small meadow on both rasterizers. There is no gallery example, because the gallery draws on the CPU. It is a device suite. It is compiled for `sm_80` and has not run on a GPU. [Issue 985](https://github.com/SethKitchen/ThreeMojo/issues/985) stays open until it does.
+`tests/test_vegetation_gpu.mojo` compares a small meadow on both rasterizers. There is no gallery example, because the gallery draws on the CPU. It is a device suite. On a machine with no GPU, each test says that it is skipped.
+
+The suite passed on an NVIDIA TITAN RTX with driver 610.88, under WSL 2 with Mojo 1.2.0 and MAX 26.7.0. No test was skipped. Both plain frames agreed to within one level in each channel.
 
 ## What a frame draws
 
@@ -331,7 +333,7 @@ The mountains are `ridge_ring`, a ring of rugged peaks 900 meters away. Each col
 
 ## Limits
 
-- The CPU culls and grows the clusters. No GPU path does that work. `MeadowDevice` draws the prepared frame on a GPU; see [Draw a frame on a GPU](#draw-a-frame-on-a-gpu). Its device suite has not run on a GPU.
+- The CPU culls and grows the clusters. No GPU path does that work. `MeadowDevice` draws the prepared frame on a GPU; see [Draw a frame on a GPU](#draw-a-frame-on-a-gpu).
 - Culling tests each cluster's bound against the view only. A cluster behind a hill is still drawn.
 - There is no visibility buffer. The rasterizer shades each fragment as it draws it.
 - The grass casts into the same two cascades as the trees. Its shadow on itself is only as sharp as their texels. So the dark roots still stand in for the shadow at the base of each tuft.
