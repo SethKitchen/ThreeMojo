@@ -28,7 +28,7 @@ from extensions.water.view import FRAME
 from std.memory import Layout
 from std.runtime import initialize_runtime
 from units.si import RADIAN, Angle
-from window.capi_abi import ABI_VERSION, MAX_SIDE
+from window.capi_abi import ABI_VERSION, MAX_SIDE, null_pointer
 from window.water_app import BED, WaterApp
 
 
@@ -108,7 +108,7 @@ def tm_create(
     """
     var w = Int(width)
     var h = Int(height)
-    if w > MAX_SIDE or h > MAX_SIDE:
+    if w < 1 or h < 1 or w > MAX_SIDE or h > MAX_SIDE:
         return None
     try:
         var app = GpuWaterApp(w, h, BED)
@@ -126,6 +126,8 @@ def tm_destroy(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> None:
     Args:
         handle: A handle from `tm_create`.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     _ = app.unsafe_take_pointee()
     app.unsafe_free()
@@ -153,6 +155,8 @@ def tm_event(
         detail: The key code of a key event. A pointer event's button is not
             used.
     """
+    if Int(handle) == 0:
+        return
     _app(handle)[].app.handle(Int(kind), Int(y), Int(detail))
 
 
@@ -166,6 +170,8 @@ def tm_step(
         handle: A handle from `tm_create`.
         microseconds: The time since the last step, in microseconds.
     """
+    if Int(handle) == 0:
+        return
     _app(handle)[].app.advance(Int(microseconds))
 
 
@@ -186,6 +192,8 @@ def tm_frame(
         `tm_width * tm_height * 4` bytes. It stays valid until the next
         call on this app.
     """
+    if Int(handle) == 0:
+        return null_pointer[UInt8]()
     var app = _app(handle)
     try:
         app[].app.frame = app[].gpu.draw(
@@ -213,6 +221,8 @@ def tm_width(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The width, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].app.width)
 
 
@@ -226,4 +236,6 @@ def tm_height(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The height, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].app.height)

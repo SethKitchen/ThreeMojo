@@ -31,7 +31,7 @@ node program's node that three.js's library maps it to.
 
 from core.assets import Assets
 from core.ordinal import require_non_negative
-from loaders.file_path import path_directory
+from loaders.file_path import confined_path, path_directory
 from loaders.model_nodes import texture_from_file
 from loaders.xml import XmlDocument, parse_xml
 from materials.material import (
@@ -406,8 +406,13 @@ struct _Reader(Movable):
         var srgb = self.attr(file, "colorspace") == "srgb_texture"
         var key = uri + ("|srgb" if srgb else "")
         if key not in self.texture_keys:
+            var disk = uri
+            if self.base != "":
+                disk = confined_path(self.base, uri, "MaterialX", True)
+            elif ".." in uri:
+                raise Error("MaterialX: unsafe image path: " + uri)
             var built = texture_from_file(
-                self.base + uri,
+                disk,
                 SRGB if srgb else LINEAR,
                 REPEAT,
                 COVERAGE if srgb else IGNORED,

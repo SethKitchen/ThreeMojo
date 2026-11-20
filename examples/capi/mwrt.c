@@ -96,6 +96,7 @@ static int reach(uint64_t end) {
 }
 
 static void *take(uint64_t size) {
+  if (size > 0xFFFFFFD0u) return 0;
   if (heap_start == 0) {
     heap_start = heap_top = ((uint32_t)(uintptr_t)&__heap_base + 15u) & ~15u;
   }
@@ -140,15 +141,20 @@ static void *take(uint64_t size) {
 }
 
 void *KGEN_CompilerRT_AlignedAlloc(uint64_t alignment, uint64_t size) {
+  /* An alignment of 0 asks for no alignment, as it did before the checks
+   * below. Every block is aligned to 16 bytes. */
+  if ((alignment & (alignment - 1u)) != 0 || alignment > 0x40000000u) {
+    return 0;
+  }
+  if (size > 0xFFFFFFD0u) return 0;
   lock(&heap_lock);
-  void *result;
+  void *result = 0;
   if (alignment <= 16) {
     result = take(size);
-  } else {
+  } else if (size <= 0xFFFFFFD0u - alignment - HEADER) {
     /* Take extra, and give back the address that is aligned. A header just
      * before it says where the block starts. */
     char *raw = take(size + alignment + HEADER);
-    result = 0;
     if (raw) {
       uintptr_t at = ((uintptr_t)raw + HEADER + alignment - 1) & ~(uintptr_t)(alignment - 1);
       block *mark = (block *)(at - HEADER);
@@ -248,8 +254,10 @@ float fmaf(float a, float b, float c) { return (float)((double)a * (double)b + (
 float hypotf(float x, float y) { return (float)__builtin_sqrt((double)x * (double)x + (double)y * (double)y); }
 
 /* Sine and cosine: reduce to a quarter turn, then the polynomials of
- * fdlibm's __kernel_sin and __kernel_cos. Good to about 1e-16 for arguments
- * up to about a million, which is far past a water clock. */
+ * fdlibm's __kernel_sin and __kernel_cos. Up to about a million the reduction
+ * is Cody-Waite, good to about 1e-16, which is far past a water clock. Past
+ * that, quarter_turns_large reduces with 96 fraction bits of 2/pi, so that no
+ * finite argument overflows the float-to-integer conversion. */
 static const double PIO2_1 = 1.57079632673412561417e+00;
 static const double PIO2_2 = 6.07710050630396597660e-11;
 static const double PIO2_3 = 2.02226624871116645580e-21;
@@ -275,12 +283,93 @@ static double kernel_cos(double x) {
                              z * (2.08757232129817482790e-09 + z * -1.13596475577881948265e-11)))));
 }
 
+static const uint32_t TWO_OVER_PI_WORDS[37] = {
+    0xA2F9836Eu, 0x4E441529u, 0xFC2757D1u, 0xF534DDC0u, 0xDB629599u, 0x3C439041u,
+    0xFE5163ABu, 0xDEBBC561u, 0xB7246E3Au, 0x424DD2E0u, 0x06492EEAu, 0x09D1921Cu,
+    0xFE1DEB1Cu, 0xB129A73Eu, 0xE88235F5u, 0x2EBB4484u, 0xE99C7026u, 0xB45F7E41u,
+    0x3991D639u, 0x835339F4u, 0x9C845F8Bu, 0xBDF9283Bu, 0x1FF897FFu, 0xDE05980Fu,
+    0xEF2F118Bu, 0x5A0A6D1Fu, 0x6D367ECFu, 0x27CB09B7u, 0x4F463F66u, 0x9E5FEA2Du,
+    0x7527BAC7u, 0xEBE5F17Bu, 0x3D0739F7u, 0x8A5292EAu, 0x6BFB5FB1u, 0x1F8D5D08u,
+    0x56033046u,
+};
+
+static uint32_t pio2_word(int k) {
+  return (k >= 0 && k < 37) ? TWO_OVER_PI_WORDS[k] : 0u;
+}
+
+static uint32_t product_bits(const uint32_t prod[10], int bit) {
+  int idx = bit >> 5;
+  int sh = bit & 31;
+  uint32_t v = prod[idx] >> sh;
+  if (sh != 0 && idx < 9) v |= prod[idx + 1] << (32 - sh);
+  return v;
+}
+
+/* Payne-Hanek reduction for |x| > 2^20: avoids 64-bit float-to-int traps on
+ * wasm32 and preserves 96 fractional bits across the entire finite double range. */
+static int quarter_turns_large(double x, double *r) {
+  uint64_t bits;
+  __builtin_memcpy(&bits, &x, sizeof(bits));
+  int sign = (int)(bits >> 63);
+  int exp = (int)((bits >> 52) & 0x7FFu) - 1023;
+  uint64_t mant = (bits & 0x000FFFFFFFFFFFFFULL) | 0x0010000000000000ULL;
+  uint32_t m0 = (uint32_t)mant;
+  uint32_t m1 = (uint32_t)(mant >> 32);
+
+  int diff = exp - 84;
+  int k_int = diff >= 0 ? (diff >> 5) : -(((-diff) + 31) >> 5);
+  int offset = diff - 32 * k_int;
+
+  uint32_t prod[10] = {0};
+  for (int i = 0; i < 8; i++) {
+    uint64_t w = pio2_word(k_int + 6 - i);
+    uint64_t t0 = w * m0 + prod[i];
+    prod[i] = (uint32_t)t0;
+    uint64_t t1 = w * m1 + prod[i + 1] + (t0 >> 32);
+    prod[i + 1] = (uint32_t)t1;
+    prod[i + 2] += (uint32_t)(t1 >> 32);
+  }
+
+  int point = 192 - offset;
+  int q = (int)(product_bits(prod, point) & 3u);
+  uint32_t f2 = product_bits(prod, point - 32);
+  uint32_t f1 = product_bits(prod, point - 64);
+  uint32_t f0 = product_bits(prod, point - 96);
+
+  int neg_frac = (f2 >= 0x80000000u);
+  if (neg_frac) {
+    uint64_t lo = ((uint64_t)f1 << 32) | f0;
+    lo = ~lo + 1ULL;
+    f2 = ~f2 + (lo == 0ULL ? 1u : 0u);
+    f1 = (uint32_t)(lo >> 32);
+    f0 = (uint32_t)lo;
+    q = (q + 1) & 3;
+  }
+
+  double fh = (double)f2 * 2.3283064365386962890625e-10;
+  double fl = (double)f1 * 5.4210108624275221700372640043497e-20 +
+              (double)f0 * 1.262177448353618888658765704452458e-29;
+  const double pio2_hi = 1.57079632679489655800e+00;
+  const double pio2_lo = 6.12323399573676603587e-17;
+  double rem = fh * pio2_hi + (fl * pio2_hi + (fh + fl) * pio2_lo);
+  if (neg_frac) rem = -rem;
+  if (sign) {
+    rem = -rem;
+    q = (-q) & 3;
+  }
+  *r = rem;
+  return q;
+}
+
 /* Returns the quadrant and puts the remainder in *r. */
 static int quarter_turns(double x, double *r) {
+  double ax = x < 0.0 ? -x : x;
+  if (ax > 1048576.0) return quarter_turns_large(x, r);
   double scaled = x * TWO_OVER_PI;
-  double n = (double)(long long)(scaled + (scaled < 0 ? -0.5 : 0.5));
-  *r = ((x - n * PIO2_1) - n * PIO2_2) - n * PIO2_3;
-  return (int)((long long)n & 3);
+  int n = (int)(scaled + (scaled < 0 ? -0.5 : 0.5));
+  double dn = (double)n;
+  *r = ((x - dn * PIO2_1) - dn * PIO2_2) - dn * PIO2_3;
+  return n & 3;
 }
 
 double sin(double x) {

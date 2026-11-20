@@ -14,7 +14,7 @@ Every feature has one GitHub issue. The [README checklist](README.md#features) l
 - `make check` must pass before you commit.
 - `make coverage` must stay at 100% for lines, branches, conditions and MC/DC.
 - Each test must run in 5 seconds or less. `make test-cpu` fails a slower test. Make the code under test faster. Do not change the test.
-- Every public symbol must have a docstring with `Args`, `Returns` and `Raises` sections.
+- Every public struct, trait, function and method must have a docstring. Functions and methods must include `Args`, `Returns` and `Raises` sections where applicable. `make check` enforces this rule.
 - Every id, mode and kind must be a type, not a bare integer. Add a file to `tests/compile_fail/` that proves the compiler rejects the integer.
 - Every value that a type can hold but the code does not accept must be refused at the boundary. Add a test that constructs the wrong value.
 - Original content that is not a three.js port lives under `extensions/`.
@@ -28,6 +28,11 @@ Keep each pull request focused on one correction. Use the affected test subset
 for that change. Inspect the selection with `AFFECTED=<base-ref>` before a run.
 Shared imports can still select the full suite. Do not drop selected tests or
 weaken coverage checks to make a run smaller.
+
+For local work inside one extension package, pass `DOMAIN=<name>` to scope
+lint, tests and coverage to `extensions/<name>/` and its consumers. Core
+modules must not import `extensions.*`, and cross-extension imports must
+follow the layering table in `tools/check_repository_contracts.mojo`.
 
 Do not edit the root Makefile for routine work. The Makefile finds library
 modules, test suites and helper libraries from their names. A helper library

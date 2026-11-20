@@ -1333,6 +1333,19 @@ def test_event_nodes_are_found_in_sdl_order() raises:
         assert_equal(names[3], "event9")
         assert_equal(names[4], "event10")
         assert_equal(len(names), 5)
+        # A folder lists its nodes in an order that the file system chooses.
+        # With no js numbers the first node is event2, and with them it is
+        # event7. So in one of the two sorts, the node that the folder lists
+        # first is not the first node, and a later node moves to the front,
+        # whatever the order is.
+        var plain = list_event_nodes(root, temporary_path("no_sys"))
+        assert_equal(len(plain), 5)
+        assert_equal(
+            String(plain[0][byte = root.byte_length() + 1 :]), "event2"
+        )
+        assert_equal(
+            String(plain[4][byte = root.byte_length() + 1 :]), "event10"
+        )
         assert_equal(event_joystick_index(sysfs, 7), 0)
         # Each order of a node with a js number and one without, whatever
         # order the folder lists them in.

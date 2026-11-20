@@ -13,7 +13,7 @@ says so, on a machine without a GPU.
 
 from std.sys import has_accelerator
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
-from window.capi_abi import ABI_VERSION, MAX_SIDE
+from window.capi_abi import ABI_VERSION, MAX_SIDE, null_pointer
 from window.capi_water_gpu import (
     GpuWaterApp,
     tm_abi_version,
@@ -79,9 +79,17 @@ def test_the_abi_version_is_the_cores() raises:
 
 def test_a_side_out_of_range_makes_no_app() raises:
     assert_false(Bool(tm_create(Int32(0), Int32(10))))
+    assert_false(Bool(tm_create(Int32(10), Int32(0))))
     assert_false(Bool(tm_create(Int32(-1), Int32(10))))
     assert_false(Bool(tm_create(Int32(MAX_SIDE + 1), Int32(10))))
     assert_false(Bool(tm_create(Int32(10), Int32(MAX_SIDE + 1))))
+    var empty = null_pointer[NoneType]()
+    tm_destroy(empty)
+    tm_event(empty, Int32(KEY_DOWN), Int32(0), Int32(0), Int32(KEY_SPACE))
+    tm_step(empty, Int32(STEP_MICROSECONDS))
+    assert_equal(Int(tm_frame(empty)), 0)
+    assert_equal(tm_width(empty), Int32(0))
+    assert_equal(tm_height(empty), Int32(0))
 
 
 def test_a_machine_without_a_gpu_makes_no_app() raises:

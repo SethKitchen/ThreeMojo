@@ -158,3 +158,18 @@ comptime SPLAT_INFO_ORDER = SplatInfo(3)
 `SPLAT_ORDER` again when it changes."""
 comptime SPLAT_VIEW_FLOATS = 48
 """How many floats the `SPLAT_VIEW` part holds."""
+
+
+@no_inline
+def null_pointer[
+    T: AnyType
+](address: Int = 0) -> Pointer[T, MutUntrackedOrigin]:
+    """Return a C pointer with the given raw address, zero by default.
+
+    Args:
+        address: The raw address, zero for `NULL`.
+
+    Returns:
+        The pointer value for C ABI boundaries.
+    """
+    return Pointer[T, MutUntrackedOrigin](unsafe_from_address=address)

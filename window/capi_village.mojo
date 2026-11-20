@@ -52,6 +52,7 @@ from window.capi_abi import (
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
+    null_pointer,
 )
 from window.village_app import (
     VillageApp,
@@ -120,13 +121,13 @@ def tm_create(
     var h = Int(height)
     if w > MAX_SIDE or h > MAX_SIDE:
         return None
-    print("Building the village...", file=stderr)
     try:
         var gpu = gpu_from_environment()
         var parameters = play_parameters(quality_from_environment(), gpu)
         # A value that is not valid is refused before the village is built.
         var hour = hour_from_environment()
         var weather = weather_from_environment()
+        print("Building the village...", file=stderr)
         return new_app(w, h, parameters, read_bed(), gpu, hour, weather)
     except:
         return None
@@ -140,6 +141,8 @@ def tm_destroy(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> None:
     Args:
         handle: A handle from `tm_create`.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     # The game keeps its progress as it ends, if it keeps it anywhere. A
     # file that cannot be written loses only this game's progress.
@@ -175,6 +178,8 @@ def tm_event(
         detail: The key code of a key event, or the button of a pointer
             event.
     """
+    if Int(handle) == 0:
+        return
     var what = Int(kind)
     if what == POINTER_DOWN or what == POINTER_MOVE or what == POINTER_UP:
         _app(handle)[].point(what, Int(x), Int(y), Int(detail))
@@ -199,6 +204,8 @@ def tm_step(
         handle: A handle from `tm_create`.
         microseconds: The time since the last step, in microseconds.
     """
+    if Int(handle) == 0:
+        return
     _app(handle)[].advance(Int(microseconds))
 
 
@@ -218,6 +225,8 @@ def tm_frame(
         `tm_width * tm_height * 4` bytes. It stays valid until the next
         call on this app.
     """
+    if Int(handle) == 0:
+        return null_pointer[UInt8]()
     var app = _app(handle)
     app[].draw()
     return Pointer[UInt8, MutUntrackedOrigin](
@@ -235,6 +244,8 @@ def tm_width(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The width, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].width)
 
 
@@ -248,6 +259,8 @@ def tm_height(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The height, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].height)
 
 
@@ -270,11 +283,15 @@ def tm_village_audio(
         How many samples it made on each side: `frames`, or 0 if `frames`
         is out of range. The samples are not changed then.
     """
+    if Int(handle) == 0:
+        return 0
+    if Int(samples) == 0:
+        return 0
     try:
         var made = _app(handle)[].game.audio(Int(frames))
         for k in range(len(made)):
             samples[unsafe_offset=k] = made[k]
-        return frames
+        return Int32(len(made) // 2)
     except:
         return 0
 
@@ -300,6 +317,8 @@ def tm_village_passes(
         1 if the app is one for a GPU, and the passes are as asked. 0 if it
         is not: the CPU draws everything.
     """
+    if Int(handle) == 0:
+        return 0
     if _app(handle)[].take_passes(on != 0):
         return 1
     return 0
@@ -319,6 +338,8 @@ def tm_village_prepare(
         the app is not one for a GPU, or the frame cannot be drawn: the host
         then draws nothing, and shows the last frame.
     """
+    if Int(handle) == 0:
+        return 0
     if _app(handle)[].prepare_gpu():
         return 1
     return 0
@@ -337,6 +358,8 @@ def tm_village_ints(
         `INT_COUNT` integers, by the `INT_*` numbers of `renderers.game_gpu`.
         They stay valid until the next call that prepares a frame.
     """
+    if Int(handle) == 0:
+        return null_pointer[Int64]()
     return Pointer[Int64, MutUntrackedOrigin](
         unsafe_from_address=Int(_app(handle)[].frame.ints.unsafe_ptr())
     )
@@ -356,6 +379,8 @@ def tm_village_floats(
         `renderers.game_gpu`. They stay valid until the next call that
         prepares a frame.
     """
+    if Int(handle) == 0:
+        return null_pointer[Float32]()
     return Pointer[Float32, MutUntrackedOrigin](
         unsafe_from_address=Int(_app(handle)[].frame.floats.unsafe_ptr())
     )
@@ -375,6 +400,8 @@ def tm_village_pointers(
         `renderers.game_gpu`. The data stays valid until the next call that
         prepares a frame.
     """
+    if Int(handle) == 0:
+        return null_pointer[Int64]()
     return Pointer[Int64, MutUntrackedOrigin](
         unsafe_from_address=Int(_app(handle)[].frame.pointers.unsafe_ptr())
     )
@@ -398,6 +425,8 @@ def tm_village_finish(
         The frame, as `tm_frame` returns it. It stays valid until the next
         call on this app.
     """
+    if Int(handle) == 0:
+        return null_pointer[UInt8]()
     var app = _app(handle)
     app[].finish_gpu()
     return Pointer[UInt8, MutUntrackedOrigin](

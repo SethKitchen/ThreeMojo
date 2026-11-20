@@ -556,6 +556,8 @@ def one_band(
     """
     var errors = List[String](length=bands, fill=String(""))
     var no_rows = List[Int]()
+    var no_starts = List[Int](length=len(draws) * bands + 1, fill=0)
+    var no_ramps = List[List[Float32]]()
     var no_triangles = List[Corner]()
     var no_surfaces = List[Surface]()
     var no_splats = List[ProjectedSplat]()
@@ -568,7 +570,16 @@ def one_band(
             no_surfaces.unsafe_ptr()
             .unsafe_mut_cast[False]()
             .unsafe_origin_cast[ImmutAnyOrigin](),
-            no_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            no_ramps.unsafe_ptr()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin](),
+            no_starts.unsafe_ptr()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin](),
+            no_rows.unsafe_ptr()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin](),
+            bands,
             segments.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
             segment_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
             points.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
@@ -598,6 +609,8 @@ def one_band(
     group.wait()
     # The task reads these through pointers the compiler cannot see.
     _ = len(no_rows)
+    _ = len(no_starts)
+    _ = len(no_ramps)
     _ = len(no_triangles)
     _ = len(no_surfaces)
     _ = len(no_splats)

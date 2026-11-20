@@ -54,6 +54,7 @@ from window.capi_abi import (
     KEY_UP,
     MAX_SIDE,
     WHEEL,
+    null_pointer,
 )
 
 comptime DEGREES_PER_SECOND = Float32(150)
@@ -207,6 +208,8 @@ def tm_destroy(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> None:
     Args:
         handle: A handle from `tm_create`.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     _ = app.unsafe_take_pointee()
     app.unsafe_free()
@@ -237,6 +240,8 @@ def tm_event(
             as `controls.input.PointerButton` numbers it, or -1, or the
             notches of a wheel event, positive toward the user.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     var event_kind = Int(kind)
     if event_kind == KEY_DOWN and Int(detail) == KEY_SPACE:
@@ -279,6 +284,8 @@ def tm_step(
         handle: A handle from `tm_create`.
         microseconds: The time since the last step, in microseconds.
     """
+    if Int(handle) == 0:
+        return
     var app = _app(handle)
     if app[].paused or microseconds < 0:
         return
@@ -313,6 +320,8 @@ def tm_frame(
         `tm_width * tm_height * 4` bytes. It stays valid until the next
         call on this app.
     """
+    if Int(handle) == 0:
+        return null_pointer[UInt8]()
     var app = _app(handle)
     try:
         app[].frame = app[].renderer.render(
@@ -335,6 +344,8 @@ def tm_width(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The width, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].width)
 
 
@@ -348,4 +359,6 @@ def tm_height(handle: OpaquePointer[MutUntrackedOrigin]) abi("C") -> Int32:
     Returns:
         The height, in pixels.
     """
+    if Int(handle) == 0:
+        return 0
     return Int32(_app(handle)[].height)

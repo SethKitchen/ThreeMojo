@@ -263,10 +263,17 @@ struct XmlDocument(Movable):
             Error: If the index names no element.
         """
         self._check(element)
-        var out = self.elements[element].text
-        for child in self.elements[element].children:
-            out += self.text_content(child)
-        return out^
+        var parts = List[String]()
+        var stack = List[Int]()
+        stack.append(element)
+        while len(stack) > 0:
+            var current = stack.pop()
+            if self.elements[current].text.byte_length() > 0:
+                parts.append(self.elements[current].text)
+            ref children = self.elements[current].children
+            for rev in range(len(children) - 1, -1, -1):
+                stack.append(children[rev])
+        return "".join(parts)
 
 
 def parse_xml(text: String) raises -> XmlDocument:

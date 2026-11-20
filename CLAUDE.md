@@ -16,7 +16,7 @@ ThreeMojo ports three.js to Mojo. Read the [README](README.md) first and [CONTRI
 - Every id, mode and kind is a type with `is_valid`. Every boundary that reads one checks it. Add a `tests/compile_fail/` file for each new type.
 - Every quantity carries a unit type. A length is a `Length`, an angle is an `Angle`.
 - The CPU and GPU rasterizers share their arithmetic and agree in the parity tests.
-- Every public symbol has a docstring with `Args`, `Returns` and `Raises`.
+- Every public struct, trait, function and method has a docstring. Public functions and methods document `Args`, `Returns` and `Raises`. `make repository-check` and `lint-cpu` enforce both.
 
 ## Toolchain
 

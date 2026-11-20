@@ -23,6 +23,7 @@ from animation.animation_mixer import (
     ONCE,
     PING_PONG,
     REPEAT,
+    _BindingKey,
     Loop,
     check_target,
     read_target,
@@ -850,6 +851,10 @@ def test_a_group_reaches_skinned_meshes_and_cameras_at_its_members() raises:
         ),
         0,
     )
+    assert_true(_BindingKey(1, 2, 3) == _BindingKey(1, 2, 3))
+    assert_false(_BindingKey(0, 2, 3) == _BindingKey(1, 2, 3))
+    assert_false(_BindingKey(1, 0, 3) == _BindingKey(1, 2, 3))
+    assert_false(_BindingKey(1, 2, 0) == _BindingKey(1, 2, 3))
 
 
 def main() raises:

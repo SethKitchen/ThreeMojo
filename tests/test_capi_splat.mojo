@@ -54,6 +54,7 @@ from window.capi_abi import (
     SplatInfo,
     SplatPart,
     WHEEL,
+    null_pointer,
 )
 from window.capi_splat import (
     MAX_ASSET,
@@ -922,6 +923,27 @@ def test_the_parts_are_numbered_as_the_header_numbers_them() raises:
     assert_equal(VIEW_COUNT, 38)
     assert_equal(VIEW_BACKGROUND, 40)
     assert_equal(SPLAT_VIEW_FLOATS, 48)
+
+
+def test_null_handles_and_buffers_are_ignored() raises:
+    var empty = null_pointer[NoneType]()
+    var no_bytes = null_pointer[UInt8]()
+    tm_free(no_bytes)
+    tm_destroy(empty)
+    tm_event(empty, Int32(POINTER_DOWN), Int32(1), Int32(1), Int32(0))
+    tm_step(empty, Int32(16000))
+    assert_equal(Int(tm_frame(empty)), 0)
+    assert_equal(tm_width(empty), Int32(0))
+    assert_equal(tm_height(empty), Int32(0))
+    assert_equal(tm_resize(empty, Int32(32), Int32(32)), Int32(1))
+    assert_equal(tm_asset(empty, no_bytes, Int32(4)), Int32(1))
+    assert_equal(tm_splat_prepare(empty), Int32(1))
+    assert_false(Bool(tm_splat_part(empty, Int32(SPLAT_CENTERS.value))))
+    assert_equal(tm_splat_words(empty, Int32(SPLAT_CENTERS.value)), Int32(0))
+    assert_equal(tm_splat_info(empty, Int32(SPLAT_INFO_COUNT.value)), Int32(0))
+    var app = _plain()
+    assert_equal(tm_asset(app, no_bytes, Int32(4)), Int32(1))
+    tm_destroy(app)
 
 
 def main() raises:

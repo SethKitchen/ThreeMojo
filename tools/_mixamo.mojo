@@ -558,6 +558,11 @@ struct Transport(Copyable, Movable):
                 command.append("POST")
                 command.append("--data-binary")
                 command.append("@" + scratch + "/request")
+            if url.startswith("https://"):
+                command.append("--proto")
+                command.append("=https")
+                command.append("--proto-redir")
+                command.append("=https")
             command.append("--url")
             command.append(url)
             var result = run_program(command, 330.0, merge_errors=False)
@@ -663,9 +668,14 @@ struct Transport(Copyable, Movable):
                 scratch + "/body",
                 "--write-out",
                 "%{http_code}",
-                "--url",
-                url,
             ]
+            if url.startswith("https://"):
+                command.append("--proto")
+                command.append("=https")
+                command.append("--proto-redir")
+                command.append("=https")
+            command.append("--url")
+            command.append(url)
             var result = run_program(command, 630.0, merge_errors=False)
             if result.status != 0:
                 raise Error(
@@ -829,9 +839,8 @@ def file_name(product: Product, entries: List[Entry]) -> String:
     var plain = safe_name(product.name) + ".fbx"
     for entry in entries:  # pragma: no branch
         if entry.file == plain and entry.id != product.id:
-            var tag = String(
-                product.id[byte = : min(8, product.id.byte_length())]
-            )
+            var clean_id = safe_name(product.id)
+            var tag = String(clean_id[byte = : min(8, clean_id.byte_length())])
             return safe_name(product.name) + " " + tag + ".fbx"
     return plain^
 
@@ -860,7 +869,9 @@ def _wait_for_export(
     this one is the old one, so the poll goes on.
     """
     for _ in range(options.polls):  # pragma: no branch
-        var reply = transport.get("/characters/" + character + "/monitor")
+        var reply = transport.get(
+            "/characters/" + url_encode(character) + "/monitor"
+        )
         if reply.status == 404:
             raise Error("Mixamo has no export for the character")
         var job = parse_job(_checked(reply, "the monitor"))
@@ -909,9 +920,9 @@ def _download_one(
     var details = _checked(
         transport.get(
             "/products/"
-            + product.id
+            + url_encode(product.id)
             + "?similar=0&character_id="
-            + options.character
+            + url_encode(options.character)
         ),
         "the animation",
     )
@@ -953,7 +964,7 @@ def download_all(transport: Transport, options: Options) raises -> Report:
     make_dirs(options.output)
     var before = String()
     var baseline = transport.get(
-        "/characters/" + options.character + "/monitor"
+        "/characters/" + url_encode(options.character) + "/monitor"
     )
     if baseline.status == 401 or baseline.status == 403:
         _ = _checked(baseline, "the monitor")

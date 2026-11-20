@@ -895,6 +895,8 @@ def test_step_end_of_file_cases() raises:
     assert_equal(f.as_real(f.argument(1, 1)), 1000)
     _ = f.add("Z", List[Int]())
     assert_true(f.write().find("=Z();") >= 0)
+    with assert_raises(contains="more than 1 entities"):
+        _ = parse(_bad("#1=X();\n#2=Y();"), max_entities=1)
 
 
 def test_a_furnished_tower_round_trips() raises:

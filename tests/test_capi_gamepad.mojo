@@ -10,7 +10,7 @@ scalars and the same opaque handle.
 """
 
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
-from window.capi_abi import ABI_VERSION, KEY_DOWN, MAX_SIDE
+from window.capi_abi import ABI_VERSION, KEY_DOWN, MAX_SIDE, null_pointer
 from window.capi_gamepad import (
     MAX_ID,
     create_app,
@@ -232,6 +232,52 @@ def test_rumble() raises:
     tm_step(app, Int32(600000))
     assert_equal(Int(tm_gamepad_take_rumble(app, Int32(0))), 1)
     assert_equal(Int(tm_gamepad_rumble_strength(app, Int32(RUMBLE_LOW))), 0)
+    tm_destroy(app)
+
+
+def test_null_handles_and_id_buffers_are_ignored() raises:
+    var empty = null_pointer[NoneType]()
+    var no_bytes = null_pointer[UInt8]()
+    tm_free(no_bytes)
+    tm_destroy(empty)
+    tm_event(empty, Int32(KEY_DOWN), Int32(0), Int32(0), Int32(0))
+    tm_step(empty, Int32(16000))
+    assert_equal(Int(tm_frame(empty)), 0)
+    assert_equal(tm_width(empty), Int32(0))
+    assert_equal(tm_height(empty), Int32(0))
+    assert_equal(
+        tm_gamepad_connect(
+            empty, Int32(0), no_bytes, Int32(3), Int32(4), Int32(16), Int32(0)
+        ),
+        Int32(0),
+    )
+    assert_equal(tm_gamepad_disconnect(empty, Int32(0)), Int32(0))
+    tm_gamepad_set_axis(empty, Int32(0), Int32(0), 0.5)
+    tm_gamepad_set_button(empty, Int32(0), Int32(0), Int32(1), 1.0)
+    assert_equal(tm_gamepad_sample(empty, Int32(0), 10.0), Int32(-1))
+    assert_equal(tm_gamepad_count(empty), Int32(0))
+    assert_equal(tm_gamepad_index(empty, Int32(0)), Int32(-1))
+    assert_equal(tm_gamepad_axis(empty, Int32(0), Int32(0)), Int32(0))
+    assert_equal(tm_gamepad_button(empty, Int32(0), Int32(0)), Int32(0))
+    assert_equal(
+        tm_gamepad_rumble(empty, Int32(0), Int32(1), Int32(1), Int32(100)),
+        Int32(0),
+    )
+    assert_equal(tm_gamepad_take_rumble(empty, Int32(0)), Int32(0))
+    assert_equal(tm_gamepad_rumble_strength(empty, Int32(RUMBLE_LOW)), Int32(0))
+    var app = _make()
+    assert_equal(
+        tm_gamepad_connect(
+            app, Int32(0), no_bytes, Int32(3), Int32(4), Int32(16), Int32(0)
+        ),
+        Int32(0),
+    )
+    assert_equal(
+        tm_gamepad_connect(
+            app, Int32(0), no_bytes, Int32(0), Int32(4), Int32(16), Int32(0)
+        ),
+        Int32(1),
+    )
     tm_destroy(app)
 
 

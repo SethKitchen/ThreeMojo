@@ -112,6 +112,7 @@ from math.ray import Ray
 from math.triangle import Line3, Triangle
 from math.norm import squared_length2
 from math.vector3 import Vector3
+from std.collections import Set
 from std.math import cos, fma, inf, isfinite, sin, sqrt
 from units.si import Angle, Duration, Length
 from core.ordinal import require_valid
@@ -259,7 +260,7 @@ struct PhysicsWorld(Movable):
     var _order: List[Int]
     # For each body, the bodies a joint keeps it from touching, as the
     # last contact search found them. Empty when no joint does.
-    var _joined: List[List[Int]]
+    var _joined: Set[UInt64]
 
     def __init__(out self):
         """Create an empty world with standard gravity."""
@@ -285,7 +286,7 @@ struct PhysicsWorld(Movable):
         self._ccd_index = _CCDIndex()
         self._ccd_brute_force = False
         self._order = List[Int]()
-        self._joined = List[List[Int]]()
+        self._joined = Set[UInt64]()
 
     def add_body(mut self, var body: RigidBody) raises -> BodyId:
         """Add a body. A mesh body's triangles go into the static octree.
@@ -2292,22 +2293,25 @@ struct PhysicsWorld(Movable):
             self._mesh_pairs(out, a, shapes[a], boxes[a])
         return out^
 
+    @staticmethod
+    def _joined_pair(a: Int, b: Int) -> UInt64:
+        var low = UInt64(min(a, b))
+        var high = UInt64(max(a, b))
+        return (low << 32) | high
+
     def _is_joined(self, a: Int, b: Int) -> Bool:
         # Whether a joint keeps two bodies from touching in this step.
-        return len(self._joined) > 0 and b in self._joined[a]
+        if len(self._joined) == 0:
+            return False
+        return Self._joined_pair(a, b) in self._joined
 
-    def _partners(self) -> List[List[Int]]:
-        # For each body, the bodies a joint keeps it from touching. Empty
-        # when no joint does, so a world with no joints pays nothing.
-        var out = List[List[Int]]()
+    def _partners(self) -> Set[UInt64]:
+        # Body pairs kept from touching by an active non-colliding joint.
+        var out = Set[UInt64]()
         for joint in self.joints:
             if not joint.enabled or joint.collide_connected:
                 continue
-            if len(out) == 0:
-                for _ in range(len(self.bodies)):  # pragma: no branch
-                    out.append(List[Int]())
-            out[joint.a.value].append(joint.b.value)
-            out[joint.b.value].append(joint.a.value)
+            out.add(Self._joined_pair(joint.a.value, joint.b.value))
         return out^
 
     def _may_touch(self, a: Int, b: Int, boxes: List[Box3]) -> Bool:

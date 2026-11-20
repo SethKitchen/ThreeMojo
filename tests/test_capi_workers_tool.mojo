@@ -72,6 +72,35 @@ if (scenario === "success") {
   assert.deepEqual(workers.map((worker) => worker.stops), [0, 0]);
   library.close();
   assert.deepEqual(workers.map((worker) => worker.stops), [1, 1]);
+} else if (scenario === "destroyed") {
+  let calls = 0;
+  const memory = { buffer: new ArrayBuffer(64) };
+  const { Library } = await import(process.argv[1]);
+  const lib = new Library({
+    memory,
+    tm_abi_version: () => 1,
+    tm_init: () => {},
+    tm_create: () => 16n,
+    tm_destroy: () => { calls++; },
+    tm_event: () => { calls++; },
+    tm_step: () => { calls++; },
+    tm_frame: () => 0n,
+    tm_alloc: () => 16n,
+    tm_free: () => {},
+    tm_asset: () => { calls++; return 0; },
+    tm_resize: () => { calls++; return 0; },
+  });
+  const app = lib.create(2, 2);
+  assert.throws(() => app.frame(), /returned no frame/);
+  app.destroy();
+  assert.equal(calls, 1);
+  app.destroy();
+  app.event(1, 0, 0, -1);
+  app.step(1000);
+  assert.equal(app.asset(new Uint8Array([1, 2])), false);
+  assert.equal(app.resize(4, 4), false);
+  assert.throws(() => app.frame(), /destroyed/);
+  assert.equal(calls, 1);
 } else {
   await assert.rejects(loadThreads(new Uint8Array(), { threads: 2, spawn }), messages[scenario]);
   assert.equal(workers.length, scenario === "stack" || scenario === "spawn" ? 1 : 2);
@@ -95,6 +124,7 @@ def test_startup_cleanup_and_successful_close() raises:
         "abi",
         "init",
         "success",
+        "destroyed",
     ]:
         var result = run_program(
             [

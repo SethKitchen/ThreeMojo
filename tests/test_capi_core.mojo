@@ -29,6 +29,7 @@ from window.capi_abi import (
     POINTER_DOWN,
     POINTER_MOVE,
     WHEEL,
+    null_pointer,
 )
 from window.capi_core import (
     TICK_MICROSECONDS,
@@ -275,6 +276,16 @@ def test_the_frame_hashes_that_the_wasm_build_must_match() raises:
     assert_equal(second, UInt64(658073559776311977))
     assert_equal(third, UInt64(17593184181753337403))
     tm_destroy(app)
+
+
+def test_null_handles_are_ignored() raises:
+    var empty = null_pointer[NoneType]()
+    tm_destroy(empty)
+    tm_event(empty, Int32(POINTER_MOVE), Int32(1), Int32(1), Int32(-1))
+    tm_step(empty, Int32(TICK_MICROSECONDS))
+    assert_equal(Int(tm_frame(empty)), 0)
+    assert_equal(tm_width(empty), Int32(0))
+    assert_equal(tm_height(empty), Int32(0))
 
 
 def main() raises:

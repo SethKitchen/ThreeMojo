@@ -82,7 +82,7 @@ from std.math import isfinite
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
-from loaders.file_path import path_directory
+from loaders.file_path import confined_path, path_directory
 from loaders.image_file import decode_image
 from core.buffer_geometry import COLOR
 from loaders.obj import ObjModel, read_obj
@@ -767,7 +767,7 @@ def _texture(
     if said.has_displacement:
         displacement_bias = said.displacement_bias
         displacement_scale = said.displacement_scale
-    var path = directory + said.file
+    var path = confined_path(directory, said.file, "MTL", True)
     var key = (
         path
         + "|"
@@ -1234,6 +1234,10 @@ def read_obj_with_materials(
         if comment >= 0:
             var kept = String(name[byte=0:comment].strip())
             name = kept^
-        library.merge(read_mtl(directory + name, assets, options))
+        library.merge(
+            read_mtl(
+                confined_path(directory, name, "MTL", True), assets, options
+            )
+        )
     var ids = set_materials(model, library, assets)
     return ObjWithMaterials(model^, library^, ids^)

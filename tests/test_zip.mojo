@@ -779,5 +779,22 @@ def test_a_zip64_end_record_is_checked_field_by_field() raises:
     refused(bytes, "ends inside central directory entry 1")
 
 
+def test_zip_budgets_and_duplicate_local_headers_are_refused() raises:
+    var two = zip_archive([stored("a.txt", "hello"), stored("b.txt", "world")])
+    with assert_raises(contains="entry count exceeds"):
+        _ = unzip(two, max_entries=1)
+    with assert_raises(contains="exceeds the entry byte limit"):
+        _ = unzip(two, max_entry_bytes=4)
+    with assert_raises(contains="uncompressed bytes exceed"):
+        _ = unzip(two, max_total_bytes=8)
+
+    # Point the second central directory entry's local offset back to 0.
+    var aliased = two.copy()
+    var first_central = 40 + 40
+    var second_central = first_central + 46 + 5
+    poke(aliased, second_central + 42, 0, 4)
+    refused(aliased, "shares a local header offset")
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -40,6 +40,12 @@ from math.finite import require_finite
 # list counts as one level, so each recursive call has a bounded stack.
 comptime _MAX_VALUE_NESTING = 256
 
+comptime MAX_STEP_ENTITIES = 16777216
+"""The largest number of entities a STEP `DATA` section can hold by default:
+2^24. An IFC file of a large building holds some millions of entities, so the
+default is above that. A caller that reads untrusted files can pass a smaller
+`max_entities` to `parse`."""
+
 
 @fieldwise_init
 struct StepKind(Equatable, ImplicitlyCopyable, Writable):
@@ -876,11 +882,14 @@ def _parse_arguments(
     return file.as_list(list_index)
 
 
-def parse(text: String) raises -> StepFile:
+def parse(
+    text: String, max_entities: Int = MAX_STEP_ENTITIES
+) raises -> StepFile:
     """Read a STEP physical file.
 
     Args:
         text: The file's text.
+        max_entities: The largest number of entities allowed in `DATA`.
 
     Returns:
         Its header entries, entities and values.
@@ -888,8 +897,9 @@ def parse(text: String) raises -> StepFile:
     Raises:
         Error: If the text is not a well-formed STEP file, giving the line:
             a missing section, a bad value, an unclosed string or comment,
-            a repeated instance number, or more than 256 nested lists and
-            typed values, including the outer attribute list.
+            a repeated instance number, more than `max_entities` entities, or
+            more than 256 nested lists and typed values, including the outer
+            attribute list.
     """
     var reader = _Reader(text)
     var file = StepFile()
@@ -929,6 +939,8 @@ def parse(text: String) raises -> StepFile:
         reader.expect(59, "a semicolon")
         if file.has(id):
             raise reader.fail(String("a repeated instance #", id))
+        if len(file.entities) >= max_entities:
+            raise reader.fail(String("more than ", max_entities, " entities"))
         file._index[id] = len(file.entities)
         file.entities.append(StepEntity(id, name, arguments^))
     if reader.keyword() != "END-ISO-10303-21":

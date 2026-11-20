@@ -1090,6 +1090,11 @@ def test_the_corners_of_the_reader() raises:
     assert_equal(assets.textures.count(), 1)
     var surfaces = Assets()
     var four = read_materialx(SURFACES, surfaces)
+    with assert_raises(contains="MaterialX: unsafe image path"):
+        _ = read_materialx(
+            String(CORNERS).replace("__TEST_PREFIX__", "../escape_"),
+            surfaces,
+        )
     assert_equal(len(four.ids), 4)
     # No base: three.js's gray, times the coat's color.
     ref program = surfaces.programs.get(

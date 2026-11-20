@@ -67,11 +67,11 @@ jobs:
       run_export: ${{ steps.plan.outputs.export }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
       # tools/ci_scope.mojo plans the checks.
       - name: Install the pinned Mojo toolchain
         run: |
@@ -93,7 +93,7 @@ jobs:
             sh tools/tool.sh .venv/bin/mojo ci_scope plan --base "$PUSH_BASE"
           fi
       - name: Preserve exact check selection
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ci-selection
           path: .cache/ci-selection.json
@@ -120,17 +120,17 @@ jobs:
 
     steps:
       # The whole history, so that the merge base with the base branch exists.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore exact check selection
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-selection
           path: .cache/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
       - name: Install the pinned Mojo toolchain
         run: |
@@ -167,17 +167,17 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore exact check selection
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-selection
           path: .cache/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
       - name: Install the pinned Mojo toolchain
         run: |
@@ -202,17 +202,17 @@ jobs:
         shard: [1, 2, 3]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore exact check selection
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-selection
           path: .cache/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
       - name: Install the pinned Mojo toolchain
         run: |
@@ -224,7 +224,7 @@ jobs:
         run: sh tools/tool.sh .venv/bin/mojo compiler_metadata > compiler-metadata.json
 
       - name: Preserve compiler metadata before CPU compilation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: compiler-metadata-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: compiler-metadata.json
@@ -266,27 +266,29 @@ jobs:
     if: needs.scope.outputs.run_lint == 'true'
     env:
       CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
-    name: check-cpu (macOS, Apple Silicon) lint
+    name: check-cpu (macOS, Apple Silicon) lint ${{ matrix.shard }}/3
     runs-on: macos-latest
-    # The Mac lints one file at a time, which takes about four hours, and
-    # then runs the coverage protocol, portability and documentation steps.
-    # This aggregate hang guard does not change any per-test timeout. A
-    # hosted runner stops any job at 360 minutes.
-    timeout-minutes: 330
+    # Split across three shards so no macOS lint job approaches the 360m
+    # hosted runner ceiling.
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       # The whole history, so that the merge base with the base branch exists.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore exact check selection
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-selection
           path: .cache/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
       - name: Install the pinned Mojo toolchain
         run: |
@@ -297,20 +299,22 @@ jobs:
       - name: lint
         if: needs.scope.outputs.run_native == 'true'
         run: |
-          sh tools/tool.sh .venv/bin/mojo ci_scope run -- fmt-check JOBS=1
-          sh tools/tool.sh .venv/bin/mojo ci_scope run -- lint-cpu JOBS=1
-          sh tools/tool.sh .venv/bin/mojo ci_scope run -- compile-fail JOBS=1
+          if [ "${{ matrix.shard }}" = 1 ]; then
+            sh tools/tool.sh .venv/bin/mojo ci_scope run -- fmt-check JOBS=1
+            sh tools/tool.sh .venv/bin/mojo ci_scope run -- compile-fail JOBS=1
+          fi
+          sh tools/tool.sh .venv/bin/mojo ci_scope run -- lint-cpu LINT_SHARD=${{ matrix.shard }}/3 JOBS=1
 
       - name: Coverage protocol regressions
-        if: needs.scope.outputs.run_coverage_tools == 'true'
+        if: needs.scope.outputs.run_coverage_tools == 'true' && matrix.shard == 1
         run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-coverage-tool JOBS=1
 
       - name: Portability contracts
-        if: needs.scope.outputs.run_portability == 'true'
+        if: needs.scope.outputs.run_portability == 'true' && matrix.shard == 1
         run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-portability JOBS=1
 
       - name: Documentation
-        if: needs.scope.outputs.run_docs == 'true'
+        if: needs.scope.outputs.run_docs == 'true' && matrix.shard == 1
         run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- docs-check
 
   tools-macos:
@@ -323,17 +327,17 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore exact check selection
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-selection
           path: .cache/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
       - name: Install the pinned Mojo toolchain
         run: |
@@ -370,17 +374,17 @@ jobs:
             target: test-cpu SHARD=4/4
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore exact check selection
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-selection
           path: .cache/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
       - name: Install the pinned Mojo toolchain
         run: |
@@ -468,11 +472,11 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore exact check selection
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-selection
           path: .cache/
@@ -503,7 +507,7 @@ jobs:
       # Compressed as captured, so a group's streams are megabytes, not the
       # gigabytes the raw probes would be. Nothing to upload when no measured
       # module is affected.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-hits-${{ matrix.shard }}
           path: coverage/build/hits/
@@ -512,7 +516,7 @@ jobs:
 
       # Failed captures retain their partial streams and stdout for diagnosis.
       # These are not successful coverage inputs for the report job.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
           name: coverage-diagnostics-${{ matrix.shard }}
@@ -536,11 +540,11 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore exact check selection
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-selection
           path: .cache/
@@ -556,7 +560,7 @@ jobs:
       - name: instrument
         run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- coverage-instrument
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: coverage-hits-*
           path: coverage/build/hits/
@@ -579,17 +583,17 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Restore exact check selection
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-selection
           path: .cache/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
       - name: Install the pinned Mojo toolchain and MAX
         run: |
@@ -613,14 +617,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Restore exact check selection
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-selection
           path: .cache/
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
       - name: Install the pinned Mojo toolchain
         run: |
           uv venv --prompt ThreeMojo
@@ -646,7 +650,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Copy docs/wiki to the GitHub wiki
         run: |

@@ -79,7 +79,7 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
-from loaders.file_path import path_directory
+from loaders.file_path import confined_path, path_directory
 from loaders.image_file import decode_image
 from loaders.vrml_geometry import (
     SurfaceData,
@@ -1251,7 +1251,7 @@ struct _Builder(Movable):
         var record = VrmlTexture(name, url)
         record.wrap_s = wrap_s
         record.wrap_t = wrap_t
-        var file = Path(self.resource_path + url)
+        var file = Path(confined_path(self.resource_path, url, "VRML"))
         if file.exists():
             var image = decode_image(file.read_bytes())
             var texture = Texture(

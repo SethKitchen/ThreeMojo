@@ -115,7 +115,7 @@ from lights.light import (
     spot_light,
 )
 from loaders.bytes import space_tab_line, decode_base64
-from loaders.file_path import path_directory
+from loaders.file_path import confined_path, path_directory
 from loaders.fbx_tree import (
     FBX_BYTES,
     FBX_INTEGER,
@@ -1349,7 +1349,9 @@ struct _Loader(Movable):
             var file = String(name[byte = name.rfind("\\") + 1 :])
             if file == "" or file.find(":") >= 0:
                 raise Error("FBX: only a relative image path is read: " + name)
-            bytes = Path(self.directory + file).read_bytes()
+            bytes = Path(
+                confined_path(self.directory, file, "FBX")
+            ).read_bytes()
         var wrap = REPEAT
         if self.value(node, "WrapModeU", 0) != 0:
             wrap = CLAMP

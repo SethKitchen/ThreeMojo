@@ -64,7 +64,7 @@ from core.gaussian_splat_utils import (
     write_covariance,
 )
 from core.user_data import UserData, user_data_of
-from loaders.file_path import path_directory
+from loaders.file_path import confined_path, path_directory
 from loaders.gltf import (
     _FLAT_NODE_MATRIX,
     UniqueNames,
@@ -496,7 +496,7 @@ def _buffers(
                     raise Error("glTF: a data URI that is not base64")
                 data = decode_base64(String(uri[byte = comma + 1 :]))
             else:
-                data = Path(directory + uri).read_bytes()
+                data = Path(confined_path(directory, uri, "glTF")).read_bytes()
         if length > len(data):
             raise Error("glTF: a splat buffer is shorter than its byteLength")
         # GLB padding is not part of the declared buffer. Views must not
