@@ -38,7 +38,7 @@ from math.finite import (
     require_positive_tolerance,
 )
 from extensions.numerics.skyline import SkylineFactor, reverse_cuthill_mckee
-from extensions.numerics.sparse import SparseBuilder
+from extensions.numerics.sparse import CsrMatrix, SparseBuilder
 from extensions.numerics.vector import norm, zeros
 from extensions.structure.ids import MemberId, NodeId
 from extensions.structure.kinds import Dof
@@ -46,8 +46,10 @@ from generators.utils import Vec3d
 from units.si import (
     Area64,
     Force64,
+    KILOGRAM,
     Length64,
     METER,
+    Mass64,
     NEWTON,
     PASCAL,
     Pressure64,
@@ -195,6 +197,9 @@ struct TrussModel(Copyable, Movable):
     var loads: List[Float64]
     # True if each bar follows its current length and axis.
     var corotational: Bool
+    # The lumped mass of each node, in kilograms. Only a time history
+    # uses it.
+    var masses: List[Float64]
 
     def __init__(out self):
         """Create an empty model with small displacements."""
@@ -203,6 +208,7 @@ struct TrussModel(Copyable, Movable):
         self.bars = List[Bar]()
         self.loads = List[Float64]()
         self.corotational = False
+        self.masses = List[Float64]()
 
     def set_corotational(mut self, corotational: Bool):
         """Choose the geometry of the bars.
@@ -248,7 +254,28 @@ struct TrussModel(Copyable, Movable):
         for _ in range(3):
             self.fixed.append(False)
             self.loads.append(0)
+        self.masses.append(0)
         return NodeId(len(self.nodes) - 1)
+
+    def add_mass(mut self, node: NodeId, mass: Mass64) raises:
+        """Add a lumped mass at a node, for a time history.
+
+        The mass acts on the three translations. A static step does not
+        use it.
+
+        Args:
+            node: The node.
+            mass: The mass. Zero or more.
+
+        Raises:
+            Error: If the node id is out of range or the mass is negative
+                or not finite.
+        """
+        self.check_node(node)
+        var m = mass.to(KILOGRAM)
+        if not (m >= 0 and isfinite(m)):
+            raise Error("A mass must be zero or more and finite")
+        self.masses[node.value] += m
 
     def _entry(self, node: NodeId, dof: Dof) raises -> Int:
         """Return the vector entry of a translation of a node."""
@@ -437,10 +464,43 @@ def default_newton() raises -> NewtonOptions:
     return NewtonOptions(1e-10, 25)
 
 
-struct _Trial(Movable):
+struct TrussTangent(Movable):
     """The response of every bar at trial displacements."""
 
-    # The internal force of each degree of freedom, in newtons.
+    # The internal force of each degree of freedom, three per node, in
+    # newtons.
+    var internal: List[Float64]
+    # The state of each bar at the trial displacements.
+    var states: List[BarState]
+    # The axial force of each bar, in newtons.
+    var forces: List[Float64]
+    # The tangent stiffness of the free degrees of freedom.
+    var matrix: CsrMatrix
+
+    def __init__(
+        out self,
+        var internal: List[Float64],
+        var states: List[BarState],
+        var forces: List[Float64],
+        var matrix: CsrMatrix,
+    ):
+        """Hold a tangent. `assemble_truss` makes these.
+
+        Args:
+            internal: Three internal forces per node.
+            states: One state per bar.
+            forces: One axial force per bar.
+            matrix: The tangent of the free degrees of freedom.
+        """
+        self.internal = internal^
+        self.states = states^
+        self.forces = forces^
+        self.matrix = matrix^
+
+
+struct _Trial(Movable):
+    """A tangent with its matrix factored."""
+
     var internal: List[Float64]
     var states: List[BarState]
     var forces: List[Float64]
@@ -460,8 +520,16 @@ struct _Trial(Movable):
         self.factor = factor^
 
 
-def _equations(model: TrussModel) -> List[Int]:
-    """Number the free degrees of freedom, with -1 at a held one."""
+def truss_equations(model: TrussModel) -> List[Int]:
+    """Number the free degrees of freedom of a truss.
+
+    Args:
+        model: The model.
+
+    Returns:
+        For each degree of freedom, three per node, its equation number,
+        or -1 if a support holds it.
+    """
     var equation = List[Int](capacity=len(model.fixed))
     var count = 0
     for i in range(len(model.fixed)):
@@ -473,14 +541,34 @@ def _equations(model: TrussModel) -> List[Int]:
     return equation^
 
 
-def _trial(
-    model: TrussModel,
-    state: TrussState,
-    u: List[Float64],
-    equation: List[Int],
-    size: Int,
-) raises -> _Trial:
-    """Return the internal forces and the factored tangent at u."""
+def assemble_truss(
+    model: TrussModel, state: TrussState, u: List[Float64]
+) raises -> TrussTangent:
+    """Return the internal forces and the tangent of a truss at trial
+    displacements.
+
+    Args:
+        model: The model.
+        state: The committed state. Each bar steps from its state here to
+            its strain at the trial displacements.
+        u: The trial displacements, three per node, in meters.
+
+    Returns:
+        The internal forces, the bar states, the bar forces and the
+        tangent stiffness of the free degrees of freedom.
+
+    Raises:
+        Error: If the state or the displacements do not fit the model, or
+            a value is not finite.
+    """
+    _check_state(model, state)
+    if len(u) != 3 * len(model.nodes):
+        raise Error("The displacements do not fit the model")
+    var equation = truss_equations(model)
+    var size = 0
+    for i in range(len(equation)):
+        if equation[i] >= 0:
+            size += 1
     var internal = zeros(len(u))
     var states = List[BarState](capacity=len(model.bars))
     var forces = zeros(len(model.bars))
@@ -539,13 +627,27 @@ def _trial(
                 if (i < 3) != (j < 3):
                     value = -value
                 builder.add(row, column, value)
-    var matrix = builder.build()
+    return TrussTangent(internal^, states^, forces^, builder.build())
+
+
+def _trial(
+    model: TrussModel, state: TrussState, u: List[Float64]
+) raises -> _Trial:
+    """Return the internal forces and the factored tangent at u."""
+    var tangent = assemble_truss(model, state, u)
     try:
         # The tangent can be indefinite past a limit point of a
         # corotational truss. The factorization takes that. It refuses
         # only a zero pivot.
-        var factor = SkylineFactor(matrix, reverse_cuthill_mckee(matrix))
-        return _Trial(internal^, states^, forces^, factor^)
+        var factor = SkylineFactor(
+            tangent.matrix, reverse_cuthill_mckee(tangent.matrix)
+        )
+        return _Trial(
+            tangent.internal.copy(),
+            tangent.states.copy(),
+            tangent.forces.copy(),
+            factor^,
+        )
     except:
         raise Error(
             "The truss cannot carry more load: its tangent stiffness is"
@@ -578,7 +680,7 @@ def _advance(
     Otherwise the degree of freedom `entry` moves by `step`, and the load
     factor is an unknown.
     """
-    var equation = _equations(model)
+    var equation = truss_equations(model)
     var size = 0
     for i in range(len(equation)):
         if equation[i] >= 0:
@@ -593,7 +695,7 @@ def _advance(
     if entry >= 0:
         target = u[entry] + step
     for iteration in range(options.iterations + 1):  # pragma: no branch
-        var trial = _trial(model, state, u, equation, size)
+        var trial = _trial(model, state, u)
         var residual = _reduce(trial.internal, equation, size)
         for i in range(size):  # pragma: no branch
             residual[i] = factor * reference[i] - residual[i]

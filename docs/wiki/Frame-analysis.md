@@ -18,7 +18,8 @@
 | `buckling` | `solve_buckling`, `BucklingResult`, `solve_second_order`, `SecondOrderOptions`, `frame_geometric_stiffness` and `assemble_geometric_stiffness` |
 | `spectrum` | `solve_response_spectrum`, `SpectrumResult`, `ResponseSpectrum`, `CombinationRule` with `SRSS` and `CQC`, `combine_modes` and `modal_correlation` |
 | `section` | `FiberSection`, `ConcreteLaw`, `moment_curvature`, `CurvaturePoint`, `section_response`, `SectionResponse` and `concrete_response` |
-| `nonlinear` | `TrussModel`, `TrussState`, `SteelLaw`, `load_step`, `displacement_step`, `NewtonOptions`, `bar_response`, `BarState` and `BarResponse` |
+| `nonlinear` | `TrussModel`, `TrussState`, `SteelLaw`, `load_step`, `displacement_step`, `NewtonOptions`, `bar_response`, `BarState`, `BarResponse`, `assemble_truss` and `TrussTangent` |
+| `transient` | `start_motion`, `dynamic_step` and `TrussMotion` |
 | `dynamic` | `solve_load_history`, `solve_ground_motion`, `TimeHistory`, `newmark`, `TimeSeries`, `GroundMotion`, `HistoryOptions`, `NewmarkMethod` and `RayleighDamping` |
 
 ## Units and axes
@@ -255,6 +256,26 @@ displacement_step(model, state, apex, UZ, Length64(-10, MILLIMETER), default_new
 
 A shallow truss under a growing load reaches a limit load and snaps through. `load_step` cannot hold a load above the limit on the first branch. `displacement_step` follows the whole path, because the sag grows all the way. Past the limit the tangent is not positive definite, and the solver takes that. This is the corotational truss of OpenSees.
 
+### A truss in time
+
+`extensions/structure/transient.mojo` follows a truss under a load that changes in time, while its bars yield. Give each free node a mass with `model.add_mass(node, mass)`. `start_motion(model, state)` gives the motion at time zero, from rest. `dynamic_step` advances the state and the motion by one time step.
+
+```mojo
+model.add_mass(roof, Mass64(20000, KILOGRAM))
+var state = TrussState(model)
+var motion = start_motion(model, state)
+for step in range(1, 501):
+    dynamic_step(model, state, motion, load_at(step), Duration64(0.01, SECOND), average_acceleration(), damping, default_newton())
+```
+
+The equation of motion is M a + C v + f(u) = λ(t) P. The load factor λ is the argument of each step, so any record in time can drive the truss. The damping is Rayleigh damping, a M + b K₀, with K₀ the tangent stiffness at the start of the motion.
+
+Each step is a Newmark step. The velocity and the acceleration at the end follow from the displacement there. So the step solves for the displacement by Newton iteration, with the matrix K + γ/(β Δt) C + M/(β Δt²). The state and the motion change only when the step converges.
+
+A `TrussMotion` holds the velocities, the accelerations and the time. `assemble_truss(model, state, u)` gives the internal forces and the tangent stiffness at trial displacements.
+
+OpenSees does this analysis with its Newmark integrator and its Newton algorithm.
+
 The parts follow the OpenSees objects: a uniaxial material with a committed state, a truss element, the Newton algorithm, and the LoadControl and DisplacementControl integrators. The law gives the response of the OpenSees material Steel01 with no isotropic hardening. The code is original.
 
 ## Find the moment-curvature curve of a section
@@ -355,7 +376,7 @@ The live loads are typical values from ASCE/SEI 7-16, table 4.3-1. They are not 
 
 ## Validation
 
-Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo`, `tests/test_structure_nonlinear.mojo`, `tests/test_structure_spectrum.mojo`, `tests/test_structure_section.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
+Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo`, `tests/test_structure_nonlinear.mojo`, `tests/test_structure_transient.mojo`, `tests/test_structure_spectrum.mojo`, `tests/test_structure_section.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
 
 | Case | Reference | Error |
 |---|---|---|
@@ -379,6 +400,9 @@ Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_m
 | The same rectangle with 0.4 of its squash load, 400 layers | A plastic moment of M_p (1 - (N / N_y)²) | Below 0.1% |
 | Singly reinforced concrete beam, peak moment | ACI 318: A_s f_y (d - a / 2) with the rectangular stress block | Below 3% |
 | Kent and Park envelope at six strains | 0.75 of the strength at half the peak strain, and the line after the peak | Below 1e-6 Pa |
+| Elastoplastic system under a half-sine pulse, 9 steps | Chopra, table E5.5 | Equal to the four decimals of the table |
+| The same system with no yield, by mass and by stiffness damping | Chopra, table E5.3 | Equal to the four decimals of the table |
+| Elastic chain of two bars and two masses, 200 steps | Energy balance | Below 1e-9 of the strain energy |
 | Shallow two-bar truss of von Mises, corotational, 50 steps of 10 mm | The closed form of the load at each sag, through the flat state and the mirror state | Below 0.01 N of a limit load of 76 kN |
 | The same truss, load control to 0.8 of the limit | The closed-form sag | Below 1e-4 N |
 | The same truss with small displacements | The linear stiffness 2 E A h² / L³ | Below 1e-12 m |
@@ -419,6 +443,7 @@ Every function raises `Error` for input it cannot use.
 | The load case has no axial force, or fewer positive factors than the count | `solve_buckling` |
 | The load case is at or above its buckling load, or the iteration does not converge | `solve_second_order` |
 | A truss is a mechanism or at its collapse load, or a step does not converge | `load_step`, `displacement_step` |
+| A free node has no mass, or the motion does not fit the model | `start_motion`, `dynamic_step` |
 | A concrete law, a fiber or a patch is not valid | `ConcreteLaw`, `FiberSection` |
 | No axial strain carries the axial force of a section | `moment_curvature` |
 | A steel law, a bar area or a step size is not valid | `SteelLaw`, `TrussModel.add_bar`, `load_step`, `displacement_step` |
@@ -439,6 +464,7 @@ Every function raises `Error` for input it cannot use.
 - A support fixes a degree of freedom at zero. The model has no springs and no settlements.
 - A member load is uniform along the member and acts along a global axis.
 - A response spectrum analysis has one ground direction and one damping ratio. It gives displacements and the base shear, not member forces.
+- The time history of a truss has lumped masses and a load factor in time. It has no ground motion input.
 - A time history starts from rest. It has Rayleigh damping only, and every support has the same ground motion.
 - The view uses uniform tributary loads on beams. It does not model walls as shear walls or as loads.
 
