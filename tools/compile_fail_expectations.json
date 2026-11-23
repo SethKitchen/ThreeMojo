@@ -2267,6 +2267,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_head_loss_formula_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 36,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'HeadLossFormula'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_head_lymph_part_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2410,6 +2420,46 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_hydraulic_link_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LinkId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_hydraulic_link_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LinkKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_hydraulic_node_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'NodeId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_hydraulic_node_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'NodeKind'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_joint_id_is_not_a_bare_int.mojo": {
     "errors": [

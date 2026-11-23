@@ -96,6 +96,7 @@ Look something up.
 - [Molecular structures](Molecular-structures)
 - [Tetrahedral FEM](Tetrahedral-FEM)
 - [Finite-volume flow](Finite-volume-flow)
+- [Pipe networks](Pipe-networks)
 - [Survival analysis](Survival-analysis)
 - [Diagnostic tests](Diagnostic-tests)
 - [Meta-analysis](Meta-analysis)

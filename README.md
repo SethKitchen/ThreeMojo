@@ -814,9 +814,10 @@ Earth-retaining structures and the pictures that explain them. A checked box rec
 
 ### Fluid flow
 
-Finite-volume analysis of flow, with OpenFOAM as the model. A checked box records implemented scope. It does not establish engineering validity.
+Analysis of flow, with OpenFOAM and EPANET as the models. A checked box records implemented scope. It does not establish engineering validity.
 
 - [x] [Finite-volume flow](https://github.com/SethKitchen/ThreeMojo/wiki/Finite-volume-flow): laminar incompressible flow by the PISO algorithm of icoFoam; it meets Poiseuille flow and Ghia's cavity [#1136](https://github.com/SethKitchen/ThreeMojo/issues/1136)
+- [x] [Pipe networks](https://github.com/SethKitchen/ThreeMojo/wiki/Pipe-networks): steady heads and flows by the global gradient algorithm of EPANET, with three head loss formulas and pumps [#1138](https://github.com/SethKitchen/ThreeMojo/issues/1138)
 
 ### General relativity
 
