@@ -82,6 +82,7 @@ comptime ALLOWED_EXTENSION_EDGES = [
     "castle:structure",
     "castle:visual",
     "castle:water",
+    "cfd:numerics",
     "chemistry:numerics",
     "chemistry:visual",
     "clinical:imaging",
