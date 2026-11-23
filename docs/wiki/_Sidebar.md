@@ -176,6 +176,7 @@
 - [Medical imaging](Medical-imaging)
 - [Molecular structures](Molecular-structures)
 - [Tetrahedral FEM](Tetrahedral-FEM)
+- [Finite-volume flow](Finite-volume-flow)
 - [Survival analysis](Survival-analysis)
 - [Diagnostic tests](Diagnostic-tests)
 - [Meta-analysis](Meta-analysis)
