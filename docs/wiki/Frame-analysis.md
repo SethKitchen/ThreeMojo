@@ -16,6 +16,7 @@
 | `static` | `StaticSolver`, `solve_static`, `StaticResult`, `MemberForces` and the assembly functions |
 | `modal` | `solve_modes`, `ModalResult` and `assemble_mass` |
 | `buckling` | `solve_buckling`, `BucklingResult`, `solve_second_order`, `SecondOrderOptions`, `frame_geometric_stiffness` and `assemble_geometric_stiffness` |
+| `spectrum` | `solve_response_spectrum`, `SpectrumResult`, `ResponseSpectrum`, `CombinationRule` with `SRSS` and `CQC`, `combine_modes` and `modal_correlation` |
 | `nonlinear` | `TrussModel`, `TrussState`, `SteelLaw`, `load_step`, `displacement_step`, `NewtonOptions`, `bar_response`, `BarState` and `BarResponse` |
 | `dynamic` | `solve_load_history`, `solve_ground_motion`, `TimeHistory`, `newmark`, `TimeSeries`, `GroundMotion`, `HistoryOptions`, `NewmarkMethod` and `RayleighDamping` |
 
@@ -130,6 +131,39 @@ The solver factors the effective stiffness K + γ/(β Δt) C + M/(β Δt²) once
 `newmark(k, m, shape, series, options)` runs the same integrator on any stiffness and mass in consistent units. Use it for a model that is not a `StructuralModel`.
 
 The load pattern with a time series, the uniform ground motion, the Rayleigh damping and the Newmark integrator follow the analysis objects of OpenSees. The code is original.
+
+## Combine modes with a response spectrum
+
+`solve_response_spectrum(model, spectrum, direction, modes, rule, damping)` gives the peak response of a model to a ground motion that a response spectrum describes. The ground moves along one global axis.
+
+```mojo
+var spectrum = ResponseSpectrum([0.0, 0.1, 0.5, 1.0, 2.0], [0.4, 1.0, 1.0, 0.5, 0.25], Acceleration64(9.80665, METER_PER_SECOND_SQUARED))
+var result = solve_response_spectrum(model, spectrum, UX, 6, CQC, 0.05)
+var drift = result.translation(roof, UX)
+var shear = result.base_shear()
+```
+
+A `ResponseSpectrum` holds a pseudo-acceleration at each period. It is linear between two periods and keeps its end value outside them. The value at a period is the list value times the scale, so a spectrum in units of g has a scale of 9.80665 m/s².
+
+For each mode φ, with φᵀ M φ = 1 and r the rigid motion along the axis, the solver finds these values:
+
+| Value | Formula |
+|---|---|
+| Participation factor | Γ = φᵀ M r |
+| Effective mass | Γ² |
+| Peak base shear of the mode | Γ² S_a |
+| Peak displacement of the mode | Γ φ S_a / ω² |
+
+The peaks of the modes do not occur at one time. `SRSS` combines them as the square root of the sum of the squares. `CQC` adds the cross terms of each pair of modes, with the correlation of Der Kiureghian for one damping ratio. Use `CQC` when two modes have close frequencies. The two rules agree when the frequencies are far apart.
+
+| Result | Holds |
+|---|---|
+| `translation(node, dof)` | The combined peak displacement, relative to the ground. It has no sign. |
+| `base_shear()` | The combined peak base shear |
+| `effective_mass(mode)` | The effective mass of a mode |
+| `frequencies`, `participation`, `effective_masses`, `modal_shears`, `displacements` | The raw values of each mode, and the combined peak of each degree of freedom |
+
+The effective masses of all the modes add to the mass that the ground motion moves. Use enough modes for their sum to reach most of that mass. Building codes ask for 90%.
 
 ## Find buckling loads
 
@@ -278,7 +312,7 @@ The live loads are typical values from ASCE/SEI 7-16, table 4.3-1. They are not 
 
 ## Validation
 
-Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo`, `tests/test_structure_nonlinear.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
+Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo`, `tests/test_structure_nonlinear.mojo`, `tests/test_structure_spectrum.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
 
 | Case | Reference | Error |
 |---|---|---|
@@ -298,6 +332,10 @@ Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_m
 | Cantilever beam-column at half its Euler load | H L³ / (3 E I) times 3 (tan u - u) / u³, and a base moment of H L tan u / u | Below 0.001% |
 | The same member in tension at twice its Euler load | 3 (u - tanh u) / u³ | Below 0.01% |
 | Frame with a shell slab, second order | Sum of reactions equals the loads | Below 1e-6 |
+| One floor on one column, flat spectrum | S_a / ω² and m S_a | Below 0.05% |
+| Shear building of two equal storeys, SRSS | Effective masses of 1.8944 m and 0.1056 m, and the base shear and roof sway from them | Below 0.2% |
+| The same building, CQC at 5% damping | SRSS, because the frequencies are far apart | Below 0.5% |
+| Combination rules on given peaks | SRSS of 3 and 4 is 5. CQC is the absolute sum at equal frequencies and SRSS at zero damping. | Below 1e-12 |
 | One bar, strained past yield and back | The bilinear law, and a second yield at 290 - 500 = -210 MPa | Below 1e-3 Pa |
 | Three-bar truss, perfectly plastic, load control | Bar forces before and after first yield at σ A (1 + 2 cos³ θ). A load above σ A (1 + 2 cos θ) is refused. | Below 1e-4 N |
 | The same truss, loaded to 550 kN and unloaded | The residual bar forces, which balance | Below 1e-4 N |
@@ -325,7 +363,9 @@ Every function raises `Error` for input it cannot use.
 | A member's ends are at one point, or its reference is zero | `add_member`, `member_axes` |
 | A section or material is not valid | `add_member`, `add_shell` |
 | The structure is a mechanism | `StaticSolver`, `solve_static`, `solve_modes`, `solve_load_history`, `solve_ground_motion`, `solve_buckling`, `solve_second_order` |
-| The mode count is out of range | `solve_modes`, `solve_buckling` |
+| The mode count is out of range | `solve_modes`, `solve_buckling`, `solve_response_spectrum` |
+| A spectrum has no period, periods that do not ascend, or a negative value | `ResponseSpectrum` |
+| A combination rule or a damping ratio is not valid | `solve_response_spectrum`, `combine_modes` |
 | The load case has no axial force, or fewer positive factors than the count | `solve_buckling` |
 | The load case is at or above its buckling load, or the iteration does not converge | `solve_second_order` |
 | A truss is a mechanism or at its collapse load, or a step does not converge | `load_step`, `displacement_step` |
@@ -344,6 +384,7 @@ Every function raises `Error` for input it cannot use.
 - The members have no shear deformation, no end releases, no offsets and no warping torsion.
 - A support fixes a degree of freedom at zero. The model has no springs and no settlements.
 - A member load is uniform along the member and acts along a global axis.
+- A response spectrum analysis has one ground direction and one damping ratio. It gives displacements and the base shear, not member forces.
 - A time history starts from rest. It has Rayleigh damping only, and every support has the same ground motion.
 - The view uses uniform tributary loads on beams. It does not model walls as shear walls or as loads.
 
@@ -355,10 +396,11 @@ Every function raises `Error` for input it cannot use.
 - McGuire, Gallagher and Ziemian, "Matrix Structural Analysis", 2nd edition, 2000: chapter 9, the geometric stiffness.
 - Timoshenko and Gere, "Theory of Elastic Stability", 2nd edition, 1961: chapters 1 and 2.
 - Dhondt, "The Finite Element Method for Three-Dimensional Thermomechanical Applications", Wiley, 2004: the theory of CalculiX.
+- Der Kiureghian, "A response spectrum method for random vibration analysis of MDF systems", Earthquake Engineering and Structural Dynamics 9, 1981: the CQC correlation.
 - Simo and Hughes, "Computational Inelasticity", Springer, 1998: chapter 1, the return map of one-dimensional plasticity.
 - Chen and Han, "Plasticity for Structural Engineers", Springer, 1988: limit analysis of the three-bar truss.
 - Newmark, "A method of computation for structural dynamics", Journal of the Engineering Mechanics Division, ASCE, 1959.
-- Chopra, "Dynamics of Structures", 4th edition, 2012: sections 5.4 and 11.4, and tables E5.3 and E5.4.
+- Chopra, "Dynamics of Structures", 4th edition, 2012: sections 5.4, 11.4, 13.7 and 13.8, and tables E5.3 and E5.4.
 - McKenna, Scott and Fenves, "Nonlinear finite-element analysis software architecture using object composition", Journal of Computing in Civil Engineering, 2010: the OpenSees analysis objects.
 - Blevins, "Formulas for Natural Frequency and Mode Shape", 1979: table 8-1.
 - ASCE/SEI 7-16, "Minimum Design Loads and Associated Criteria for Buildings and Other Structures", table 4.3-1.
