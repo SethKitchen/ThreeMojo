@@ -606,11 +606,10 @@ Content that is not a three.js port lives under `extensions/`. These features ha
 A checked box records implemented scope. It does not establish engineering or clinical validity.
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
-- [ ] [Meadow on the GPU rasterizer](https://github.com/SethKitchen/ThreeMojo/wiki/Vegetation#draw-a-frame-on-a-gpu): MeadowDevice draws the prepared frame; compiled for sm_80, but its device parity suite has not run [#985](https://github.com/SethKitchen/ThreeMojo/issues/985)
-
 <details>
-<summary>Implemented: 146</summary>
+<summary>Implemented: 147</summary>
 
+- [x] [Meadow on the GPU rasterizer](https://github.com/SethKitchen/ThreeMojo/wiki/Vegetation#draw-a-frame-on-a-gpu): MeadowDevice draws the prepared frame, and its device parity suite passes on an NVIDIA TITAN RTX [#985](https://github.com/SethKitchen/ThreeMojo/issues/985)
 - [x] [Mixamo animations](https://github.com/SethKitchen/ThreeMojo/wiki/Mixamo-animations): download every Mixamo animation from your own Adobe account, retarget it onto the game humanoid, and bake one `.glb`. Run live against Mixamo [#849](https://github.com/SethKitchen/ThreeMojo/issues/849)
 - [x] [Audio-aligned game faces](https://github.com/SethKitchen/ThreeMojo/wiki/Audio-aligned-game-faces): caller-provided phonemes or visemes, audio-clock transport, preserved facial LOD and validated glTF bakes [#299](https://github.com/SethKitchen/ThreeMojo/issues/299)
 
