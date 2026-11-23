@@ -95,6 +95,7 @@ comptime ALLOWED_EXTENSION_EDGES = [
     "fem:imaging",
     "fem:numerics",
     "fem:sdf",
+    "hydraulics:numerics",
     "humanoid:anatomy",
     "imaging:humanoid",
     "imaging:numerics",
