@@ -15,6 +15,7 @@
 | `model` | `StructuralModel`, with nodes, supports, members, shells, load cases, loads and added masses |
 | `static` | `StaticSolver`, `solve_static`, `StaticResult`, `MemberForces` and the assembly functions |
 | `modal` | `solve_modes`, `ModalResult` and `assemble_mass` |
+| `buckling` | `solve_buckling`, `BucklingResult`, `solve_second_order`, `SecondOrderOptions`, `frame_geometric_stiffness` and `assemble_geometric_stiffness` |
 | `dynamic` | `solve_load_history`, `solve_ground_motion`, `TimeHistory`, `newmark`, `TimeSeries`, `GroundMotion`, `HistoryOptions`, `NewmarkMethod` and `RayleighDamping` |
 
 ## Units and axes
@@ -129,6 +130,44 @@ The solver factors the effective stiffness K + γ/(β Δt) C + M/(β Δt²) once
 
 The load pattern with a time series, the uniform ground motion, the Rayleigh damping and the Newmark integrator follow the analysis objects of OpenSees. The code is original.
 
+## Find buckling loads
+
+`solve_buckling(model, case, count)` gives the lowest buckling factors of a load case. A factor λ means that λ times the load case buckles the structure. The result also holds one shape per factor, with its largest entry at one.
+
+```mojo
+var push = model.add_load_case("push")
+model.add_force(push, top, UZ, Force64(-100, KILONEWTON))
+var buckling = solve_buckling(model, push, 2)
+var critical_load = 100 * buckling.factors[0]
+```
+
+The solver uses these steps:
+
+1. A linear static solution gives the axial force of each member.
+2. The axial forces give the geometric stiffness Kg. Tension adds stiffness and compression removes it.
+3. The factors solve (K + λ Kg) φ = 0.
+
+Only positive factors are returned. A load case that puts every member in tension has none, and the function raises an error. A load case with no axial force raises an error too.
+
+The eigenproblem is solved in the shifted form (K + s Kg) φ = γ K φ, with λ = s / (1 - γ). The scale s keeps the left matrix positive definite. The lowest γ are the lowest positive λ. So `lowest_modes` of [Numerics](Numerics) finds them, and its Sturm check proves that no factor was missed.
+
+## Solve with second-order effects
+
+`solve_second_order(model, case, options)` solves a load case with the geometric stiffness of its own axial forces. The result is a `StaticResult`. It holds the P-Delta effect: an axial compression makes the sway and the moments larger.
+
+```mojo
+var result = solve_second_order(model, wind_and_gravity, default_second_order())
+var amplified_sway = result.translation(roof, UX)
+```
+
+The first solution is linear. Each later solution uses the axial forces of the solution before it. The iteration stops when the largest displacement changes by less than the tolerance. `default_second_order()` has a tolerance of 1e-10 and a budget of 50 solutions. `SecondOrderOptions(tolerance, iterations)` sets both.
+
+The function raises an error when the load case is at or above its buckling load. Run `solve_buckling` first to find the factor.
+
+The member end forces include the geometric stiffness. So the moment at the base of a column includes the axial force times the sway. The kinematics stay linear, so the method is for small displacements.
+
+CalculiX has this buckling analysis as its `*BUCKLE` procedure. OpenSees has the second-order analysis as its P-Delta transformation. The code is original.
+
 ## The frame element
 
 The member is the two-node Euler-Bernoulli element of Przemieniecki, with twelve degrees of freedom. It has no shear deformation and no end releases.
@@ -143,6 +182,7 @@ If the reference vector is parallel to the member, the global z axis is used ins
 | Torsion | G J / L, with Saint-Venant's constant J from `Section.torsion_constant` |
 | Bending in the x-z plane | 12 E Iy / L³, 6 E Iy / L², 4 E Iy / L and 2 E Iy / L, with Iy the strong second moment |
 | Bending in the x-y plane | The same terms with Iz, the weak second moment |
+| Geometric stiffness | N / (30 L) times 36, 3 L, 4 L² and -L² in each bending plane, with N the axial tension |
 | Consistent mass | ρ A L / 420 times the Hermite matrix, plus rotary inertia ρ I / (30 L) times its matrix in each plane, plus the polar inertia ρ (Iy + Iz) L in torsion |
 | Uniform load w | w L / 2 at each node and moments of w L² / 12 |
 | Transformation | Four copies of the 3 by 3 rotation, with the local axes as rows. A global matrix is Tᵀ K T. |
@@ -195,7 +235,7 @@ The live loads are typical values from ASCE/SEI 7-16, table 4.3-1. They are not 
 
 ## Validation
 
-Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
+Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
 
 | Case | Reference | Error |
 |---|---|---|
@@ -210,6 +250,11 @@ Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_m
 | Cantilever, first frequency, 2, 4 and 8 elements | 1.8751² sqrt(E I / (m L⁴)) / (2π) | +0.047%, +0.0018%, -0.0013% |
 | Simply supported beam, first three frequencies, 10 elements | (n π)² sqrt(E I / (m L⁴)) / (2π) | -0.011%, -0.035%, -0.049% |
 | Cantilever with a tip mass ten times the beam mass | Rayleigh's method with 0.2357 m L | -0.002% |
+| Column, 8 elements: cantilever, pinned ends, fixed ends, fixed and pinned ends | Euler load π² E I / (K L)² with K = 2, 1, 0.5 and 0.699 | 0.0007%, 0.003%, 0.05% and 0.014% |
+| Vertical cantilever in space, first three factors | Weak axis, strong axis, second weak mode | 0.0007%, 0.0007% and 0.05% |
+| Cantilever beam-column at half its Euler load | H L³ / (3 E I) times 3 (tan u - u) / u³, and a base moment of H L tan u / u | Below 0.001% |
+| The same member in tension at twice its Euler load | 3 (u - tanh u) / u³ | Below 0.01% |
+| Frame with a shell slab, second order | Sum of reactions equals the loads | Below 1e-6 |
 | One degree of freedom, half-sine pulse, average acceleration | Chopra, table E5.3 | Equal to the four decimals of the table |
 | The same system, linear acceleration | Chopra, table E5.4 | Equal to the four decimals of the table |
 | Two degrees of freedom, step load, steps of 0.1 s and 0.05 s | Modal solution | The error falls by a factor of 4 |
@@ -232,8 +277,10 @@ Every function raises `Error` for input it cannot use.
 | A force is not along a translation, or a moment is not about a rotation | `add_force`, `add_moment`, `add_line_load`, the result accessors |
 | A member's ends are at one point, or its reference is zero | `add_member`, `member_axes` |
 | A section or material is not valid | `add_member`, `add_shell` |
-| The structure is a mechanism | `StaticSolver`, `solve_static`, `solve_modes`, `solve_load_history`, `solve_ground_motion` |
-| The mode count is out of range | `solve_modes` |
+| The structure is a mechanism | `StaticSolver`, `solve_static`, `solve_modes`, `solve_load_history`, `solve_ground_motion`, `solve_buckling`, `solve_second_order` |
+| The mode count is out of range | `solve_modes`, `solve_buckling` |
+| The load case has no axial force, or fewer positive factors than the count | `solve_buckling` |
+| The load case is at or above its buckling load, or the iteration does not converge | `solve_second_order` |
 | A time step, a step count, a method or a damping is not valid | `HistoryOptions` |
 | A series is empty, or its interval or a value is not valid | `TimeSeries` |
 | A ground motion is not along a translation | `GroundMotion` |
@@ -242,7 +289,8 @@ Every function raises `Error` for input it cannot use.
 
 ## Limits
 
-- The analysis is linear and elastic. It has no second-order effects, no buckling and no material nonlinearity.
+- The material is linear and elastic. The displacements are small: `solve_second_order` adds the geometric stiffness, but it has no large rotations.
+- A shell has no geometric stiffness. Its membrane stress does not change a buckling factor.
 - The members have no shear deformation, no end releases, no offsets and no warping torsion.
 - A support fixes a degree of freedom at zero. The model has no springs and no settlements.
 - A member load is uniform along the member and acts along a global axis.
@@ -254,6 +302,9 @@ Every function raises `Error` for input it cannot use.
 - Przemieniecki, "Theory of Matrix Structural Analysis", McGraw-Hill, 1968: sections 5.6 and 11.3.
 - Bathe, "Finite Element Procedures", 2nd edition, 2014: sections 4.2 and 10.3.
 - Hibbeler, "Structural Analysis", chapter 11, the slope-deflection method.
+- McGuire, Gallagher and Ziemian, "Matrix Structural Analysis", 2nd edition, 2000: chapter 9, the geometric stiffness.
+- Timoshenko and Gere, "Theory of Elastic Stability", 2nd edition, 1961: chapters 1 and 2.
+- Dhondt, "The Finite Element Method for Three-Dimensional Thermomechanical Applications", Wiley, 2004: the theory of CalculiX.
 - Newmark, "A method of computation for structural dynamics", Journal of the Engineering Mechanics Division, ASCE, 1959.
 - Chopra, "Dynamics of Structures", 4th edition, 2012: sections 5.4 and 11.4, and tables E5.3 and E5.4.
 - McKenna, Scott and Fenves, "Nonlinear finite-element analysis software architecture using object composition", Journal of Computing in Civil Engineering, 2010: the OpenSees analysis objects.
