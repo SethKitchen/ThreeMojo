@@ -177,6 +177,7 @@ Look something up.
 Understand why.
 
 - [Why a software rasterizer](Why-a-software-rasterizer)
+- [Why the engineering solvers are original code](Why-the-engineering-solvers-are-original-code)
 - [Why the scene graph is an array](Why-the-scene-graph-is-an-array)
 - [Why color is linear](Why-color-is-linear)
 - [Why a normal is not a color](Why-a-normal-is-not-a-color)

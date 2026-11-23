@@ -189,6 +189,7 @@
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)
+- [Engineering solvers are original code](Why-the-engineering-solvers-are-original-code)
 - [Scene graph as an array](Why-the-scene-graph-is-an-array)
 - [Linear color](Why-color-is-linear)
 - [Normals are not colors](Why-a-normal-is-not-a-color)
