@@ -8,8 +8,8 @@
 An input deck is a text file of keyword lines, which start with `*`, and
 data lines. `parse_deck` reads the static subset that this port can
 solve: nodes, four-node and ten-node tetrahedra, node and element sets,
-elastic materials, solid sections, boundary conditions, point loads and
-gravity. `Deck.problem` gives a `StaticProblem`. `deck_text` writes a
+elastic materials, solid sections, boundary conditions, point loads,
+pressure on element faces and gravity. `Deck.problem` gives a `StaticProblem`. `deck_text` writes a
 `StaticProblem` as a deck, so CalculiX can run the same model.
 
 A keyword outside the subset raises an error. The reader does not skip
@@ -39,7 +39,7 @@ from extensions.fem.ids import (
 )
 from extensions.fem.mesh import TetMesh, signed_volume
 from extensions.fem.static import StaticProblem
-from extensions.sdf.vector import V3, dot, v3
+from extensions.sdf.vector import V3, cross, dot, v3
 from units.si import (
     Acceleration64,
     Density64,
@@ -293,6 +293,9 @@ struct _Reader(Movable):
     var keyword: String
     # The parameters of that keyword, in capitals.
     var parameters: Dict[String, String]
+    # The nodes of each element in the order of the deck: four or ten per
+    # element. A face label counts its nodes in this order.
+    var deck_nodes: List[Int]
     # The numbers of an element whose data continues on the next line.
     var pending: List[Int]
     var continues: Bool
@@ -314,6 +317,7 @@ struct _Reader(Movable):
         self.units = units
         self.keyword = String("")
         self.parameters = Dict[String, String]()
+        self.deck_nodes = List[Int]()
         self.pending = List[Int]()
         self.continues = False
         self.material = -1
@@ -522,6 +526,8 @@ struct _Reader(Movable):
                 )
             nodes.append(index)
         self.pending.clear()
+        for i in range(count):  # pragma: no branch
+            self.deck_nodes.append(nodes[i])
         var existing = self.deck.mesh.element_count()
         if existing > 0 and (self.deck.mesh.order == QUADRATIC) != quadratic:
             raise Error(
@@ -694,14 +700,75 @@ struct _Reader(Movable):
         for i in range(len(nodes)):  # pragma: no branch
             self.deck.loads.append(DeckValue(nodes[i], axis, value))
 
+    def _pressure(mut self, fields: List[String], face: Int, line: Int) raises:
+        """Read a face pressure and add its consistent nodal forces.
+
+        A positive pressure pushes into the element. The force of a face
+        is the pressure times its area. A four-node element puts a third
+        of it on each corner of the face. A ten-node element puts a third
+        on each edge node of the face.
+        """
+        var elements: List[Int]
+        try:
+            var number = atol(fields[0])
+            var index = self.deck._element_index.get(number, -1)
+            if index < 0:
+                raise Error("no element")
+            elements = [index]
+        except:
+            var name = _upper(fields[0])
+            if name not in self.deck.element_sets:
+                raise Error(
+                    file_line("deck", line),
+                    "the deck has no element or element set ",
+                    name,
+                )
+            elements = self.deck.element_sets[name].copy()
+        var pressure = (
+            _real(fields[2], "A pressure", line) * self.units.stress()
+        )
+        # The corners of each face, the corner opposite to it and its
+        # edge nodes, counted from zero in the order of the deck.
+        var corners = [0, 1, 2, 0, 3, 1, 1, 3, 2, 2, 3, 0]
+        var opposite = [3, 2, 0, 1]
+        var edges = [4, 5, 6, 7, 8, 4, 8, 9, 5, 9, 7, 6]
+        var per = self.deck.mesh.nodes_per_element()
+        ref points = self.deck.mesh.nodes
+        for k in range(len(elements)):  # pragma: no branch
+            var base = per * elements[k]
+            var a = points[self.deck_nodes[base + corners[3 * face]]]
+            var b = points[self.deck_nodes[base + corners[3 * face + 1]]]
+            var c = points[self.deck_nodes[base + corners[3 * face + 2]]]
+            var far = points[self.deck_nodes[base + opposite[face]]]
+            # Twice the area, along the normal that points out.
+            var normal = cross(b - a, c - a)
+            if dot(normal, far - a) > 0:
+                normal = normal * -1.0
+            var push = normal * (-pressure / 6)
+            var parts = [push.x, push.y, push.z]
+            for n in range(3):
+                var local = corners[3 * face + n]
+                if per == 10:
+                    local = edges[3 * face + n]
+                var node = self.deck_nodes[base + local]
+                for axis in range(3):
+                    self.deck.loads.append(DeckValue(node, axis, parts[axis]))
+
     def _dload(mut self, fields: List[String], line: Int) raises:
-        """Read a data line of *DLOAD. Only GRAV on every element."""
+        """Read a data line of *DLOAD: a face pressure or GRAV."""
+        if len(fields) >= 3:
+            var label = _upper(fields[1])
+            var faces = ["P1", "P2", "P3", "P4"]
+            for face in range(4):
+                if label == faces[face]:
+                    self._pressure(fields, face, line)
+                    return
         if len(fields) < 6 or _upper(fields[1]) != "GRAV":
             raise Error(
                 file_line("deck", line),
                 (
-                    "the only distributed load is GRAV, with a size and a"
-                    " direction"
+                    "a distributed load must be a pressure P1 to P4, or GRAV"
+                    " with a size and a direction"
                 ),
             )
         if self.has_gravity:

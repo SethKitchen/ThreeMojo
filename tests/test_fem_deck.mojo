@@ -265,6 +265,106 @@ def test_boundary_forms() raises:
     )
 
 
+def test_pressure_on_each_face() raises:
+    """A pressure of 2 MPa on each face of one tetrahedron, in millimeters.
+
+    Reference: the faces are 1-2-3, 1-4-2, 2-4-3 and 3-4-1. A positive
+    pressure pushes into the element with a force of the pressure times
+    the area, and each corner of the face takes a third. Three faces have
+    an area of 0.5 m². The fourth has the normal (1, 1, 1) and an area of
+    sqrt(3) / 2 m².
+    """
+    var third = 2e6 * 0.5 / 3
+    # The face, the node off the face, and the push on each node of it.
+    var labels = ["P1", "P2", "P3", "P4"]
+    var off = [3, 2, 0, 1]
+    var pushes = [
+        v3(0, 0, third),
+        v3(0, third, 0),
+        v3(-third, -third, -third),
+        v3(third, 0, 0),
+    ]
+    for face in range(4):
+        var text = (
+            String(_TET)
+            .replace("Eall, GRAV, 9810, 0, 0, -1", "7, " + labels[face] + ", 2")
+            .replace("4, 3, -1000\n", "")
+        )
+        var deck = parse_deck(text, millimeter_units())
+        assert_equal(len(deck.loads), 9)
+        var forces = deck.problem().forces.copy()
+        for node in range(4):
+            var expected = pushes[face]
+            if node == off[face]:
+                expected = v3(0, 0, 0)
+            assert_almost_equal(forces[3 * node], expected.x, atol=1e-6)
+            assert_almost_equal(forces[3 * node + 1], expected.y, atol=1e-6)
+            assert_almost_equal(forces[3 * node + 2], expected.z, atol=1e-6)
+    # An element with its last two nodes swapped is inverted. Its face
+    # P1 is then 1-2-4, in the plane y = 0, and the push is still inward.
+    var inverted = (
+        String(_TET)
+        .replace("7, 1, 2, 3, 4", "7, 1, 2, 4, 3")
+        .replace("Eall, GRAV, 9810, 0, 0, -1", "7, P1, 2")
+        .replace("4, 3, -1000\n", "")
+    )
+    var turned = parse_deck(inverted, millimeter_units()).problem()
+    assert_almost_equal(turned.forces[1], third, atol=1e-6)
+    assert_almost_equal(turned.forces[4], third, atol=1e-6)
+    assert_almost_equal(turned.forces[10], third, atol=1e-6)
+    assert_almost_equal(turned.forces[7], 0.0, atol=0)
+    # An element set as the target gives the same forces.
+    var by_set = (
+        String(_TET)
+        .replace("Eall, GRAV, 9810, 0, 0, -1", "Eall, P1, 2")
+        .replace("4, 3, -1000\n", "")
+    )
+    var forces = parse_deck(by_set, millimeter_units()).problem().forces.copy()
+    assert_almost_equal(forces[2], third, atol=1e-6)
+
+
+def _pressed_bar(quadratic: Bool) raises:
+    """Compare a bar pulled by face pressures with `press_plane`."""
+    var problem = _bar(quadratic)
+    var bare = _bar(quadratic)
+    for i in range(len(bare.forces)):
+        bare.forces[i] = 0
+    var text = deck_text(bare, "A bar with no load")
+    # A pull of 50 MPa on each element face that lies on the end x = 2 m.
+    var corners = [0, 1, 2, 0, 3, 1, 1, 3, 2, 2, 3, 0]
+    var per = problem.mesh.nodes_per_element()
+    var lines = String("*DLOAD\n")
+    var count = 0
+    for e in range(problem.mesh.element_count()):
+        for face in range(4):
+            var on_end = True
+            for n in range(3):
+                var node = problem.mesh.corners[per * e + corners[3 * face + n]]
+                if abs(problem.mesh.nodes[node].x - 2) > 1e-9:
+                    on_end = False
+            if on_end:
+                lines += String(e + 1, ", P", face + 1, ", -50e6\n")
+                count += 1
+    assert_equal(count, 2)
+    var deck = parse_deck(
+        text.replace("*NODE FILE", lines + "*NODE FILE"), si_units()
+    )
+    var forces = deck.problem().forces.copy()
+    for i in range(len(forces)):
+        assert_almost_equal(forces[i], problem.forces[i], atol=1e-6)
+
+
+def test_face_pressure_matches_press_plane() raises:
+    """A bar pulled by a pressure of -50 MPa on its end faces.
+
+    Reference: `press_plane` on the same faces, for four-node and for
+    ten-node elements. A ten-node element puts the force on its edge
+    nodes.
+    """
+    _pressed_bar(False)
+    _pressed_bar(True)
+
+
 comptime _TEN = """*NODE
 1, 0, 0, 0
 2, 2, 0, 0
@@ -405,7 +505,11 @@ def test_data_refusals() raises:
     _swap("Base, 1, 3", "Base, 3, 1", "below the first")
     _swap("4, 3, -1000", "4, 3", "a degree of freedom and a value")
     _swap("Eall, GRAV, 9810, 0, 0, -1", "Eall, GRAV, 9810", "GRAV")
-    _swap("Eall, GRAV, 9810, 0, 0, -1", "Eall, P1, 1, 0, 0, 0", "GRAV")
+    _swap("Eall, GRAV, 9810, 0, 0, -1", "Eall, P5, 1, 0, 0, 0", "GRAV")
+    _swap("Eall, GRAV, 9810, 0, 0, -1", "Eall, P1", "GRAV")
+    _swap("Eall, GRAV, 9810, 0, 0, -1", "9, P1, 2", "element set 9")
+    _swap("Eall, GRAV, 9810, 0, 0, -1", "None, P1, 2", "element set NONE")
+    _swap("Eall, GRAV, 9810, 0, 0, -1", "7, P1, much", "is not a number")
     _swap(
         "Eall, GRAV, 9810, 0, 0, -1",
         "Eall, GRAV, 9810, 0, 0, -1\nEall, GRAV, 9810, 0, 0, -1",

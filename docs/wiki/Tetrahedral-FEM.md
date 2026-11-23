@@ -501,7 +501,7 @@ The reader takes this subset of the format:
 | `*BOUNDARY` | A node or a node set, a first and a last degree of freedom from 1 to 3, and a displacement |
 | `*STEP`, `*STATIC`, `*END STEP` | One linear static step |
 | `*CLOAD` | A node or a node set, a degree of freedom and a force |
-| `*DLOAD` | `GRAV` on every element, with a size and a direction |
+| `*DLOAD` | A pressure `P1` to `P4` on a face of an element or of an element set. `GRAV` on every element, with a size and a direction. |
 | `*NODE FILE`, `*EL FILE`, `*NODE PRINT`, `*EL PRINT` | Output requests that it does not read |
 
 A line that starts with `**` is a comment. Names and keywords have no case. A number or a set must be defined before a line uses it.
@@ -509,6 +509,8 @@ A line that starts with `**` is a comment. Names and keywords have no case. A nu
 The reader raises an error for a keyword outside this table, for `NLGEOM`, and for a second step. It does not skip a line that it cannot honor, because a skipped line changes the answer. Each error names its line.
 
 A `Deck` holds the mesh, the materials and their names, the densities, the sets, the supports and the loads, in SI units. `node(number)` and `element(number)` give the mesh ids of the deck numbers.
+
+The faces `P1` to `P4` have the nodes 1-2-3, 1-4-2, 2-4-3 and 3-4-1, in the node order of the deck. A positive pressure pushes into the element. The reader turns the pressure into consistent nodal forces. A four-node element puts a third of the force on each corner of the face. A ten-node element puts a third on each edge node of the face.
 
 An element with a negative volume is turned, with its edge nodes. The edge nodes of a `C3D10` element follow the edges 1-2, 2-3, 1-3, 1-4, 2-4 and 3-4, which is also the order of `edge_pairs`. The solver takes the edges as straight.
 
@@ -522,6 +524,7 @@ The tests check these results:
 
 - A bar is written as a deck and read back, with four-node and with ten-node elements. The two problems give the same displacements to 1e-11 of the stretch, and the end moves by σ L / E.
 - A deck of one tetrahedron in millimeters gives the forces of the same element built in meters.
+- A pressure on each face of one tetrahedron gives the pressure times the area along the inward normal. A bar pulled by face pressures has the nodal forces of `press_plane`, for both element orders.
 - A bar of 96 elements on symmetry supports is pulled 1 mm along x. Every element has a stress of 100 MPa, to within 1 mPa. The bar narrows by Poisson's ratio, and its end reaction is 100 MN.
 - The same bar under a pressure of 9 MPa stretches 90 micrometers, as `sigma L / E` gives.
 - An element stiffness is symmetric. A translation and a small rotation cause no force.
@@ -617,7 +620,7 @@ Every function raises `Error` for input it cannot use.
 - Ten-node tetrahedra have straight edges. A curved boundary is a set of flat faces.
 - The elastic loads are static. There is no damping, contact or response to a load in time.
 - A consistent capacity can undershoot near a sudden change, when the step is short against `h^2 / alpha`. Use `LUMPED_CAPACITY` or a finer mesh. A lumped capacity keeps the bounds on four-node elements without obtuse angles only.
-- A deck holds one linear static step of `C3D4` or `C3D10` elements. It has no pressure on faces, no contact and no `*INCLUDE`.
+- A deck holds one linear static step of `C3D4` or `C3D10` elements. It has no contact and no `*INCLUDE`. A face pressure is uniform.
 - The solver is iterative. A large or badly conditioned problem needs a large budget.
 - A voxel mesh has stair steps on curved surfaces. The stress at a stair step is not the stress of the smooth shape.
 - A thermal dose of 240 minutes is a threshold from research, and tissues differ. A dosed volume is not a prediction of a treatment.
