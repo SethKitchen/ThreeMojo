@@ -23,6 +23,7 @@
 | `probe` | `locate_point`, `MeshPoint`, `sample_field`, `sample_temperature` and `sample_displacement` |
 | `dose` | `thermal_dose` and `dose_volume` |
 | `export` | `vtk_mesh`, `vtk_result`, `vtk_modes`, `vtk_temperatures`, `vtk_heat`, `vtk_record`, `vtk_series` and `series_names` |
+| `deck` | `parse_deck`, `read_deck`, `Deck`, `DeckUnits`, `si_units`, `millimeter_units` and `deck_text` |
 | `density` | `CtDensityLaw`, `element_ct`, `density_materials` and `DensityMaterials` |
 | `modal` | `natural_modes`, `ModalResult`, `assemble_mass` and `mass_coefficients` |
 | `thermal` | `ThermalMaterial`, `ThermalProblem`, `solve_thermal`, `ThermalResult`, `ThermalCapacity`, `solve_transient`, `TransientResult`, `held_heat`, `HeatRates`, `heat_flux` and `HeatFluxes` |
@@ -475,10 +476,52 @@ Path("heat.vtk.series").write_text(vtk_series(names, history))
 
 meshio 5.3.5 read the five records of a heated bar, with 99 points and the temperature field of each. Python's JSON reader read the series file with the five times. These checks are not part of the test suite.
 
+## Read and write CalculiX decks
+
+`parse_deck(text, units)` reads an input deck of CalculiX or Abaqus. `read_deck(path, units)` reads the file. `Deck.problem()` gives the `StaticProblem` of the deck. `deck_text(problem, title)` writes a `StaticProblem` as a deck, so CalculiX can run the same model.
+
+```mojo
+var deck = read_deck("bracket.inp", millimeter_units())
+var result = solve_static(deck.problem(), 1e-10, 20000)
+var tip = result.displacement(deck.node(1042))
+```
+
+A deck has no units. `DeckUnits(length, force)` gives the length and the force of one deck unit. The stress, the density and the acceleration follow from them. `si_units()` is meters and newtons. `millimeter_units()` is millimeters and newtons, so a stress is in megapascals and a density is in tonnes per cubic millimeter.
+
+The reader takes this subset of the format:
+
+| Keyword | What the reader takes |
+|---|---|
+| `*HEADING` | Lines that it does not read |
+| `*NODE` | A number and x, y and z. `NSET=` puts the nodes in a set. |
+| `*ELEMENT` | `TYPE=C3D4` or `TYPE=C3D10`. A line that ends with a comma continues on the next line. `ELSET=` puts the elements in a set. |
+| `*NSET`, `*ELSET` | Numbers, or with `GENERATE` a first number, a last number and a step |
+| `*MATERIAL` | `NAME=`, then `*ELASTIC` with Young's modulus and Poisson's ratio, and `*DENSITY` |
+| `*SOLID SECTION` | `ELSET=` and `MATERIAL=` |
+| `*BOUNDARY` | A node or a node set, a first and a last degree of freedom from 1 to 3, and a displacement |
+| `*STEP`, `*STATIC`, `*END STEP` | One linear static step |
+| `*CLOAD` | A node or a node set, a degree of freedom and a force |
+| `*DLOAD` | `GRAV` on every element, with a size and a direction |
+| `*NODE FILE`, `*EL FILE`, `*NODE PRINT`, `*EL PRINT` | Output requests that it does not read |
+
+A line that starts with `**` is a comment. Names and keywords have no case. A number or a set must be defined before a line uses it.
+
+The reader raises an error for a keyword outside this table, for `NLGEOM`, and for a second step. It does not skip a line that it cannot honor, because a skipped line changes the answer. Each error names its line.
+
+A `Deck` holds the mesh, the materials and their names, the densities, the sets, the supports and the loads, in SI units. `node(number)` and `element(number)` give the mesh ids of the deck numbers.
+
+An element with a negative volume is turned, with its edge nodes. The edge nodes of a `C3D10` element follow the edges 1-2, 2-3, 1-3, 1-4, 2-4 and 3-4, which is also the order of `edge_pairs`. The solver takes the edges as straight.
+
+`deck_text` writes SI units. Each force of the problem becomes a `*CLOAD` line. So a pressure and a weight keep their consistent nodal forces. A number has the 16 digits that `String` gives, so a round trip changes a displacement by about 1e-12 of its size. `deck_text` raises an error for a problem with a thermal strain.
+
+No test runs CalculiX. The deck that `deck_text` writes follows the published format, and the tests read it back.
+
 ## Verification
 
 The tests check these results:
 
+- A bar is written as a deck and read back, with four-node and with ten-node elements. The two problems give the same displacements to 1e-11 of the stretch, and the end moves by σ L / E.
+- A deck of one tetrahedron in millimeters gives the forces of the same element built in meters.
 - A bar of 96 elements on symmetry supports is pulled 1 mm along x. Every element has a stress of 100 MPa, to within 1 mPa. The bar narrows by Poisson's ratio, and its end reaction is 100 MN.
 - The same bar under a pressure of 9 MPa stretches 90 micrometers, as `sigma L / E` gives.
 - An element stiffness is symmetric. A translation and a small rotation cause no force.
@@ -563,6 +606,8 @@ Every function raises `Error` for input it cannot use.
 | No element holds a point, or a field or a mesh point does not fit the mesh | `locate_point`, `sample_field`, `sample_temperature`, `sample_displacement` |
 | A result is not for its problem, or an element, a node or an axis is out of range | `held_heat`, `heat_flux`, `HeatRates`, `HeatFluxes` |
 | The capacities or the start do not fit the problem, a step or a count is out of range, or a capacity kind is not valid | `solve_transient`, `ThermalCapacity` |
+| A deck has a keyword outside the subset, a malformed line, a name before its definition, an element with no section or a node in no element | `parse_deck`, `read_deck` |
+| A title has a line break, or a problem has a thermal strain | `deck_text` |
 | A record is outside its history, or a series name is empty or holds a quote, a backslash or a control character | `vtk_record`, `vtk_series`, `series_names` |
 
 ## Limits
@@ -572,6 +617,7 @@ Every function raises `Error` for input it cannot use.
 - Ten-node tetrahedra have straight edges. A curved boundary is a set of flat faces.
 - The elastic loads are static. There is no damping, contact or response to a load in time.
 - A consistent capacity can undershoot near a sudden change, when the step is short against `h^2 / alpha`. Use `LUMPED_CAPACITY` or a finer mesh. A lumped capacity keeps the bounds on four-node elements without obtuse angles only.
+- A deck holds one linear static step of `C3D4` or `C3D10` elements. It has no pressure on faces, no contact and no `*INCLUDE`.
 - The solver is iterative. A large or badly conditioned problem needs a large budget.
 - A voxel mesh has stair steps on curved surfaces. The stress at a stair step is not the stress of the smooth shape.
 - A thermal dose of 240 minutes is a threshold from research, and tissues differ. A dosed volume is not a prediction of a treatment.
@@ -587,6 +633,7 @@ Every function raises `Error` for input it cannot use.
 - Hestenes and Stiefel, "Methods of conjugate gradients for solving linear systems", 1952.
 - Morgan, Bayraktar and Keaveny, "Trabecular bone modulus-density relationships depend on anatomic site", 2003.
 - Bathe, "Finite Element Procedures", 2nd edition, 2014, sections 10.2 and 11.6.
+- Dhondt, "CalculiX CrunchiX User's Manual", version 2.21, 2023: the input deck format.
 - Bonet and Wood, "Nonlinear Continuum Mechanics for Finite Element Analysis", 2nd edition, 2008.
 - Hinton, Rock and Zienkiewicz, "A note on mass lumping and related processes in the finite element method", 1976.
 - Pennes, "Analysis of tissue and arterial blood temperatures in the resting human forearm", 1948.
