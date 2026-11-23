@@ -244,6 +244,17 @@ The applied load is the reference load times the load factor. The two step funct
 
 Each step is a Newton iteration with the consistent tangent. It stops when the unbalanced force is below the tolerance times the forces in balance. `default_newton()` has a tolerance of 1e-10 and a budget of 25 iterations. `bar_response(law, state, strain)` gives the stress, the tangent and the new state of one bar. It is the return map of Simo and Hughes.
 
+### Large displacements
+
+`model.set_corotational(True)` gives each bar its exact geometry. The bar takes its strain from its current length, and it pushes along its current axis. So the analysis is exact for any displacement and any rotation. The tangent of a bar gets a geometric part: its force over its length, on the directions normal to the bar.
+
+```mojo
+model.set_corotational(True)
+displacement_step(model, state, apex, UZ, Length64(-10, MILLIMETER), default_newton())
+```
+
+A shallow truss under a growing load reaches a limit load and snaps through. `load_step` cannot hold a load above the limit on the first branch. `displacement_step` follows the whole path, because the sag grows all the way. Past the limit the tangent is not positive definite, and the solver takes that. This is the corotational truss of OpenSees.
+
 The parts follow the OpenSees objects: a uniaxial material with a committed state, a truss element, the Newton algorithm, and the LoadControl and DisplacementControl integrators. The law gives the response of the OpenSees material Steel01 with no isotropic hardening. The code is original.
 
 ## Find the moment-curvature curve of a section
@@ -368,6 +379,9 @@ Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_m
 | The same rectangle with 0.4 of its squash load, 400 layers | A plastic moment of M_p (1 - (N / N_y)²) | Below 0.1% |
 | Singly reinforced concrete beam, peak moment | ACI 318: A_s f_y (d - a / 2) with the rectangular stress block | Below 3% |
 | Kent and Park envelope at six strains | 0.75 of the strength at half the peak strain, and the line after the peak | Below 1e-6 Pa |
+| Shallow two-bar truss of von Mises, corotational, 50 steps of 10 mm | The closed form of the load at each sag, through the flat state and the mirror state | Below 0.01 N of a limit load of 76 kN |
+| The same truss, load control to 0.8 of the limit | The closed-form sag | Below 1e-4 N |
+| The same truss with small displacements | The linear stiffness 2 E A h² / L³ | Below 1e-12 m |
 | One floor on one column, flat spectrum | S_a / ω² and m S_a | Below 0.05% |
 | Shear building of two equal storeys, SRSS | Effective masses of 1.8944 m and 0.1056 m, and the base shear and roof sway from them | Below 0.2% |
 | The same building, CQC at 5% damping | SRSS, because the frequencies are far apart | Below 0.5% |
@@ -418,7 +432,8 @@ Every function raises `Error` for input it cannot use.
 
 - The material of a frame member and of a shell is linear and elastic. Only the bars of a `TrussModel` yield.
 - A fiber section bends about one axis. It is not yet the section of a frame member.
-- The displacements are small. `solve_second_order` adds the geometric stiffness, but it has no large rotations. A `TrussModel` has no geometric stiffness.
+- The displacements of a frame are small. `solve_second_order` adds the geometric stiffness, but it has no large rotations. Only a corotational `TrussModel` has an exact geometry.
+- Displacement control needs a degree of freedom that grows along the whole path. The module has no arc-length control.
 - A shell has no geometric stiffness. Its membrane stress does not change a buckling factor.
 - The members have no shear deformation, no end releases, no offsets and no warping torsion.
 - A support fixes a degree of freedom at zero. The model has no springs and no settlements.

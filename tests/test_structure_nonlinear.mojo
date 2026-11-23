@@ -248,6 +248,148 @@ def test_displacement_control_follows_the_path() raises:
     assert_almost_equal(state.load_factor, before - drop, atol=1e-3)
 
 
+def _shallow_truss(corotational: Bool) raises -> TrussModel:
+    """Two elastic bars from supports 4 m apart to an apex 0.2 m above.
+
+    The apex moves only up and down. A load of 1 N pushes it down.
+    """
+    var model = TrussModel()
+    var elastic = SteelLaw(
+        Pressure64(200e9, PASCAL), Pressure64(1e15, PASCAL), 0
+    )
+    var left = model.add_node(Vec3d(-2, 0, 0))
+    var right = model.add_node(Vec3d(2, 0, 0))
+    var apex = model.add_node(Vec3d(0, 0, 0.2))
+    model.add_support(left, [UX, UY, UZ])
+    model.add_support(right, [UX, UY, UZ])
+    model.add_support(apex, [UX, UY])
+    _ = model.add_bar(left, apex, Area64(1e-3, SQUARE_METER), elastic)
+    _ = model.add_bar(right, apex, Area64(1e-3, SQUARE_METER), elastic)
+    model.add_load(apex, UZ, Force64(-1, NEWTON))
+    model.set_corotational(corotational)
+    return model^
+
+
+def _shallow_load(sag: Float64) -> Float64:
+    """Return the load that holds the apex of the shallow truss at a sag.
+
+    Each bar has the length l = sqrt(a² + (h - w)²) and the force
+    E A (l - L) / L. The load is -2 N (h - w) / l.
+    """
+    var first = sqrt(4 + 0.04)
+    var now = sqrt(4 + (0.2 - sag) * (0.2 - sag))
+    var force = 2e8 * (now - first) / first
+    return -2 * force * (0.2 - sag) / now
+
+
+def test_shallow_truss_snaps_through() raises:
+    """The two-bar truss of von Mises, pushed down through its flat state.
+
+    Reference: the closed form of the load at each sag. The load rises to
+    a limit, falls to zero when the truss is flat, is negative until the
+    truss is its own mirror image, and then rises. Displacement control
+    follows the whole path within 1e-6 of the limit load.
+    """
+    var model = _shallow_truss(True)
+    var state = TrussState(model)
+    var limit = Float64(0)
+    var lowest = Float64(0)
+    for step in range(1, 51):
+        displacement_step(
+            model,
+            state,
+            NodeId(2),
+            UZ,
+            Length64(-0.01, METER),
+            default_newton(),
+        )
+        var sag = 0.01 * Float64(step)
+        var expected = _shallow_load(sag)
+        assert_almost_equal(state.load_factor, expected, atol=1e-2)
+        if sag < 0.2:
+            limit = max(limit, state.load_factor)
+        lowest = min(lowest, state.load_factor)
+    # The limit load of a shallow truss is close to
+    # (E A h³ / L³) times 2 / (3 sqrt(3)), at a sag of h (1 - 1 / sqrt(3)).
+    var shallow = 2e8 * 0.008 / sqrt(4.04) ** 3 * 2 / (3 * sqrt(3.0))
+    assert_true(abs(limit / shallow - 1) < 0.02, String(limit))
+    assert_true(abs(lowest / -limit - 1) < 0.03, String(lowest))
+    # At a sag of 0.2 m the truss is flat, and at 0.4 m it has no force.
+    assert_almost_equal(_shallow_load(0.2), 0.0, atol=0)
+    assert_almost_equal(_shallow_load(0.4), 0.0, atol=1e-6)
+    # Load control holds a load below the limit at its closed-form sag.
+    var held = TrussState(model)
+    load_step(model, held, 0.8 * limit, default_newton())
+    var sag = -held.translation(NodeId(2), UZ).to(METER)
+    assert_true(sag > 0 and sag < 0.1)
+    assert_almost_equal(_shallow_load(sag), 0.8 * limit, atol=1e-4)
+    assert_almost_equal(
+        held.bar_force(MemberId(0)).to(NEWTON),
+        2e8 * (sqrt(4 + (0.2 - sag) ** 2) - sqrt(4.04)) / sqrt(4.04),
+        atol=1e-3,
+    )
+
+
+def test_small_displacements_miss_the_snap() raises:
+    """The same truss with small displacements, which stays linear.
+
+    Reference: the stiffness 2 E A h² / L³. The corotational truss has
+    this stiffness at its start and loses it as it flattens.
+    """
+    var linear = _shallow_truss(False)
+    var state = TrussState(linear)
+    load_step(linear, state, 1000, default_newton())
+    var stiffness = 2 * 2e8 * 0.04 / sqrt(4.04) ** 3
+    assert_almost_equal(
+        state.translation(NodeId(2), UZ).to(METER),
+        -1000 / stiffness,
+        atol=1e-12,
+    )
+    var exact = _shallow_truss(True)
+    var soft = TrussState(exact)
+    load_step(exact, soft, 1000, default_newton())
+    var sag = -soft.translation(NodeId(2), UZ).to(METER)
+    assert_true(sag > 1000 / stiffness and sag < 1.1 * 1000 / stiffness)
+    assert_almost_equal(_shallow_load(sag), 1000.0, atol=1e-5)
+
+
+def test_chain_of_two_bars() raises:
+    """Two bars in a line from a support, pulled at the far end.
+
+    Reference: the end moves by F L / (E A) of each bar, 1 mm and 2 mm
+    here, with both geometries. The middle node is free at both of its
+    bars.
+    """
+    var geometries = [False, True]
+    for k in range(2):
+        var model = TrussModel()
+        var elastic = SteelLaw(
+            Pressure64(200e9, PASCAL), Pressure64(1e15, PASCAL), 0
+        )
+        var area = Area64(1e-3, SQUARE_METER)
+        var a = model.add_node(Vec3d(0, 0, 0))
+        var b = model.add_node(Vec3d(2, 0, 0))
+        var c = model.add_node(Vec3d(4, 0, 0))
+        model.add_support(a, [UX, UY, UZ])
+        model.add_support(b, [UY, UZ])
+        model.add_support(c, [UY, UZ])
+        _ = model.add_bar(a, b, area, elastic)
+        _ = model.add_bar(b, c, area, elastic)
+        model.add_load(c, UX, Force64(100e3, NEWTON))
+        model.set_corotational(geometries[k])
+        var state = TrussState(model)
+        load_step(model, state, 1, default_newton())
+        assert_almost_equal(
+            state.translation(b, UX).to(METER), 0.001, atol=1e-12
+        )
+        assert_almost_equal(
+            state.translation(c, UX).to(METER), 0.002, atol=1e-12
+        )
+        assert_almost_equal(
+            state.bar_force(MemberId(1)).to(NEWTON), 100e3, atol=1e-5
+        )
+
+
 def test_model_refusals() raises:
     var bad = nan[DType.float64]()
     var model = TrussModel()

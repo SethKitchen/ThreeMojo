@@ -24,7 +24,9 @@ converge.
 The parts follow the OpenSees objects: a uniaxial material with a
 committed state, a truss element, the Newton algorithm, and the
 LoadControl and DisplacementControl integrators. The displacements are
-small. The code is original and shares no source with OpenSees.
+small, unless `set_corotational` asks for the exact geometry of the
+OpenSees corotational truss. The code is original and shares no source
+with OpenSees.
 """
 
 from std.math import isfinite
@@ -191,13 +193,31 @@ struct TrussModel(Copyable, Movable):
     # The reference load, three entries per node, in newtons. The applied
     # load is the load factor times it.
     var loads: List[Float64]
+    # True if each bar follows its current length and axis.
+    var corotational: Bool
 
     def __init__(out self):
-        """Create an empty model."""
+        """Create an empty model with small displacements."""
         self.nodes = List[Vec3d]()
         self.fixed = List[Bool]()
         self.bars = List[Bar]()
         self.loads = List[Float64]()
+        self.corotational = False
+
+    def set_corotational(mut self, corotational: Bool):
+        """Choose the geometry of the bars.
+
+        With small displacements a bar takes its strain along its first
+        axis. A corotational bar takes its strain from its current
+        length, and it pushes along its current axis. So it is exact for
+        any displacement and any rotation. Its tangent gets a geometric
+        part, which lets a shallow truss snap through.
+
+        Args:
+            corotational: True for the exact geometry. False for small
+                displacements, which is the start value.
+        """
+        self.corotational = corotational
 
     def check_node(self, id: NodeId) raises:
         """Refuse a node id that is not in range.
@@ -469,40 +489,61 @@ def _trial(
         ref bar = model.bars[b]
         var axis = model.nodes[bar.end.value] - model.nodes[bar.start.value]
         var length = axis.length()
-        var n = axis * (1 / length)
-        var cosines = [n.x, n.y, n.z]
         var s = 3 * bar.start.value
         var e = 3 * bar.end.value
-        var stretch = Float64(0)
-        for d in range(3):
-            stretch += cosines[d] * (u[e + d] - u[s + d])
+        var n = axis * (1 / length)
+        var current = length
+        var stretch: Float64
+        if model.corotational:
+            var moved = Vec3d(
+                axis.x + u[e] - u[s],
+                axis.y + u[e + 1] - u[s + 1],
+                axis.z + u[e + 2] - u[s + 2],
+            )
+            current = moved.length()
+            n = moved * (1 / current)
+            stretch = current - length
+        else:
+            stretch = (
+                n.x * (u[e] - u[s])
+                + n.y * (u[e + 1] - u[s + 1])
+                + n.z * (u[e + 2] - u[s + 2])
+            )
+        var cosines = [n.x, n.y, n.z]
         var response = bar_response(bar.law, state.bars[b], stretch / length)
         var force = response.stress * bar.area
         forces[b] = force
         states.append(response.state)
         var stiffness = response.tangent * bar.area / length
+        # The geometric part: a bar under a force resists a turn.
+        var geometric = Float64(0)
+        if model.corotational:
+            geometric = force / current
         var entries = [s, s + 1, s + 2, e, e + 1, e + 2]
-        var shape = [
-            -cosines[0],
-            -cosines[1],
-            -cosines[2],
-            cosines[0],
-            cosines[1],
-            cosines[2],
-        ]
         for i in range(6):
-            internal[entries[i]] += force * shape[i]
+            var end_sign = Float64(1)
+            if i < 3:
+                end_sign = -1
+            internal[entries[i]] += force * end_sign * cosines[i % 3]
             var row = equation[entries[i]]
             if row < 0:
                 continue
             for j in range(6):
                 var column = equation[entries[j]]
-                if column >= 0:
-                    builder.add(row, column, stiffness * shape[i] * shape[j])
+                if column < 0:
+                    continue
+                var along = cosines[i % 3] * cosines[j % 3]
+                var value = (stiffness - geometric) * along
+                if i % 3 == j % 3:
+                    value += geometric
+                if (i < 3) != (j < 3):
+                    value = -value
+                builder.add(row, column, value)
     var matrix = builder.build()
     try:
-        # A tangent of bars is never indefinite. It can only be singular,
-        # and the factorization refuses a zero pivot.
+        # The tangent can be indefinite past a limit point of a
+        # corotational truss. The factorization takes that. It refuses
+        # only a zero pivot.
         var factor = SkylineFactor(matrix, reverse_cuthill_mckee(matrix))
         return _Trial(internal^, states^, forces^, factor^)
     except:
