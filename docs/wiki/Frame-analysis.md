@@ -17,6 +17,7 @@
 | `modal` | `solve_modes`, `ModalResult` and `assemble_mass` |
 | `buckling` | `solve_buckling`, `BucklingResult`, `solve_second_order`, `SecondOrderOptions`, `frame_geometric_stiffness` and `assemble_geometric_stiffness` |
 | `spectrum` | `solve_response_spectrum`, `SpectrumResult`, `ResponseSpectrum`, `CombinationRule` with `SRSS` and `CQC`, `combine_modes` and `modal_correlation` |
+| `section` | `FiberSection`, `ConcreteLaw`, `moment_curvature`, `CurvaturePoint`, `section_response`, `SectionResponse` and `concrete_response` |
 | `nonlinear` | `TrussModel`, `TrussState`, `SteelLaw`, `load_step`, `displacement_step`, `NewtonOptions`, `bar_response`, `BarState` and `BarResponse` |
 | `dynamic` | `solve_load_history`, `solve_ground_motion`, `TimeHistory`, `newmark`, `TimeSeries`, `GroundMotion`, `HistoryOptions`, `NewmarkMethod` and `RayleighDamping` |
 
@@ -245,6 +246,37 @@ Each step is a Newton iteration with the consistent tangent. It stops when the u
 
 The parts follow the OpenSees objects: a uniaxial material with a committed state, a truss element, the Newton algorithm, and the LoadControl and DisplacementControl integrators. The law gives the response of the OpenSees material Steel01 with no isotropic hardening. The code is original.
 
+## Find the moment-curvature curve of a section
+
+`extensions/structure/section.mojo` gives the moment capacity and the ductility of a section of steel or of reinforced concrete. A `FiberSection` is a stack of fibers. Each fiber has an area, a height above a reference axis, and a law.
+
+```mojo
+var concrete = ConcreteLaw(Pressure64(30, MEGAPASCAL), 0.002, Pressure64(6, MEGAPASCAL), 0.006)
+var steel = SteelLaw(Pressure64(200, GIGAPASCAL), Pressure64(420, MEGAPASCAL), 0.01)
+var section = FiberSection()
+section.add_concrete_patch(Length64(-0.25, METER), Length64(0.25, METER), Length64(0.3, METER), 100, concrete)
+section.add_steel(Length64(-0.19, METER), Area64(1500e-6, SQUARE_METER), steel)
+var curve = moment_curvature(section, Force64(0, NEWTON), InverseLength64(0.06, PER_METER), 120, 1e-9)
+```
+
+| Method | Adds |
+|---|---|
+| `add_concrete_patch(bottom, top, width, layers, law)` | A rectangle of concrete, cut into equal layers |
+| `add_steel_patch(bottom, top, width, layers, law)` | A rectangle of steel, cut into equal layers |
+| `add_steel(y, area, law)` | One fiber of steel, such as a layer of bars |
+
+Plane sections stay plane. At an axial strain ε₀ and a curvature κ, the strain of a fiber at a height y is ε₀ - κ y. So a positive curvature shortens the top. The axial force is the sum of σ A, with tension positive. The moment is minus the sum of σ A y.
+
+A `ConcreteLaw` is the envelope of Kent and Park. With x the compressive strain over the peak strain, the stress is the strength times 2 x - x² up to the peak. Then it falls on a line to the crushing strength and stays there. The concrete carries no tension. The law has no memory, so it is for a curvature that grows in one direction.
+
+`moment_curvature(section, axial, last_curvature, steps, tolerance)` raises the curvature from zero in equal steps under a constant axial force. At each step it finds the axial strain that gives the force, by Newton iteration. The steel keeps its plastic state from each step to the next. Each `CurvaturePoint` holds the curvature, the moment and the axial strain.
+
+A compression is a negative axial force. The function raises an error when no axial strain carries the force. That happens when the force is above the capacity, or when the section has no axial stiffness left.
+
+`section_response(section, states, strain, curvature)` gives the forces of one state. A steel fiber does not take concrete away, so a bar in concrete counts its area twice. This is the usual small error of a fiber model.
+
+OpenSees does this analysis with a fiber section of Concrete01 and Steel01 in a zero-length element. The concrete here is the monotonic envelope of Concrete01. The code is original.
+
 ## The frame element
 
 The member is the two-node Euler-Bernoulli element of Przemieniecki, with twelve degrees of freedom. It has no shear deformation and no end releases.
@@ -312,7 +344,7 @@ The live loads are typical values from ASCE/SEI 7-16, table 4.3-1. They are not 
 
 ## Validation
 
-Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo`, `tests/test_structure_nonlinear.mojo`, `tests/test_structure_spectrum.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
+Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo`, `tests/test_structure_nonlinear.mojo`, `tests/test_structure_spectrum.mojo`, `tests/test_structure_section.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
 
 | Case | Reference | Error |
 |---|---|---|
@@ -332,6 +364,10 @@ Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_m
 | Cantilever beam-column at half its Euler load | H L³ / (3 E I) times 3 (tan u - u) / u³, and a base moment of H L tan u / u | Below 0.001% |
 | The same member in tension at twice its Euler load | 3 (u - tanh u) / u³ | Below 0.01% |
 | Frame with a shell slab, second order | Sum of reactions equals the loads | Below 1e-6 |
+| Steel rectangle, perfectly plastic, 200 layers | E I κ, then M_y (3 - (κ_y / κ)²) / 2 | Below 0.01% |
+| The same rectangle with 0.4 of its squash load, 400 layers | A plastic moment of M_p (1 - (N / N_y)²) | Below 0.1% |
+| Singly reinforced concrete beam, peak moment | ACI 318: A_s f_y (d - a / 2) with the rectangular stress block | Below 3% |
+| Kent and Park envelope at six strains | 0.75 of the strength at half the peak strain, and the line after the peak | Below 1e-6 Pa |
 | One floor on one column, flat spectrum | S_a / ω² and m S_a | Below 0.05% |
 | Shear building of two equal storeys, SRSS | Effective masses of 1.8944 m and 0.1056 m, and the base shear and roof sway from them | Below 0.2% |
 | The same building, CQC at 5% damping | SRSS, because the frequencies are far apart | Below 0.5% |
@@ -369,6 +405,8 @@ Every function raises `Error` for input it cannot use.
 | The load case has no axial force, or fewer positive factors than the count | `solve_buckling` |
 | The load case is at or above its buckling load, or the iteration does not converge | `solve_second_order` |
 | A truss is a mechanism or at its collapse load, or a step does not converge | `load_step`, `displacement_step` |
+| A concrete law, a fiber or a patch is not valid | `ConcreteLaw`, `FiberSection` |
+| No axial strain carries the axial force of a section | `moment_curvature` |
 | A steel law, a bar area or a step size is not valid | `SteelLaw`, `TrussModel.add_bar`, `load_step`, `displacement_step` |
 | A time step, a step count, a method or a damping is not valid | `HistoryOptions` |
 | A series is empty, or its interval or a value is not valid | `TimeSeries` |
@@ -379,6 +417,7 @@ Every function raises `Error` for input it cannot use.
 ## Limits
 
 - The material of a frame member and of a shell is linear and elastic. Only the bars of a `TrussModel` yield.
+- A fiber section bends about one axis. It is not yet the section of a frame member.
 - The displacements are small. `solve_second_order` adds the geometric stiffness, but it has no large rotations. A `TrussModel` has no geometric stiffness.
 - A shell has no geometric stiffness. Its membrane stress does not change a buckling factor.
 - The members have no shear deformation, no end releases, no offsets and no warping torsion.
@@ -397,6 +436,8 @@ Every function raises `Error` for input it cannot use.
 - Timoshenko and Gere, "Theory of Elastic Stability", 2nd edition, 1961: chapters 1 and 2.
 - Dhondt, "The Finite Element Method for Three-Dimensional Thermomechanical Applications", Wiley, 2004: the theory of CalculiX.
 - Der Kiureghian, "A response spectrum method for random vibration analysis of MDF systems", Earthquake Engineering and Structural Dynamics 9, 1981: the CQC correlation.
+- Kent and Park, "Flexural members with confined concrete", Journal of the Structural Division, ASCE, 1971: the concrete envelope.
+- ACI 318-19, "Building Code Requirements for Structural Concrete", section 22.2: the rectangular stress block.
 - Simo and Hughes, "Computational Inelasticity", Springer, 1998: chapter 1, the return map of one-dimensional plasticity.
 - Chen and Han, "Plasticity for Structural Engineers", Springer, 1988: limit analysis of the three-bar truss.
 - Newmark, "A method of computation for structural dynamics", Journal of the Engineering Mechanics Division, ASCE, 1959.
