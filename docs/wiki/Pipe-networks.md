@@ -10,6 +10,7 @@
 | `headloss` | `Roughness`, `hazen_williams`, `darcy_weisbach`, `chezy_manning`, `friction_factor`, `pipe_head_loss` and `HeadLoss` |
 | `network` | `PipeNetwork` and `Link` |
 | `solve` | `solve_network`, `NetworkResult`, `SolveOptions`, `default_options` and `link_head_loss` |
+| `inp` | `parse_inp`, `read_inp`, `InpNetwork` and `flow_unit` |
 
 ## Build a network
 
@@ -66,6 +67,51 @@ var flow = result.flow(main)
 
 `default_options()` has an accuracy of 1e-10 and a budget of 200 iterations. The accuracy is the sum of the flow changes of one iteration over the sum of the flows. EPANET uses 0.001. `SolveOptions(accuracy, iterations)` sets both.
 
+## Read an EPANET file
+
+`parse_inp(text)` reads the text of an EPANET `.inp` file. `read_inp(path)` reads the file. Both return an `InpNetwork`.
+
+```mojo
+var file = read_inp("town.inp")
+var result = solve_network(file.network, file.options)
+var pressure = result.pressure_head(file.node("J-104"))
+```
+
+| Field or method | Holds |
+|---|---|
+| `network` | The `PipeNetwork` |
+| `node(name)`, `link(name)` | The id of a name in the file. The case of the name does not matter. |
+| `node_names`, `link_names` | The name of each node and of each link |
+| `options` | The `ACCURACY` and the `TRIALS` of the file, or 0.001 and 40, which are the defaults of EPANET |
+| `title` | The lines of the title |
+
+The reader takes these sections:
+
+| Section | What the reader takes |
+|---|---|
+| `[TITLE]` | The title |
+| `[JUNCTIONS]` | A name, an elevation, a demand and a pattern |
+| `[RESERVOIRS]` | A name and a head |
+| `[TANKS]` | A name, an elevation and a first level. The tank is a node of fixed head at their sum. |
+| `[PIPES]` | A name, two nodes, a length, a diameter, a roughness, a minor loss and a status of `OPEN` |
+| `[PUMPS]` | A name, two nodes, `HEAD` and the name of a curve of one point |
+| `[CURVES]` | A name, a flow and a head |
+| `[PATTERNS]` | A name and its multipliers. The reader keeps the first one. |
+| `[OPTIONS]` | `UNITS`, `HEADLOSS`, `VISCOSITY`, `DEMAND MULTIPLIER`, `PATTERN`, `ACCURACY` and `TRIALS` |
+
+The `UNITS` option fixes every unit of the file. The default is gallons per minute.
+
+| Flow unit | Lengths and heads | Diameters | Darcy-Weisbach roughness |
+|---|---|---|---|
+| `CFS`, `GPM`, `MGD`, `IMGD`, `AFD` | Feet | Inches | Thousandths of a foot |
+| `LPS`, `LPM`, `MLD`, `CMH`, `CMD` | Meters | Millimeters | Millimeters |
+
+The `HEADLOSS` option is `H-W`, `D-W` or `C-M`. It gives every pipe of the file its formula. The `VISCOSITY` option is relative to water at 20 °C.
+
+A demand is its base value times the `DEMAND MULTIPLIER` and the first multiplier of its pattern. EPANET uses the same value at time zero. A junction with no pattern takes the pattern of the `PATTERN` option, if the file has it.
+
+Some sections can change a steady result, and this port cannot honor them: `[VALVES]`, `[STATUS]`, `[CONTROLS]`, `[RULES]`, `[EMITTERS]` and `[DEMANDS]`. The reader raises an error when one of them holds a line. It also raises an error for a closed pipe and a check valve. A pump of constant power and a pump curve of more than one point raise an error too. The reader passes over the other sections, such as `[COORDINATES]`, `[TIMES]` and `[REPORT]`.
+
 ## The method
 
 The unknowns are the head at each junction and the flow in each link. Each link gives one equation: the head at its start less the head at its end is its head loss h(q). Each junction gives one equation: the flows in, less the flows out, equal the demand.
@@ -92,7 +138,7 @@ EPANET is in the public domain. The solver follows the method of its manual. The
 
 ## Validation
 
-Each row is a test in `tests/test_hydraulics.mojo`.
+Each row is a test in `tests/test_hydraulics.mojo` or `tests/test_hydraulics_inp.mojo`.
 
 | Case | Reference | Error |
 |---|---|---|
@@ -104,6 +150,9 @@ Each row is a test in `tests/test_hydraulics.mojo`.
 | Two loops, two reservoirs, seven pipes, all formulas | The junction equations and the link equations | Below 1e-12 m³/s and 1e-8 m |
 | Pump, pipe and a lift of 30 m | The operating point, by bisection | Below 1e-10 m³/s |
 | Network with no demand | No flow, and the head of the reservoir | Below 1e-9 m |
+| EPANET file in US units: 1000 ft of 12 in pipe, 500 gal/min | The US formula of EPANET, 4.727 C^-1.852 d^-4.871 L q^1.852 | Below 0.1% |
+| EPANET file in liters per second, two loops, a reservoir and a tank | The same network built in code | Below 1e-9 m and 1e-12 m³/s |
+| The ten flow units of EPANET | Their factors to cubic meters per second | Below 1e-8 |
 
 ## Errors
 
@@ -120,6 +169,7 @@ Every function raises `Error` for input it cannot use.
 | A pump runs backward | `solve_network` |
 | The iteration does not converge within its budget | `solve_network` |
 | A velocity is asked of a pump | `NetworkResult.velocity` |
+| A file has a malformed line, a name that repeats or is not defined, an unknown unit, or a section that is not supported | `parse_inp`, `read_inp` |
 
 ## Limits
 
@@ -128,6 +178,7 @@ Every function raises `Error` for input it cannot use.
 - A pump has a one-point curve and runs at one speed.
 - The demands are fixed. A pressure below zero does not reduce a demand.
 - The solver does not model water quality.
+- An EPANET file gives one steady state, at time zero. The reader takes no valves, no controls and no pump curves of three points.
 
 ## References
 
