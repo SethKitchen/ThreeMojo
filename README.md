@@ -819,6 +819,7 @@ Earth-retaining structures and the pictures that explain them. A checked box rec
 Analysis of flow, with OpenFOAM, EPANET and HEC-RAS as the models. A checked box records implemented scope. It does not establish engineering validity.
 
 - [x] [Finite-volume flow](https://github.com/SethKitchen/ThreeMojo/wiki/Finite-volume-flow): laminar incompressible flow by the PISO algorithm of icoFoam; it meets Poiseuille flow and Ghia's cavity [#1136](https://github.com/SethKitchen/ThreeMojo/issues/1136)
+- [x] [Cavity flow example](https://github.com/SethKitchen/ThreeMojo/wiki/Finite-volume-flow): the lid-driven cavity at a Reynolds number of 400, with its speed and the streamlines of three vortices [#1142](https://github.com/SethKitchen/ThreeMojo/issues/1142)
 - [x] [Pipe networks](https://github.com/SethKitchen/ThreeMojo/wiki/Pipe-networks): steady heads and flows by the global gradient algorithm of EPANET, with three head loss formulas and pumps [#1138](https://github.com/SethKitchen/ThreeMojo/issues/1138)
 - [x] [Open channels](https://github.com/SethKitchen/ThreeMojo/wiki/Open-channels): normal and critical depth, hydraulic jumps and standard-step profiles of HEC-RAS; they meet Chow's channel and the profile equation [#1141](https://github.com/SethKitchen/ThreeMojo/issues/1141)
 

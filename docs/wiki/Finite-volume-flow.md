@@ -2,6 +2,10 @@
 
 `extensions/cfd/` solves laminar incompressible flow on a block of cells in two dimensions. It advances the Navier-Stokes equations in time with the PISO algorithm, as the OpenFOAM solver icoFoam does. A checked result is a numerical result. It does not establish engineering validity.
 
+![The flow in a lid-driven cavity at a Reynolds number of 400: the speed, and streamlines of the main vortex and the two corner vortices](out/cavity-flow.png)
+
+`examples/cavity_flow.mojo` makes this picture. The lid of a 1 m cavity moves to the right at 1 m/s, and the Reynolds number is 400. The grid has 48 by 48 cells. The color is the speed, and the white lines are streamlines.
+
 ## Modules
 
 | Module | What it gives |
