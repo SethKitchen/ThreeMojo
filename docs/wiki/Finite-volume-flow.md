@@ -60,6 +60,10 @@ The time step is implicit. For a transient result, keep the Courant number u Δt
 
 ## Carry heat
 
+![Air between a hot wall and a cold wall at a Rayleigh number of 100000: the temperature, and the streamlines of the convection](out/buoyant-cavity.png)
+
+`examples/buoyant_cavity.mojo` makes this picture. The left wall is hot and the right wall is cold. The grid has 40 by 40 cells. The Nusselt number of the hot wall is 4.617. The benchmark of de Vahl Davis gives 4.519.
+
 `extensions/cfd/heat.mojo` adds a temperature that the flow carries, and the buoyancy that the temperature gives. A `BuoyantCase` holds a `FlowCase` and the thermal properties of the fluid. A new case has every side insulated.
 
 ```mojo
