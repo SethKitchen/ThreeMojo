@@ -98,6 +98,7 @@ Look something up.
 - [Finite-volume flow](Finite-volume-flow)
 - [Pipe networks](Pipe-networks)
 - [Open channels](Open-channels)
+- [Groundwater flow](Groundwater-flow)
 - [Survival analysis](Survival-analysis)
 - [Diagnostic tests](Diagnostic-tests)
 - [Meta-analysis](Meta-analysis)

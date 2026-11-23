@@ -18,7 +18,9 @@ ThreeMojo has solvers that follow well known engineering programs. Each solver i
 | OpenFOAM | icoFoam: laminar incompressible flow by PISO | `extensions/cfd/flow.mojo` | [Finite-volume flow](Finite-volume-flow) |
 | OpenFOAM | buoyantBoussinesqPimpleFoam: heat and buoyancy | `extensions/cfd/heat.mojo` | [Finite-volume flow](Finite-volume-flow#carry-heat) |
 | EPANET | Steady hydraulics of a pipe network | `extensions/hydraulics/` | [Pipe networks](Pipe-networks) |
+| EPANET | Input files | `extensions/hydraulics/inp.mojo` | [Pipe networks](Pipe-networks#read-an-epanet-file) |
 | HEC-RAS | Steady profiles by the standard step method | `extensions/hydraulics/channel.mojo` | [Open channels](Open-channels) |
+| MODFLOW | Steady heads in one aquifer layer | `extensions/groundwater/` | [Groundwater flow](Groundwater-flow) |
 
 The project already had the base of these solvers. [Tetrahedral FEM](Tetrahedral-FEM) has static, modal and thermal analysis of solids. [Frame analysis](Frame-analysis) and [Shell analysis](Shell-analysis) have linear frames and shells. [Numerics](Numerics) has the sparse matrices and the factorizations.
 
@@ -33,12 +35,13 @@ A translation of source code is a derived work. It keeps the license of its sour
 | OpenSees | A license of the Regents of the University of California | Read its terms before any use of its source. |
 | EPANET | Public domain for version 2.0, and the MIT license for version 2.2 | A translation is allowed. |
 | HEC-RAS | Free software of the US Army Corps of Engineers | Its source is not published. Its manuals give its methods. |
+| MODFLOW | Public domain, from the US Geological Survey | A translation is allowed. |
 
 ThreeMojo has the PolyForm Noncommercial license, with a commercial license beside it. Code under the GPL cannot have those terms. So a translation of OpenFOAM or of CalculiX cannot be part of this project.
 
 A method is not source code. An algorithm in a paper or a textbook is free to implement. Each solver here implements a method from its first publication or from a textbook. Each module names that reference in its docstring. The names of some options follow the program, because users know them: `average_acceleration`, `*CLOAD`, PISO.
 
-The same rule holds for all five programs, also where a translation is allowed. One rule is simpler to keep and to check.
+The same rule holds for all six programs, also where a translation is allowed. One rule is simpler to keep and to check.
 
 ## What "follows" means
 
@@ -50,7 +53,7 @@ A page that says that a solver follows a program makes three claims:
 
 The page does not claim these things:
 
-- It does not claim the same numbers as the program. No test runs OpenSees, CalculiX, OpenFOAM, EPANET or HEC-RAS. Where a formula differs, the page says so. The [Pipe networks](Pipe-networks#differences-from-epanet) and [Open channels](Open-channels#differences-from-hec-ras) pages each have a section on the differences.
+- It does not claim the same numbers as the program. No test runs OpenSees, CalculiX, OpenFOAM, EPANET, HEC-RAS or MODFLOW. Where a formula differs, the page says so. The [Pipe networks](Pipe-networks#differences-from-epanet) and [Open channels](Open-channels#differences-from-hec-ras) pages each have a section on the differences.
 - It does not claim the scope of the program. Each solver covers a small part. The Limits section of each page says what is missing.
 - It does not claim engineering validity. A checked box in the README records implemented scope. A design needs the review of an engineer.
 
@@ -67,3 +70,4 @@ A difference that a comparison finds is a useful issue. Give the input of both p
 - Weller, Tabor, Jasak and Fureby, "A tensorial approach to computational continuum mechanics using object-oriented techniques", Computers in Physics, 1998: OpenFOAM.
 - Rossman, "EPANET 2 Users Manual", EPA/600/R-00/057, US Environmental Protection Agency, 2000.
 - Brunner, "HEC-RAS River Analysis System Hydraulic Reference Manual", US Army Corps of Engineers, 2016.
+- McDonald and Harbaugh, "A modular three-dimensional finite-difference ground-water flow model", US Geological Survey, 1988: MODFLOW.
