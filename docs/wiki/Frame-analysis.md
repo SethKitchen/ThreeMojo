@@ -15,6 +15,7 @@
 | `model` | `StructuralModel`, with nodes, supports, members, shells, load cases, loads and added masses |
 | `static` | `StaticSolver`, `solve_static`, `StaticResult`, `MemberForces` and the assembly functions |
 | `modal` | `solve_modes`, `ModalResult` and `assemble_mass` |
+| `dynamic` | `solve_load_history`, `solve_ground_motion`, `TimeHistory`, `newmark`, `TimeSeries`, `GroundMotion`, `HistoryOptions`, `NewmarkMethod` and `RayleighDamping` |
 
 ## Units and axes
 
@@ -88,6 +89,46 @@ var first = modes.frequencies[0]
 
 The mass matrix adds the consistent mass of each member, the lumped mass of each shell and the added masses. The eigensolver is `lowest_modes` of [Numerics](Numerics): subspace iteration with a Sturm check.
 
+## Follow a model in time
+
+`solve_load_history(model, case, series, options)` gives the motion of a model under a load case that changes in time. `solve_ground_motion(model, motion, options)` gives the motion relative to a ground that accelerates. Both start from rest. Both integrate M a + C v + K u = s f(t) with Newmark's method.
+
+```mojo
+var record = TimeSeries(Duration64(0.02, SECOND), accelerations_in_g)
+var motion = GroundMotion(UX, record, Acceleration64(9.80665, METER_PER_SECOND_SQUARED))
+var modes = solve_modes(model, 3)
+var damping = rayleigh_damping(0.05, modes.frequencies[0], modes.frequencies[2])
+var options = HistoryOptions(Duration64(0.01, SECOND), 3000, average_acceleration(), damping)
+var history = solve_ground_motion(model, motion, options)
+var drift = history.peak_translation(roof, UX)
+```
+
+A `TimeSeries` holds factors at equal intervals from time zero. The factor is linear between two values. It is zero after the last value. `constant_series(duration)` is one up to the duration, so it makes a load case a step load.
+
+A `GroundMotion` holds a translation, a series and a scale. The ground acceleration is the series value times the scale. Every support moves with the ground. The effective load is -M r a(t), where r is one at each translation along the axis.
+
+| Option | Meaning |
+|---|---|
+| `step` | The time step |
+| `steps` | The number of steps, from 1 to 1048576 |
+| `method` | `average_acceleration()` has γ = 1/2 and β = 1/4. `linear_acceleration()` has γ = 1/2 and β = 1/6. `NewmarkMethod(gamma, beta)` sets both. |
+| `damping` | `RayleighDamping(a, b)` gives C = a M + b K. `no_damping()` gives zero. `rayleigh_damping(ratio, first, second)` gives one damping ratio at two frequencies. |
+
+The average acceleration method is stable for every step. It keeps the energy of an undamped model. The linear acceleration method is more accurate. It is stable only when the step is below 0.551 of the shortest period of the model, so use it on small models only. `NewmarkMethod.is_valid()` is true for a method that is stable for every step.
+
+| Result | Holds |
+|---|---|
+| `count()`, `time(i)` | The number of times, and the time of entry `i` |
+| `translation(i, node, dof)` | One displacement at one time |
+| `peak_translation(node, dof)` | The largest absolute displacement of the history |
+| `displacements`, `velocities`, `accelerations` | One raw global vector per time, six entries per node |
+
+The solver factors the effective stiffness K + γ/(β Δt) C + M/(β Δt²) once. Each step then costs one substitution. The mass must be positive definite, as for `solve_modes`.
+
+`newmark(k, m, shape, series, options)` runs the same integrator on any stiffness and mass in consistent units. Use it for a model that is not a `StructuralModel`.
+
+The load pattern with a time series, the uniform ground motion, the Rayleigh damping and the Newmark integrator follow the analysis objects of OpenSees. The code is original.
+
 ## The frame element
 
 The member is the two-node Euler-Bernoulli element of Przemieniecki, with twelve degrees of freedom. It has no shear deformation and no end releases.
@@ -154,7 +195,7 @@ The live loads are typical values from ASCE/SEI 7-16, table 4.3-1. They are not 
 
 ## Validation
 
-Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
+Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
 
 | Case | Reference | Error |
 |---|---|---|
@@ -169,6 +210,12 @@ Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_m
 | Cantilever, first frequency, 2, 4 and 8 elements | 1.8751² sqrt(E I / (m L⁴)) / (2π) | +0.047%, +0.0018%, -0.0013% |
 | Simply supported beam, first three frequencies, 10 elements | (n π)² sqrt(E I / (m L⁴)) / (2π) | -0.011%, -0.035%, -0.049% |
 | Cantilever with a tip mass ten times the beam mass | Rayleigh's method with 0.2357 m L | -0.002% |
+| One degree of freedom, half-sine pulse, average acceleration | Chopra, table E5.3 | Equal to the four decimals of the table |
+| The same system, linear acceleration | Chopra, table E5.4 | Equal to the four decimals of the table |
+| Two degrees of freedom, step load, steps of 0.1 s and 0.05 s | Modal solution | The error falls by a factor of 4 |
+| The same system, 300 steps of 0.7 s | Energy balance | Below 1e-11 |
+| Bar with one free degree of freedom, step load | (P / k) (1 - cos ω t) | Below 0.1% of P / k |
+| Cantilever on ground that accelerates at g, critical damping | Static deflection under self-weight | Below 1e-8 |
 | Two-storey frame view, tributary and shell slabs | Sum of reactions equals the dead and live loads | Below 1e-9 |
 | L-shaped roof view | Sum of reactions equals the dead and live loads | Below 1e-9 |
 
@@ -185,8 +232,12 @@ Every function raises `Error` for input it cannot use.
 | A force is not along a translation, or a moment is not about a rotation | `add_force`, `add_moment`, `add_line_load`, the result accessors |
 | A member's ends are at one point, or its reference is zero | `add_member`, `member_axes` |
 | A section or material is not valid | `add_member`, `add_shell` |
-| The structure is a mechanism | `StaticSolver`, `solve_static`, `solve_modes` |
+| The structure is a mechanism | `StaticSolver`, `solve_static`, `solve_modes`, `solve_load_history`, `solve_ground_motion` |
 | The mode count is out of range | `solve_modes` |
+| A time step, a step count, a method or a damping is not valid | `HistoryOptions` |
+| A series is empty, or its interval or a value is not valid | `TimeSeries` |
+| A ground motion is not along a translation | `GroundMotion` |
+| The mass is not positive definite | `newmark`, `solve_load_history`, `solve_ground_motion` |
 | The building or view options are not valid | `structural_view` |
 
 ## Limits
@@ -195,6 +246,7 @@ Every function raises `Error` for input it cannot use.
 - The members have no shear deformation, no end releases, no offsets and no warping torsion.
 - A support fixes a degree of freedom at zero. The model has no springs and no settlements.
 - A member load is uniform along the member and acts along a global axis.
+- A time history starts from rest. It has Rayleigh damping only, and every support has the same ground motion.
 - The view uses uniform tributary loads on beams. It does not model walls as shear walls or as loads.
 
 ## References
@@ -202,5 +254,8 @@ Every function raises `Error` for input it cannot use.
 - Przemieniecki, "Theory of Matrix Structural Analysis", McGraw-Hill, 1968: sections 5.6 and 11.3.
 - Bathe, "Finite Element Procedures", 2nd edition, 2014: sections 4.2 and 10.3.
 - Hibbeler, "Structural Analysis", chapter 11, the slope-deflection method.
+- Newmark, "A method of computation for structural dynamics", Journal of the Engineering Mechanics Division, ASCE, 1959.
+- Chopra, "Dynamics of Structures", 4th edition, 2012: sections 5.4 and 11.4, and tables E5.3 and E5.4.
+- McKenna, Scott and Fenves, "Nonlinear finite-element analysis software architecture using object composition", Journal of Computing in Civil Engineering, 2010: the OpenSees analysis objects.
 - Blevins, "Formulas for Natural Frequency and Mode Shape", 1979: table 8-1.
 - ASCE/SEI 7-16, "Minimum Design Loads and Associated Criteria for Buildings and Other Structures", table 4.3-1.
