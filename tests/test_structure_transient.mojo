@@ -27,7 +27,7 @@ from extensions.structure.dynamic import (
     no_damping,
 )
 from extensions.structure.ids import MemberId, NodeId
-from extensions.structure.kinds import UX, UY, UZ
+from extensions.structure.kinds import RX, UX, UY, UZ
 from extensions.structure.nonlinear import (
     NewtonOptions,
     assemble_truss,
@@ -36,7 +36,11 @@ from extensions.structure.nonlinear import (
     TrussState,
     default_newton,
 )
-from extensions.structure.transient import dynamic_step, start_motion
+from extensions.structure.transient import (
+    dynamic_step,
+    set_ground_motion_load,
+    start_motion,
+)
 from generators.utils import Vec3d
 from units.si import (
     Area64,
@@ -213,6 +217,44 @@ def test_elastic_chain_keeps_its_energy() raises:
     assert_true(largest > 1)
     assert_true(worst < 1e-9 * largest, String(worst, " ", largest))
     assert_true(state.iterations <= 2)
+
+
+def test_ground_motion_is_a_load_of_minus_the_mass() raises:
+    """The elastoplastic system on ground that accelerates.
+
+    Reference: the motion relative to the ground is that of the fixed
+    system under the force -m a. A ground acceleration of -39.48 times
+    the pulse gives the force 10 times the pulse of Chopra's table E5.5,
+    and the same displacements.
+    """
+    var model = _oscillator(7.5)
+    set_ground_motion_load(model, UX)
+    assert_almost_equal(model.loads[3], -0.2533, atol=0)
+    assert_almost_equal(model.loads[0], 0.0, atol=0)
+    var omega = sqrt(10 / 0.2533)
+    var damping = RayleighDamping(2 * 0.05 * omega, 0)
+    var expected = _run(_oscillator(7.5), damping, 9)
+    var state = TrussState(model)
+    var motion = start_motion(model, state)
+    for step in range(1, 10):
+        dynamic_step(
+            model,
+            state,
+            motion,
+            -10 / 0.2533 * _pulse(step),
+            _s(0.1),
+            average_acceleration(),
+            damping,
+            default_newton(),
+        )
+        assert_almost_equal(
+            state.displacements[3], expected[step - 1], atol=1e-12
+        )
+    with assert_raises(contains="translation"):
+        set_ground_motion_load(model, RX)
+    var empty = TrussModel()
+    set_ground_motion_load(empty, UX)
+    assert_equal(len(empty.loads), 0)
 
 
 def test_transient_refusals() raises:

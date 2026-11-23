@@ -19,7 +19,7 @@
 | `spectrum` | `solve_response_spectrum`, `SpectrumResult`, `ResponseSpectrum`, `CombinationRule` with `SRSS` and `CQC`, `combine_modes` and `modal_correlation` |
 | `section` | `FiberSection`, `ConcreteLaw`, `moment_curvature`, `CurvaturePoint`, `section_response`, `SectionResponse` and `concrete_response` |
 | `nonlinear` | `TrussModel`, `TrussState`, `SteelLaw`, `load_step`, `displacement_step`, `NewtonOptions`, `bar_response`, `BarState`, `BarResponse`, `assemble_truss` and `TrussTangent` |
-| `transient` | `start_motion`, `dynamic_step` and `TrussMotion` |
+| `transient` | `start_motion`, `dynamic_step`, `set_ground_motion_load` and `TrussMotion` |
 | `dynamic` | `solve_load_history`, `solve_ground_motion`, `TimeHistory`, `newmark`, `TimeSeries`, `GroundMotion`, `HistoryOptions`, `NewmarkMethod` and `RayleighDamping` |
 
 ## Units and axes
@@ -272,6 +272,8 @@ The equation of motion is M a + C v + f(u) = λ(t) P. The load factor λ is the 
 
 Each step is a Newmark step. The velocity and the acceleration at the end follow from the displacement there. So the step solves for the displacement by Newton iteration, with the matrix K + γ/(β Δt) C + M/(β Δt²). The state and the motion change only when the step converges.
 
+`set_ground_motion_load(model, dof)` makes the reference load minus the mass of each node along one axis. The load factor of a step is then the acceleration of the ground, in meters per second squared. The motion is relative to the ground, and every support moves with it.
+
 A `TrussMotion` holds the velocities, the accelerations and the time. `assemble_truss(model, state, u)` gives the internal forces and the tangent stiffness at trial displacements.
 
 OpenSees does this analysis with its Newmark integrator and its Newton algorithm.
@@ -403,6 +405,7 @@ Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_m
 | Elastoplastic system under a half-sine pulse, 9 steps | Chopra, table E5.5 | Equal to the four decimals of the table |
 | The same system with no yield, by mass and by stiffness damping | Chopra, table E5.3 | Equal to the four decimals of the table |
 | Elastic chain of two bars and two masses, 200 steps | Energy balance | Below 1e-9 of the strain energy |
+| Elastoplastic system on ground that accelerates | The same system under the force -m a | Below 1e-12 |
 | Shallow two-bar truss of von Mises, corotational, 50 steps of 10 mm | The closed form of the load at each sag, through the flat state and the mirror state | Below 0.01 N of a limit load of 76 kN |
 | The same truss, load control to 0.8 of the limit | The closed-form sag | Below 1e-4 N |
 | The same truss with small displacements | The linear stiffness 2 E A h² / L³ | Below 1e-12 m |
@@ -464,7 +467,7 @@ Every function raises `Error` for input it cannot use.
 - A support fixes a degree of freedom at zero. The model has no springs and no settlements.
 - A member load is uniform along the member and acts along a global axis.
 - A response spectrum analysis has one ground direction and one damping ratio. It gives displacements and the base shear, not member forces.
-- The time history of a truss has lumped masses and a load factor in time. It has no ground motion input.
+- The time history of a truss has lumped masses. Its ground motion has one axis, and every support has the same motion.
 - A time history starts from rest. It has Rayleigh damping only, and every support has the same ground motion.
 - The view uses uniform tributary loads on beams. It does not model walls as shear walls or as loads.
 

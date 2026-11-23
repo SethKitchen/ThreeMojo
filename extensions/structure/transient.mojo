@@ -21,8 +21,12 @@ with K the tangent stiffness of the trial displacement. The state and
 the motion change only when the step converges. See Chopra, "Dynamics of
 Structures", 4th edition, section 5.7.
 
+`set_ground_motion_load` makes the reference load that of a ground
+acceleration, so the load factor of a step is the acceleration of the
+ground.
+
 OpenSees does this analysis with its Newmark integrator and its Newton
-algorithm. The code is original and shares no source with OpenSees.
+algorithm, and the ground motion with its UniformExcitation pattern. The code is original and shares no source with OpenSees.
 """
 
 from core.ordinal import require_valid
@@ -42,6 +46,7 @@ from extensions.structure.nonlinear import (
     assemble_truss,
     truss_equations,
 )
+from extensions.structure.kinds import Dof
 from units.si import Duration64, SECOND
 
 
@@ -90,6 +95,30 @@ def _free(
         if equation[i] >= 0:
             out[equation[i]] = full[i]
     return out^
+
+
+def set_ground_motion_load(mut model: TrussModel, dof: Dof) raises:
+    """Make the reference load of a truss the load of a ground motion.
+
+    The reference load becomes minus the mass of each node, along one
+    axis. With this load, the load factor of a step is the acceleration
+    of the ground in meters per second squared, and the motion is
+    relative to the ground. Every support moves with the ground. The
+    loads that the model had are dropped.
+
+    Args:
+        model: The model, with its masses.
+        dof: The axis of the ground motion: `UX`, `UY` or `UZ`.
+
+    Raises:
+        Error: If the degree of freedom is not a translation.
+    """
+    if not dof.is_translation():
+        raise Error("A ground motion must act along a translation")
+    for i in range(len(model.loads)):
+        model.loads[i] = 0
+    for n in range(len(model.masses)):
+        model.loads[3 * n + dof.value] = -model.masses[n]
 
 
 def start_motion(model: TrussModel, state: TrussState) raises -> TrussMotion:
