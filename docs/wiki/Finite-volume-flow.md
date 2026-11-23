@@ -10,9 +10,10 @@
 
 | Module | What it gives |
 |---|---|
-| `kinds` | `Side` with `WEST`, `EAST`, `SOUTH` and `NORTH`. `BoundaryKind` with `FIXED_VELOCITY` and `FIXED_PRESSURE`. `ConvectionScheme` with `UPWIND` and `CENTRAL`. |
-| `quantities` | `DynamicViscosity64`, `KinematicViscosity64` and their units `PASCAL_SECOND`, `CENTIPOISE`, `SQUARE_METER_PER_SECOND` and `CENTISTOKES` |
+| `kinds` | `Side` with `WEST`, `EAST`, `SOUTH` and `NORTH`. `BoundaryKind` with `FIXED_VELOCITY` and `FIXED_PRESSURE`. `ConvectionScheme` with `UPWIND` and `CENTRAL`. `ThermalKind` with `FIXED_TEMPERATURE` and `INSULATED`. |
+| `quantities` | `DynamicViscosity64`, `KinematicViscosity64`, `ThermalDiffusivity64` and their units `PASCAL_SECOND`, `CENTIPOISE`, `SQUARE_METER_PER_SECOND` and `CENTISTOKES` |
 | `flow` | `Grid`, `Boundary`, `FlowCase`, `FlowOptions` and `FlowSolver` |
+| `heat` | `BuoyantCase`, `BuoyantSolver`, `ThermalBoundary`, `fixed_temperature` and `insulated` |
 
 ## Set up a case
 
@@ -57,6 +58,34 @@ The time step is implicit. For a transient result, keep the Courant number u Δt
 
 `FlowOptions(correctors, sweeps, pressure_tolerance, pressure_iterations)` sets the inner iterations. `default_options()` gives 2 correctors, 50 sweeps, a tolerance of 1e-8 and a budget of 10000 iterations.
 
+## Carry heat
+
+`extensions/cfd/heat.mojo` adds a temperature that the flow carries, and the buoyancy that the temperature gives. A `BuoyantCase` holds a `FlowCase` and the thermal properties of the fluid. A new case has every side insulated.
+
+```mojo
+var buoyant = BuoyantCase(flow^, ThermalDiffusivity64(2.2e-5, SQUARE_METER_PER_SECOND), ThermalExpansion64(3.4e-3, PER_KELVIN), Acceleration64(9.80665, METER_PER_SECOND_SQUARED), Temperature64(293.15, KELVIN))
+buoyant.set_thermal_boundary(WEST, fixed_temperature(Temperature64(303.15, KELVIN)))
+buoyant.set_thermal_boundary(EAST, fixed_temperature(Temperature64(283.15, KELVIN)))
+var solver = BuoyantSolver(buoyant^, default_options())
+var steps = solver.run_to_steady(Duration64(0.1, SECOND), TemperatureDifference64(1e-5, KELVIN_DIFFERENCE), 5000)
+var warm = solver.temperature(3, 8)
+```
+
+| Thermal boundary | Meaning |
+|---|---|
+| `fixed_temperature(t)` | The side has a fixed temperature. |
+| `insulated()` | No heat crosses the side by conduction. Fluid that enters through it has the temperature of the cell beside it. |
+
+The model is the approximation of Boussinesq. The fluid has one density in every term but the weight. A cell at a temperature T has an upward acceleration of g β (T - T₀). Here β is the expansion coefficient and T₀ is the reference temperature. The gravity acts along -y. The approximation holds for a small temperature range.
+
+Each time step has three parts. First the solver sets the buoyancy of each cell from its temperature. Then `FlowSolver` advances the flow by one PISO step. Last the solver advances the temperature with the new face fluxes, implicit in time.
+
+`BuoyantSolver` has `step`, `run_to_steady`, `temperature(i, j)` and `change()`. Its field `flow` is the `FlowSolver`, with the velocities and the pressure. `wall_gradient(side)` gives the mean temperature gradient at a side of fixed temperature. The Nusselt number of a wall is this gradient times a length over a temperature difference.
+
+`FlowSolver` has a body acceleration per cell in its fields `force_x` and `force_y`. They are zero unless a caller sets them. The solver takes the force at each face, next to the pressure gradient, so the two can balance there. At a wall the pressure gradient along the normal equals the force. So a fluid in stable layers stays at rest, and its pressure is hydrostatic. OpenFOAM gets the same balance with its pressure p_rgh.
+
+The model follows the OpenFOAM solver buoyantBoussinesqPimpleFoam. The code is original.
+
 ## The method
 
 The cells hold the velocity and the pressure at their centers. The faces hold the volume flux. Each time step has these parts:
@@ -72,7 +101,7 @@ The equations, the PISO loop and the names H and A follow icoFoam. The code is o
 
 ## Validation
 
-Each row is a test in `tests/test_cfd_flow.mojo`.
+Each row is a test in `tests/test_cfd_flow.mojo` or `tests/test_cfd_heat.mojo`.
 
 | Case | Reference | Result |
 |---|---|---|
@@ -83,8 +112,15 @@ Each row is a test in `tests/test_cfd_flow.mojo`.
 | The same cavity, 16 cells a side | The same 12 values | 0.029 of the lid speed |
 | Duct with an inlet and an outlet, upwind scheme | Outlet flux equals inlet flux | Below 1e-8 m²/s |
 | Fluid at rest | Stays at rest | Exact |
+| Cavity with a hot and a cold wall, no gravity | A linear temperature and a Nusselt number of one | Below 1e-7 |
+| The same cavity at a Rayleigh number of 1000, 12 cells a side | de Vahl Davis: a Nusselt number of 1.118, and peak velocities of 3.649 and 3.697 | 0.9%, 1.3% and 2.5% |
+| The same cavity at a Rayleigh number of 10000, 12 cells, upwind scheme | de Vahl Davis: a Nusselt number of 2.243 | Below 12% |
+| Warm fluid above cold fluid, with gravity | At rest, with a linear temperature | Velocities below 1e-6 m/s |
+| Duct with a warm inlet and insulated walls | The inlet temperature in every cell | Below 1e-6 K |
 
-With 32 cells a side, the cavity has u = -0.2064 at y = 0.484 on the vertical center line. Ghia, Ghia and Shin give -0.2058 at y = 0.5. That grid is too slow for a test of 5 seconds under coverage, so no test holds this value.
+At a Rayleigh number of 10000 with the central scheme, the Nusselt number is 2.325 with 16 cells a side and 2.280 with 24. The benchmark value is 2.243. These grids are too slow for a test under coverage, so no test holds these values.
+
+With 32 cells a side, the cavity has u = -0.2064 at y = 0.484 on the vertical center line. Ghia, Ghia and Shin give -0.2058 at y = 0.5. That grid is too slow for a test under coverage too.
 
 ## Errors
 
@@ -98,13 +134,16 @@ Every function raises `Error` for input it cannot use.
 | A side, a boundary or a scheme is not valid | `set_boundary`, `set_scheme`, `FlowSolver` |
 | A count or a tolerance of the options is not positive | `FlowOptions` |
 | A time step is not positive and finite | `step`, `run`, `run_to_steady` |
+| A diffusivity is not positive, or a thermal property or a thermal boundary is not valid | `BuoyantCase`, `set_thermal_boundary`, `BuoyantSolver` |
+| A wall gradient is asked of an insulated side | `wall_gradient` |
 | The pressure solution does not converge within its budget | `step`, `run`, `run_to_steady` |
 | The flow is not steady within the step budget | `run_to_steady` |
 
 ## Limits
 
 - The grid is one block of equal rectangles in two dimensions. It has no grading and no obstacles.
-- The flow is laminar and incompressible, with a constant viscosity. It has no turbulence model, no heat and no gravity.
+- The flow is laminar and incompressible, with constant properties. It has no turbulence model. The buoyancy is the approximation of Boussinesq, with the gravity along -y.
+- The buoyancy of a step comes from the temperature at its start. Keep the time step below the period of the buoyancy oscillation, 1 / sqrt(g β dT/dy).
 - Each side has one boundary along its whole length.
 - A side of fixed pressure takes the velocity of the cell beside it. So an inflow through it has no fixed direction.
 - The time scheme is implicit Euler, which is first order.
@@ -115,5 +154,6 @@ Every function raises `Error` for input it cannot use.
 - Rhie and Chow, "Numerical study of the turbulent flow past an airfoil with trailing edge separation", AIAA Journal 21, 1983: the face flux.
 - Jasak, "Error analysis and estimation for the finite volume method with applications to fluid flows", PhD thesis, Imperial College, 1996: the OpenFOAM discretization.
 - Ferziger and Peric, "Computational Methods for Fluid Dynamics", 3rd edition, 2002: chapters 7 and 8.
+- de Vahl Davis, "Natural convection of air in a square cavity: a bench mark numerical solution", Int. J. Numer. Methods Fluids 3, 1983.
 - Ghia, Ghia and Shin, "High-Re solutions for incompressible flow using the Navier-Stokes equations and a multigrid method", Journal of Computational Physics 48, 1982.
 - White, "Viscous Fluid Flow", 3rd edition, 2006: plane Poiseuille flow.

@@ -344,6 +344,17 @@ def test_fluid_at_rest_stays_at_rest() raises:
             assert_almost_equal(solver.pressure(i, j).to(PASCAL), 0.0, atol=0)
 
 
+def test_one_cell_at_rest() raises:
+    """A grid of one cell has no neighbor on any side."""
+    var flow = _fluid(Grid(1, 1, _m(1), _m(1)), 1, 0.01)
+    var solver = FlowSolver(flow^, default_options())
+    solver.step(_s(0.1))
+    assert_almost_equal(
+        solver.velocity_x(0, 0).to(METER_PER_SECOND), 0.0, atol=0
+    )
+    assert_almost_equal(solver.pressure(0, 0).to(PASCAL), 0.0, atol=0)
+
+
 def test_inlet_flow_leaves_through_the_outlet() raises:
     """A duct with an inlet at 0.5 m/s and an outlet of fixed pressure.
 

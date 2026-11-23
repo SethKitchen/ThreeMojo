@@ -493,6 +493,11 @@ struct FlowSolver(Movable):
     # The pressure matrix. Its pattern is fixed and each corrector fills
     # its values.
     var matrix: CsrMatrix
+    # A body acceleration of each cell along x and along y, in meters per
+    # second squared. Zero unless a caller sets it, as `BuoyantSolver`
+    # does for buoyancy.
+    var force_x: List[Float64]
+    var force_y: List[Float64]
 
     def __init__(out self, var flow: FlowCase, options: FlowOptions) raises:
         """Create a solver with the fluid at rest.
@@ -522,6 +527,8 @@ struct FlowSolver(Movable):
         self.time = 0
         self.last_change = 0
         self.matrix = pressure_pattern(grid)
+        self.force_x = zeros(n)
+        self.force_y = zeros(n)
         for j in range(grid.ny):  # pragma: no branch
             self.flux_x[(grid.nx + 1) * j] = flow.boundaries[0].u * grid.dy
             self.flux_x[grid.nx + (grid.nx + 1) * j] = (
@@ -599,8 +606,18 @@ struct FlowSolver(Movable):
         """
         return Velocity64(self.last_change)
 
-    def _outward(self, i: Int, j: Int, side: Int) -> Float64:
-        """Return the flux that leaves a cell through a side."""
+    def outward_flux(self, i: Int, j: Int, side: Int) -> Float64:
+        """Return the volume flux that leaves a cell through a side.
+
+        Args:
+            i: The column of the cell.
+            j: The row of the cell.
+            side: The value of a `Side`.
+
+        Returns:
+            The flux, in square meters per second for a block one meter
+            thick. A negative flux enters the cell.
+        """
         var grid = self.flow.grid
         if side == 0:
             return -self.flux_x[i + (grid.nx + 1) * j]
@@ -626,7 +643,7 @@ struct FlowSolver(Movable):
             for i in range(grid.nx):  # pragma: no branch
                 var net = Float64(0)
                 for side in range(4):
-                    net += self._outward(i, j, side)
+                    net += self.outward_flux(i, j, side)
                 worst = max(worst, abs(net))
         return KinematicViscosity64(worst)
 
@@ -640,7 +657,26 @@ struct FlowSolver(Movable):
         ref boundary = self.flow.boundaries[side]
         if boundary.kind == FIXED_PRESSURE:
             return boundary.p / self.flow.density
-        return self.p[c]
+        # At a side of fixed velocity the pressure gradient along the
+        # normal balances the body force at the wall. With no force it is
+        # zero. The force at the wall comes from the cell and the cell
+        # behind it, on a line. This makes the cell gradient exact for a
+        # force that is linear, such as the buoyancy of stable layers.
+        var half = 0.5 * grid.dx
+        if side >= 2:
+            half = 0.5 * grid.dy
+        var normal_x = _normal_x(side)
+        var normal_y = _normal_y(side)
+        var push = self.force_x[c] * normal_x + self.force_y[c] * normal_y
+        # The opposite side: west and east swap, south and north swap.
+        var behind = grid.neighbor(i, j, side ^ 1)
+        if behind >= 0:
+            var inner = (
+                self.force_x[behind] * normal_x
+                + self.force_y[behind] * normal_y
+            )
+            push += 0.5 * (push - inner)
+        return self.p[c] + half * push
 
     def _gradient(self, mut gx: List[Float64], mut gy: List[Float64]):
         """Fill the pressure gradient of each cell from its face values."""
@@ -654,6 +690,38 @@ struct FlowSolver(Movable):
                 gy[c] = (
                     self._face_pressure(i, j, 3) - self._face_pressure(i, j, 2)
                 ) / grid.dy
+
+    def _star_flux(
+        self,
+        hu: List[Float64],
+        hv: List[Float64],
+        inverse: List[Float64],
+        c: Int,
+        other: Int,
+        side: Int,
+        area: Float64,
+    ) -> Float64:
+        """Return the flux of H / A and of the body force out of a side.
+
+        `other` is the cell across the side, or -1 at a side of fixed
+        pressure. The body force is taken at the face, as the pressure
+        gradient is, so that the two can balance there.
+        """
+        var normal_x = _normal_x(side)
+        var normal_y = _normal_y(side)
+        if other >= 0:
+            var mean = 0.5 * (inverse[c] + inverse[other])
+            var push = 0.5 * (
+                (self.force_x[c] + self.force_x[other]) * normal_x
+                + (self.force_y[c] + self.force_y[other]) * normal_y
+            )
+            var carried = 0.5 * (
+                (hu[c] + hu[other]) * normal_x + (hv[c] + hv[other]) * normal_y
+            )
+            return (carried + mean * push) * area
+        var push = self.force_x[c] * normal_x + self.force_y[c] * normal_y
+        var carried = hu[c] * normal_x + hv[c] * normal_y
+        return (carried + inverse[c] * push) * area
 
     # --- the step ---------------------------------------------------------
 
@@ -699,7 +767,7 @@ struct FlowSolver(Movable):
                     if side >= 2:
                         area = grid.dx
                         distance = grid.dy
-                    var out = self._outward(i, j, side)
+                    var out = self.outward_flux(i, j, side)
                     if grid.neighbor(i, j, side) >= 0:
                         var diffusion = nu * area / distance
                         if upwind:
@@ -727,8 +795,8 @@ struct FlowSolver(Movable):
             for j in range(ny):  # pragma: no branch
                 for i in range(nx):  # pragma: no branch
                     var c = i + nx * j
-                    var su = bu[c] - volume * gx[c]
-                    var sv = bv[c] - volume * gy[c]
+                    var su = bu[c] - volume * (gx[c] - self.force_x[c])
+                    var sv = bv[c] - volume * (gy[c] - self.force_y[c])
                     for side in range(4):
                         var other = grid.neighbor(i, j, side)
                         if other >= 0:
@@ -787,13 +855,8 @@ struct FlowSolver(Movable):
                                 * area
                                 / distance
                             )
-                            var flux = (
-                                0.5
-                                * (
-                                    (hu[c] + hu[other]) * normal_x
-                                    + (hv[c] + hv[other]) * normal_y
-                                )
-                                * area
+                            var flux = self._star_flux(
+                                hu, hv, inverse, c, other, side, area
                             )
                             diagonal += coefficient
                             self.matrix.values[
@@ -804,9 +867,9 @@ struct FlowSolver(Movable):
                         ref boundary = self.flow.boundaries[side]
                         if boundary.kind == FIXED_PRESSURE:
                             var coefficient = 2 * inverse[c] * area / distance
-                            var flux = (
-                                hu[c] * normal_x + hv[c] * normal_y
-                            ) * area
+                            var flux = self._star_flux(
+                                hu, hv, inverse, c, other, side, area
+                            )
                             diagonal += coefficient
                             rhs[c] += (
                                 coefficient * boundary.p / self.flow.density
@@ -858,13 +921,8 @@ struct FlowSolver(Movable):
                         var other = grid.neighbor(i, j, side)
                         var out: Float64
                         if other >= 0:
-                            out = (
-                                0.5
-                                * (
-                                    (hu[c] + hu[other]) * normal_x
-                                    + (hv[c] + hv[other]) * normal_y
-                                )
-                                * area
+                            out = self._star_flux(
+                                hu, hv, inverse, c, other, side, area
                             ) - 0.5 * (
                                 inverse[c] + inverse[other]
                             ) * area / distance * (
@@ -872,9 +930,9 @@ struct FlowSolver(Movable):
                             )
                         elif self.flow.boundaries[side].kind == FIXED_PRESSURE:
                             ref boundary = self.flow.boundaries[side]
-                            out = (
-                                hu[c] * normal_x + hv[c] * normal_y
-                            ) * area - 2 * inverse[c] * area / distance * (
+                            out = self._star_flux(
+                                hu, hv, inverse, c, other, side, area
+                            ) - 2 * inverse[c] * area / distance * (
                                 boundary.p / self.flow.density - self.p[c]
                             )
                         else:
@@ -890,11 +948,11 @@ struct FlowSolver(Movable):
                             self.flux_y[i + nx * j] = -out
                         else:
                             self.flux_y[i + nx * (j + 1)] = out
-            # Correct the velocity: u = H / A - (1 / A) ∇p.
+            # Correct the velocity: u = H / A - (1 / A) (∇p - f).
             self._gradient(gx, gy)
             for c in range(n):  # pragma: no branch
-                self.u[c] = hu[c] - inverse[c] * gx[c]
-                self.v[c] = hv[c] - inverse[c] * gy[c]
+                self.u[c] = hu[c] - inverse[c] * (gx[c] - self.force_x[c])
+                self.v[c] = hv[c] - inverse[c] * (gy[c] - self.force_y[c])
         var change = Float64(0)
         for c in range(n):  # pragma: no branch
             require_finite(self.u[c], "The flow is not finite")

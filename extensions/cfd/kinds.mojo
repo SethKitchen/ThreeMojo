@@ -7,7 +7,8 @@
 
 A `Side` names one of the four sides of a grid. A `BoundaryKind` says
 which variable a side fixes. A `ConvectionScheme` says how a face takes
-its velocity from the two cells beside it.
+its velocity from the two cells beside it. A `ThermalKind` says what a
+side does to the heat.
 """
 from core.ordinal import ordinal_valid
 
@@ -79,3 +80,24 @@ struct ConvectionScheme(Equatable, ImplicitlyCopyable, Writable):
 comptime UPWIND = ConvectionScheme(0)
 # The mean of the two cells. Second order. OpenFOAM names it `linear`.
 comptime CENTRAL = ConvectionScheme(1)
+
+
+@fieldwise_init
+struct ThermalKind(Equatable, ImplicitlyCopyable, Writable):
+    """What a side of the grid does to the heat."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the two kinds.
+
+        Returns:
+            Whether the value is 0 or 1.
+        """
+        return ordinal_valid(self.value, 2 - 1)
+
+
+# The temperature of the side is fixed.
+comptime FIXED_TEMPERATURE = ThermalKind(0)
+# No heat crosses the side by conduction.
+comptime INSULATED = ThermalKind(1)
