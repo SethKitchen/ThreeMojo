@@ -16,6 +16,7 @@
 | `static` | `StaticSolver`, `solve_static`, `StaticResult`, `MemberForces` and the assembly functions |
 | `modal` | `solve_modes`, `ModalResult` and `assemble_mass` |
 | `buckling` | `solve_buckling`, `BucklingResult`, `solve_second_order`, `SecondOrderOptions`, `frame_geometric_stiffness` and `assemble_geometric_stiffness` |
+| `nonlinear` | `TrussModel`, `TrussState`, `SteelLaw`, `load_step`, `displacement_step`, `NewtonOptions`, `bar_response`, `BarState` and `BarResponse` |
 | `dynamic` | `solve_load_history`, `solve_ground_motion`, `TimeHistory`, `newmark`, `TimeSeries`, `GroundMotion`, `HistoryOptions`, `NewmarkMethod` and `RayleighDamping` |
 
 ## Units and axes
@@ -168,6 +169,48 @@ The member end forces include the geometric stiffness. So the moment at the base
 
 CalculiX has this buckling analysis as its `*BUCKLE` procedure. OpenSees has the second-order analysis as its P-Delta transformation. The code is original.
 
+## Follow a truss past yield
+
+`extensions/structure/nonlinear.mojo` follows a truss whose bars yield. A `TrussModel` holds nodes, supports, bars and a reference load. Each node has the three translations only. A `TrussState` holds the displacements, the load factor and the plastic state of each bar.
+
+```mojo
+var steel = SteelLaw(Pressure64(200, GIGAPASCAL), Pressure64(250, MEGAPASCAL), 0.01)
+var model = TrussModel()
+var top = model.add_node(Vec3d(0, 0, 2))
+var joint = model.add_node(Vec3d(0, 0, 0))
+model.add_support(top, [UX, UY, UZ])
+model.add_support(joint, [UX, UY])
+_ = model.add_bar(top, joint, Area64(1e-3, SQUARE_METER), steel)
+model.add_load(joint, UZ, Force64(-1, KILONEWTON))
+var state = TrussState(model)
+load_step(model, state, 200, default_newton())
+displacement_step(model, state, joint, UZ, Length64(-1, MILLIMETER), default_newton())
+var load = state.load_factor
+```
+
+A `SteelLaw` is bilinear. The bar is elastic up to its yield stress. Then it follows the modulus times the hardening ratio. A ratio of zero gives a perfectly plastic bar. The hardening is kinematic: the elastic range keeps its size of twice the yield stress and moves with the plastic strain. So a bar that has yielded in tension yields sooner in compression.
+
+The applied load is the reference load times the load factor. The two step functions change the state only when they converge.
+
+| Function | What it does |
+|---|---|
+| `load_step(model, state, factor_change, options)` | Changes the load factor by an amount. A negative change unloads. |
+| `displacement_step(model, state, node, dof, change, options)` | Moves one free translation by an amount and finds the load factor |
+
+`load_step` cannot pass a collapse load. There the tangent stiffness is singular, and the function raises an error. `displacement_step` follows a path through a plateau, if the bars have some hardening.
+
+| State | Holds |
+|---|---|
+| `load_factor` | The applied load over the reference load |
+| `translation(node, dof)` | One displacement |
+| `bar_force(bar)` | The axial force of a bar. Tension is positive. |
+| `has_yielded(bar)` | Whether the bar has a plastic strain |
+| `iterations` | The Newton iterations of the last step |
+
+Each step is a Newton iteration with the consistent tangent. It stops when the unbalanced force is below the tolerance times the forces in balance. `default_newton()` has a tolerance of 1e-10 and a budget of 25 iterations. `bar_response(law, state, strain)` gives the stress, the tangent and the new state of one bar. It is the return map of Simo and Hughes.
+
+The parts follow the OpenSees objects: a uniaxial material with a committed state, a truss element, the Newton algorithm, and the LoadControl and DisplacementControl integrators. The law gives the response of the OpenSees material Steel01 with no isotropic hardening. The code is original.
+
 ## The frame element
 
 The member is the two-node Euler-Bernoulli element of Przemieniecki, with twelve degrees of freedom. It has no shear deformation and no end releases.
@@ -235,7 +278,7 @@ The live loads are typical values from ASCE/SEI 7-16, table 4.3-1. They are not 
 
 ## Validation
 
-Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
+Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo`, `tests/test_structure_nonlinear.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
 
 | Case | Reference | Error |
 |---|---|---|
@@ -255,6 +298,10 @@ Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_m
 | Cantilever beam-column at half its Euler load | H L³ / (3 E I) times 3 (tan u - u) / u³, and a base moment of H L tan u / u | Below 0.001% |
 | The same member in tension at twice its Euler load | 3 (u - tanh u) / u³ | Below 0.01% |
 | Frame with a shell slab, second order | Sum of reactions equals the loads | Below 1e-6 |
+| One bar, strained past yield and back | The bilinear law, and a second yield at 290 - 500 = -210 MPa | Below 1e-3 Pa |
+| Three-bar truss, perfectly plastic, load control | Bar forces before and after first yield at σ A (1 + 2 cos³ θ). A load above σ A (1 + 2 cos θ) is refused. | Below 1e-4 N |
+| The same truss, loaded to 550 kN and unloaded | The residual bar forces, which balance | Below 1e-4 N |
+| The same truss with 1% hardening, displacement control | The load at each sag from the bilinear law, and the elastic slope of a step back | Below 1e-3 N |
 | One degree of freedom, half-sine pulse, average acceleration | Chopra, table E5.3 | Equal to the four decimals of the table |
 | The same system, linear acceleration | Chopra, table E5.4 | Equal to the four decimals of the table |
 | Two degrees of freedom, step load, steps of 0.1 s and 0.05 s | Modal solution | The error falls by a factor of 4 |
@@ -281,6 +328,8 @@ Every function raises `Error` for input it cannot use.
 | The mode count is out of range | `solve_modes`, `solve_buckling` |
 | The load case has no axial force, or fewer positive factors than the count | `solve_buckling` |
 | The load case is at or above its buckling load, or the iteration does not converge | `solve_second_order` |
+| A truss is a mechanism or at its collapse load, or a step does not converge | `load_step`, `displacement_step` |
+| A steel law, a bar area or a step size is not valid | `SteelLaw`, `TrussModel.add_bar`, `load_step`, `displacement_step` |
 | A time step, a step count, a method or a damping is not valid | `HistoryOptions` |
 | A series is empty, or its interval or a value is not valid | `TimeSeries` |
 | A ground motion is not along a translation | `GroundMotion` |
@@ -289,7 +338,8 @@ Every function raises `Error` for input it cannot use.
 
 ## Limits
 
-- The material is linear and elastic. The displacements are small: `solve_second_order` adds the geometric stiffness, but it has no large rotations.
+- The material of a frame member and of a shell is linear and elastic. Only the bars of a `TrussModel` yield.
+- The displacements are small. `solve_second_order` adds the geometric stiffness, but it has no large rotations. A `TrussModel` has no geometric stiffness.
 - A shell has no geometric stiffness. Its membrane stress does not change a buckling factor.
 - The members have no shear deformation, no end releases, no offsets and no warping torsion.
 - A support fixes a degree of freedom at zero. The model has no springs and no settlements.
@@ -305,6 +355,8 @@ Every function raises `Error` for input it cannot use.
 - McGuire, Gallagher and Ziemian, "Matrix Structural Analysis", 2nd edition, 2000: chapter 9, the geometric stiffness.
 - Timoshenko and Gere, "Theory of Elastic Stability", 2nd edition, 1961: chapters 1 and 2.
 - Dhondt, "The Finite Element Method for Three-Dimensional Thermomechanical Applications", Wiley, 2004: the theory of CalculiX.
+- Simo and Hughes, "Computational Inelasticity", Springer, 1998: chapter 1, the return map of one-dimensional plasticity.
+- Chen and Han, "Plasticity for Structural Engineers", Springer, 1988: limit analysis of the three-bar truss.
 - Newmark, "A method of computation for structural dynamics", Journal of the Engineering Mechanics Division, ASCE, 1959.
 - Chopra, "Dynamics of Structures", 4th edition, 2012: sections 5.4 and 11.4, and tables E5.3 and E5.4.
 - McKenna, Scott and Fenves, "Nonlinear finite-element analysis software architecture using object composition", Journal of Computing in Civil Engineering, 2010: the OpenSees analysis objects.
