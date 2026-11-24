@@ -3,11 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A pipe network node must be a `NodeId`, not a bare integer."""
+"""An EPANET link property must be a `LinkProperty`, not a bare integer."""
 
-from extensions.hydraulics.kinds import NodeId
+from extensions.epanet.kinds import LinkProperty
 
 
 def main():
-    var node: NodeId = 0
-    _ = node.is_valid()
+    var kind: LinkProperty = 0
+    _ = kind.is_valid()

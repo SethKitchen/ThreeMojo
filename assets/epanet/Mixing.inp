@@ -1,0 +1,92 @@
+[TITLE]
+Mixing: tank mixing models, sources and reactions (MGD, H-W)
+
+[JUNCTIONS]
+;ID   Elev  Demand  Pattern
+ J1   100   0
+ J2   110   0.3     D1
+ J3   105   0.2     D1
+ J4   95    0.25    D1
+ J5   100   0.15    D1
+ J6   90    0.2
+
+[RESERVOIRS]
+;ID   Head
+ R1   300
+
+[TANKS]
+;ID   Elev  Init  Min  Max  Diam  MinVol
+ T1   200   10    2    25   50    0
+ T2   210   8     1    20   40    0
+ T3   190   12    3    28   45    0
+ T4   205   6     1    18   35    0
+
+[PIPES]
+;ID   N1   N2   Length  Diam  Rough  Minor  Status
+ P1   R1   J1   5000    16    120    0      Open
+ P2   J1   J2   2000    12    110    0      Open
+ P3   J2   T1   1500    12    100    0      Open
+ P4   J1   J3   2500    10    120    0      Open
+ P5   J3   T2   1800    10    110    0      Open
+ P6   J1   J4   3000    10    120    0      Open
+ P7   J4   T3   1200    10    100    0      Open
+ P8   J4   J5   1000    8     120    0      Open
+ P9   J5   T4   1500    8     110    0      Open
+ P10  J5   J6   800     6     120    0      Open
+ P11  J6   J3   1600    6     120    0      Open
+
+[PATTERNS]
+ D1   0.4  0.6  1.2  1.8  1.5  0.5
+ SP1  1.0  1.5  0.5  1.0  2.0  1.0
+
+[CONTROLS]
+ LINK P1 CLOSED AT TIME 10
+ LINK P1 OPEN AT TIME 16
+
+[MIXING]
+ T1   MIXED
+ T2   2COMP  0.4
+ T3   FIFO
+ T4   LIFO
+
+[QUALITY]
+ R1   0.8
+ T1   0.5
+ T2   0.6
+ T3   0.4
+ T4   0.3
+ J6   0.2
+
+[SOURCES]
+ J2   CONCEN    2.0
+ J4   MASS      50     SP1
+ J5   SETPOINT  1.2
+ J1   FLOWPACED 0.5
+
+[REACTIONS]
+ Order Bulk    2
+ Order Tank    1
+ Order Wall    0
+ Global Bulk   -0.8
+ Global Wall   -0.4
+ Bulk  P4      -1.2
+ Wall  P6      -0.6
+ Tank  T3      -0.5
+ Limiting Potential 4
+ Roughness Correlation 0.0
+
+[TIMES]
+ Duration           36:00
+ Hydraulic Timestep 1:00
+ Quality Timestep   0:05
+ Pattern Timestep   6:00
+ Report Timestep    2:00
+
+[OPTIONS]
+ Units      MGD
+ Headloss   H-W
+ Quality    Chlorine mg/L
+ Diffusivity 1.0
+ Tolerance  0.01
+
+[END]

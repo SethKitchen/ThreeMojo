@@ -1,189 +1,120 @@
 # Pipe networks
 
-`extensions/hydraulics/` solves the steady flow of a network of pipes. It gives the head at each node and the flow in each link, by the global gradient algorithm that EPANET uses. A checked result is a numerical result. It does not establish engineering validity.
+`extensions/epanet/` is a port of the engine of OWA EPANET 2.3.6. It reads an EPANET input file and runs the hydraulics and the water quality of the network over time. The tests compare it with the real EPANET program: on the seven example networks, on 540 small input files, and function by function. The values agree to the last bit in the function tests, and to ten significant digits over whole runs. A checked result is a numerical result. It does not establish engineering validity.
 
-## Modules
+EPANET has the MIT license. A translation is allowed, so the port follows the C source line by line. See [THIRD-PARTY-NOTICES.md](https://github.com/SethKitchen/ThreeMojo/blob/main/THIRD-PARTY-NOTICES.md) and [Why the engineering solvers are original code](Why-the-engineering-solvers-are-original-code).
 
-| Module | What it gives |
-|---|---|
-| `kinds` | `NodeId`, `LinkId`, `NodeKind` with `JUNCTION` and `RESERVOIR`, `LinkKind` with `PIPE` and `PUMP`, `HeadLossFormula`, and `KinematicViscosity64` |
-| `headloss` | `Roughness`, `hazen_williams`, `darcy_weisbach`, `chezy_manning`, `friction_factor`, `pipe_head_loss` and `HeadLoss` |
-| `network` | `PipeNetwork` and `Link` |
-| `solve` | `solve_network`, `NetworkResult`, `SolveOptions`, `default_options` and `link_head_loss` |
-| `inp` | `parse_inp`, `read_inp`, `InpNetwork` and `flow_unit` |
+## Run a network
 
-## Build a network
-
-A network has nodes and links. A junction has an elevation and a demand, which is the flow that leaves the network there. A reservoir has a fixed head. A pipe joins two nodes and loses head to friction. A pump adds head from its start node to its end node.
+`EpanetProject(text)` reads the text of an `.inp` file. Then run the hydraulics, one step at a time, until the next step is zero.
 
 ```mojo
-var network = PipeNetwork()
-var lake = network.add_reservoir(Length64(60, METER))
-var town = network.add_junction(Length64(20, METER), VolumeFlowRate64(0.05, CUBIC_METER_PER_SECOND))
-var main = network.add_pipe(lake, town, Length64(1200, METER), Length64(0.3, METER), hazen_williams(120), 0)
+from extensions.epanet.kinds import EN_QUALITY
+from extensions.epanet.project import EpanetProject
+
+var p = EpanetProject(open("Net1.inp", "r").read())
+var node = p.node_index("10")
+p.open_hydraulics()
+p.init_hydraulics(save=True)
+while True:
+    var t = p.run_hydraulics()
+    var head = p.head(node)
+    if p.next_hydraulics().value == 0.0:
+        break
+p.close_hydraulics()
 ```
 
-| Method | Adds |
-|---|---|
-| `add_junction(elevation, demand)` | A junction. A negative demand is an inflow. |
-| `add_reservoir(head)` | A node of fixed head |
-| `add_pipe(start, end, length, diameter, roughness, minor_loss)` | A pipe. The minor loss is the sum of the coefficients K of its fittings. |
-| `add_pump(start, end, design_flow, design_head)` | A pump with a one-point curve |
-| `set_viscosity(viscosity)` | The kinematic viscosity of the fluid. The default is water at 20 °C, 1.004e-6 m²/s. |
+Then run the water quality in the same way. After `close_hydraulics`, the water quality reads the hydraulics that `init_hydraulics(save=True)` saved.
 
-Each pipe has its own formula. A network can mix the three.
+```mojo
+p.open_quality()
+p.init_quality()
+while True:
+    var t = p.run_quality()
+    var chlorine = p.node_value(node, EN_QUALITY)
+    if p.next_quality().value == 0.0:
+        break
+p.close_quality()
+```
 
-| Roughness | Formula | Head loss of a flow q, in SI units |
+You can also run the two together. Open both solvers, and call `run_quality` and `next_quality` after each hydraulic step. The water quality then uses the current hydraulic state. This is the same as the toolkit of EPANET.
+
+## The functions
+
+| Method | What it does | EPANET function |
 |---|---|---|
-| `hazen_williams(c)` | Hazen-Williams | 10.67 L q^1.852 / (C^1.852 d^4.8704) |
-| `darcy_weisbach(height)` | Darcy-Weisbach | f (L / d) v² / (2 g) |
-| `chezy_manning(n)` | Chezy-Manning | n² L v² / R^(4/3), with R = d / 4 |
+| `EpanetProject(text)` | Reads a network. An error lists each bad line, as EPANET reports them. | `EN_open` |
+| `open_hydraulics()` | Makes the hydraulic solver and checks the network | `EN_openH` |
+| `init_hydraulics(save, init_flows)` | Sets the starting state. `save` keeps each step for the water quality. | `EN_initH` |
+| `run_hydraulics()` | Solves the network at the current time. Returns the time. | `EN_runH` |
+| `next_hydraulics()` | Moves to the next event. Returns the step, which is zero at the end. | `EN_nextH` |
+| `close_hydraulics()` | Closes the hydraulic solver | `EN_closeH` |
+| `open_quality()`, `init_quality()`, `run_quality()`, `next_quality()`, `close_quality()` | The same steps for the water quality | `EN_openQ` to `EN_closeQ` |
+| `node_index(id)`, `link_index(id)` | The index of a name | `EN_getnodeindex`, `EN_getlinkindex` |
+| `node_id(node)`, `link_id(link)` | The name of an index | `EN_getnodeid`, `EN_getlinkid` |
+| `node_count()`, `link_count()` | The number of nodes and of links | `EN_getcount` |
+| `duration()`, `report_step()`, `quality_type()` | The options of the file | `EN_gettimeparam`, `EN_getqualtype` |
+| `head(node)`, `pressure_head(node)`, `demand(node)`, `flow(link)` | A result in SI units | `EN_getnodevalue`, `EN_getlinkvalue` |
+| `node_value(node, property)`, `link_value(link, property)` | A result in the units of the input file | `EN_getnodevalue`, `EN_getlinkvalue` |
 
-A fitting adds K v² / (2 g).
+A node property is `EN_DEMAND`, `EN_HEAD`, `EN_PRESSURE` or `EN_QUALITY`. A link property is `EN_FLOW`, `EN_STATUS`, `EN_SETTING`, `EN_ENERGY` or `EN_LINKQUAL`. A `NodeIndex` and a `LinkIndex` start at 1, as in EPANET.
 
-The friction factor f follows EPANET. Below a Reynolds number of 2000 it is 64 / Re. From 4000 it is the formula of Swamee and Jain. Between them it is a cubic that meets both. `friction_factor(reynolds, relative_roughness)` gives it.
+Each method raises `Error` with the EPANET error code and its text, for example `EPANET error 110: cannot solve network hydraulic equations`.
 
-A pump has the one-point curve of EPANET. Its design flow is q₀ and its design head is h₀. At a flow q the pump adds a head of (4/3) h₀ - (1/3) h₀ (q / q₀)². So the shutoff head is 4/3 of the design head. The head is zero at twice the design flow.
+## What the port includes
 
-## Solve the network
+The port has each part of the engine that changes a result.
 
-`solve_network(network, options)` returns a `NetworkResult`.
+| Part | C source | Mojo module |
+|---|---|---|
+| The input file, with each section, option and error code | `input1.c`, `input2.c`, `input3.c`, `rules.c` | `input`, `options`, `ruleparse`, `prepare`, `text`, `lookup` |
+| The checks of a network | `input1.c`, `project.c` | `validate` |
+| The ordering and the factorization of the sparse matrix | `smatrix.c`, `genmmd.c` | `smatrix`, `genmmd` |
+| The hydraulics: the global gradient algorithm, with tanks, pumps, valves, check valves, controls, rules, patterns, curves, emitters, pressure driven demands and leaks | `hydraul.c`, `hydcoeffs.c`, `hydsolver.c`, `hydstatus.c`, `leakage.c`, `rules.c` | `hydraul`, `hydbase`, `coeffs`, `hydsolver`, `hydstatus`, `leakage`, `rules` |
+| The energy of pumps | `hydraul.c` | `hydraul` |
+| The water quality: chemicals, age, source trace, reactions and the four tank mixing models | `quality.c`, `qualroute.c`, `qualreact.c` | `quality` |
+| The toolkit functions above | `epanet.c` | `project`, `api` |
 
-```mojo
-var result = solve_network(network, default_options())
-var pressure = result.pressure_head(town)
-var flow = result.flow(main)
-```
+The port does not include these parts. None of them changes a result.
 
-| Result | Holds |
-|---|---|
-| `head(node)` | The head at a node |
-| `pressure_head(node)` | The head less the elevation. A negative value means that the network cannot supply the junction. |
-| `flow(link)` | The flow from the start node to the end node. A negative flow runs the other way. |
-| `velocity(link)` | The mean velocity in a pipe |
-| `heads`, `flows`, `iterations` | The raw vectors, in meters and cubic meters per second, and the iteration count |
+- The report file and the binary output file. The reader keeps the `[REPORT]` options, but the port writes no report.
+- The functions that edit a network, and the writer of an input file.
+- The hydraulics file. The port keeps the saved steps in memory. It rounds each saved value to 32 bits, as the file does, so that the water quality is the same.
+- The data of `[COORDINATES]`, `[VERTICES]`, `[LABELS]`, `[BACKDROP]` and `[TAGS]`. The reader reads these sections, and it checks their names as EPANET does.
 
-`link_head_loss(network, link, flow)` gives the head that a link loses at a flow. For a pump it is minus the head that the pump adds.
+## How the port stays exact
 
-`default_options()` has an accuracy of 1e-10 and a budget of 200 iterations. The accuracy is the sum of the flow changes of one iteration over the sum of the flows. EPANET uses 0.001. `SolveOptions(accuracy, iterations)` sets both.
+The equations amplify a small difference. One bit of difference in a head loss can change a flow in the fifth digit. So the port must do the same floating point operations as the C code, in the same order.
 
-## Read an EPANET file
-
-`parse_inp(text)` reads the text of an EPANET `.inp` file. `read_inp(path)` reads the file. Both return an `InpNetwork`.
-
-```mojo
-var file = read_inp("town.inp")
-var result = solve_network(file.network, file.options)
-var pressure = result.pressure_head(file.node("J-104"))
-```
-
-| Field or method | Holds |
-|---|---|
-| `network` | The `PipeNetwork` |
-| `node(name)`, `link(name)` | The id of a name in the file. The case of the name does not matter. |
-| `node_names`, `link_names` | The name of each node and of each link |
-| `options` | The `ACCURACY` and the `TRIALS` of the file, or 0.001 and 40, which are the defaults of EPANET |
-| `title` | The lines of the title |
-
-The reader takes these sections:
-
-| Section | What the reader takes |
-|---|---|
-| `[TITLE]` | The title |
-| `[JUNCTIONS]` | A name, an elevation, a demand and a pattern |
-| `[RESERVOIRS]` | A name and a head |
-| `[TANKS]` | A name, an elevation and a first level. The tank is a node of fixed head at their sum. |
-| `[PIPES]` | A name, two nodes, a length, a diameter, a roughness, a minor loss and a status of `OPEN` |
-| `[PUMPS]` | A name, two nodes, `HEAD` and the name of a curve of one point |
-| `[CURVES]` | A name, a flow and a head |
-| `[PATTERNS]` | A name and its multipliers. The reader keeps the first one. |
-| `[OPTIONS]` | `UNITS`, `HEADLOSS`, `VISCOSITY`, `DEMAND MULTIPLIER`, `PATTERN`, `ACCURACY` and `TRIALS` |
-
-The `UNITS` option fixes every unit of the file. The default is gallons per minute.
-
-| Flow unit | Lengths and heads | Diameters | Darcy-Weisbach roughness |
-|---|---|---|---|
-| `CFS`, `GPM`, `MGD`, `IMGD`, `AFD` | Feet | Inches | Thousandths of a foot |
-| `LPS`, `LPM`, `MLD`, `CMH`, `CMD` | Meters | Millimeters | Millimeters |
-
-The `HEADLOSS` option is `H-W`, `D-W` or `C-M`. It gives every pipe of the file its formula. The `VISCOSITY` option is relative to water at 20 °C.
-
-A demand is its base value times the `DEMAND MULTIPLIER` and the first multiplier of its pattern. EPANET uses the same value at time zero. A junction with no pattern takes the pattern of the `PATTERN` option, if the file has it.
-
-Some sections can change a steady result, and this port cannot honor them: `[VALVES]`, `[STATUS]`, `[CONTROLS]`, `[RULES]`, `[EMITTERS]` and `[DEMANDS]`. The reader raises an error when one of them holds a line. It also raises an error for a closed pipe and a check valve. A pump of constant power and a pump curve of more than one point raise an error too. The reader passes over the other sections, such as `[COORDINATES]`, `[TIMES]` and `[REPORT]`.
-
-## The method
-
-The unknowns are the head at each junction and the flow in each link. Each link gives one equation: the head at its start less the head at its end is its head loss h(q). Each junction gives one equation: the flows in, less the flows out, equal the demand.
-
-The global gradient algorithm of Todini and Pilati is Newton's method on both sets of equations at once. Each iteration has these steps:
-
-1. For each link, find p = 1 / h'(q) and y = p h(q).
-2. Solve a symmetric positive definite system for the junction heads. Its matrix has the sum of p of the links at a junction on the diagonal, and -p between two joined junctions.
-3. Set the flow of each link to q - y + p (H_start - H_end).
-
-The flows of each iterate balance at each junction. The first guess is a velocity of 0.3048 m/s in each pipe and the design flow in each pump, as in EPANET.
-
-A pipe at rest has a gradient of zero, which makes the system singular. So a flow whose gradient is below 1e-7 s/m² has the linear loss of that gradient. EPANET does the same. Laminar flow is linear already and keeps its own gradient.
-
-The Darcy-Weisbach gradient takes the friction factor as constant, as EPANET does. The iteration still converges to the exact head loss.
-
-EPANET is in the public domain. The solver follows the method of its manual. The code is original.
+- A power or a logarithm calls the C library through `cpow` and `clog` in `cmath.mojo`. The `**` operator of Mojo can differ from `pow` in the last bits.
+- A product is `mul(a, b)`. This stops the compiler from joining a product and a sum into one fused operation. The C build of EPANET does not join them.
+- A formula keeps the grouping of the C code. For example, `PI*SQR(d)/4` is `PI * (d * d) / 4`, not `PI * d * d / 4`.
+- The arrays start at index 1, as in the C code. A list that the C code builds by putting each new item first is read in reverse.
 
 ## Differences from EPANET
 
-- EPANET states its formulas in US units, with rounded coefficients: 4.727 for Hazen-Williams and 4.66 for Chezy-Manning, with a diameter exponent of 5.33. This port uses the SI forms above. The Chezy-Manning form here is exact, with an exponent of 16/3. The head losses differ from EPANET by less than 0.1%.
-- Each pipe has its own formula. EPANET has one formula for the whole network.
-- A pump that runs backward raises an error. EPANET closes the pump and continues.
+The port gives the same results as EPANET 2.3.6. It differs only where EPANET reads memory that it does not own.
+
+- EPANET 2.3.6 reads past the end of two kinds of `[SOURCES]` line. One has an unknown source type, such as `J1 BRIGHT 1`. One has no strength, such as `J1 CONCEN`. The port gives error 213 for the first line and error 202 for the second.
+- The ordering routine `genmmd` of EPANET can eliminate many nodes in one round. EPANET always calls it with one node in each round. The port has only that case, and so it does not have the tests that only many nodes in one round need. The docstring of `genmmd.mojo` gives the proof that each test it leaves out is always false.
 
 ## Validation
 
-Each row is a test in `tests/test_hydraulics.mojo` or `tests/test_hydraulics_inp.mojo`.
+Each row is a test suite. Each reference comes from the real EPANET 2.3.6, built from commit `57d8bd8a`.
 
-| Case | Reference | Error |
+| Suite | Reference | Agreement |
 |---|---|---|
-| Friction factor, relative roughness 1e-6 to 1e-2, Reynolds number 5000 to 1e8 | The Colebrook-White equation, solved by iteration | Below 3% |
-| Friction factor at Reynolds numbers of 2000 and 4000 | The cubic meets 64 / Re and Swamee and Jain | Below 1e-9 |
-| One pipe, each formula, with and without a fitting | The closed form of the head loss | Below 1e-9 m. Below 1e-5 of the loss for Darcy-Weisbach. |
-| One pipe, laminar oil | Hagen and Poiseuille, 128 ν L q / (π g d⁴) | Below 1e-12 m |
-| Two parallel pipes with C of 100 and 140 | Flows in the ratio 100 to 140 | Below 1e-10 m³/s |
-| Two loops, two reservoirs, seven pipes, all formulas | The junction equations and the link equations | Below 1e-12 m³/s and 1e-8 m |
-| Pump, pipe and a lift of 30 m | The operating point, by bisection | Below 1e-10 m³/s |
-| Network with no demand | No flow, and the head of the reservoir | Below 1e-9 m |
-| EPANET file in US units: 1000 ft of 12 in pipe, 500 gal/min | The US formula of EPANET, 4.727 C^-1.852 d^-4.871 L q^1.852 | Below 0.1% |
-| EPANET file in liters per second, two loops, a reservoir and a tank | The same network built in code | Below 1e-9 m and 1e-12 m³/s |
-| The ten flow units of EPANET | Their factors to cubic meters per second | Below 1e-8 |
+| `tests/test_epanet_reference.mojo` | Net1, Net2 and Net3 of EPANET, and four more networks: valves, pumps, pressure driven demands with leaks and emitters, and tank mixing. Heads, demands, pressures, flows, statuses, settings, energy and quality at each step, from `assets/epanet/make_epanet.py`. | Ten significant digits |
+| `tests/test_epanet_cases.mojo` | 540 small input files in `assets/epanet/cases.txt`. Each option, each form of each section, each input error, and each path of the solvers. Some run the hydraulics and the quality together. From `assets/epanet/make_epanet_cases.py`. | The same error codes for the same lines, and ten significant digits for each result |
+| `tests/test_epanet_units.mojo` | Single functions of the C solver, on states that an input file cannot easily make. Examples are a valve at a node with no other path, a leak that has not converged and a demand that does not match its pressure. From `assets/epanet/make_epanet_units.py` and `epanet_units.c`. | Each bit |
+| `tests/test_epanet_genmmd.mojo` | The ordering of the C routine `genmmd` on 291 graphs: paths, stars, grids, cubes, trees, random graphs and graphs in parts. From `assets/epanet/make_epanet_genmmd.py`. | Each value |
+| `tests/test_epanet.mojo` | The order of the toolkit calls, and their errors | The EPANET error codes |
 
-## Errors
-
-Every function raises `Error` for input it cannot use.
-
-| Case | Functions |
-|---|---|
-| An id is out of range | All methods that take an id |
-| An elevation, a demand or a head is not finite | `add_junction`, `add_reservoir` |
-| A link joins a node to itself | `add_pipe`, `add_pump` |
-| A length, a diameter, a roughness or a minor loss is not valid | `add_pipe` |
-| A design flow or a design head is not positive | `add_pump` |
-| The network has no reservoir, or a junction has no path to one | `solve_network` |
-| A pump runs backward | `solve_network` |
-| The iteration does not converge within its budget | `solve_network` |
-| A velocity is asked of a pump | `NetworkResult.velocity` |
-| A file has a malformed line, a name that repeats or is not defined, an unknown unit, or a section that is not supported | `parse_inp`, `read_inp` |
-
-## Limits
-
-- The flow is steady. The solver has no tanks with a level, no demand patterns and no time.
-- A link is a pipe or a pump. The solver has no valves and no check valves.
-- A pump has a one-point curve and runs at one speed.
-- The demands are fixed. A pressure below zero does not reduce a demand.
-- The solver does not model water quality.
-- An EPANET file gives one steady state, at time zero. The reader takes no valves, no controls and no pump curves of three points.
+To make a reference again, build EPANET as the docstring of `make_epanet.py` says. Then run the script that the suite names.
 
 ## References
 
+- Rossman, Woo, Tryby, Shang, Janke and Haxton, "EPANET 2.2 User Manual", EPA/600/R-20/133, US Environmental Protection Agency, 2020.
 - Todini and Pilati, "A gradient algorithm for the analysis of pipe networks", in "Computer Applications in Water Supply", volume 1, 1988.
-- Rossman, "EPANET 2 Users Manual", EPA/600/R-00/057, US Environmental Protection Agency, 2000: section 3.1 and appendix D.
-- Swamee and Jain, "Explicit equations for pipe-flow problems", Journal of the Hydraulics Division, ASCE, 1976.
-- Colebrook, "Turbulent flow in pipes, with particular reference to the transition region between the smooth and rough pipe laws", ICE Journal, 1939.
-- Dunlop, "WADI Users Manual", Local Government Computer Services Board, Dublin, 1991, as cited by Rossman: the friction factor in the critical zone.
+- George and Liu, "The evolution of the minimum degree ordering algorithm", SIAM Review, 1989.
+- OWA EPANET 2.3.6, <https://github.com/OpenWaterAnalytics/EPANET>.

@@ -1,0 +1,106 @@
+[TITLE]
+Pumps: head curves, power, speed patterns and energy (LPS, D-W)
+
+[JUNCTIONS]
+;ID   Elev  Demand  Pattern
+ J1   10    0
+ J2   12    8       D1
+ J3   15    6       D1
+ J4   20    5       D1
+ J5   18    4
+ J6   25    3       D1
+
+[RESERVOIRS]
+;ID   Head   Pattern
+ R1   5
+ R2   8      H1
+
+[TANKS]
+;ID   Elev  Init  Min  Max  Diam  MinVol  VolCurve
+ T1   50    3     1    6    12    0
+ T2   55    2     0.5  5    0     0       VC1
+
+[PIPES]
+;ID   N1   N2   Length  Diam  Rough  Minor  Status
+ P1   J1   J2   400     200   0.1    0      Open
+ P2   J2   J3   300     150   0.2    1.5    Open
+ P3   J3   T1   500     200   0.1    0      Open
+ P4   J4   J5   350     150   0.5    0      Open
+ P5   J5   T2   600     150   0.1    0      Open
+ P6   J3   J4   250     100   0.05   0      CV
+ P7   J5   J6   300     100   0.1    0      Open
+ P8   J6   J2   900     80    0.3    0      Open
+ P9   J4   T1   700     100   1.0    0      Open
+
+[PUMPS]
+;ID   N1   N2   Parameters
+ U1   R1   J1   HEAD C1 SPEED 1.0 PATTERN S1
+ U2   R2   J4   HEAD C3
+ U3   J1   J5   POWER 6
+ U4   R1   J1   HEAD CM
+
+[CURVES]
+;ID   X      Y
+;PUMP: single point
+ C1   20     55
+;PUMP: three points
+ C3   0      70
+ C3   15     60
+ C3   30     30
+;PUMP: multiple points
+ CM   0      62
+ CM   5      61
+ CM   12     55
+ CM   20     40
+ CM   25     22
+;EFFICIENCY:
+ E1   5      50
+ E1   15     75
+ E1   25     65
+;VOLUME:
+ VC1  0      0
+ VC1  2      150
+ VC1  5      500
+
+[PATTERNS]
+ D1   0.5  0.7  1.1  1.4  1.2  0.9
+ S1   1.0  0.9  0.8  1.1  1.0  0.95
+ H1   1.0  1.02 1.04 1.0  0.98 0.96
+ PR1  0.5  0.5  1.0  1.5  1.5  1.0
+
+[ENERGY]
+ Global Efficiency  70
+ Global Price       0.12
+ Demand Charge      10
+ Pump U1 Efficiency E1
+ Pump U1 Price      0.10
+ Pump U1 Pattern    PR1
+ Pump U2 Efficiency E1
+
+[STATUS]
+ U4   Closed
+
+[CONTROLS]
+ LINK U4 OPEN IF NODE T1 BELOW 2
+ LINK U4 CLOSED IF NODE T1 ABOVE 4.5
+ LINK U2 0.8 AT TIME 5
+ LINK U3 CLOSED AT TIME 10
+ LINK U3 OPEN AT TIME 14
+
+[QUALITY]
+
+[TIMES]
+ Duration           24:00
+ Hydraulic Timestep 0:30
+ Quality Timestep   0:05
+ Pattern Timestep   4:00
+ Report Timestep    1:00
+
+[OPTIONS]
+ Units      LPS
+ Headloss   D-W
+ Quality    Age
+ Viscosity  1.1
+ Specific Gravity 0.998
+
+[END]

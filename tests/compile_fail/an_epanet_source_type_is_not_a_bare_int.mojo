@@ -3,11 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A pipe network kind must be a `LinkKind`, not a bare integer."""
+"""An EPANET source type must be a `SourceType`, not a bare integer."""
 
-from extensions.hydraulics.kinds import LinkKind
+from extensions.epanet.kinds import SourceType
 
 
 def main():
-    var kind: LinkKind = 0
+    var kind: SourceType = 0
     _ = kind.is_valid()

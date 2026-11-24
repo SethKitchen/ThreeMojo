@@ -30,7 +30,6 @@ the public domain, and the code here is original.
 from std.math import isfinite, sqrt
 from core.ordinal import require_positive
 from math.finite import require_finite, require_positive_finite
-from extensions.hydraulics.headloss import GRAVITY
 from units.si import (
     Area64,
     CUBIC_METER_PER_SECOND,
@@ -39,6 +38,8 @@ from units.si import (
     VolumeFlowRate64,
 )
 
+# The standard acceleration of gravity, in meters per second squared.
+comptime GRAVITY = 9.80665
 # The halvings of a bisection. Each finds a depth to the last bit.
 comptime _BISECTIONS = 200
 # The largest number of steps of one profile.

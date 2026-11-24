@@ -3,11 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A pipe network link must be a `LinkId`, not a bare integer."""
+"""An EPANET demand model must be a `DemandModel`, not a bare integer."""
 
-from extensions.hydraulics.kinds import LinkId
+from extensions.epanet.kinds import DemandModel
 
 
 def main():
-    var link: LinkId = 0
-    _ = link.is_valid()
+    var kind: DemandModel = 0
+    _ = kind.is_valid()

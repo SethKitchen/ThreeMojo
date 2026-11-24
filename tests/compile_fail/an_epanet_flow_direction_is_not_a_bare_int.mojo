@@ -3,11 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A pipe network kind must be a `NodeKind`, not a bare integer."""
+"""An EPANET flow direction must be a `FlowDirection`, not a bare integer."""
 
-from extensions.hydraulics.kinds import NodeKind
+from extensions.epanet.kinds import FlowDirection
 
 
 def main():
-    var kind: NodeKind = 0
+    var kind: FlowDirection = 0
     _ = kind.is_valid()

@@ -1,0 +1,1935 @@
+# Single functions of the EPANET solver on states that are hard to reach
+# from an input file. See make_epanet_units.py.
+# Valve status: PRV V1 (link 9) and PSV V2 (link 10).
+net valve_reversal
+set flow 9 1
+set flow 10 1
+call prvstatus 9 2 50 40 30
+call psvstatus 10 2 50 40 30
+call prvstatus 9 2 50 40 49.9996
+call psvstatus 10 2 50 40 49.9996
+call prvstatus 9 2 50 40 50.0006
+call psvstatus 10 2 50 40 50.0006
+call prvstatus 9 2 50 40 55
+call psvstatus 10 2 50 40 55
+call prvstatus 9 2 50 40 70
+call psvstatus 10 2 50 40 70
+call prvstatus 9 2 50 49.9996 30
+call psvstatus 10 2 50 49.9996 30
+call prvstatus 9 2 50 49.9996 49.9996
+call psvstatus 10 2 50 49.9996 49.9996
+call prvstatus 9 2 50 49.9996 50.0006
+call psvstatus 10 2 50 49.9996 50.0006
+call prvstatus 9 2 50 49.9996 55
+call psvstatus 10 2 50 49.9996 55
+call prvstatus 9 2 50 49.9996 70
+call psvstatus 10 2 50 49.9996 70
+call prvstatus 9 2 50 50 30
+call psvstatus 10 2 50 50 30
+call prvstatus 9 2 50 50 49.9996
+call psvstatus 10 2 50 50 49.9996
+call prvstatus 9 2 50 50 50.0006
+call psvstatus 10 2 50 50 50.0006
+call prvstatus 9 2 50 50 55
+call psvstatus 10 2 50 50 55
+call prvstatus 9 2 50 50 70
+call psvstatus 10 2 50 50 70
+call prvstatus 9 2 50 50.0006 30
+call psvstatus 10 2 50 50.0006 30
+call prvstatus 9 2 50 50.0006 49.9996
+call psvstatus 10 2 50 50.0006 49.9996
+call prvstatus 9 2 50 50.0006 50.0006
+call psvstatus 10 2 50 50.0006 50.0006
+call prvstatus 9 2 50 50.0006 55
+call psvstatus 10 2 50 50.0006 55
+call prvstatus 9 2 50 50.0006 70
+call psvstatus 10 2 50 50.0006 70
+call prvstatus 9 2 50 60 30
+call psvstatus 10 2 50 60 30
+call prvstatus 9 2 50 60 49.9996
+call psvstatus 10 2 50 60 49.9996
+call prvstatus 9 2 50 60 50.0006
+call psvstatus 10 2 50 60 50.0006
+call prvstatus 9 2 50 60 55
+call psvstatus 10 2 50 60 55
+call prvstatus 9 2 50 60 70
+call psvstatus 10 2 50 60 70
+call prvstatus 9 3 50 40 30
+call psvstatus 10 3 50 40 30
+call prvstatus 9 3 50 40 49.9996
+call psvstatus 10 3 50 40 49.9996
+call prvstatus 9 3 50 40 50.0006
+call psvstatus 10 3 50 40 50.0006
+call prvstatus 9 3 50 40 55
+call psvstatus 10 3 50 40 55
+call prvstatus 9 3 50 40 70
+call psvstatus 10 3 50 40 70
+call prvstatus 9 3 50 49.9996 30
+call psvstatus 10 3 50 49.9996 30
+call prvstatus 9 3 50 49.9996 49.9996
+call psvstatus 10 3 50 49.9996 49.9996
+call prvstatus 9 3 50 49.9996 50.0006
+call psvstatus 10 3 50 49.9996 50.0006
+call prvstatus 9 3 50 49.9996 55
+call psvstatus 10 3 50 49.9996 55
+call prvstatus 9 3 50 49.9996 70
+call psvstatus 10 3 50 49.9996 70
+call prvstatus 9 3 50 50 30
+call psvstatus 10 3 50 50 30
+call prvstatus 9 3 50 50 49.9996
+call psvstatus 10 3 50 50 49.9996
+call prvstatus 9 3 50 50 50.0006
+call psvstatus 10 3 50 50 50.0006
+call prvstatus 9 3 50 50 55
+call psvstatus 10 3 50 50 55
+call prvstatus 9 3 50 50 70
+call psvstatus 10 3 50 50 70
+call prvstatus 9 3 50 50.0006 30
+call psvstatus 10 3 50 50.0006 30
+call prvstatus 9 3 50 50.0006 49.9996
+call psvstatus 10 3 50 50.0006 49.9996
+call prvstatus 9 3 50 50.0006 50.0006
+call psvstatus 10 3 50 50.0006 50.0006
+call prvstatus 9 3 50 50.0006 55
+call psvstatus 10 3 50 50.0006 55
+call prvstatus 9 3 50 50.0006 70
+call psvstatus 10 3 50 50.0006 70
+call prvstatus 9 3 50 60 30
+call psvstatus 10 3 50 60 30
+call prvstatus 9 3 50 60 49.9996
+call psvstatus 10 3 50 60 49.9996
+call prvstatus 9 3 50 60 50.0006
+call psvstatus 10 3 50 60 50.0006
+call prvstatus 9 3 50 60 55
+call psvstatus 10 3 50 60 55
+call prvstatus 9 3 50 60 70
+call psvstatus 10 3 50 60 70
+call prvstatus 9 4 50 40 30
+call psvstatus 10 4 50 40 30
+call prvstatus 9 4 50 40 49.9996
+call psvstatus 10 4 50 40 49.9996
+call prvstatus 9 4 50 40 50.0006
+call psvstatus 10 4 50 40 50.0006
+call prvstatus 9 4 50 40 55
+call psvstatus 10 4 50 40 55
+call prvstatus 9 4 50 40 70
+call psvstatus 10 4 50 40 70
+call prvstatus 9 4 50 49.9996 30
+call psvstatus 10 4 50 49.9996 30
+call prvstatus 9 4 50 49.9996 49.9996
+call psvstatus 10 4 50 49.9996 49.9996
+call prvstatus 9 4 50 49.9996 50.0006
+call psvstatus 10 4 50 49.9996 50.0006
+call prvstatus 9 4 50 49.9996 55
+call psvstatus 10 4 50 49.9996 55
+call prvstatus 9 4 50 49.9996 70
+call psvstatus 10 4 50 49.9996 70
+call prvstatus 9 4 50 50 30
+call psvstatus 10 4 50 50 30
+call prvstatus 9 4 50 50 49.9996
+call psvstatus 10 4 50 50 49.9996
+call prvstatus 9 4 50 50 50.0006
+call psvstatus 10 4 50 50 50.0006
+call prvstatus 9 4 50 50 55
+call psvstatus 10 4 50 50 55
+call prvstatus 9 4 50 50 70
+call psvstatus 10 4 50 50 70
+call prvstatus 9 4 50 50.0006 30
+call psvstatus 10 4 50 50.0006 30
+call prvstatus 9 4 50 50.0006 49.9996
+call psvstatus 10 4 50 50.0006 49.9996
+call prvstatus 9 4 50 50.0006 50.0006
+call psvstatus 10 4 50 50.0006 50.0006
+call prvstatus 9 4 50 50.0006 55
+call psvstatus 10 4 50 50.0006 55
+call prvstatus 9 4 50 50.0006 70
+call psvstatus 10 4 50 50.0006 70
+call prvstatus 9 4 50 60 30
+call psvstatus 10 4 50 60 30
+call prvstatus 9 4 50 60 49.9996
+call psvstatus 10 4 50 60 49.9996
+call prvstatus 9 4 50 60 50.0006
+call psvstatus 10 4 50 60 50.0006
+call prvstatus 9 4 50 60 55
+call psvstatus 10 4 50 60 55
+call prvstatus 9 4 50 60 70
+call psvstatus 10 4 50 60 70
+call prvstatus 9 7 50 40 30
+call psvstatus 10 7 50 40 30
+call prvstatus 9 7 50 40 49.9996
+call psvstatus 10 7 50 40 49.9996
+call prvstatus 9 7 50 40 50.0006
+call psvstatus 10 7 50 40 50.0006
+call prvstatus 9 7 50 40 55
+call psvstatus 10 7 50 40 55
+call prvstatus 9 7 50 40 70
+call psvstatus 10 7 50 40 70
+call prvstatus 9 7 50 49.9996 30
+call psvstatus 10 7 50 49.9996 30
+call prvstatus 9 7 50 49.9996 49.9996
+call psvstatus 10 7 50 49.9996 49.9996
+call prvstatus 9 7 50 49.9996 50.0006
+call psvstatus 10 7 50 49.9996 50.0006
+call prvstatus 9 7 50 49.9996 55
+call psvstatus 10 7 50 49.9996 55
+call prvstatus 9 7 50 49.9996 70
+call psvstatus 10 7 50 49.9996 70
+call prvstatus 9 7 50 50 30
+call psvstatus 10 7 50 50 30
+call prvstatus 9 7 50 50 49.9996
+call psvstatus 10 7 50 50 49.9996
+call prvstatus 9 7 50 50 50.0006
+call psvstatus 10 7 50 50 50.0006
+call prvstatus 9 7 50 50 55
+call psvstatus 10 7 50 50 55
+call prvstatus 9 7 50 50 70
+call psvstatus 10 7 50 50 70
+call prvstatus 9 7 50 50.0006 30
+call psvstatus 10 7 50 50.0006 30
+call prvstatus 9 7 50 50.0006 49.9996
+call psvstatus 10 7 50 50.0006 49.9996
+call prvstatus 9 7 50 50.0006 50.0006
+call psvstatus 10 7 50 50.0006 50.0006
+call prvstatus 9 7 50 50.0006 55
+call psvstatus 10 7 50 50.0006 55
+call prvstatus 9 7 50 50.0006 70
+call psvstatus 10 7 50 50.0006 70
+call prvstatus 9 7 50 60 30
+call psvstatus 10 7 50 60 30
+call prvstatus 9 7 50 60 49.9996
+call psvstatus 10 7 50 60 49.9996
+call prvstatus 9 7 50 60 50.0006
+call psvstatus 10 7 50 60 50.0006
+call prvstatus 9 7 50 60 55
+call psvstatus 10 7 50 60 55
+call prvstatus 9 7 50 60 70
+call psvstatus 10 7 50 60 70
+set flow 9 1e-05
+set flow 10 1e-05
+call prvstatus 9 2 50 40 30
+call psvstatus 10 2 50 40 30
+call prvstatus 9 2 50 40 49.9996
+call psvstatus 10 2 50 40 49.9996
+call prvstatus 9 2 50 40 50.0006
+call psvstatus 10 2 50 40 50.0006
+call prvstatus 9 2 50 40 55
+call psvstatus 10 2 50 40 55
+call prvstatus 9 2 50 40 70
+call psvstatus 10 2 50 40 70
+call prvstatus 9 2 50 49.9996 30
+call psvstatus 10 2 50 49.9996 30
+call prvstatus 9 2 50 49.9996 49.9996
+call psvstatus 10 2 50 49.9996 49.9996
+call prvstatus 9 2 50 49.9996 50.0006
+call psvstatus 10 2 50 49.9996 50.0006
+call prvstatus 9 2 50 49.9996 55
+call psvstatus 10 2 50 49.9996 55
+call prvstatus 9 2 50 49.9996 70
+call psvstatus 10 2 50 49.9996 70
+call prvstatus 9 2 50 50 30
+call psvstatus 10 2 50 50 30
+call prvstatus 9 2 50 50 49.9996
+call psvstatus 10 2 50 50 49.9996
+call prvstatus 9 2 50 50 50.0006
+call psvstatus 10 2 50 50 50.0006
+call prvstatus 9 2 50 50 55
+call psvstatus 10 2 50 50 55
+call prvstatus 9 2 50 50 70
+call psvstatus 10 2 50 50 70
+call prvstatus 9 2 50 50.0006 30
+call psvstatus 10 2 50 50.0006 30
+call prvstatus 9 2 50 50.0006 49.9996
+call psvstatus 10 2 50 50.0006 49.9996
+call prvstatus 9 2 50 50.0006 50.0006
+call psvstatus 10 2 50 50.0006 50.0006
+call prvstatus 9 2 50 50.0006 55
+call psvstatus 10 2 50 50.0006 55
+call prvstatus 9 2 50 50.0006 70
+call psvstatus 10 2 50 50.0006 70
+call prvstatus 9 2 50 60 30
+call psvstatus 10 2 50 60 30
+call prvstatus 9 2 50 60 49.9996
+call psvstatus 10 2 50 60 49.9996
+call prvstatus 9 2 50 60 50.0006
+call psvstatus 10 2 50 60 50.0006
+call prvstatus 9 2 50 60 55
+call psvstatus 10 2 50 60 55
+call prvstatus 9 2 50 60 70
+call psvstatus 10 2 50 60 70
+call prvstatus 9 3 50 40 30
+call psvstatus 10 3 50 40 30
+call prvstatus 9 3 50 40 49.9996
+call psvstatus 10 3 50 40 49.9996
+call prvstatus 9 3 50 40 50.0006
+call psvstatus 10 3 50 40 50.0006
+call prvstatus 9 3 50 40 55
+call psvstatus 10 3 50 40 55
+call prvstatus 9 3 50 40 70
+call psvstatus 10 3 50 40 70
+call prvstatus 9 3 50 49.9996 30
+call psvstatus 10 3 50 49.9996 30
+call prvstatus 9 3 50 49.9996 49.9996
+call psvstatus 10 3 50 49.9996 49.9996
+call prvstatus 9 3 50 49.9996 50.0006
+call psvstatus 10 3 50 49.9996 50.0006
+call prvstatus 9 3 50 49.9996 55
+call psvstatus 10 3 50 49.9996 55
+call prvstatus 9 3 50 49.9996 70
+call psvstatus 10 3 50 49.9996 70
+call prvstatus 9 3 50 50 30
+call psvstatus 10 3 50 50 30
+call prvstatus 9 3 50 50 49.9996
+call psvstatus 10 3 50 50 49.9996
+call prvstatus 9 3 50 50 50.0006
+call psvstatus 10 3 50 50 50.0006
+call prvstatus 9 3 50 50 55
+call psvstatus 10 3 50 50 55
+call prvstatus 9 3 50 50 70
+call psvstatus 10 3 50 50 70
+call prvstatus 9 3 50 50.0006 30
+call psvstatus 10 3 50 50.0006 30
+call prvstatus 9 3 50 50.0006 49.9996
+call psvstatus 10 3 50 50.0006 49.9996
+call prvstatus 9 3 50 50.0006 50.0006
+call psvstatus 10 3 50 50.0006 50.0006
+call prvstatus 9 3 50 50.0006 55
+call psvstatus 10 3 50 50.0006 55
+call prvstatus 9 3 50 50.0006 70
+call psvstatus 10 3 50 50.0006 70
+call prvstatus 9 3 50 60 30
+call psvstatus 10 3 50 60 30
+call prvstatus 9 3 50 60 49.9996
+call psvstatus 10 3 50 60 49.9996
+call prvstatus 9 3 50 60 50.0006
+call psvstatus 10 3 50 60 50.0006
+call prvstatus 9 3 50 60 55
+call psvstatus 10 3 50 60 55
+call prvstatus 9 3 50 60 70
+call psvstatus 10 3 50 60 70
+call prvstatus 9 4 50 40 30
+call psvstatus 10 4 50 40 30
+call prvstatus 9 4 50 40 49.9996
+call psvstatus 10 4 50 40 49.9996
+call prvstatus 9 4 50 40 50.0006
+call psvstatus 10 4 50 40 50.0006
+call prvstatus 9 4 50 40 55
+call psvstatus 10 4 50 40 55
+call prvstatus 9 4 50 40 70
+call psvstatus 10 4 50 40 70
+call prvstatus 9 4 50 49.9996 30
+call psvstatus 10 4 50 49.9996 30
+call prvstatus 9 4 50 49.9996 49.9996
+call psvstatus 10 4 50 49.9996 49.9996
+call prvstatus 9 4 50 49.9996 50.0006
+call psvstatus 10 4 50 49.9996 50.0006
+call prvstatus 9 4 50 49.9996 55
+call psvstatus 10 4 50 49.9996 55
+call prvstatus 9 4 50 49.9996 70
+call psvstatus 10 4 50 49.9996 70
+call prvstatus 9 4 50 50 30
+call psvstatus 10 4 50 50 30
+call prvstatus 9 4 50 50 49.9996
+call psvstatus 10 4 50 50 49.9996
+call prvstatus 9 4 50 50 50.0006
+call psvstatus 10 4 50 50 50.0006
+call prvstatus 9 4 50 50 55
+call psvstatus 10 4 50 50 55
+call prvstatus 9 4 50 50 70
+call psvstatus 10 4 50 50 70
+call prvstatus 9 4 50 50.0006 30
+call psvstatus 10 4 50 50.0006 30
+call prvstatus 9 4 50 50.0006 49.9996
+call psvstatus 10 4 50 50.0006 49.9996
+call prvstatus 9 4 50 50.0006 50.0006
+call psvstatus 10 4 50 50.0006 50.0006
+call prvstatus 9 4 50 50.0006 55
+call psvstatus 10 4 50 50.0006 55
+call prvstatus 9 4 50 50.0006 70
+call psvstatus 10 4 50 50.0006 70
+call prvstatus 9 4 50 60 30
+call psvstatus 10 4 50 60 30
+call prvstatus 9 4 50 60 49.9996
+call psvstatus 10 4 50 60 49.9996
+call prvstatus 9 4 50 60 50.0006
+call psvstatus 10 4 50 60 50.0006
+call prvstatus 9 4 50 60 55
+call psvstatus 10 4 50 60 55
+call prvstatus 9 4 50 60 70
+call psvstatus 10 4 50 60 70
+call prvstatus 9 7 50 40 30
+call psvstatus 10 7 50 40 30
+call prvstatus 9 7 50 40 49.9996
+call psvstatus 10 7 50 40 49.9996
+call prvstatus 9 7 50 40 50.0006
+call psvstatus 10 7 50 40 50.0006
+call prvstatus 9 7 50 40 55
+call psvstatus 10 7 50 40 55
+call prvstatus 9 7 50 40 70
+call psvstatus 10 7 50 40 70
+call prvstatus 9 7 50 49.9996 30
+call psvstatus 10 7 50 49.9996 30
+call prvstatus 9 7 50 49.9996 49.9996
+call psvstatus 10 7 50 49.9996 49.9996
+call prvstatus 9 7 50 49.9996 50.0006
+call psvstatus 10 7 50 49.9996 50.0006
+call prvstatus 9 7 50 49.9996 55
+call psvstatus 10 7 50 49.9996 55
+call prvstatus 9 7 50 49.9996 70
+call psvstatus 10 7 50 49.9996 70
+call prvstatus 9 7 50 50 30
+call psvstatus 10 7 50 50 30
+call prvstatus 9 7 50 50 49.9996
+call psvstatus 10 7 50 50 49.9996
+call prvstatus 9 7 50 50 50.0006
+call psvstatus 10 7 50 50 50.0006
+call prvstatus 9 7 50 50 55
+call psvstatus 10 7 50 50 55
+call prvstatus 9 7 50 50 70
+call psvstatus 10 7 50 50 70
+call prvstatus 9 7 50 50.0006 30
+call psvstatus 10 7 50 50.0006 30
+call prvstatus 9 7 50 50.0006 49.9996
+call psvstatus 10 7 50 50.0006 49.9996
+call prvstatus 9 7 50 50.0006 50.0006
+call psvstatus 10 7 50 50.0006 50.0006
+call prvstatus 9 7 50 50.0006 55
+call psvstatus 10 7 50 50.0006 55
+call prvstatus 9 7 50 50.0006 70
+call psvstatus 10 7 50 50.0006 70
+call prvstatus 9 7 50 60 30
+call psvstatus 10 7 50 60 30
+call prvstatus 9 7 50 60 49.9996
+call psvstatus 10 7 50 60 49.9996
+call prvstatus 9 7 50 60 50.0006
+call psvstatus 10 7 50 60 50.0006
+call prvstatus 9 7 50 60 55
+call psvstatus 10 7 50 60 55
+call prvstatus 9 7 50 60 70
+call psvstatus 10 7 50 60 70
+set flow 9 -1e-05
+set flow 10 -1e-05
+call prvstatus 9 2 50 40 30
+call psvstatus 10 2 50 40 30
+call prvstatus 9 2 50 40 49.9996
+call psvstatus 10 2 50 40 49.9996
+call prvstatus 9 2 50 40 50.0006
+call psvstatus 10 2 50 40 50.0006
+call prvstatus 9 2 50 40 55
+call psvstatus 10 2 50 40 55
+call prvstatus 9 2 50 40 70
+call psvstatus 10 2 50 40 70
+call prvstatus 9 2 50 49.9996 30
+call psvstatus 10 2 50 49.9996 30
+call prvstatus 9 2 50 49.9996 49.9996
+call psvstatus 10 2 50 49.9996 49.9996
+call prvstatus 9 2 50 49.9996 50.0006
+call psvstatus 10 2 50 49.9996 50.0006
+call prvstatus 9 2 50 49.9996 55
+call psvstatus 10 2 50 49.9996 55
+call prvstatus 9 2 50 49.9996 70
+call psvstatus 10 2 50 49.9996 70
+call prvstatus 9 2 50 50 30
+call psvstatus 10 2 50 50 30
+call prvstatus 9 2 50 50 49.9996
+call psvstatus 10 2 50 50 49.9996
+call prvstatus 9 2 50 50 50.0006
+call psvstatus 10 2 50 50 50.0006
+call prvstatus 9 2 50 50 55
+call psvstatus 10 2 50 50 55
+call prvstatus 9 2 50 50 70
+call psvstatus 10 2 50 50 70
+call prvstatus 9 2 50 50.0006 30
+call psvstatus 10 2 50 50.0006 30
+call prvstatus 9 2 50 50.0006 49.9996
+call psvstatus 10 2 50 50.0006 49.9996
+call prvstatus 9 2 50 50.0006 50.0006
+call psvstatus 10 2 50 50.0006 50.0006
+call prvstatus 9 2 50 50.0006 55
+call psvstatus 10 2 50 50.0006 55
+call prvstatus 9 2 50 50.0006 70
+call psvstatus 10 2 50 50.0006 70
+call prvstatus 9 2 50 60 30
+call psvstatus 10 2 50 60 30
+call prvstatus 9 2 50 60 49.9996
+call psvstatus 10 2 50 60 49.9996
+call prvstatus 9 2 50 60 50.0006
+call psvstatus 10 2 50 60 50.0006
+call prvstatus 9 2 50 60 55
+call psvstatus 10 2 50 60 55
+call prvstatus 9 2 50 60 70
+call psvstatus 10 2 50 60 70
+call prvstatus 9 3 50 40 30
+call psvstatus 10 3 50 40 30
+call prvstatus 9 3 50 40 49.9996
+call psvstatus 10 3 50 40 49.9996
+call prvstatus 9 3 50 40 50.0006
+call psvstatus 10 3 50 40 50.0006
+call prvstatus 9 3 50 40 55
+call psvstatus 10 3 50 40 55
+call prvstatus 9 3 50 40 70
+call psvstatus 10 3 50 40 70
+call prvstatus 9 3 50 49.9996 30
+call psvstatus 10 3 50 49.9996 30
+call prvstatus 9 3 50 49.9996 49.9996
+call psvstatus 10 3 50 49.9996 49.9996
+call prvstatus 9 3 50 49.9996 50.0006
+call psvstatus 10 3 50 49.9996 50.0006
+call prvstatus 9 3 50 49.9996 55
+call psvstatus 10 3 50 49.9996 55
+call prvstatus 9 3 50 49.9996 70
+call psvstatus 10 3 50 49.9996 70
+call prvstatus 9 3 50 50 30
+call psvstatus 10 3 50 50 30
+call prvstatus 9 3 50 50 49.9996
+call psvstatus 10 3 50 50 49.9996
+call prvstatus 9 3 50 50 50.0006
+call psvstatus 10 3 50 50 50.0006
+call prvstatus 9 3 50 50 55
+call psvstatus 10 3 50 50 55
+call prvstatus 9 3 50 50 70
+call psvstatus 10 3 50 50 70
+call prvstatus 9 3 50 50.0006 30
+call psvstatus 10 3 50 50.0006 30
+call prvstatus 9 3 50 50.0006 49.9996
+call psvstatus 10 3 50 50.0006 49.9996
+call prvstatus 9 3 50 50.0006 50.0006
+call psvstatus 10 3 50 50.0006 50.0006
+call prvstatus 9 3 50 50.0006 55
+call psvstatus 10 3 50 50.0006 55
+call prvstatus 9 3 50 50.0006 70
+call psvstatus 10 3 50 50.0006 70
+call prvstatus 9 3 50 60 30
+call psvstatus 10 3 50 60 30
+call prvstatus 9 3 50 60 49.9996
+call psvstatus 10 3 50 60 49.9996
+call prvstatus 9 3 50 60 50.0006
+call psvstatus 10 3 50 60 50.0006
+call prvstatus 9 3 50 60 55
+call psvstatus 10 3 50 60 55
+call prvstatus 9 3 50 60 70
+call psvstatus 10 3 50 60 70
+call prvstatus 9 4 50 40 30
+call psvstatus 10 4 50 40 30
+call prvstatus 9 4 50 40 49.9996
+call psvstatus 10 4 50 40 49.9996
+call prvstatus 9 4 50 40 50.0006
+call psvstatus 10 4 50 40 50.0006
+call prvstatus 9 4 50 40 55
+call psvstatus 10 4 50 40 55
+call prvstatus 9 4 50 40 70
+call psvstatus 10 4 50 40 70
+call prvstatus 9 4 50 49.9996 30
+call psvstatus 10 4 50 49.9996 30
+call prvstatus 9 4 50 49.9996 49.9996
+call psvstatus 10 4 50 49.9996 49.9996
+call prvstatus 9 4 50 49.9996 50.0006
+call psvstatus 10 4 50 49.9996 50.0006
+call prvstatus 9 4 50 49.9996 55
+call psvstatus 10 4 50 49.9996 55
+call prvstatus 9 4 50 49.9996 70
+call psvstatus 10 4 50 49.9996 70
+call prvstatus 9 4 50 50 30
+call psvstatus 10 4 50 50 30
+call prvstatus 9 4 50 50 49.9996
+call psvstatus 10 4 50 50 49.9996
+call prvstatus 9 4 50 50 50.0006
+call psvstatus 10 4 50 50 50.0006
+call prvstatus 9 4 50 50 55
+call psvstatus 10 4 50 50 55
+call prvstatus 9 4 50 50 70
+call psvstatus 10 4 50 50 70
+call prvstatus 9 4 50 50.0006 30
+call psvstatus 10 4 50 50.0006 30
+call prvstatus 9 4 50 50.0006 49.9996
+call psvstatus 10 4 50 50.0006 49.9996
+call prvstatus 9 4 50 50.0006 50.0006
+call psvstatus 10 4 50 50.0006 50.0006
+call prvstatus 9 4 50 50.0006 55
+call psvstatus 10 4 50 50.0006 55
+call prvstatus 9 4 50 50.0006 70
+call psvstatus 10 4 50 50.0006 70
+call prvstatus 9 4 50 60 30
+call psvstatus 10 4 50 60 30
+call prvstatus 9 4 50 60 49.9996
+call psvstatus 10 4 50 60 49.9996
+call prvstatus 9 4 50 60 50.0006
+call psvstatus 10 4 50 60 50.0006
+call prvstatus 9 4 50 60 55
+call psvstatus 10 4 50 60 55
+call prvstatus 9 4 50 60 70
+call psvstatus 10 4 50 60 70
+call prvstatus 9 7 50 40 30
+call psvstatus 10 7 50 40 30
+call prvstatus 9 7 50 40 49.9996
+call psvstatus 10 7 50 40 49.9996
+call prvstatus 9 7 50 40 50.0006
+call psvstatus 10 7 50 40 50.0006
+call prvstatus 9 7 50 40 55
+call psvstatus 10 7 50 40 55
+call prvstatus 9 7 50 40 70
+call psvstatus 10 7 50 40 70
+call prvstatus 9 7 50 49.9996 30
+call psvstatus 10 7 50 49.9996 30
+call prvstatus 9 7 50 49.9996 49.9996
+call psvstatus 10 7 50 49.9996 49.9996
+call prvstatus 9 7 50 49.9996 50.0006
+call psvstatus 10 7 50 49.9996 50.0006
+call prvstatus 9 7 50 49.9996 55
+call psvstatus 10 7 50 49.9996 55
+call prvstatus 9 7 50 49.9996 70
+call psvstatus 10 7 50 49.9996 70
+call prvstatus 9 7 50 50 30
+call psvstatus 10 7 50 50 30
+call prvstatus 9 7 50 50 49.9996
+call psvstatus 10 7 50 50 49.9996
+call prvstatus 9 7 50 50 50.0006
+call psvstatus 10 7 50 50 50.0006
+call prvstatus 9 7 50 50 55
+call psvstatus 10 7 50 50 55
+call prvstatus 9 7 50 50 70
+call psvstatus 10 7 50 50 70
+call prvstatus 9 7 50 50.0006 30
+call psvstatus 10 7 50 50.0006 30
+call prvstatus 9 7 50 50.0006 49.9996
+call psvstatus 10 7 50 50.0006 49.9996
+call prvstatus 9 7 50 50.0006 50.0006
+call psvstatus 10 7 50 50.0006 50.0006
+call prvstatus 9 7 50 50.0006 55
+call psvstatus 10 7 50 50.0006 55
+call prvstatus 9 7 50 50.0006 70
+call psvstatus 10 7 50 50.0006 70
+call prvstatus 9 7 50 60 30
+call psvstatus 10 7 50 60 30
+call prvstatus 9 7 50 60 49.9996
+call psvstatus 10 7 50 60 49.9996
+call prvstatus 9 7 50 60 50.0006
+call psvstatus 10 7 50 60 50.0006
+call prvstatus 9 7 50 60 55
+call psvstatus 10 7 50 60 55
+call prvstatus 9 7 50 60 70
+call psvstatus 10 7 50 60 70
+set flow 9 -1
+set flow 10 -1
+call prvstatus 9 2 50 40 30
+call psvstatus 10 2 50 40 30
+call prvstatus 9 2 50 40 49.9996
+call psvstatus 10 2 50 40 49.9996
+call prvstatus 9 2 50 40 50.0006
+call psvstatus 10 2 50 40 50.0006
+call prvstatus 9 2 50 40 55
+call psvstatus 10 2 50 40 55
+call prvstatus 9 2 50 40 70
+call psvstatus 10 2 50 40 70
+call prvstatus 9 2 50 49.9996 30
+call psvstatus 10 2 50 49.9996 30
+call prvstatus 9 2 50 49.9996 49.9996
+call psvstatus 10 2 50 49.9996 49.9996
+call prvstatus 9 2 50 49.9996 50.0006
+call psvstatus 10 2 50 49.9996 50.0006
+call prvstatus 9 2 50 49.9996 55
+call psvstatus 10 2 50 49.9996 55
+call prvstatus 9 2 50 49.9996 70
+call psvstatus 10 2 50 49.9996 70
+call prvstatus 9 2 50 50 30
+call psvstatus 10 2 50 50 30
+call prvstatus 9 2 50 50 49.9996
+call psvstatus 10 2 50 50 49.9996
+call prvstatus 9 2 50 50 50.0006
+call psvstatus 10 2 50 50 50.0006
+call prvstatus 9 2 50 50 55
+call psvstatus 10 2 50 50 55
+call prvstatus 9 2 50 50 70
+call psvstatus 10 2 50 50 70
+call prvstatus 9 2 50 50.0006 30
+call psvstatus 10 2 50 50.0006 30
+call prvstatus 9 2 50 50.0006 49.9996
+call psvstatus 10 2 50 50.0006 49.9996
+call prvstatus 9 2 50 50.0006 50.0006
+call psvstatus 10 2 50 50.0006 50.0006
+call prvstatus 9 2 50 50.0006 55
+call psvstatus 10 2 50 50.0006 55
+call prvstatus 9 2 50 50.0006 70
+call psvstatus 10 2 50 50.0006 70
+call prvstatus 9 2 50 60 30
+call psvstatus 10 2 50 60 30
+call prvstatus 9 2 50 60 49.9996
+call psvstatus 10 2 50 60 49.9996
+call prvstatus 9 2 50 60 50.0006
+call psvstatus 10 2 50 60 50.0006
+call prvstatus 9 2 50 60 55
+call psvstatus 10 2 50 60 55
+call prvstatus 9 2 50 60 70
+call psvstatus 10 2 50 60 70
+call prvstatus 9 3 50 40 30
+call psvstatus 10 3 50 40 30
+call prvstatus 9 3 50 40 49.9996
+call psvstatus 10 3 50 40 49.9996
+call prvstatus 9 3 50 40 50.0006
+call psvstatus 10 3 50 40 50.0006
+call prvstatus 9 3 50 40 55
+call psvstatus 10 3 50 40 55
+call prvstatus 9 3 50 40 70
+call psvstatus 10 3 50 40 70
+call prvstatus 9 3 50 49.9996 30
+call psvstatus 10 3 50 49.9996 30
+call prvstatus 9 3 50 49.9996 49.9996
+call psvstatus 10 3 50 49.9996 49.9996
+call prvstatus 9 3 50 49.9996 50.0006
+call psvstatus 10 3 50 49.9996 50.0006
+call prvstatus 9 3 50 49.9996 55
+call psvstatus 10 3 50 49.9996 55
+call prvstatus 9 3 50 49.9996 70
+call psvstatus 10 3 50 49.9996 70
+call prvstatus 9 3 50 50 30
+call psvstatus 10 3 50 50 30
+call prvstatus 9 3 50 50 49.9996
+call psvstatus 10 3 50 50 49.9996
+call prvstatus 9 3 50 50 50.0006
+call psvstatus 10 3 50 50 50.0006
+call prvstatus 9 3 50 50 55
+call psvstatus 10 3 50 50 55
+call prvstatus 9 3 50 50 70
+call psvstatus 10 3 50 50 70
+call prvstatus 9 3 50 50.0006 30
+call psvstatus 10 3 50 50.0006 30
+call prvstatus 9 3 50 50.0006 49.9996
+call psvstatus 10 3 50 50.0006 49.9996
+call prvstatus 9 3 50 50.0006 50.0006
+call psvstatus 10 3 50 50.0006 50.0006
+call prvstatus 9 3 50 50.0006 55
+call psvstatus 10 3 50 50.0006 55
+call prvstatus 9 3 50 50.0006 70
+call psvstatus 10 3 50 50.0006 70
+call prvstatus 9 3 50 60 30
+call psvstatus 10 3 50 60 30
+call prvstatus 9 3 50 60 49.9996
+call psvstatus 10 3 50 60 49.9996
+call prvstatus 9 3 50 60 50.0006
+call psvstatus 10 3 50 60 50.0006
+call prvstatus 9 3 50 60 55
+call psvstatus 10 3 50 60 55
+call prvstatus 9 3 50 60 70
+call psvstatus 10 3 50 60 70
+call prvstatus 9 4 50 40 30
+call psvstatus 10 4 50 40 30
+call prvstatus 9 4 50 40 49.9996
+call psvstatus 10 4 50 40 49.9996
+call prvstatus 9 4 50 40 50.0006
+call psvstatus 10 4 50 40 50.0006
+call prvstatus 9 4 50 40 55
+call psvstatus 10 4 50 40 55
+call prvstatus 9 4 50 40 70
+call psvstatus 10 4 50 40 70
+call prvstatus 9 4 50 49.9996 30
+call psvstatus 10 4 50 49.9996 30
+call prvstatus 9 4 50 49.9996 49.9996
+call psvstatus 10 4 50 49.9996 49.9996
+call prvstatus 9 4 50 49.9996 50.0006
+call psvstatus 10 4 50 49.9996 50.0006
+call prvstatus 9 4 50 49.9996 55
+call psvstatus 10 4 50 49.9996 55
+call prvstatus 9 4 50 49.9996 70
+call psvstatus 10 4 50 49.9996 70
+call prvstatus 9 4 50 50 30
+call psvstatus 10 4 50 50 30
+call prvstatus 9 4 50 50 49.9996
+call psvstatus 10 4 50 50 49.9996
+call prvstatus 9 4 50 50 50.0006
+call psvstatus 10 4 50 50 50.0006
+call prvstatus 9 4 50 50 55
+call psvstatus 10 4 50 50 55
+call prvstatus 9 4 50 50 70
+call psvstatus 10 4 50 50 70
+call prvstatus 9 4 50 50.0006 30
+call psvstatus 10 4 50 50.0006 30
+call prvstatus 9 4 50 50.0006 49.9996
+call psvstatus 10 4 50 50.0006 49.9996
+call prvstatus 9 4 50 50.0006 50.0006
+call psvstatus 10 4 50 50.0006 50.0006
+call prvstatus 9 4 50 50.0006 55
+call psvstatus 10 4 50 50.0006 55
+call prvstatus 9 4 50 50.0006 70
+call psvstatus 10 4 50 50.0006 70
+call prvstatus 9 4 50 60 30
+call psvstatus 10 4 50 60 30
+call prvstatus 9 4 50 60 49.9996
+call psvstatus 10 4 50 60 49.9996
+call prvstatus 9 4 50 60 50.0006
+call psvstatus 10 4 50 60 50.0006
+call prvstatus 9 4 50 60 55
+call psvstatus 10 4 50 60 55
+call prvstatus 9 4 50 60 70
+call psvstatus 10 4 50 60 70
+call prvstatus 9 7 50 40 30
+call psvstatus 10 7 50 40 30
+call prvstatus 9 7 50 40 49.9996
+call psvstatus 10 7 50 40 49.9996
+call prvstatus 9 7 50 40 50.0006
+call psvstatus 10 7 50 40 50.0006
+call prvstatus 9 7 50 40 55
+call psvstatus 10 7 50 40 55
+call prvstatus 9 7 50 40 70
+call psvstatus 10 7 50 40 70
+call prvstatus 9 7 50 49.9996 30
+call psvstatus 10 7 50 49.9996 30
+call prvstatus 9 7 50 49.9996 49.9996
+call psvstatus 10 7 50 49.9996 49.9996
+call prvstatus 9 7 50 49.9996 50.0006
+call psvstatus 10 7 50 49.9996 50.0006
+call prvstatus 9 7 50 49.9996 55
+call psvstatus 10 7 50 49.9996 55
+call prvstatus 9 7 50 49.9996 70
+call psvstatus 10 7 50 49.9996 70
+call prvstatus 9 7 50 50 30
+call psvstatus 10 7 50 50 30
+call prvstatus 9 7 50 50 49.9996
+call psvstatus 10 7 50 50 49.9996
+call prvstatus 9 7 50 50 50.0006
+call psvstatus 10 7 50 50 50.0006
+call prvstatus 9 7 50 50 55
+call psvstatus 10 7 50 50 55
+call prvstatus 9 7 50 50 70
+call psvstatus 10 7 50 50 70
+call prvstatus 9 7 50 50.0006 30
+call psvstatus 10 7 50 50.0006 30
+call prvstatus 9 7 50 50.0006 49.9996
+call psvstatus 10 7 50 50.0006 49.9996
+call prvstatus 9 7 50 50.0006 50.0006
+call psvstatus 10 7 50 50.0006 50.0006
+call prvstatus 9 7 50 50.0006 55
+call psvstatus 10 7 50 50.0006 55
+call prvstatus 9 7 50 50.0006 70
+call psvstatus 10 7 50 50.0006 70
+call prvstatus 9 7 50 60 30
+call psvstatus 10 7 50 60 30
+call prvstatus 9 7 50 60 49.9996
+call psvstatus 10 7 50 60 49.9996
+call prvstatus 9 7 50 60 50.0006
+call psvstatus 10 7 50 60 50.0006
+call prvstatus 9 7 50 60 55
+call psvstatus 10 7 50 60 55
+call prvstatus 9 7 50 60 70
+call psvstatus 10 7 50 60 70
+# FCV V1 (link 6), with its setting and minor loss.
+net fcv_large_minor_loss
+set km 6 1
+set flow 6 0.5
+set setting 6 0.3
+call fcvstatus 6 3 60 50
+call fcvstatus 6 3 50 60
+call fcvstatus 6 3 50 50
+call fcvstatus 6 3 100 10
+call fcvstatus 6 3 60 59.9
+call fcvstatus 6 4 60 50
+call fcvstatus 6 4 50 60
+call fcvstatus 6 4 50 50
+call fcvstatus 6 4 100 10
+call fcvstatus 6 4 60 59.9
+call fcvstatus 6 6 60 50
+call fcvstatus 6 6 50 60
+call fcvstatus 6 6 50 50
+call fcvstatus 6 6 100 10
+call fcvstatus 6 6 60 59.9
+set flow 6 0.2
+set setting 6 0.3
+call fcvstatus 6 3 60 50
+call fcvstatus 6 3 50 60
+call fcvstatus 6 3 50 50
+call fcvstatus 6 3 100 10
+call fcvstatus 6 3 60 59.9
+call fcvstatus 6 4 60 50
+call fcvstatus 6 4 50 60
+call fcvstatus 6 4 50 50
+call fcvstatus 6 4 100 10
+call fcvstatus 6 4 60 59.9
+call fcvstatus 6 6 60 50
+call fcvstatus 6 6 50 60
+call fcvstatus 6 6 50 50
+call fcvstatus 6 6 100 10
+call fcvstatus 6 6 60 59.9
+set flow 6 1e-05
+set setting 6 0.3
+call fcvstatus 6 3 60 50
+call fcvstatus 6 3 50 60
+call fcvstatus 6 3 50 50
+call fcvstatus 6 3 100 10
+call fcvstatus 6 3 60 59.9
+call fcvstatus 6 4 60 50
+call fcvstatus 6 4 50 60
+call fcvstatus 6 4 50 50
+call fcvstatus 6 4 100 10
+call fcvstatus 6 4 60 59.9
+call fcvstatus 6 6 60 50
+call fcvstatus 6 6 50 60
+call fcvstatus 6 6 50 50
+call fcvstatus 6 6 100 10
+call fcvstatus 6 6 60 59.9
+set flow 6 -1
+set setting 6 0.3
+call fcvstatus 6 3 60 50
+call fcvstatus 6 3 50 60
+call fcvstatus 6 3 50 50
+call fcvstatus 6 3 100 10
+call fcvstatus 6 3 60 59.9
+call fcvstatus 6 4 60 50
+call fcvstatus 6 4 50 60
+call fcvstatus 6 4 50 50
+call fcvstatus 6 4 100 10
+call fcvstatus 6 4 60 59.9
+call fcvstatus 6 6 60 50
+call fcvstatus 6 6 50 60
+call fcvstatus 6 6 50 50
+call fcvstatus 6 6 100 10
+call fcvstatus 6 6 60 59.9
+set km 6 100000
+set flow 6 0.5
+set setting 6 0.3
+call fcvstatus 6 3 60 50
+call fcvstatus 6 3 50 60
+call fcvstatus 6 3 50 50
+call fcvstatus 6 3 100 10
+call fcvstatus 6 3 60 59.9
+call fcvstatus 6 4 60 50
+call fcvstatus 6 4 50 60
+call fcvstatus 6 4 50 50
+call fcvstatus 6 4 100 10
+call fcvstatus 6 4 60 59.9
+call fcvstatus 6 6 60 50
+call fcvstatus 6 6 50 60
+call fcvstatus 6 6 50 50
+call fcvstatus 6 6 100 10
+call fcvstatus 6 6 60 59.9
+set flow 6 0.2
+set setting 6 0.3
+call fcvstatus 6 3 60 50
+call fcvstatus 6 3 50 60
+call fcvstatus 6 3 50 50
+call fcvstatus 6 3 100 10
+call fcvstatus 6 3 60 59.9
+call fcvstatus 6 4 60 50
+call fcvstatus 6 4 50 60
+call fcvstatus 6 4 50 50
+call fcvstatus 6 4 100 10
+call fcvstatus 6 4 60 59.9
+call fcvstatus 6 6 60 50
+call fcvstatus 6 6 50 60
+call fcvstatus 6 6 50 50
+call fcvstatus 6 6 100 10
+call fcvstatus 6 6 60 59.9
+set flow 6 1e-05
+set setting 6 0.3
+call fcvstatus 6 3 60 50
+call fcvstatus 6 3 50 60
+call fcvstatus 6 3 50 50
+call fcvstatus 6 3 100 10
+call fcvstatus 6 3 60 59.9
+call fcvstatus 6 4 60 50
+call fcvstatus 6 4 50 60
+call fcvstatus 6 4 50 50
+call fcvstatus 6 4 100 10
+call fcvstatus 6 4 60 59.9
+call fcvstatus 6 6 60 50
+call fcvstatus 6 6 50 60
+call fcvstatus 6 6 50 50
+call fcvstatus 6 6 100 10
+call fcvstatus 6 6 60 59.9
+set flow 6 -1
+set setting 6 0.3
+call fcvstatus 6 3 60 50
+call fcvstatus 6 3 50 60
+call fcvstatus 6 3 50 50
+call fcvstatus 6 3 100 10
+call fcvstatus 6 3 60 59.9
+call fcvstatus 6 4 60 50
+call fcvstatus 6 4 50 60
+call fcvstatus 6 4 50 50
+call fcvstatus 6 4 100 10
+call fcvstatus 6 4 60 59.9
+call fcvstatus 6 6 60 50
+call fcvstatus 6 6 50 60
+call fcvstatus 6 6 50 50
+call fcvstatus 6 6 100 10
+call fcvstatus 6 6 60 59.9
+# Check valves.
+call cvstatus 2 -1 -1
+call cvstatus 2 -1 -1e-05
+call cvstatus 2 -1 0
+call cvstatus 2 -1 1
+call cvstatus 2 -0.0004 -1
+call cvstatus 2 -0.0004 -1e-05
+call cvstatus 2 -0.0004 0
+call cvstatus 2 -0.0004 1
+call cvstatus 2 0 -1
+call cvstatus 2 0 -1e-05
+call cvstatus 2 0 0
+call cvstatus 2 0 1
+call cvstatus 2 0.0004 -1
+call cvstatus 2 0.0004 -1e-05
+call cvstatus 2 0.0004 0
+call cvstatus 2 0.0004 1
+call cvstatus 2 1 -1
+call cvstatus 2 1 -1e-05
+call cvstatus 2 1 0
+call cvstatus 2 1 1
+call cvstatus 3 -1 -1
+call cvstatus 3 -1 -1e-05
+call cvstatus 3 -1 0
+call cvstatus 3 -1 1
+call cvstatus 3 -0.0004 -1
+call cvstatus 3 -0.0004 -1e-05
+call cvstatus 3 -0.0004 0
+call cvstatus 3 -0.0004 1
+call cvstatus 3 0 -1
+call cvstatus 3 0 -1e-05
+call cvstatus 3 0 0
+call cvstatus 3 0 1
+call cvstatus 3 0.0004 -1
+call cvstatus 3 0.0004 -1e-05
+call cvstatus 3 0.0004 0
+call cvstatus 3 0.0004 1
+call cvstatus 3 1 -1
+call cvstatus 3 1 -1e-05
+call cvstatus 3 1 0
+call cvstatus 3 1 1
+# A constant power pump U1 (link 5).
+net power_pump_dead_end
+set status 5 3
+set setting 5 1
+set flow 5 0
+call pumpstatus 5 10
+call pumpcoeff 5
+set flow 5 1e-09
+call pumpstatus 5 10
+call pumpcoeff 5
+set flow 5 0.1
+call pumpstatus 5 10
+call pumpcoeff 5
+set flow 5 1
+call pumpstatus 5 10
+call pumpcoeff 5
+set flow 5 1000000
+call pumpstatus 5 10
+call pumpcoeff 5
+set flow 5 1e+12
+call pumpstatus 5 10
+call pumpcoeff 5
+set status 5 2
+set setting 5 0
+set flow 5 0
+call pumpstatus 5 10
+call pumpcoeff 5
+set flow 5 1e-09
+call pumpstatus 5 10
+call pumpcoeff 5
+set flow 5 0.1
+call pumpstatus 5 10
+call pumpcoeff 5
+set flow 5 1
+call pumpstatus 5 10
+call pumpcoeff 5
+set flow 5 1000000
+call pumpstatus 5 10
+call pumpcoeff 5
+set flow 5 1e+12
+call pumpstatus 5 10
+call pumpcoeff 5
+# A pump with a curve, U1 (link 6).
+net rules_pump_beyond_shutoff
+set setting 6 0.5
+call pumpstatus 6 50
+call pumpstatus 6 199.9
+call pumpstatus 6 200.0006
+call pumpstatus 6 300
+set flow 6 0
+call pumpcoeff 6
+set flow 6 1e-09
+call pumpcoeff 6
+set flow 6 0.5
+call pumpcoeff 6
+set flow 6 3
+call pumpcoeff 6
+set setting 6 1
+call pumpstatus 6 50
+call pumpstatus 6 199.9
+call pumpstatus 6 200.0006
+call pumpstatus 6 300
+set flow 6 0
+call pumpcoeff 6
+set flow 6 1e-09
+call pumpcoeff 6
+set flow 6 0.5
+call pumpcoeff 6
+set flow 6 3
+call pumpcoeff 6
+set setting 6 1.2
+call pumpstatus 6 50
+call pumpstatus 6 199.9
+call pumpstatus 6 200.0006
+call pumpstatus 6 300
+set flow 6 0
+call pumpcoeff 6
+set flow 6 1e-09
+call pumpcoeff 6
+set flow 6 0.5
+call pumpcoeff 6
+set flow 6 3
+call pumpcoeff 6
+# Each valve of rules_actions at each node, active and open.
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 1
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 1
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 2
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 2
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 3
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 3
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 4
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 4
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 5
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 5
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 6
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 6
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 7
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 7
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 8
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 8
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 9
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 9
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 10
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 10
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 11
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 11
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 12
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 12
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 13
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 13
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 14
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 14
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 15
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 15
+# A network with no valves.
+net base
+call badvalve 1
+# Pressure controls on junctions: P2, U1, V1 (PRV), V2 (TCV).
+net pressure_controls
+set head 1 2000
+set head 2 2000
+set head 3 2000
+call pswitch
+net pressure_controls
+set head 1 2000
+set head 2 2000
+set head 3 2000
+set status 2 2
+set setting 7 0.8
+set setting 8 40
+set setting 9 -1e10
+set status 9 3
+call pswitch
+net pressure_controls
+set head 1 2000
+set head 2 2000
+set head 3 2000
+set setting 7 1
+set setting 9 -1e10
+set status 9 2
+set status 6 3
+call pswitch
+net pressure_controls
+set head 1 2000
+set head 2 2000
+set head 3 2000
+set setting 8 -1e10
+set status 8 2
+call pswitch
+net pressure_controls
+set head 1 -1000
+set head 2 -1000
+set head 3 -1000
+call pswitch
+net pressure_controls
+set head 1 -1000
+set head 2 -1000
+set head 3 -1000
+set status 2 2
+set setting 7 0.8
+set setting 8 40
+set setting 9 -1e10
+set status 9 3
+call pswitch
+net pressure_controls
+set head 1 -1000
+set head 2 -1000
+set head 3 -1000
+set setting 7 1
+set setting 9 -1e10
+set status 9 2
+set status 6 3
+call pswitch
+net pressure_controls
+set head 1 -1000
+set head 2 -1000
+set head 3 -1000
+set setting 8 -1e10
+set status 8 2
+call pswitch
+net pressure_controls
+set head 1 0
+set head 2 2000
+set head 3 -1000
+call pswitch
+net pressure_controls
+set head 1 0
+set head 2 2000
+set head 3 -1000
+set status 2 2
+set setting 7 0.8
+set setting 8 40
+set setting 9 -1e10
+set status 9 3
+call pswitch
+net pressure_controls
+set head 1 0
+set head 2 2000
+set head 3 -1000
+set setting 7 1
+set setting 9 -1e10
+set status 9 2
+set status 6 3
+call pswitch
+net pressure_controls
+set head 1 0
+set head 2 2000
+set head 3 -1000
+set setting 8 -1e10
+set status 8 2
+call pswitch
+# Pressure driven demands at J1 (node 1).
+net pda_below_minimum
+set fulldemand 1 1
+set demandflow 1 0
+set head 1 10
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0
+set head 1 50
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0
+set head 1 80
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0
+set head 1 200
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.002
+set head 1 10
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.002
+set head 1 50
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.002
+set head 1 80
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.002
+set head 1 200
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.5
+set head 1 10
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.5
+set head 1 50
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.5
+set head 1 80
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.5
+set head 1 200
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.9
+set head 1 10
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.9
+set head 1 50
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.9
+set head 1 80
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.9
+set head 1 200
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 1.5
+set head 1 10
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 1.5
+set head 1 50
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 1.5
+set head 1 80
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 1.5
+set head 1 200
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0
+set head 1 10
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0
+set head 1 50
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0
+set head 1 80
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0
+set head 1 200
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.002
+set head 1 10
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.002
+set head 1 50
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.002
+set head 1 80
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.002
+set head 1 200
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.5
+set head 1 10
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.5
+set head 1 50
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.5
+set head 1 80
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.5
+set head 1 200
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.9
+set head 1 10
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.9
+set head 1 50
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.9
+set head 1 80
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 0.9
+set head 1 200
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 1.5
+set head 1 10
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 1.5
+set head 1 50
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 1.5
+set head 1 80
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+set fulldemand 1 0.01
+set demandflow 1 1.5
+set head 1 200
+call newdemandflows
+call pdaconverged
+call demandcoeffs
+net pda_small_exponent
+set fulldemand 1 1
+set demandflow 1 0
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 1e-08
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.0002
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.002
+call demandcoeffs
+set fulldemand 1 1
+set demandflow 1 0.5
+call demandcoeffs
+# Leakage that has and has not converged.
+net leakage_large
+call leakagehasconverged
+call hasconverged 0 0
+set head 1 0
+call leakagehasconverged
+call hasconverged 0 0
+set head 1 50
+call leakagehasconverged
+call hasconverged 0 0
+set head 1 120
+call leakagehasconverged
+call hasconverged 0 0
+set head 1 500
+call leakagehasconverged
+call hasconverged 0 0
+# Emitter J4 (node 4) with flows from tiny to large.
+net emitter_no_pressure
+set emitterflow 4 0
+call emittercoeffs
+set emitterflow 4 1e-12
+call emittercoeffs
+set emitterflow 4 1e-06
+call emittercoeffs
+set emitterflow 4 0.001
+call emittercoeffs
+set emitterflow 4 1
+call emittercoeffs
+set emitterflow 4 -0.001
+call emittercoeffs
+set emitterflow 4 1000000
+call emittercoeffs
+# Emitter J3 (node 3) with the default exponent, and backflow allowed.
+net options_backflow_yes
+set emitterflow 3 0
+call emittercoeffs
+set emitterflow 3 1e-13
+call emittercoeffs
+set emitterflow 3 -1e-13
+call emittercoeffs
+set emitterflow 3 1e-12
+call emittercoeffs
+set emitterflow 3 1e-09
+call emittercoeffs
+set emitterflow 3 1e-06
+call emittercoeffs
+set emitterflow 3 0.01
+call emittercoeffs
+set emitterflow 3 -0.01
+call emittercoeffs
+set emitterflow 3 1
+call emittercoeffs
+# A PBV, V1 (link 6), with each setting and status.
+net pbv_open_no_setting
+set setting 6 -1e10
+set status 6 2
+set flow 6 0.01
+call pbvcoeff 6
+set setting 6 -1e10
+set status 6 2
+set flow 6 1
+call pbvcoeff 6
+set setting 6 -1e10
+set status 6 2
+set flow 6 10
+call pbvcoeff 6
+set setting 6 -1e10
+set status 6 3
+set flow 6 0.01
+call pbvcoeff 6
+set setting 6 -1e10
+set status 6 3
+set flow 6 1
+call pbvcoeff 6
+set setting 6 -1e10
+set status 6 3
+set flow 6 10
+call pbvcoeff 6
+set setting 6 0
+set status 6 2
+set flow 6 0.01
+call pbvcoeff 6
+set setting 6 0
+set status 6 2
+set flow 6 1
+call pbvcoeff 6
+set setting 6 0
+set status 6 2
+set flow 6 10
+call pbvcoeff 6
+set setting 6 0
+set status 6 3
+set flow 6 0.01
+call pbvcoeff 6
+set setting 6 0
+set status 6 3
+set flow 6 1
+call pbvcoeff 6
+set setting 6 0
+set status 6 3
+set flow 6 10
+call pbvcoeff 6
+set setting 6 5
+set status 6 2
+set flow 6 0.01
+call pbvcoeff 6
+set setting 6 5
+set status 6 2
+set flow 6 1
+call pbvcoeff 6
+set setting 6 5
+set status 6 2
+set flow 6 10
+call pbvcoeff 6
+set setting 6 5
+set status 6 3
+set flow 6 0.01
+call pbvcoeff 6
+set setting 6 5
+set status 6 3
+set flow 6 1
+call pbvcoeff 6
+set setting 6 5
+set status 6 3
+set flow 6 10
+call pbvcoeff 6
+set setting 6 1e-06
+set status 6 2
+set flow 6 0.01
+call pbvcoeff 6
+set setting 6 1e-06
+set status 6 2
+set flow 6 1
+call pbvcoeff 6
+set setting 6 1e-06
+set status 6 2
+set flow 6 10
+call pbvcoeff 6
+set setting 6 1e-06
+set status 6 3
+set flow 6 0.01
+call pbvcoeff 6
+set setting 6 1e-06
+set status 6 3
+set flow 6 1
+call pbvcoeff 6
+set setting 6 1e-06
+set status 6 3
+set flow 6 10
+call pbvcoeff 6
+# Tank T1 (node 5) near its limits, in and out.
+net base
+set head 5 52
+set nodedemand 5 -1
+call tanktimestep 3600
+set head 5 52
+set nodedemand 5 -1e-07
+call tanktimestep 3600
+set head 5 52
+set nodedemand 5 1e-07
+call tanktimestep 3600
+set head 5 52
+set nodedemand 5 1
+call tanktimestep 3600
+set head 5 51.9
+set nodedemand 5 -1
+call tanktimestep 3600
+set head 5 51.9
+set nodedemand 5 -1e-07
+call tanktimestep 3600
+set head 5 51.9
+set nodedemand 5 1e-07
+call tanktimestep 3600
+set head 5 51.9
+set nodedemand 5 1
+call tanktimestep 3600
+set head 5 60
+set nodedemand 5 -1
+call tanktimestep 3600
+set head 5 60
+set nodedemand 5 -1e-07
+call tanktimestep 3600
+set head 5 60
+set nodedemand 5 1e-07
+call tanktimestep 3600
+set head 5 60
+set nodedemand 5 1
+call tanktimestep 3600
+set head 5 70
+set nodedemand 5 -1
+call tanktimestep 3600
+set head 5 70
+set nodedemand 5 -1e-07
+call tanktimestep 3600
+set head 5 70
+set nodedemand 5 1e-07
+call tanktimestep 3600
+set head 5 70
+set nodedemand 5 1
+call tanktimestep 3600
+set head 5 70.1
+set nodedemand 5 -1
+call tanktimestep 3600
+set head 5 70.1
+set nodedemand 5 -1e-07
+call tanktimestep 3600
+set head 5 70.1
+set nodedemand 5 1e-07
+call tanktimestep 3600
+set head 5 70.1
+set nodedemand 5 1
+call tanktimestep 3600
+set tankv 2 0
+set head 5 60
+set nodedemand 5 -1
+call tanktimestep 3600
+set nodedemand 5 1
+call tanktimestep 3600
+call tanktimestep 1
+set tankv 2 100
+set head 5 60
+set nodedemand 5 -1
+call tanktimestep 3600
+set nodedemand 5 1
+call tanktimestep 3600
+call tanktimestep 1
+set tankv 2 18000
+set head 5 60
+set nodedemand 5 -1
+call tanktimestep 3600
+set nodedemand 5 1
+call tanktimestep 3600
+call tanktimestep 1

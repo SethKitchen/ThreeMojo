@@ -3,11 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A pipe network formula must be a `HeadLossFormula`, not a bare integer."""
+"""An EPANET node property must be a `NodeProperty`, not a bare integer."""
 
-from extensions.hydraulics.kinds import HeadLossFormula
+from extensions.epanet.kinds import NodeProperty
 
 
 def main():
-    var formula: HeadLossFormula = 0
-    _ = formula.is_valid()
+    var kind: NodeProperty = 0
+    _ = kind.is_valid()

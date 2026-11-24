@@ -1216,3 +1216,104 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
+
+---
+
+## EPANET
+
+<https://github.com/OpenWaterAnalytics/EPANET>
+
+`extensions/epanet/` ports the hydraulic and water quality engine of OWA
+EPANET 2.3.6, commit 57d8bd8ad60e89b57f2a1ac591f05c8e13589866.
+`assets/epanet/Net1.inp`, `Net2.inp` and `Net3.inp` are the example
+networks of that release. The `.expected` files in `assets/epanet/` are
+outputs of the program, and `epanet_units.c` calls its functions. EPANET is
+distributed under the MIT License, reproduced below with its list of
+authors.
+
+```
+MIT License
+
+Copyright (c) 2019 (See AUTHORS)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice, list of authors, and this permission notice shall
+be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+```
+# Authors ordered alphabetically.
+
+Authors with Contributions in the Public Domain:
+Lewis Rossman <LRossman@cinci.rr.com>
+Michael Tryby <tryby.michael@epa.gov>
+
+Version 2.0
+Lewis Rossman <LRossman@cinci.rr.com>
+
+Authors with Contributions Subject to Copyright (see LICENSE):
+Except where noted.
+
+Version 2.1
+Jinduan Chen <jinduan.uc@gmail.com>
+Maurizio Cingi <mrzcng2@gmail.com>
+Demetrios Eliades <eldemet@gmail.com>
+Will Furnass <will@thearete.co.uk>
+Milad Ghiami <milad.ghiami67@gmail.com>
+Sam Hatchett <samhatchett@gmail.com>
+Mike Kane <muke195@gmail.com>
+Marios Kyriakou <mariosmsk@gmail.com>
+Steffen Macke <sdteffen@sdteffen.de>
+Angela Marchi <angela.marchi@adelaide.edu.au>
+Bryant McDonnell <bemcdonnell@gmail.com>
+Lew Rossman <LRossman@cinci.rr.com>
+Elad Salomons <selad@optiwater.com>
+Feng Shang <fengshang72@gmail.com>
+Yunier Soad <yunier.soad@gmail.com>
+Tom Taxon <tntaxon@anl.gov>
+Michael Tryby <tryby.michael@epa.gov> (Contributions in the Public Domain)
+James Uber <jim@citilogics.com>
+Hyoungmin Woo <hyoungmin.woo@gmail.com>
+
+Version 2.2
+Demetrios Eliades <eldemet@gmail.com>
+Sam Hatchett <samhatchett@gmail.com>
+Abel Heinsbroek <mail@abelheinsbroek.nl>
+Marios Kyriakou <mariosmsk@gmail.com>
+Lewis Rossman <LRossman@cinci.rr.com>
+Elad Salomons <selad@optiwater.com>
+Markus Sunela <markus.sunela@fluidit.fi>
+Michael Tryby <tryby.michael@epa.gov> (Contributions in the Public Domain)
+
+Version 2.3
+Luke Butler <lukepbutler@gmail.com>
+Demetrios Eliades <eldemet@gmail.com>
+Sam Hatchett <samhatchett@gmail.com>
+Abel Heinsbroek <mail@abelheinsbroek.nl>
+Robert Janke <janke.robert@epa.gov>
+Marios Kyriakou <mariosmsk@gmail.com>
+Corey McNeish
+0tkl <tkl.zhaoqing@gmail.com>
+Lewis Rossman <LRossman@cinci.rr.com>
+Elad Salomons <selad@optiwater.com>
+Alex Sinske
+Sahand Tashak
+Yu Chun Tsao
+James Uber <jim@citilogics.com>
+Oscar Vegas Niño <ovegas141279@gmail.com>
+Dennis Zanutto <dennis.zanutto@kwrwater.nl>
+```

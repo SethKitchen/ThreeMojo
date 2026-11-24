@@ -21,6 +21,7 @@ from std.testing import (
     assert_true,
 )
 from extensions.hydraulics.channel import (
+    GRAVITY,
     Channel,
     ProfilePoint,
     critical_depth,
@@ -32,7 +33,6 @@ from extensions.hydraulics.channel import (
     specific_energy,
     water_surface_profile,
 )
-from extensions.hydraulics.headloss import GRAVITY
 from units.si import (
     CUBIC_METER_PER_SECOND,
     FOOT,

@@ -3,13 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Steady hydraulics of pipe networks and of open channels.
+"""Steady flow with a free surface in open channels.
 
-A `PipeNetwork` holds junctions, reservoirs, pipes and pumps.
-`solve_network` gives the head at each node and the flow in each link, by
-the global gradient algorithm that EPANET uses. `read_inp` reads an
-EPANET input file. A `Channel` is a
-trapezoid with a free surface. `water_surface_profile` gives its
-gradually varied profile by the standard step method. See the wiki pages
-Pipe networks and Open channels.
+A `Channel` is a trapezoid with a free surface. `water_surface_profile`
+gives its gradually varied profile by the standard step method. See the
+wiki page Open channels. For pipe networks, see `extensions/epanet/` and
+the wiki page Pipe networks.
 """

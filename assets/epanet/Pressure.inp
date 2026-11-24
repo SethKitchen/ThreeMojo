@@ -1,0 +1,118 @@
+[TITLE]
+Pressure: pressure driven demand, leakage, emitters and rules (CMH, C-M)
+
+[JUNCTIONS]
+;ID   Elev  Demand  Pattern
+ J1   30    0
+ J2   35    10      D1
+ J3   42    12      D1
+ J4   38    8
+ J5   45    6       D1
+ J6   50    5
+
+[RESERVOIRS]
+;ID   Head
+ R1   80
+
+[TANKS]
+;ID   Elev  Init  Min  Max  Diam  MinVol  VolCurve  Overflow
+ T1   60    3     1    6    15    0       *         YES
+
+[PIPES]
+;ID   N1   N2   Length  Diam  Rough  Minor  Status
+ P1   R1   J1   800     250   0.011  0      Open
+ P2   J1   J2   600     200   0.012  0      Open
+ P3   J2   J3   500     150   0.013  0      Open
+ P4   J3   J4   400     150   0.012  0      Open
+ P5   J4   T1   700     200   0.011  0      Open
+ P6   J2   J5   900     100   0.014  0      Open
+ P7   J5   J6   300     80    0.013  0      Open
+ P8   J6   J4   650     100   0.012  0      Open
+
+[VALVES]
+;ID   N1   N2   Diam  Type  Setting  Minor
+ V1   J1   J4   150   TCV   3        0
+
+[DEMANDS]
+;Junction  Demand  Pattern  Category
+ J2         10      D1       Homes
+ J2         4       D2       Shops
+ J4         8       D2
+ J6         5       D1       Homes
+ J6         2
+
+[EMITTERS]
+ J3   1.5
+ J6   0.8
+
+[LEAKAGE]
+;Pipe  Area  Expansion
+ P3    0.5   0.05
+ P6    1.0   0.10
+ P7    0.8   0.02
+
+[PATTERNS]
+ D1   0.5  0.8  1.2  1.6  1.4  1.0
+ D2   1.0  1.2  1.4  0.8  0.6  0.4
+
+[RULES]
+RULE R1
+IF TANK T1 LEVEL ABOVE 4.5
+AND SYSTEM CLOCKTIME >= 2 AM
+THEN PIPE P5 STATUS IS CLOSED
+ELSE PIPE P5 STATUS IS OPEN
+PRIORITY 2
+
+RULE R2
+IF JUNCTION J3 PRESSURE < 15
+OR JUNCTION J4 DEMAND > 30
+THEN VALVE V1 SETTING = 1.5
+PRIORITY 1
+
+RULE R3
+IF SYSTEM TIME > 6
+AND TANK T1 DRAINTIME < 3
+THEN PIPE P5 STATUS IS OPEN
+AND VALVE V1 STATUS IS OPEN
+PRIORITY 3
+
+RULE R4
+IF LINK P2 FLOW >= 60
+AND SYSTEM DEMAND > 50
+AND LINK P5 STATUS IS OPEN
+THEN PIPE P7 STATUS IS CLOSED
+ELSE PIPE P7 STATUS IS OPEN
+
+RULE R5
+IF NODE J1 HEAD <= 70
+OR TANK T1 FILLTIME > 20
+THEN VALVE V1 SETTING = 5
+
+[QUALITY]
+
+[TIMES]
+ Duration           18:00
+ Hydraulic Timestep 1:00
+ Quality Timestep   0:10
+ Pattern Timestep   3:00
+ Report Timestep    1:00
+ Rule Timestep      0:15
+ Start ClockTime    1 AM
+
+[OPTIONS]
+ Units             CMH
+ Headloss          C-M
+ Pressure          Meters
+ Quality           Trace J2
+ Demand Model      PDA
+ Minimum Pressure  5
+ Required Pressure 20
+ Pressure Exponent 0.5
+ Emitter Exponent  0.6
+ Backflow Allowed  No
+ Demand Multiplier 1.2
+ CheckFreq         3
+ MaxCheck          12
+ DampLimit         0.01
+
+[END]
