@@ -1,0 +1,5 @@
+BEGIN griddata
+  STRT
+    INTERNAL FACTOR 1.0
+      8.0 8.0 9.0
+END griddata

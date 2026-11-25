@@ -95,6 +95,10 @@ Look something up.
 - [Medical imaging](Medical-imaging)
 - [Molecular structures](Molecular-structures)
 - [Tetrahedral FEM](Tetrahedral-FEM)
+- [Finite-volume flow](Finite-volume-flow)
+- [Pipe networks](Pipe-networks)
+- [Open channels](Open-channels)
+- [Groundwater flow](Groundwater-flow)
 - [Survival analysis](Survival-analysis)
 - [Diagnostic tests](Diagnostic-tests)
 - [Meta-analysis](Meta-analysis)
@@ -174,6 +178,7 @@ Look something up.
 Understand why.
 
 - [Why a software rasterizer](Why-a-software-rasterizer)
+- [Why the engineering solvers are original code](Why-the-engineering-solvers-are-original-code)
 - [Why the scene graph is an array](Why-the-scene-graph-is-an-array)
 - [Why color is linear](Why-color-is-linear)
 - [Why a normal is not a color](Why-a-normal-is-not-a-color)

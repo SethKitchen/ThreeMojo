@@ -1,0 +1,6 @@
+BEGIN options
+  READASARRAYS
+  FIXED_CELL
+END options
+BEGIN period 1
+END period

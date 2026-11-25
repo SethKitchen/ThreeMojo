@@ -1,0 +1,15 @@
+BEGIN options
+  SAVE_FLOWS
+  SS_CONFINED_ONLY
+END options
+BEGIN griddata
+  ICONVERT
+    CONSTANT 1
+  SS
+    CONSTANT 0.0001
+  SY
+    CONSTANT 0.1
+END griddata
+BEGIN period 1
+  TRANSIENT
+END period

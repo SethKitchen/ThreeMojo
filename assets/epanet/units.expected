@@ -1,0 +1,1919 @@
+net valve_reversal
+set flow 9 1
+set flow 10 1
+call prvstatus 9 2 50 40 30 = 3
+call psvstatus 10 2 50 40 30 = 2
+call prvstatus 9 2 50 40 49.9996 = 2
+call psvstatus 10 2 50 40 49.9996 = 2
+call prvstatus 9 2 50 40 50.0006 = 2
+call psvstatus 10 2 50 40 50.0006 = 2
+call prvstatus 9 2 50 40 55 = 2
+call psvstatus 10 2 50 40 55 = 2
+call prvstatus 9 2 50 40 70 = 2
+call psvstatus 10 2 50 40 70 = 2
+call prvstatus 9 2 50 49.9996 30 = 2
+call psvstatus 10 2 50 49.9996 30 = 2
+call prvstatus 9 2 50 49.9996 49.9996 = 2
+call psvstatus 10 2 50 49.9996 49.9996 = 2
+call prvstatus 9 2 50 49.9996 50.0006 = 2
+call psvstatus 10 2 50 49.9996 50.0006 = 2
+call prvstatus 9 2 50 49.9996 55 = 2
+call psvstatus 10 2 50 49.9996 55 = 2
+call prvstatus 9 2 50 49.9996 70 = 2
+call psvstatus 10 2 50 49.9996 70 = 2
+call prvstatus 9 2 50 50 30 = 2
+call psvstatus 10 2 50 50 30 = 2
+call prvstatus 9 2 50 50 49.9996 = 2
+call psvstatus 10 2 50 50 49.9996 = 2
+call prvstatus 9 2 50 50 50.0006 = 2
+call psvstatus 10 2 50 50 50.0006 = 2
+call prvstatus 9 2 50 50 55 = 2
+call psvstatus 10 2 50 50 55 = 2
+call prvstatus 9 2 50 50 70 = 2
+call psvstatus 10 2 50 50 70 = 2
+call prvstatus 9 2 50 50.0006 30 = 4
+call psvstatus 10 2 50 50.0006 30 = 4
+call prvstatus 9 2 50 50.0006 49.9996 = 2
+call psvstatus 10 2 50 50.0006 49.9996 = 4
+call prvstatus 9 2 50 50.0006 50.0006 = 2
+call psvstatus 10 2 50 50.0006 50.0006 = 2
+call prvstatus 9 2 50 50.0006 55 = 2
+call psvstatus 10 2 50 50.0006 55 = 2
+call prvstatus 9 2 50 50.0006 70 = 2
+call psvstatus 10 2 50 50.0006 70 = 2
+call prvstatus 9 2 50 60 30 = 4
+call psvstatus 10 2 50 60 30 = 4
+call prvstatus 9 2 50 60 49.9996 = 2
+call psvstatus 10 2 50 60 49.9996 = 4
+call prvstatus 9 2 50 60 50.0006 = 2
+call psvstatus 10 2 50 60 50.0006 = 3
+call prvstatus 9 2 50 60 55 = 2
+call psvstatus 10 2 50 60 55 = 3
+call prvstatus 9 2 50 60 70 = 2
+call psvstatus 10 2 50 60 70 = 2
+call prvstatus 9 3 50 40 30 = 3
+call psvstatus 10 3 50 40 30 = 4
+call prvstatus 9 3 50 40 49.9996 = 3
+call psvstatus 10 3 50 40 49.9996 = 4
+call prvstatus 9 3 50 40 50.0006 = 4
+call psvstatus 10 3 50 40 50.0006 = 4
+call prvstatus 9 3 50 40 55 = 4
+call psvstatus 10 3 50 40 55 = 4
+call prvstatus 9 3 50 40 70 = 4
+call psvstatus 10 3 50 40 70 = 4
+call prvstatus 9 3 50 49.9996 30 = 3
+call psvstatus 10 3 50 49.9996 30 = 3
+call prvstatus 9 3 50 49.9996 49.9996 = 3
+call psvstatus 10 3 50 49.9996 49.9996 = 3
+call prvstatus 9 3 50 49.9996 50.0006 = 4
+call psvstatus 10 3 50 49.9996 50.0006 = 3
+call prvstatus 9 3 50 49.9996 55 = 4
+call psvstatus 10 3 50 49.9996 55 = 3
+call prvstatus 9 3 50 49.9996 70 = 4
+call psvstatus 10 3 50 49.9996 70 = 3
+call prvstatus 9 3 50 50 30 = 3
+call psvstatus 10 3 50 50 30 = 3
+call prvstatus 9 3 50 50 49.9996 = 3
+call psvstatus 10 3 50 50 49.9996 = 3
+call prvstatus 9 3 50 50 50.0006 = 4
+call psvstatus 10 3 50 50 50.0006 = 3
+call prvstatus 9 3 50 50 55 = 4
+call psvstatus 10 3 50 50 55 = 3
+call prvstatus 9 3 50 50 70 = 4
+call psvstatus 10 3 50 50 70 = 3
+call prvstatus 9 3 50 50.0006 30 = 3
+call psvstatus 10 3 50 50.0006 30 = 3
+call prvstatus 9 3 50 50.0006 49.9996 = 3
+call psvstatus 10 3 50 50.0006 49.9996 = 3
+call prvstatus 9 3 50 50.0006 50.0006 = 4
+call psvstatus 10 3 50 50.0006 50.0006 = 3
+call prvstatus 9 3 50 50.0006 55 = 4
+call psvstatus 10 3 50 50.0006 55 = 3
+call prvstatus 9 3 50 50.0006 70 = 4
+call psvstatus 10 3 50 50.0006 70 = 3
+call prvstatus 9 3 50 60 30 = 3
+call psvstatus 10 3 50 60 30 = 3
+call prvstatus 9 3 50 60 49.9996 = 3
+call psvstatus 10 3 50 60 49.9996 = 3
+call prvstatus 9 3 50 60 50.0006 = 4
+call psvstatus 10 3 50 60 50.0006 = 3
+call prvstatus 9 3 50 60 55 = 4
+call psvstatus 10 3 50 60 55 = 3
+call prvstatus 9 3 50 60 70 = 4
+call psvstatus 10 3 50 60 70 = 3
+call prvstatus 9 4 50 40 30 = 3
+call psvstatus 10 4 50 40 30 = 4
+call prvstatus 9 4 50 40 49.9996 = 3
+call psvstatus 10 4 50 40 49.9996 = 4
+call prvstatus 9 4 50 40 50.0006 = 3
+call psvstatus 10 4 50 40 50.0006 = 3
+call prvstatus 9 4 50 40 55 = 3
+call psvstatus 10 4 50 40 55 = 3
+call prvstatus 9 4 50 40 70 = 3
+call psvstatus 10 4 50 40 70 = 3
+call prvstatus 9 4 50 49.9996 30 = 4
+call psvstatus 10 4 50 49.9996 30 = 4
+call prvstatus 9 4 50 49.9996 49.9996 = 4
+call psvstatus 10 4 50 49.9996 49.9996 = 4
+call prvstatus 9 4 50 49.9996 50.0006 = 4
+call psvstatus 10 4 50 49.9996 50.0006 = 3
+call prvstatus 9 4 50 49.9996 55 = 4
+call psvstatus 10 4 50 49.9996 55 = 3
+call prvstatus 9 4 50 49.9996 70 = 4
+call psvstatus 10 4 50 49.9996 70 = 3
+call prvstatus 9 4 50 50 30 = 4
+call psvstatus 10 4 50 50 30 = 4
+call prvstatus 9 4 50 50 49.9996 = 4
+call psvstatus 10 4 50 50 49.9996 = 4
+call prvstatus 9 4 50 50 50.0006 = 4
+call psvstatus 10 4 50 50 50.0006 = 3
+call prvstatus 9 4 50 50 55 = 4
+call psvstatus 10 4 50 50 55 = 3
+call prvstatus 9 4 50 50 70 = 4
+call psvstatus 10 4 50 50 70 = 3
+call prvstatus 9 4 50 50.0006 30 = 4
+call psvstatus 10 4 50 50.0006 30 = 4
+call prvstatus 9 4 50 50.0006 49.9996 = 4
+call psvstatus 10 4 50 50.0006 49.9996 = 4
+call prvstatus 9 4 50 50.0006 50.0006 = 4
+call psvstatus 10 4 50 50.0006 50.0006 = 3
+call prvstatus 9 4 50 50.0006 55 = 4
+call psvstatus 10 4 50 50.0006 55 = 3
+call prvstatus 9 4 50 50.0006 70 = 4
+call psvstatus 10 4 50 50.0006 70 = 3
+call prvstatus 9 4 50 60 30 = 4
+call psvstatus 10 4 50 60 30 = 4
+call prvstatus 9 4 50 60 49.9996 = 4
+call psvstatus 10 4 50 60 49.9996 = 4
+call prvstatus 9 4 50 60 50.0006 = 4
+call psvstatus 10 4 50 60 50.0006 = 3
+call prvstatus 9 4 50 60 55 = 4
+call psvstatus 10 4 50 60 55 = 3
+call prvstatus 9 4 50 60 70 = 4
+call psvstatus 10 4 50 60 70 = 3
+call prvstatus 9 7 50 40 30 = 7
+call psvstatus 10 7 50 40 30 = 7
+call prvstatus 9 7 50 40 49.9996 = 7
+call psvstatus 10 7 50 40 49.9996 = 7
+call prvstatus 9 7 50 40 50.0006 = 7
+call psvstatus 10 7 50 40 50.0006 = 7
+call prvstatus 9 7 50 40 55 = 7
+call psvstatus 10 7 50 40 55 = 7
+call prvstatus 9 7 50 40 70 = 7
+call psvstatus 10 7 50 40 70 = 7
+call prvstatus 9 7 50 49.9996 30 = 7
+call psvstatus 10 7 50 49.9996 30 = 7
+call prvstatus 9 7 50 49.9996 49.9996 = 7
+call psvstatus 10 7 50 49.9996 49.9996 = 7
+call prvstatus 9 7 50 49.9996 50.0006 = 7
+call psvstatus 10 7 50 49.9996 50.0006 = 7
+call prvstatus 9 7 50 49.9996 55 = 7
+call psvstatus 10 7 50 49.9996 55 = 7
+call prvstatus 9 7 50 49.9996 70 = 7
+call psvstatus 10 7 50 49.9996 70 = 7
+call prvstatus 9 7 50 50 30 = 7
+call psvstatus 10 7 50 50 30 = 7
+call prvstatus 9 7 50 50 49.9996 = 7
+call psvstatus 10 7 50 50 49.9996 = 7
+call prvstatus 9 7 50 50 50.0006 = 7
+call psvstatus 10 7 50 50 50.0006 = 7
+call prvstatus 9 7 50 50 55 = 7
+call psvstatus 10 7 50 50 55 = 7
+call prvstatus 9 7 50 50 70 = 7
+call psvstatus 10 7 50 50 70 = 7
+call prvstatus 9 7 50 50.0006 30 = 7
+call psvstatus 10 7 50 50.0006 30 = 7
+call prvstatus 9 7 50 50.0006 49.9996 = 7
+call psvstatus 10 7 50 50.0006 49.9996 = 7
+call prvstatus 9 7 50 50.0006 50.0006 = 7
+call psvstatus 10 7 50 50.0006 50.0006 = 7
+call prvstatus 9 7 50 50.0006 55 = 7
+call psvstatus 10 7 50 50.0006 55 = 7
+call prvstatus 9 7 50 50.0006 70 = 7
+call psvstatus 10 7 50 50.0006 70 = 7
+call prvstatus 9 7 50 60 30 = 7
+call psvstatus 10 7 50 60 30 = 7
+call prvstatus 9 7 50 60 49.9996 = 7
+call psvstatus 10 7 50 60 49.9996 = 7
+call prvstatus 9 7 50 60 50.0006 = 7
+call psvstatus 10 7 50 60 50.0006 = 7
+call prvstatus 9 7 50 60 55 = 7
+call psvstatus 10 7 50 60 55 = 7
+call prvstatus 9 7 50 60 70 = 7
+call psvstatus 10 7 50 60 70 = 7
+set flow 9 1e-05
+set flow 10 1e-05
+call prvstatus 9 2 50 40 30 = 3
+call psvstatus 10 2 50 40 30 = 2
+call prvstatus 9 2 50 40 49.9996 = 2
+call psvstatus 10 2 50 40 49.9996 = 2
+call prvstatus 9 2 50 40 50.0006 = 2
+call psvstatus 10 2 50 40 50.0006 = 2
+call prvstatus 9 2 50 40 55 = 2
+call psvstatus 10 2 50 40 55 = 2
+call prvstatus 9 2 50 40 70 = 2
+call psvstatus 10 2 50 40 70 = 2
+call prvstatus 9 2 50 49.9996 30 = 2
+call psvstatus 10 2 50 49.9996 30 = 2
+call prvstatus 9 2 50 49.9996 49.9996 = 2
+call psvstatus 10 2 50 49.9996 49.9996 = 2
+call prvstatus 9 2 50 49.9996 50.0006 = 2
+call psvstatus 10 2 50 49.9996 50.0006 = 2
+call prvstatus 9 2 50 49.9996 55 = 2
+call psvstatus 10 2 50 49.9996 55 = 2
+call prvstatus 9 2 50 49.9996 70 = 2
+call psvstatus 10 2 50 49.9996 70 = 2
+call prvstatus 9 2 50 50 30 = 2
+call psvstatus 10 2 50 50 30 = 2
+call prvstatus 9 2 50 50 49.9996 = 2
+call psvstatus 10 2 50 50 49.9996 = 2
+call prvstatus 9 2 50 50 50.0006 = 2
+call psvstatus 10 2 50 50 50.0006 = 2
+call prvstatus 9 2 50 50 55 = 2
+call psvstatus 10 2 50 50 55 = 2
+call prvstatus 9 2 50 50 70 = 2
+call psvstatus 10 2 50 50 70 = 2
+call prvstatus 9 2 50 50.0006 30 = 4
+call psvstatus 10 2 50 50.0006 30 = 4
+call prvstatus 9 2 50 50.0006 49.9996 = 2
+call psvstatus 10 2 50 50.0006 49.9996 = 4
+call prvstatus 9 2 50 50.0006 50.0006 = 2
+call psvstatus 10 2 50 50.0006 50.0006 = 2
+call prvstatus 9 2 50 50.0006 55 = 2
+call psvstatus 10 2 50 50.0006 55 = 2
+call prvstatus 9 2 50 50.0006 70 = 2
+call psvstatus 10 2 50 50.0006 70 = 2
+call prvstatus 9 2 50 60 30 = 4
+call psvstatus 10 2 50 60 30 = 4
+call prvstatus 9 2 50 60 49.9996 = 2
+call psvstatus 10 2 50 60 49.9996 = 4
+call prvstatus 9 2 50 60 50.0006 = 2
+call psvstatus 10 2 50 60 50.0006 = 3
+call prvstatus 9 2 50 60 55 = 2
+call psvstatus 10 2 50 60 55 = 3
+call prvstatus 9 2 50 60 70 = 2
+call psvstatus 10 2 50 60 70 = 2
+call prvstatus 9 3 50 40 30 = 3
+call psvstatus 10 3 50 40 30 = 4
+call prvstatus 9 3 50 40 49.9996 = 3
+call psvstatus 10 3 50 40 49.9996 = 4
+call prvstatus 9 3 50 40 50.0006 = 4
+call psvstatus 10 3 50 40 50.0006 = 4
+call prvstatus 9 3 50 40 55 = 4
+call psvstatus 10 3 50 40 55 = 4
+call prvstatus 9 3 50 40 70 = 4
+call psvstatus 10 3 50 40 70 = 4
+call prvstatus 9 3 50 49.9996 30 = 3
+call psvstatus 10 3 50 49.9996 30 = 3
+call prvstatus 9 3 50 49.9996 49.9996 = 3
+call psvstatus 10 3 50 49.9996 49.9996 = 3
+call prvstatus 9 3 50 49.9996 50.0006 = 4
+call psvstatus 10 3 50 49.9996 50.0006 = 3
+call prvstatus 9 3 50 49.9996 55 = 4
+call psvstatus 10 3 50 49.9996 55 = 3
+call prvstatus 9 3 50 49.9996 70 = 4
+call psvstatus 10 3 50 49.9996 70 = 3
+call prvstatus 9 3 50 50 30 = 3
+call psvstatus 10 3 50 50 30 = 3
+call prvstatus 9 3 50 50 49.9996 = 3
+call psvstatus 10 3 50 50 49.9996 = 3
+call prvstatus 9 3 50 50 50.0006 = 4
+call psvstatus 10 3 50 50 50.0006 = 3
+call prvstatus 9 3 50 50 55 = 4
+call psvstatus 10 3 50 50 55 = 3
+call prvstatus 9 3 50 50 70 = 4
+call psvstatus 10 3 50 50 70 = 3
+call prvstatus 9 3 50 50.0006 30 = 3
+call psvstatus 10 3 50 50.0006 30 = 3
+call prvstatus 9 3 50 50.0006 49.9996 = 3
+call psvstatus 10 3 50 50.0006 49.9996 = 3
+call prvstatus 9 3 50 50.0006 50.0006 = 4
+call psvstatus 10 3 50 50.0006 50.0006 = 3
+call prvstatus 9 3 50 50.0006 55 = 4
+call psvstatus 10 3 50 50.0006 55 = 3
+call prvstatus 9 3 50 50.0006 70 = 4
+call psvstatus 10 3 50 50.0006 70 = 3
+call prvstatus 9 3 50 60 30 = 3
+call psvstatus 10 3 50 60 30 = 3
+call prvstatus 9 3 50 60 49.9996 = 3
+call psvstatus 10 3 50 60 49.9996 = 3
+call prvstatus 9 3 50 60 50.0006 = 4
+call psvstatus 10 3 50 60 50.0006 = 3
+call prvstatus 9 3 50 60 55 = 4
+call psvstatus 10 3 50 60 55 = 3
+call prvstatus 9 3 50 60 70 = 4
+call psvstatus 10 3 50 60 70 = 3
+call prvstatus 9 4 50 40 30 = 3
+call psvstatus 10 4 50 40 30 = 4
+call prvstatus 9 4 50 40 49.9996 = 3
+call psvstatus 10 4 50 40 49.9996 = 4
+call prvstatus 9 4 50 40 50.0006 = 3
+call psvstatus 10 4 50 40 50.0006 = 3
+call prvstatus 9 4 50 40 55 = 3
+call psvstatus 10 4 50 40 55 = 3
+call prvstatus 9 4 50 40 70 = 3
+call psvstatus 10 4 50 40 70 = 3
+call prvstatus 9 4 50 49.9996 30 = 4
+call psvstatus 10 4 50 49.9996 30 = 4
+call prvstatus 9 4 50 49.9996 49.9996 = 4
+call psvstatus 10 4 50 49.9996 49.9996 = 4
+call prvstatus 9 4 50 49.9996 50.0006 = 4
+call psvstatus 10 4 50 49.9996 50.0006 = 3
+call prvstatus 9 4 50 49.9996 55 = 4
+call psvstatus 10 4 50 49.9996 55 = 3
+call prvstatus 9 4 50 49.9996 70 = 4
+call psvstatus 10 4 50 49.9996 70 = 3
+call prvstatus 9 4 50 50 30 = 4
+call psvstatus 10 4 50 50 30 = 4
+call prvstatus 9 4 50 50 49.9996 = 4
+call psvstatus 10 4 50 50 49.9996 = 4
+call prvstatus 9 4 50 50 50.0006 = 4
+call psvstatus 10 4 50 50 50.0006 = 3
+call prvstatus 9 4 50 50 55 = 4
+call psvstatus 10 4 50 50 55 = 3
+call prvstatus 9 4 50 50 70 = 4
+call psvstatus 10 4 50 50 70 = 3
+call prvstatus 9 4 50 50.0006 30 = 4
+call psvstatus 10 4 50 50.0006 30 = 4
+call prvstatus 9 4 50 50.0006 49.9996 = 4
+call psvstatus 10 4 50 50.0006 49.9996 = 4
+call prvstatus 9 4 50 50.0006 50.0006 = 4
+call psvstatus 10 4 50 50.0006 50.0006 = 3
+call prvstatus 9 4 50 50.0006 55 = 4
+call psvstatus 10 4 50 50.0006 55 = 3
+call prvstatus 9 4 50 50.0006 70 = 4
+call psvstatus 10 4 50 50.0006 70 = 3
+call prvstatus 9 4 50 60 30 = 4
+call psvstatus 10 4 50 60 30 = 4
+call prvstatus 9 4 50 60 49.9996 = 4
+call psvstatus 10 4 50 60 49.9996 = 4
+call prvstatus 9 4 50 60 50.0006 = 4
+call psvstatus 10 4 50 60 50.0006 = 3
+call prvstatus 9 4 50 60 55 = 4
+call psvstatus 10 4 50 60 55 = 3
+call prvstatus 9 4 50 60 70 = 4
+call psvstatus 10 4 50 60 70 = 3
+call prvstatus 9 7 50 40 30 = 7
+call psvstatus 10 7 50 40 30 = 7
+call prvstatus 9 7 50 40 49.9996 = 7
+call psvstatus 10 7 50 40 49.9996 = 7
+call prvstatus 9 7 50 40 50.0006 = 7
+call psvstatus 10 7 50 40 50.0006 = 7
+call prvstatus 9 7 50 40 55 = 7
+call psvstatus 10 7 50 40 55 = 7
+call prvstatus 9 7 50 40 70 = 7
+call psvstatus 10 7 50 40 70 = 7
+call prvstatus 9 7 50 49.9996 30 = 7
+call psvstatus 10 7 50 49.9996 30 = 7
+call prvstatus 9 7 50 49.9996 49.9996 = 7
+call psvstatus 10 7 50 49.9996 49.9996 = 7
+call prvstatus 9 7 50 49.9996 50.0006 = 7
+call psvstatus 10 7 50 49.9996 50.0006 = 7
+call prvstatus 9 7 50 49.9996 55 = 7
+call psvstatus 10 7 50 49.9996 55 = 7
+call prvstatus 9 7 50 49.9996 70 = 7
+call psvstatus 10 7 50 49.9996 70 = 7
+call prvstatus 9 7 50 50 30 = 7
+call psvstatus 10 7 50 50 30 = 7
+call prvstatus 9 7 50 50 49.9996 = 7
+call psvstatus 10 7 50 50 49.9996 = 7
+call prvstatus 9 7 50 50 50.0006 = 7
+call psvstatus 10 7 50 50 50.0006 = 7
+call prvstatus 9 7 50 50 55 = 7
+call psvstatus 10 7 50 50 55 = 7
+call prvstatus 9 7 50 50 70 = 7
+call psvstatus 10 7 50 50 70 = 7
+call prvstatus 9 7 50 50.0006 30 = 7
+call psvstatus 10 7 50 50.0006 30 = 7
+call prvstatus 9 7 50 50.0006 49.9996 = 7
+call psvstatus 10 7 50 50.0006 49.9996 = 7
+call prvstatus 9 7 50 50.0006 50.0006 = 7
+call psvstatus 10 7 50 50.0006 50.0006 = 7
+call prvstatus 9 7 50 50.0006 55 = 7
+call psvstatus 10 7 50 50.0006 55 = 7
+call prvstatus 9 7 50 50.0006 70 = 7
+call psvstatus 10 7 50 50.0006 70 = 7
+call prvstatus 9 7 50 60 30 = 7
+call psvstatus 10 7 50 60 30 = 7
+call prvstatus 9 7 50 60 49.9996 = 7
+call psvstatus 10 7 50 60 49.9996 = 7
+call prvstatus 9 7 50 60 50.0006 = 7
+call psvstatus 10 7 50 60 50.0006 = 7
+call prvstatus 9 7 50 60 55 = 7
+call psvstatus 10 7 50 60 55 = 7
+call prvstatus 9 7 50 60 70 = 7
+call psvstatus 10 7 50 60 70 = 7
+set flow 9 -1e-05
+set flow 10 -1e-05
+call prvstatus 9 2 50 40 30 = 3
+call psvstatus 10 2 50 40 30 = 2
+call prvstatus 9 2 50 40 49.9996 = 2
+call psvstatus 10 2 50 40 49.9996 = 2
+call prvstatus 9 2 50 40 50.0006 = 2
+call psvstatus 10 2 50 40 50.0006 = 2
+call prvstatus 9 2 50 40 55 = 2
+call psvstatus 10 2 50 40 55 = 2
+call prvstatus 9 2 50 40 70 = 2
+call psvstatus 10 2 50 40 70 = 2
+call prvstatus 9 2 50 49.9996 30 = 2
+call psvstatus 10 2 50 49.9996 30 = 2
+call prvstatus 9 2 50 49.9996 49.9996 = 2
+call psvstatus 10 2 50 49.9996 49.9996 = 2
+call prvstatus 9 2 50 49.9996 50.0006 = 2
+call psvstatus 10 2 50 49.9996 50.0006 = 2
+call prvstatus 9 2 50 49.9996 55 = 2
+call psvstatus 10 2 50 49.9996 55 = 2
+call prvstatus 9 2 50 49.9996 70 = 2
+call psvstatus 10 2 50 49.9996 70 = 2
+call prvstatus 9 2 50 50 30 = 2
+call psvstatus 10 2 50 50 30 = 2
+call prvstatus 9 2 50 50 49.9996 = 2
+call psvstatus 10 2 50 50 49.9996 = 2
+call prvstatus 9 2 50 50 50.0006 = 2
+call psvstatus 10 2 50 50 50.0006 = 2
+call prvstatus 9 2 50 50 55 = 2
+call psvstatus 10 2 50 50 55 = 2
+call prvstatus 9 2 50 50 70 = 2
+call psvstatus 10 2 50 50 70 = 2
+call prvstatus 9 2 50 50.0006 30 = 4
+call psvstatus 10 2 50 50.0006 30 = 4
+call prvstatus 9 2 50 50.0006 49.9996 = 2
+call psvstatus 10 2 50 50.0006 49.9996 = 4
+call prvstatus 9 2 50 50.0006 50.0006 = 2
+call psvstatus 10 2 50 50.0006 50.0006 = 2
+call prvstatus 9 2 50 50.0006 55 = 2
+call psvstatus 10 2 50 50.0006 55 = 2
+call prvstatus 9 2 50 50.0006 70 = 2
+call psvstatus 10 2 50 50.0006 70 = 2
+call prvstatus 9 2 50 60 30 = 4
+call psvstatus 10 2 50 60 30 = 4
+call prvstatus 9 2 50 60 49.9996 = 2
+call psvstatus 10 2 50 60 49.9996 = 4
+call prvstatus 9 2 50 60 50.0006 = 2
+call psvstatus 10 2 50 60 50.0006 = 3
+call prvstatus 9 2 50 60 55 = 2
+call psvstatus 10 2 50 60 55 = 3
+call prvstatus 9 2 50 60 70 = 2
+call psvstatus 10 2 50 60 70 = 2
+call prvstatus 9 3 50 40 30 = 3
+call psvstatus 10 3 50 40 30 = 4
+call prvstatus 9 3 50 40 49.9996 = 3
+call psvstatus 10 3 50 40 49.9996 = 4
+call prvstatus 9 3 50 40 50.0006 = 4
+call psvstatus 10 3 50 40 50.0006 = 4
+call prvstatus 9 3 50 40 55 = 4
+call psvstatus 10 3 50 40 55 = 4
+call prvstatus 9 3 50 40 70 = 4
+call psvstatus 10 3 50 40 70 = 4
+call prvstatus 9 3 50 49.9996 30 = 3
+call psvstatus 10 3 50 49.9996 30 = 3
+call prvstatus 9 3 50 49.9996 49.9996 = 3
+call psvstatus 10 3 50 49.9996 49.9996 = 3
+call prvstatus 9 3 50 49.9996 50.0006 = 4
+call psvstatus 10 3 50 49.9996 50.0006 = 3
+call prvstatus 9 3 50 49.9996 55 = 4
+call psvstatus 10 3 50 49.9996 55 = 3
+call prvstatus 9 3 50 49.9996 70 = 4
+call psvstatus 10 3 50 49.9996 70 = 3
+call prvstatus 9 3 50 50 30 = 3
+call psvstatus 10 3 50 50 30 = 3
+call prvstatus 9 3 50 50 49.9996 = 3
+call psvstatus 10 3 50 50 49.9996 = 3
+call prvstatus 9 3 50 50 50.0006 = 4
+call psvstatus 10 3 50 50 50.0006 = 3
+call prvstatus 9 3 50 50 55 = 4
+call psvstatus 10 3 50 50 55 = 3
+call prvstatus 9 3 50 50 70 = 4
+call psvstatus 10 3 50 50 70 = 3
+call prvstatus 9 3 50 50.0006 30 = 3
+call psvstatus 10 3 50 50.0006 30 = 3
+call prvstatus 9 3 50 50.0006 49.9996 = 3
+call psvstatus 10 3 50 50.0006 49.9996 = 3
+call prvstatus 9 3 50 50.0006 50.0006 = 4
+call psvstatus 10 3 50 50.0006 50.0006 = 3
+call prvstatus 9 3 50 50.0006 55 = 4
+call psvstatus 10 3 50 50.0006 55 = 3
+call prvstatus 9 3 50 50.0006 70 = 4
+call psvstatus 10 3 50 50.0006 70 = 3
+call prvstatus 9 3 50 60 30 = 3
+call psvstatus 10 3 50 60 30 = 3
+call prvstatus 9 3 50 60 49.9996 = 3
+call psvstatus 10 3 50 60 49.9996 = 3
+call prvstatus 9 3 50 60 50.0006 = 4
+call psvstatus 10 3 50 60 50.0006 = 3
+call prvstatus 9 3 50 60 55 = 4
+call psvstatus 10 3 50 60 55 = 3
+call prvstatus 9 3 50 60 70 = 4
+call psvstatus 10 3 50 60 70 = 3
+call prvstatus 9 4 50 40 30 = 3
+call psvstatus 10 4 50 40 30 = 4
+call prvstatus 9 4 50 40 49.9996 = 3
+call psvstatus 10 4 50 40 49.9996 = 4
+call prvstatus 9 4 50 40 50.0006 = 3
+call psvstatus 10 4 50 40 50.0006 = 3
+call prvstatus 9 4 50 40 55 = 3
+call psvstatus 10 4 50 40 55 = 3
+call prvstatus 9 4 50 40 70 = 3
+call psvstatus 10 4 50 40 70 = 3
+call prvstatus 9 4 50 49.9996 30 = 4
+call psvstatus 10 4 50 49.9996 30 = 4
+call prvstatus 9 4 50 49.9996 49.9996 = 4
+call psvstatus 10 4 50 49.9996 49.9996 = 4
+call prvstatus 9 4 50 49.9996 50.0006 = 4
+call psvstatus 10 4 50 49.9996 50.0006 = 3
+call prvstatus 9 4 50 49.9996 55 = 4
+call psvstatus 10 4 50 49.9996 55 = 3
+call prvstatus 9 4 50 49.9996 70 = 4
+call psvstatus 10 4 50 49.9996 70 = 3
+call prvstatus 9 4 50 50 30 = 4
+call psvstatus 10 4 50 50 30 = 4
+call prvstatus 9 4 50 50 49.9996 = 4
+call psvstatus 10 4 50 50 49.9996 = 4
+call prvstatus 9 4 50 50 50.0006 = 4
+call psvstatus 10 4 50 50 50.0006 = 3
+call prvstatus 9 4 50 50 55 = 4
+call psvstatus 10 4 50 50 55 = 3
+call prvstatus 9 4 50 50 70 = 4
+call psvstatus 10 4 50 50 70 = 3
+call prvstatus 9 4 50 50.0006 30 = 4
+call psvstatus 10 4 50 50.0006 30 = 4
+call prvstatus 9 4 50 50.0006 49.9996 = 4
+call psvstatus 10 4 50 50.0006 49.9996 = 4
+call prvstatus 9 4 50 50.0006 50.0006 = 4
+call psvstatus 10 4 50 50.0006 50.0006 = 3
+call prvstatus 9 4 50 50.0006 55 = 4
+call psvstatus 10 4 50 50.0006 55 = 3
+call prvstatus 9 4 50 50.0006 70 = 4
+call psvstatus 10 4 50 50.0006 70 = 3
+call prvstatus 9 4 50 60 30 = 4
+call psvstatus 10 4 50 60 30 = 4
+call prvstatus 9 4 50 60 49.9996 = 4
+call psvstatus 10 4 50 60 49.9996 = 4
+call prvstatus 9 4 50 60 50.0006 = 4
+call psvstatus 10 4 50 60 50.0006 = 3
+call prvstatus 9 4 50 60 55 = 4
+call psvstatus 10 4 50 60 55 = 3
+call prvstatus 9 4 50 60 70 = 4
+call psvstatus 10 4 50 60 70 = 3
+call prvstatus 9 7 50 40 30 = 7
+call psvstatus 10 7 50 40 30 = 7
+call prvstatus 9 7 50 40 49.9996 = 7
+call psvstatus 10 7 50 40 49.9996 = 7
+call prvstatus 9 7 50 40 50.0006 = 7
+call psvstatus 10 7 50 40 50.0006 = 7
+call prvstatus 9 7 50 40 55 = 7
+call psvstatus 10 7 50 40 55 = 7
+call prvstatus 9 7 50 40 70 = 7
+call psvstatus 10 7 50 40 70 = 7
+call prvstatus 9 7 50 49.9996 30 = 7
+call psvstatus 10 7 50 49.9996 30 = 7
+call prvstatus 9 7 50 49.9996 49.9996 = 7
+call psvstatus 10 7 50 49.9996 49.9996 = 7
+call prvstatus 9 7 50 49.9996 50.0006 = 7
+call psvstatus 10 7 50 49.9996 50.0006 = 7
+call prvstatus 9 7 50 49.9996 55 = 7
+call psvstatus 10 7 50 49.9996 55 = 7
+call prvstatus 9 7 50 49.9996 70 = 7
+call psvstatus 10 7 50 49.9996 70 = 7
+call prvstatus 9 7 50 50 30 = 7
+call psvstatus 10 7 50 50 30 = 7
+call prvstatus 9 7 50 50 49.9996 = 7
+call psvstatus 10 7 50 50 49.9996 = 7
+call prvstatus 9 7 50 50 50.0006 = 7
+call psvstatus 10 7 50 50 50.0006 = 7
+call prvstatus 9 7 50 50 55 = 7
+call psvstatus 10 7 50 50 55 = 7
+call prvstatus 9 7 50 50 70 = 7
+call psvstatus 10 7 50 50 70 = 7
+call prvstatus 9 7 50 50.0006 30 = 7
+call psvstatus 10 7 50 50.0006 30 = 7
+call prvstatus 9 7 50 50.0006 49.9996 = 7
+call psvstatus 10 7 50 50.0006 49.9996 = 7
+call prvstatus 9 7 50 50.0006 50.0006 = 7
+call psvstatus 10 7 50 50.0006 50.0006 = 7
+call prvstatus 9 7 50 50.0006 55 = 7
+call psvstatus 10 7 50 50.0006 55 = 7
+call prvstatus 9 7 50 50.0006 70 = 7
+call psvstatus 10 7 50 50.0006 70 = 7
+call prvstatus 9 7 50 60 30 = 7
+call psvstatus 10 7 50 60 30 = 7
+call prvstatus 9 7 50 60 49.9996 = 7
+call psvstatus 10 7 50 60 49.9996 = 7
+call prvstatus 9 7 50 60 50.0006 = 7
+call psvstatus 10 7 50 60 50.0006 = 7
+call prvstatus 9 7 50 60 55 = 7
+call psvstatus 10 7 50 60 55 = 7
+call prvstatus 9 7 50 60 70 = 7
+call psvstatus 10 7 50 60 70 = 7
+set flow 9 -1
+set flow 10 -1
+call prvstatus 9 2 50 40 30 = 3
+call psvstatus 10 2 50 40 30 = 2
+call prvstatus 9 2 50 40 49.9996 = 2
+call psvstatus 10 2 50 40 49.9996 = 2
+call prvstatus 9 2 50 40 50.0006 = 2
+call psvstatus 10 2 50 40 50.0006 = 2
+call prvstatus 9 2 50 40 55 = 2
+call psvstatus 10 2 50 40 55 = 2
+call prvstatus 9 2 50 40 70 = 2
+call psvstatus 10 2 50 40 70 = 2
+call prvstatus 9 2 50 49.9996 30 = 2
+call psvstatus 10 2 50 49.9996 30 = 2
+call prvstatus 9 2 50 49.9996 49.9996 = 2
+call psvstatus 10 2 50 49.9996 49.9996 = 2
+call prvstatus 9 2 50 49.9996 50.0006 = 2
+call psvstatus 10 2 50 49.9996 50.0006 = 2
+call prvstatus 9 2 50 49.9996 55 = 2
+call psvstatus 10 2 50 49.9996 55 = 2
+call prvstatus 9 2 50 49.9996 70 = 2
+call psvstatus 10 2 50 49.9996 70 = 2
+call prvstatus 9 2 50 50 30 = 2
+call psvstatus 10 2 50 50 30 = 2
+call prvstatus 9 2 50 50 49.9996 = 2
+call psvstatus 10 2 50 50 49.9996 = 2
+call prvstatus 9 2 50 50 50.0006 = 2
+call psvstatus 10 2 50 50 50.0006 = 2
+call prvstatus 9 2 50 50 55 = 2
+call psvstatus 10 2 50 50 55 = 2
+call prvstatus 9 2 50 50 70 = 2
+call psvstatus 10 2 50 50 70 = 2
+call prvstatus 9 2 50 50.0006 30 = 4
+call psvstatus 10 2 50 50.0006 30 = 4
+call prvstatus 9 2 50 50.0006 49.9996 = 2
+call psvstatus 10 2 50 50.0006 49.9996 = 4
+call prvstatus 9 2 50 50.0006 50.0006 = 2
+call psvstatus 10 2 50 50.0006 50.0006 = 2
+call prvstatus 9 2 50 50.0006 55 = 2
+call psvstatus 10 2 50 50.0006 55 = 2
+call prvstatus 9 2 50 50.0006 70 = 2
+call psvstatus 10 2 50 50.0006 70 = 2
+call prvstatus 9 2 50 60 30 = 4
+call psvstatus 10 2 50 60 30 = 4
+call prvstatus 9 2 50 60 49.9996 = 2
+call psvstatus 10 2 50 60 49.9996 = 4
+call prvstatus 9 2 50 60 50.0006 = 2
+call psvstatus 10 2 50 60 50.0006 = 3
+call prvstatus 9 2 50 60 55 = 2
+call psvstatus 10 2 50 60 55 = 3
+call prvstatus 9 2 50 60 70 = 2
+call psvstatus 10 2 50 60 70 = 2
+call prvstatus 9 3 50 40 30 = 2
+call psvstatus 10 3 50 40 30 = 2
+call prvstatus 9 3 50 40 49.9996 = 2
+call psvstatus 10 3 50 40 49.9996 = 2
+call prvstatus 9 3 50 40 50.0006 = 2
+call psvstatus 10 3 50 40 50.0006 = 2
+call prvstatus 9 3 50 40 55 = 2
+call psvstatus 10 3 50 40 55 = 2
+call prvstatus 9 3 50 40 70 = 2
+call psvstatus 10 3 50 40 70 = 2
+call prvstatus 9 3 50 49.9996 30 = 2
+call psvstatus 10 3 50 49.9996 30 = 2
+call prvstatus 9 3 50 49.9996 49.9996 = 2
+call psvstatus 10 3 50 49.9996 49.9996 = 2
+call prvstatus 9 3 50 49.9996 50.0006 = 2
+call psvstatus 10 3 50 49.9996 50.0006 = 2
+call prvstatus 9 3 50 49.9996 55 = 2
+call psvstatus 10 3 50 49.9996 55 = 2
+call prvstatus 9 3 50 49.9996 70 = 2
+call psvstatus 10 3 50 49.9996 70 = 2
+call prvstatus 9 3 50 50 30 = 2
+call psvstatus 10 3 50 50 30 = 2
+call prvstatus 9 3 50 50 49.9996 = 2
+call psvstatus 10 3 50 50 49.9996 = 2
+call prvstatus 9 3 50 50 50.0006 = 2
+call psvstatus 10 3 50 50 50.0006 = 2
+call prvstatus 9 3 50 50 55 = 2
+call psvstatus 10 3 50 50 55 = 2
+call prvstatus 9 3 50 50 70 = 2
+call psvstatus 10 3 50 50 70 = 2
+call prvstatus 9 3 50 50.0006 30 = 2
+call psvstatus 10 3 50 50.0006 30 = 2
+call prvstatus 9 3 50 50.0006 49.9996 = 2
+call psvstatus 10 3 50 50.0006 49.9996 = 2
+call prvstatus 9 3 50 50.0006 50.0006 = 2
+call psvstatus 10 3 50 50.0006 50.0006 = 2
+call prvstatus 9 3 50 50.0006 55 = 2
+call psvstatus 10 3 50 50.0006 55 = 2
+call prvstatus 9 3 50 50.0006 70 = 2
+call psvstatus 10 3 50 50.0006 70 = 2
+call prvstatus 9 3 50 60 30 = 2
+call psvstatus 10 3 50 60 30 = 2
+call prvstatus 9 3 50 60 49.9996 = 2
+call psvstatus 10 3 50 60 49.9996 = 2
+call prvstatus 9 3 50 60 50.0006 = 2
+call psvstatus 10 3 50 60 50.0006 = 2
+call prvstatus 9 3 50 60 55 = 2
+call psvstatus 10 3 50 60 55 = 2
+call prvstatus 9 3 50 60 70 = 2
+call psvstatus 10 3 50 60 70 = 2
+call prvstatus 9 4 50 40 30 = 2
+call psvstatus 10 4 50 40 30 = 2
+call prvstatus 9 4 50 40 49.9996 = 2
+call psvstatus 10 4 50 40 49.9996 = 2
+call prvstatus 9 4 50 40 50.0006 = 2
+call psvstatus 10 4 50 40 50.0006 = 2
+call prvstatus 9 4 50 40 55 = 2
+call psvstatus 10 4 50 40 55 = 2
+call prvstatus 9 4 50 40 70 = 2
+call psvstatus 10 4 50 40 70 = 2
+call prvstatus 9 4 50 49.9996 30 = 2
+call psvstatus 10 4 50 49.9996 30 = 2
+call prvstatus 9 4 50 49.9996 49.9996 = 2
+call psvstatus 10 4 50 49.9996 49.9996 = 2
+call prvstatus 9 4 50 49.9996 50.0006 = 2
+call psvstatus 10 4 50 49.9996 50.0006 = 2
+call prvstatus 9 4 50 49.9996 55 = 2
+call psvstatus 10 4 50 49.9996 55 = 2
+call prvstatus 9 4 50 49.9996 70 = 2
+call psvstatus 10 4 50 49.9996 70 = 2
+call prvstatus 9 4 50 50 30 = 2
+call psvstatus 10 4 50 50 30 = 2
+call prvstatus 9 4 50 50 49.9996 = 2
+call psvstatus 10 4 50 50 49.9996 = 2
+call prvstatus 9 4 50 50 50.0006 = 2
+call psvstatus 10 4 50 50 50.0006 = 2
+call prvstatus 9 4 50 50 55 = 2
+call psvstatus 10 4 50 50 55 = 2
+call prvstatus 9 4 50 50 70 = 2
+call psvstatus 10 4 50 50 70 = 2
+call prvstatus 9 4 50 50.0006 30 = 2
+call psvstatus 10 4 50 50.0006 30 = 2
+call prvstatus 9 4 50 50.0006 49.9996 = 2
+call psvstatus 10 4 50 50.0006 49.9996 = 2
+call prvstatus 9 4 50 50.0006 50.0006 = 2
+call psvstatus 10 4 50 50.0006 50.0006 = 2
+call prvstatus 9 4 50 50.0006 55 = 2
+call psvstatus 10 4 50 50.0006 55 = 2
+call prvstatus 9 4 50 50.0006 70 = 2
+call psvstatus 10 4 50 50.0006 70 = 2
+call prvstatus 9 4 50 60 30 = 2
+call psvstatus 10 4 50 60 30 = 2
+call prvstatus 9 4 50 60 49.9996 = 2
+call psvstatus 10 4 50 60 49.9996 = 2
+call prvstatus 9 4 50 60 50.0006 = 2
+call psvstatus 10 4 50 60 50.0006 = 2
+call prvstatus 9 4 50 60 55 = 2
+call psvstatus 10 4 50 60 55 = 2
+call prvstatus 9 4 50 60 70 = 2
+call psvstatus 10 4 50 60 70 = 2
+call prvstatus 9 7 50 40 30 = 2
+call psvstatus 10 7 50 40 30 = 2
+call prvstatus 9 7 50 40 49.9996 = 2
+call psvstatus 10 7 50 40 49.9996 = 2
+call prvstatus 9 7 50 40 50.0006 = 2
+call psvstatus 10 7 50 40 50.0006 = 2
+call prvstatus 9 7 50 40 55 = 2
+call psvstatus 10 7 50 40 55 = 2
+call prvstatus 9 7 50 40 70 = 2
+call psvstatus 10 7 50 40 70 = 2
+call prvstatus 9 7 50 49.9996 30 = 2
+call psvstatus 10 7 50 49.9996 30 = 2
+call prvstatus 9 7 50 49.9996 49.9996 = 2
+call psvstatus 10 7 50 49.9996 49.9996 = 2
+call prvstatus 9 7 50 49.9996 50.0006 = 2
+call psvstatus 10 7 50 49.9996 50.0006 = 2
+call prvstatus 9 7 50 49.9996 55 = 2
+call psvstatus 10 7 50 49.9996 55 = 2
+call prvstatus 9 7 50 49.9996 70 = 2
+call psvstatus 10 7 50 49.9996 70 = 2
+call prvstatus 9 7 50 50 30 = 2
+call psvstatus 10 7 50 50 30 = 2
+call prvstatus 9 7 50 50 49.9996 = 2
+call psvstatus 10 7 50 50 49.9996 = 2
+call prvstatus 9 7 50 50 50.0006 = 2
+call psvstatus 10 7 50 50 50.0006 = 2
+call prvstatus 9 7 50 50 55 = 2
+call psvstatus 10 7 50 50 55 = 2
+call prvstatus 9 7 50 50 70 = 2
+call psvstatus 10 7 50 50 70 = 2
+call prvstatus 9 7 50 50.0006 30 = 2
+call psvstatus 10 7 50 50.0006 30 = 2
+call prvstatus 9 7 50 50.0006 49.9996 = 2
+call psvstatus 10 7 50 50.0006 49.9996 = 2
+call prvstatus 9 7 50 50.0006 50.0006 = 2
+call psvstatus 10 7 50 50.0006 50.0006 = 2
+call prvstatus 9 7 50 50.0006 55 = 2
+call psvstatus 10 7 50 50.0006 55 = 2
+call prvstatus 9 7 50 50.0006 70 = 2
+call psvstatus 10 7 50 50.0006 70 = 2
+call prvstatus 9 7 50 60 30 = 2
+call psvstatus 10 7 50 60 30 = 2
+call prvstatus 9 7 50 60 49.9996 = 2
+call psvstatus 10 7 50 60 49.9996 = 2
+call prvstatus 9 7 50 60 50.0006 = 2
+call psvstatus 10 7 50 60 50.0006 = 2
+call prvstatus 9 7 50 60 55 = 2
+call psvstatus 10 7 50 60 55 = 2
+call prvstatus 9 7 50 60 70 = 2
+call psvstatus 10 7 50 60 70 = 2
+net fcv_large_minor_loss
+set km 6 1
+set flow 6 0.5
+set setting 6 0.3
+call fcvstatus 6 3 60 50 = 3
+call fcvstatus 6 3 50 60 = 6
+call fcvstatus 6 3 50 50 = 3
+call fcvstatus 6 3 100 10 = 3
+call fcvstatus 6 3 60 59.9 = 3
+call fcvstatus 6 4 60 50 = 4
+call fcvstatus 6 4 50 60 = 6
+call fcvstatus 6 4 50 50 = 6
+call fcvstatus 6 4 100 10 = 4
+call fcvstatus 6 4 60 59.9 = 6
+call fcvstatus 6 6 60 50 = 4
+call fcvstatus 6 6 50 60 = 6
+call fcvstatus 6 6 50 50 = 4
+call fcvstatus 6 6 100 10 = 4
+call fcvstatus 6 6 60 59.9 = 4
+set flow 6 0.2
+set setting 6 0.3
+call fcvstatus 6 3 60 50 = 3
+call fcvstatus 6 3 50 60 = 6
+call fcvstatus 6 3 50 50 = 3
+call fcvstatus 6 3 100 10 = 3
+call fcvstatus 6 3 60 59.9 = 3
+call fcvstatus 6 4 60 50 = 4
+call fcvstatus 6 4 50 60 = 6
+call fcvstatus 6 4 50 50 = 6
+call fcvstatus 6 4 100 10 = 4
+call fcvstatus 6 4 60 59.9 = 4
+call fcvstatus 6 6 60 50 = 6
+call fcvstatus 6 6 50 60 = 6
+call fcvstatus 6 6 50 50 = 6
+call fcvstatus 6 6 100 10 = 6
+call fcvstatus 6 6 60 59.9 = 6
+set flow 6 1e-05
+set setting 6 0.3
+call fcvstatus 6 3 60 50 = 3
+call fcvstatus 6 3 50 60 = 6
+call fcvstatus 6 3 50 50 = 3
+call fcvstatus 6 3 100 10 = 3
+call fcvstatus 6 3 60 59.9 = 3
+call fcvstatus 6 4 60 50 = 4
+call fcvstatus 6 4 50 60 = 6
+call fcvstatus 6 4 50 50 = 6
+call fcvstatus 6 4 100 10 = 4
+call fcvstatus 6 4 60 59.9 = 4
+call fcvstatus 6 6 60 50 = 6
+call fcvstatus 6 6 50 60 = 6
+call fcvstatus 6 6 50 50 = 6
+call fcvstatus 6 6 100 10 = 6
+call fcvstatus 6 6 60 59.9 = 6
+set flow 6 -1
+set setting 6 0.3
+call fcvstatus 6 3 60 50 = 6
+call fcvstatus 6 3 50 60 = 6
+call fcvstatus 6 3 50 50 = 6
+call fcvstatus 6 3 100 10 = 6
+call fcvstatus 6 3 60 59.9 = 6
+call fcvstatus 6 4 60 50 = 6
+call fcvstatus 6 4 50 60 = 6
+call fcvstatus 6 4 50 50 = 6
+call fcvstatus 6 4 100 10 = 6
+call fcvstatus 6 4 60 59.9 = 6
+call fcvstatus 6 6 60 50 = 6
+call fcvstatus 6 6 50 60 = 6
+call fcvstatus 6 6 50 50 = 6
+call fcvstatus 6 6 100 10 = 6
+call fcvstatus 6 6 60 59.9 = 6
+set km 6 100000
+set flow 6 0.5
+set setting 6 0.3
+call fcvstatus 6 3 60 50 = 3
+call fcvstatus 6 3 50 60 = 6
+call fcvstatus 6 3 50 50 = 3
+call fcvstatus 6 3 100 10 = 3
+call fcvstatus 6 3 60 59.9 = 3
+call fcvstatus 6 4 60 50 = 6
+call fcvstatus 6 4 50 60 = 6
+call fcvstatus 6 4 50 50 = 6
+call fcvstatus 6 4 100 10 = 6
+call fcvstatus 6 4 60 59.9 = 6
+call fcvstatus 6 6 60 50 = 4
+call fcvstatus 6 6 50 60 = 6
+call fcvstatus 6 6 50 50 = 4
+call fcvstatus 6 6 100 10 = 4
+call fcvstatus 6 6 60 59.9 = 4
+set flow 6 0.2
+set setting 6 0.3
+call fcvstatus 6 3 60 50 = 3
+call fcvstatus 6 3 50 60 = 6
+call fcvstatus 6 3 50 50 = 3
+call fcvstatus 6 3 100 10 = 3
+call fcvstatus 6 3 60 59.9 = 3
+call fcvstatus 6 4 60 50 = 6
+call fcvstatus 6 4 50 60 = 6
+call fcvstatus 6 4 50 50 = 6
+call fcvstatus 6 4 100 10 = 6
+call fcvstatus 6 4 60 59.9 = 6
+call fcvstatus 6 6 60 50 = 6
+call fcvstatus 6 6 50 60 = 6
+call fcvstatus 6 6 50 50 = 6
+call fcvstatus 6 6 100 10 = 6
+call fcvstatus 6 6 60 59.9 = 6
+set flow 6 1e-05
+set setting 6 0.3
+call fcvstatus 6 3 60 50 = 3
+call fcvstatus 6 3 50 60 = 6
+call fcvstatus 6 3 50 50 = 3
+call fcvstatus 6 3 100 10 = 3
+call fcvstatus 6 3 60 59.9 = 3
+call fcvstatus 6 4 60 50 = 4
+call fcvstatus 6 4 50 60 = 6
+call fcvstatus 6 4 50 50 = 6
+call fcvstatus 6 4 100 10 = 4
+call fcvstatus 6 4 60 59.9 = 4
+call fcvstatus 6 6 60 50 = 6
+call fcvstatus 6 6 50 60 = 6
+call fcvstatus 6 6 50 50 = 6
+call fcvstatus 6 6 100 10 = 6
+call fcvstatus 6 6 60 59.9 = 6
+set flow 6 -1
+set setting 6 0.3
+call fcvstatus 6 3 60 50 = 6
+call fcvstatus 6 3 50 60 = 6
+call fcvstatus 6 3 50 50 = 6
+call fcvstatus 6 3 100 10 = 6
+call fcvstatus 6 3 60 59.9 = 6
+call fcvstatus 6 4 60 50 = 6
+call fcvstatus 6 4 50 60 = 6
+call fcvstatus 6 4 50 50 = 6
+call fcvstatus 6 4 100 10 = 6
+call fcvstatus 6 4 60 59.9 = 6
+call fcvstatus 6 6 60 50 = 6
+call fcvstatus 6 6 50 60 = 6
+call fcvstatus 6 6 50 50 = 6
+call fcvstatus 6 6 100 10 = 6
+call fcvstatus 6 6 60 59.9 = 6
+call cvstatus 2 -1 -1 = 2
+call cvstatus 2 -1 -1e-05 = 2
+call cvstatus 2 -1 0 = 2
+call cvstatus 2 -1 1 = 2
+call cvstatus 2 -0.0004 -1 = 2
+call cvstatus 2 -0.0004 -1e-05 = 2
+call cvstatus 2 -0.0004 0 = 2
+call cvstatus 2 -0.0004 1 = 2
+call cvstatus 2 0 -1 = 2
+call cvstatus 2 0 -1e-05 = 2
+call cvstatus 2 0 0 = 2
+call cvstatus 2 0 1 = 2
+call cvstatus 2 0.0004 -1 = 2
+call cvstatus 2 0.0004 -1e-05 = 2
+call cvstatus 2 0.0004 0 = 2
+call cvstatus 2 0.0004 1 = 2
+call cvstatus 2 1 -1 = 2
+call cvstatus 2 1 -1e-05 = 3
+call cvstatus 2 1 0 = 3
+call cvstatus 2 1 1 = 3
+call cvstatus 3 -1 -1 = 2
+call cvstatus 3 -1 -1e-05 = 2
+call cvstatus 3 -1 0 = 2
+call cvstatus 3 -1 1 = 2
+call cvstatus 3 -0.0004 -1 = 2
+call cvstatus 3 -0.0004 -1e-05 = 3
+call cvstatus 3 -0.0004 0 = 3
+call cvstatus 3 -0.0004 1 = 3
+call cvstatus 3 0 -1 = 2
+call cvstatus 3 0 -1e-05 = 3
+call cvstatus 3 0 0 = 3
+call cvstatus 3 0 1 = 3
+call cvstatus 3 0.0004 -1 = 2
+call cvstatus 3 0.0004 -1e-05 = 3
+call cvstatus 3 0.0004 0 = 3
+call cvstatus 3 0.0004 1 = 3
+call cvstatus 3 1 -1 = 2
+call cvstatus 3 1 -1e-05 = 3
+call cvstatus 3 1 0 = 3
+call cvstatus 3 1 1 = 3
+net power_pump_dead_end
+set status 5 3
+set setting 5 1
+set flow 5 0
+call pumpstatus 5 10 = 1
+call pumpcoeff 5 = 1e-08 0
+set flow 5 1e-09
+call pumpstatus 5 10 = 1
+call pumpcoeff 5 = 1e-08 1.0000000000000001e-09
+set flow 5 0.1
+call pumpstatus 5 10 = 3
+call pumpcoeff 5 = 0.00022691173133651009 -0.099999999999999992
+set flow 5 1
+call pumpstatus 5 10 = 3
+call pumpcoeff 5 = 0.022691173133651009 -1
+set flow 5 1000000
+call pumpstatus 5 10 = 3
+call pumpcoeff 5 = 1000000 1000000
+set flow 5 1e+12
+call pumpstatus 5 10 = 3
+call pumpcoeff 5 = 1000000 1000000000000
+set status 5 2
+set setting 5 0
+set flow 5 0
+call pumpstatus 5 10 = 1
+call pumpcoeff 5 = 1e-08 0
+set flow 5 1e-09
+call pumpstatus 5 10 = 1
+call pumpcoeff 5 = 1e-08 1.0000000000000001e-09
+set flow 5 0.1
+call pumpstatus 5 10 = 3
+call pumpcoeff 5 = 1e-08 0.10000000000000001
+set flow 5 1
+call pumpstatus 5 10 = 3
+call pumpcoeff 5 = 1e-08 1
+set flow 5 1000000
+call pumpstatus 5 10 = 3
+call pumpcoeff 5 = 1e-08 1000000
+set flow 5 1e+12
+call pumpstatus 5 10 = 3
+call pumpcoeff 5 = 1e-08 1000000000000
+net rules_pump_beyond_shutoff
+set setting 6 0.5
+call pumpstatus 6 50 = 3
+call pumpstatus 6 199.9 = 0
+call pumpstatus 6 200.0006 = 0
+call pumpstatus 6 300 = 0
+set flow 6 0
+call pumpcoeff 6 = 1e-08 0
+set flow 6 1e-09
+call pumpcoeff 6 = 1e-08 1.0000000000000001e-09
+set flow 6 0.5
+call pumpcoeff 6 = 1e-08 0.5
+set flow 6 3
+call pumpcoeff 6 = 1e-08 3
+set setting 6 1
+call pumpstatus 6 50 = 3
+call pumpstatus 6 199.9 = 3
+call pumpstatus 6 200.0006 = 3
+call pumpstatus 6 300 = 0
+set flow 6 0
+call pumpcoeff 6 = 1e-08 0
+set flow 6 1e-09
+call pumpcoeff 6 = 1e-08 1.0000000000000001e-09
+set flow 6 0.5
+call pumpcoeff 6 = 1e-08 0.5
+set flow 6 3
+call pumpcoeff 6 = 1e-08 3
+set setting 6 1.2
+call pumpstatus 6 50 = 3
+call pumpstatus 6 199.9 = 3
+call pumpstatus 6 200.0006 = 3
+call pumpstatus 6 300 = 0
+set flow 6 0
+call pumpcoeff 6 = 1e-08 0
+set flow 6 1e-09
+call pumpcoeff 6 = 1e-08 1.0000000000000001e-09
+set flow 6 0.5
+call pumpcoeff 6 = 1e-08 0.5
+set flow 6 3
+call pumpcoeff 6 = 1e-08 3
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 1 = 1 | 3 3 3 3 3 3 3 3 3 7 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 1 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 2 = 0 | 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 2 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 3 = 0 | 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 3 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 4 = 0 | 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 4 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 5 = 1 | 3 3 3 3 3 3 3 3 3 7 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 5 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 6 = 1 | 3 3 3 3 3 3 3 3 3 4 7 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 6 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 7 = 1 | 3 3 3 3 3 3 3 3 3 4 7 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 7 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 8 = 1 | 3 3 3 3 3 3 3 3 3 4 4 6 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 8 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 9 = 1 | 3 3 3 3 3 3 3 3 3 4 4 6 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 9 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 10 = 0 | 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 10 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 11 = 0 | 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 11 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 12 = 0 | 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 12 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 13 = 0 | 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 13 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 14 = 0 | 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 14 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 4
+set status 11 4
+set status 12 4
+set status 13 4
+set status 14 4
+set status 15 4
+set status 16 4
+call badvalve 15 = 0 | 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net rules_actions
+set status 10 3
+set status 11 3
+set status 12 3
+set status 13 3
+set status 14 3
+set status 15 3
+set status 16 3
+call badvalve 15 = 0 | 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 | 100 100 100 100 100 100 100 100 1 46.157396722824828 69.236095084237249 0.66840302920252836 0 5 50 11.539349180706207
+net base
+call badvalve 1 = 0 | 3 3 3 3 | 100 100 100 100
+net pressure_controls
+set head 1 2000
+set head 2 2000
+set head 3 2000
+call pswitch = 0 | 3 2 3 3 3 3 3 3 3 | 100 100 100 100 100 100 1 92.314793445649656 -10000000000
+net pressure_controls
+set head 1 2000
+set head 2 2000
+set head 3 2000
+set status 2 2
+set setting 7 0.8
+set setting 8 40
+set setting 9 -1e10
+set status 9 3
+call pswitch = 1 | 3 2 3 3 3 3 3 3 3 | 100 100 100 100 100 100 1 40 -10000000000
+net pressure_controls
+set head 1 2000
+set head 2 2000
+set head 3 2000
+set setting 7 1
+set setting 9 -1e10
+set status 9 2
+set status 6 3
+call pswitch = 0 | 3 2 3 3 3 3 3 3 2 | 100 100 100 100 100 100 1 92.314793445649656 -10000000000
+net pressure_controls
+set head 1 2000
+set head 2 2000
+set head 3 2000
+set setting 8 -1e10
+set status 8 2
+call pswitch = 0 | 3 2 3 3 3 3 3 2 3 | 100 100 100 100 100 100 1 -10000000000 -10000000000
+net pressure_controls
+set head 1 -1000
+set head 2 -1000
+set head 3 -1000
+call pswitch = 1 | 3 2 3 3 3 3 3 3 3 | 100 100 100 100 100 100 0.80000000000000004 92.314793445649656 -10000000000
+net pressure_controls
+set head 1 -1000
+set head 2 -1000
+set head 3 -1000
+set status 2 2
+set setting 7 0.8
+set setting 8 40
+set setting 9 -1e10
+set status 9 3
+call pswitch = 1 | 3 2 3 3 3 3 3 4 3 | 100 100 100 100 100 100 0.80000000000000004 92.314793445649656 -10000000000
+net pressure_controls
+set head 1 -1000
+set head 2 -1000
+set head 3 -1000
+set setting 7 1
+set setting 9 -1e10
+set status 9 2
+set status 6 3
+call pswitch = 1 | 3 2 3 3 3 3 3 3 3 | 100 100 100 100 100 100 0.80000000000000004 92.314793445649656 -10000000000
+net pressure_controls
+set head 1 -1000
+set head 2 -1000
+set head 3 -1000
+set setting 8 -1e10
+set status 8 2
+call pswitch = 1 | 3 2 3 3 3 3 3 4 3 | 100 100 100 100 100 100 0.80000000000000004 92.314793445649656 -10000000000
+net pressure_controls
+set head 1 0
+set head 2 2000
+set head 3 -1000
+call pswitch = 1 | 3 2 3 3 3 3 3 3 3 | 100 100 100 100 100 100 0.80000000000000004 92.314793445649656 -10000000000
+net pressure_controls
+set head 1 0
+set head 2 2000
+set head 3 -1000
+set status 2 2
+set setting 7 0.8
+set setting 8 40
+set setting 9 -1e10
+set status 9 3
+call pswitch = 1 | 3 2 3 3 3 3 3 4 3 | 100 100 100 100 100 100 0.80000000000000004 92.314793445649656 -10000000000
+net pressure_controls
+set head 1 0
+set head 2 2000
+set head 3 -1000
+set setting 7 1
+set setting 9 -1e10
+set status 9 2
+set status 6 3
+call pswitch = 1 | 3 2 3 3 3 3 3 3 3 | 100 100 100 100 100 100 0.80000000000000004 92.314793445649656 -10000000000
+net pressure_controls
+set head 1 0
+set head 2 2000
+set head 3 -1000
+set setting 8 -1e10
+set status 8 2
+call pswitch = 1 | 3 2 3 3 3 3 3 4 3 | 100 100 100 100 100 100 0.80000000000000004 92.314793445649656 -10000000000
+net pda_below_minimum
+set fulldemand 1 1
+set demandflow 1 0
+set head 1 10
+call newdemandflows = 0.0013083201196607407 4.1635756864001648e-07 2.7788637846940205e-07 2 | -1.3847119016847448e-07 0.0013080387154410025 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 1 5 99.98014223337691
+call demandcoeffs = | 1.0000000000130193e-09 -5.9235095086815207e-08 0.00024665712157223807 0.020691480738967101 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 1
+set demandflow 1 0
+set head 1 50
+call newdemandflows = 0.001308240090142945 5.8500707964279054e-08 5.8471190168474498e-08 1 | -5.8471190168474498e-08 0.0013080386859232068 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 1 5 99.980141019057442
+call demandcoeffs = | 1.0000000000731152e-09 2.0764904913005131e-08 0.00024665712713841487 0.02069148117638267 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 1
+set demandflow 1 0
+set head 1 80
+call newdemandflows = 0.0013081831477626078 1.5288098317445854e-09 1.5288098315255021e-09 1 | 1.5288098315255021e-09 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 5 99.980140107981683
+call demandcoeffs = | 0.0093490409838475758 0.74078149881376731 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 1
+set demandflow 1 0
+set head 1 200
+call newdemandflows = 0.0013084231477626075 2.4152880983163504e-07 2.4152880983152551e-07 1 | 2.4152880983152551e-07 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 5 99.980136463678605
+call demandcoeffs = | 231.53714636176159 18346.099344414772 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 1
+set demandflow 1 0.002
+set head 1 10
+call newdemandflows = 0.39930818161895287 0.40000000000000002 0.40000000000000002 1 | -0.39800000000000002 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 5 106.02360939584614
+call demandcoeffs = | 9.9999994488807142e-10 -0.39799990979663552 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 1
+set demandflow 1 0.002
+set head 1 50
+call newdemandflows = 0.39930818161895287 0.40000000000000002 0.40000000000000002 1 | -0.39800000000000002 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 5 106.02360939584614
+call demandcoeffs = | 9.9999994488807142e-10 -0.39799990979663552 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 1
+set demandflow 1 0.002
+set head 1 80
+call newdemandflows = 0.40330818161895288 0.40000000000000002 0.40000000000000002 1 | 0.40200000000000002 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 5 93.875932481976591
+call demandcoeffs = | 0.017964344941956881 1.6244245439469318 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 1
+set demandflow 1 0.002
+set head 1 200
+call newdemandflows = 0.40330818161895288 0.40000000000000002 0.40000000000000002 1 | 0.40200000000000002 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 5 93.875932481976591
+call demandcoeffs = | 0.017964344941956881 1.6244245439469318 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 1
+set demandflow 1 0.5
+set head 1 10
+call newdemandflows = 0.10130818161895275 0.40000000000000002 0.40000000000000002 1 | 0.099999999999999978 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 5 98.461680516962332
+call demandcoeffs = | 0.072216666666666679 5.772166666666668 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 1
+set demandflow 1 0.5
+set head 1 50
+call newdemandflows = 0.10130818161895275 0.40000000000000002 0.40000000000000002 1 | 0.099999999999999978 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 5 98.461680516962332
+call demandcoeffs = | 0.072216666666666679 5.772166666666668 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 1
+set demandflow 1 0.5
+set head 1 80
+call newdemandflows = 0.26234151495228619 0.23896666666666666 0.23896666666666666 1 | 0.26103333333333334 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 5 96.016454384841339
+call demandcoeffs = | 0.027665687651640913 2.3226377240028944 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 1
+set demandflow 1 0.5
+set head 1 200
+call newdemandflows = 0.90130818161895276 0.40000000000000002 0.40000000000000002 1 | 0.90000000000000002 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 5 86.314003603092772
+call demandcoeffs = | 0.0080240740740740741 1.0857962962962964 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 1
+set demandflow 1 0.9
+set head 1 10
+call newdemandflows = 0.50130818161895274 0.40000000000000002 0.40000000000000002 1 | 0.5 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 5 92.387842060027552
+call demandcoeffs = | 0.014443333333333334 1.3944333333333334 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 1
+set demandflow 1 0.9
+set head 1 50
+call newdemandflows = 0.50130818161895274 0.40000000000000002 0.40000000000000002 1 | 0.5 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 5 92.387842060027552
+call demandcoeffs = | 0.014443333333333334 1.3944333333333334 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 1
+set demandflow 1 0.9
+set head 1 80
+call newdemandflows = 0.50130818161895274 0.40000000000000002 0.40000000000000002 1 | 0.5 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 5 92.387842060027552
+call demandcoeffs = | 0.014443333333333334 1.3944333333333334 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 1
+set demandflow 1 0.9
+set head 1 200
+call newdemandflows = 1.3013081816189527 0.40000000000000002 0.40000000000000002 1 | 1.3 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9999981998618514e-10 0.30000014224091609 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 1
+set demandflow 1 1.5
+set head 1 10
+call newdemandflows = 1.1013081816189527 0.40000000000000002 0.40000000000000002 1 | 1.1000000000000001 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9999984768061411e-10 0.10000014777980681 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 1
+set demandflow 1 1.5
+set head 1 50
+call newdemandflows = 1.1013081816189527 0.40000000000000002 0.40000000000000002 1 | 1.1000000000000001 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9999984768061411e-10 0.10000014777980681 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 1
+set demandflow 1 1.5
+set head 1 80
+call newdemandflows = 1.1013081816189527 0.40000000000000002 0.40000000000000002 1 | 1.1000000000000001 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9999984768061411e-10 0.10000014777980681 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 1
+set demandflow 1 1.5
+set head 1 200
+call newdemandflows = 1.1013081816189527 0.40000000000000002 0.40000000000000002 1 | 1.1000000000000001 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9999984768061411e-10 0.10000014777980681 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 0.01
+set demandflow 1 0
+set head 1 10
+call newdemandflows = 0.0013083200901429447 1.3847119016858401e-07 1.3847119016847448e-07 1 | -1.3847119016847448e-07 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 1 5 99.97662891735682
+call demandcoeffs = | 9.9999999982129431e-10 -5.9235095088732552e-08 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 0.01
+set demandflow 1 0
+set head 1 50
+call newdemandflows = 0.0013082400901429446 5.8471190168584043e-08 5.8471190168474498e-08 1 | -5.8471190168474498e-08 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 1 5 99.976627487667486
+call demandcoeffs = | 9.9999999999215694e-10 2.0764904908957174e-08 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 0.01
+set demandflow 1 0
+set head 1 80
+call newdemandflows = 0.0013081831477626078 1.5288098316350477e-09 1.5288098315255021e-09 1 | 1.5288098315255021e-09 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 5 99.976626415400517
+call demandcoeffs = | 0.0093488559726009716 0.74076683924508513 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 0.01
+set demandflow 1 0
+set head 1 200
+call newdemandflows = 0.0013084231477626075 2.4152880983163504e-07 2.4152880983152551e-07 1 | 2.4152880983152551e-07 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 5 99.976622126332572
+call demandcoeffs = | 2.952153713390766 233.91713245369564 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 0.01
+set demandflow 1 0.002
+set head 1 10
+call newdemandflows = 0.0033081816189527761 0.0040000000000000001 0.0040000000000000001 1 | -0.002 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 5 100.01236867558158
+call demandcoeffs = | 9.9999723056386641e-10 -0.0019999179946882215 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 0.01
+set demandflow 1 0.002
+set head 1 50
+call newdemandflows = 0.0033081816189527761 0.0040000000000000001 0.0040000000000000001 1 | -0.002 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 5 100.01236867558158
+call demandcoeffs = | 9.9999723056386641e-10 -0.0019999179946882215 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 0.01
+set demandflow 1 0.002
+set head 1 80
+call newdemandflows = 0.0025840149522861097 0.00072416666666666669 0.00072416666666666658 1 | 0.0012758333333333335 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 5 99.953825876677087
+call demandcoeffs = | 0.00056603527106466355 0.045488341225778356 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 0.01
+set demandflow 1 0.002
+set head 1 200
+call newdemandflows = 0.0073081816189527757 0.0040000000000000001 0.0040000000000000001 1 | 0.0060000000000000001 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 5 99.869399744143479
+call demandcoeffs = | 0.00012036111111111112 0.012536944444444446 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 0.01
+set demandflow 1 0.5
+set head 1 10
+call newdemandflows = 0.49730818161895285 0.0040000000000000001 0.0040000000000000001 1 | 0.496 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9931364933754254e-10 0.48583672772404646 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 0.01
+set demandflow 1 0.5
+set head 1 50
+call newdemandflows = 0.49730818161895285 0.0040000000000000001 0.0040000000000000001 1 | 0.496 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9931364933754254e-10 0.48583672772404646 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 0.01
+set demandflow 1 0.5
+set head 1 80
+call newdemandflows = 0.49730818161895285 0.0040000000000000001 0.0040000000000000001 1 | 0.496 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9931364933754254e-10 0.48583672772404646 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 0.01
+set demandflow 1 0.5
+set head 1 200
+call newdemandflows = 0.49730818161895285 0.0040000000000000001 0.0040000000000000001 1 | 0.496 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9931364933754254e-10 0.48583672772404646 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 0.01
+set demandflow 1 0.9
+set head 1 10
+call newdemandflows = 0.89730818161895276 0.0040000000000000001 0.0040000000000000001 1 | 0.89600000000000002 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9876082663190102e-10 0.88545732120268039 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 0.01
+set demandflow 1 0.9
+set head 1 50
+call newdemandflows = 0.89730818161895276 0.0040000000000000001 0.0040000000000000001 1 | 0.89600000000000002 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9876082663190102e-10 0.88545732120268039 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 0.01
+set demandflow 1 0.9
+set head 1 80
+call newdemandflows = 0.89730818161895276 0.0040000000000000001 0.0040000000000000001 1 | 0.89600000000000002 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9876082663190102e-10 0.88545732120268039 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 0.01
+set demandflow 1 0.9
+set head 1 200
+call newdemandflows = 0.89730818161895276 0.0040000000000000001 0.0040000000000000001 1 | 0.89600000000000002 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9876082663190102e-10 0.88545732120268039 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 0.01
+set demandflow 1 1.5
+set head 1 10
+call newdemandflows = 1.4973081816189526 0.0040000000000000001 0.0040000000000000001 1 | 1.496 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9793273845825041e-10 1.4844744400544823 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 0.01
+set demandflow 1 1.5
+set head 1 50
+call newdemandflows = 1.4973081816189526 0.0040000000000000001 0.0040000000000000001 1 | 1.496 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9793273845825041e-10 1.4844744400544823 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+set fulldemand 1 0.01
+set demandflow 1 1.5
+set head 1 80
+call newdemandflows = 1.4973081816189526 0.0040000000000000001 0.0040000000000000001 1 | 1.496 0.0013080386859232066 -5.2922809220084907e-09 -9.2292280966506892e-08 -4.5348467681047593e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9793273845825041e-10 1.4844744400544823 0.00024665712713841493 0.020691481176382674 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874713e-08
+set fulldemand 1 0.01
+set demandflow 1 1.5
+set head 1 200
+call newdemandflows = 1.4973081816189526 0.0040000000000000001 0.0040000000000000001 1 | 1.496 0.0013080386859232063 -5.2922809220084899e-09 -9.2292280966506892e-08 -4.53484676810476e-08
+call pdaconverged = 0 4 99.976584596782331
+call demandcoeffs = | 9.9793273845825041e-10 1.4844744400544823 0.00024665712713841493 0.020691481176382677 1.0000000089167186e-09 7.1943814756468475e-08 1.0000000000293397e-09 7.1943814117131911e-08 1.0000000001215665e-09 8.3887627407874687e-08
+net pda_small_exponent
+set fulldemand 1 1
+set demandflow 1 0
+call demandcoeffs = | 2.0000000000000001e-09 1.9998999999999999e-08 9.2850262087406819e-07 7.7814623319653648e-05 1.3903075390601385e-06 9.9915126175732102e-05
+set fulldemand 1 1
+set demandflow 1 1e-08
+call demandcoeffs = | 0.39999999354920429 3.9999999254920429 9.2850262087406819e-07 7.7814623319653648e-05 1.3903075390601385e-06 9.9915126175732102e-05
+set fulldemand 1 1
+set demandflow 1 0.0002
+call demandcoeffs = | 0 0 9.2850262087406819e-07 7.7814623319653648e-05 1.3903075390601385e-06 9.9915126175732102e-05
+set fulldemand 1 1
+set demandflow 1 0.002
+call demandcoeffs = | 1.709067151161319e+263 1.7090671511613189e+264 9.2850262087406819e-07 7.7814623319653648e-05 1.3903075390601385e-06 9.9915126175732102e-05
+set fulldemand 1 1
+set demandflow 1 0.5
+call demandcoeffs = | 6.8659125634861486e+25 6.8659125634861489e+26 9.2850262087406819e-07 7.7814623319653648e-05 1.3903075390601385e-06 9.9915126175732102e-05
+net leakage_large
+call leakagehasconverged = 1
+call hasconverged 0 0 = 1
+set head 1 0
+call leakagehasconverged = 0
+call hasconverged 0 0 = 0
+set head 1 50
+call leakagehasconverged = 0
+call hasconverged 0 0 = 0
+set head 1 120
+call leakagehasconverged = 0
+call hasconverged 0 0 = 0
+set head 1 500
+call leakagehasconverged = 0
+call hasconverged 0 0 = 0
+net emitter_no_pressure
+set emitterflow 4 0
+call emittercoeffs = | 0 0 0 0 0 0 0 -nan
+set emitterflow 4 1e-12
+call emittercoeffs = | 0 0 0 0 0 0 1.6977835786214361e-10 1.59621656390415e-08
+set emitterflow 4 1e-06
+call emittercoeffs = | 0 0 0 0 0 0 1.6977835786214378e-06 0.00016259165639041515
+set emitterflow 4 0.001
+call emittercoeffs = | 0 0 0 0 0 0 0.0001697783578621439 0.018959165639041528
+set emitterflow 4 1
+call emittercoeffs = | 0 0 0 0 0 0 0.016977835786214396 4.5959165639041535
+set emitterflow 4 -0.001
+call emittercoeffs = | 0 0 0 0 0 0 0.0001697783578621439 0.012959165639041526
+set emitterflow 4 1000000
+call emittercoeffs = | 0 0 0 0 0 0 169.77835786214413 3015959.1656390415
+net options_backflow_yes
+set emitterflow 3 0
+call emittercoeffs = | 0 0 0 0 20000000 160000000
+set emitterflow 3 1e-13
+call emittercoeffs = | 0 0 0 0 20000000 160000000
+set emitterflow 3 -1e-13
+call emittercoeffs = | 0 0 0 0 20000000 160000000
+set emitterflow 3 1e-12
+call emittercoeffs = | 0 0 0 0 4301827.526076341 34414620.208610728
+set emitterflow 3 1e-09
+call emittercoeffs = | 0 0 0 0 4301.8275260763403 34414.620208611217
+set emitterflow 3 1e-06
+call emittercoeffs = | 0 0 0 0 4.301827526076341 34.414620708610727
+set emitterflow 3 0.01
+call emittercoeffs = | 0 0 0 0 0.00043018275260763407 0.0084414620208610718
+set emitterflow 3 -0.01
+call emittercoeffs = | 0 0 0 0 0.00043018275260763407 -0.0015585379791389277
+set emitterflow 3 1
+call emittercoeffs = | 0 0 0 0 4.3018275260763407e-06 0.50003441462020859
+net pbv_open_no_setting
+set setting 6 -1e10
+set status 6 2
+set flow 6 0.01
+call pbvcoeff 6 = 1e-08 0.01
+set setting 6 -1e10
+set status 6 2
+set flow 6 1
+call pbvcoeff 6 = 1e-08 1
+set setting 6 -1e10
+set status 6 2
+set flow 6 10
+call pbvcoeff 6 = 1e-08 10
+set setting 6 -1e10
+set status 6 3
+set flow 6 0.01
+call pbvcoeff 6 = 1000000 0.01
+set setting 6 -1e10
+set status 6 3
+set flow 6 1
+call pbvcoeff 6 = 1000000 1
+set setting 6 -1e10
+set status 6 3
+set flow 6 10
+call pbvcoeff 6 = 1000000 10
+set setting 6 0
+set status 6 2
+set flow 6 0.01
+call pbvcoeff 6 = 1e-08 0.01
+set setting 6 0
+set status 6 2
+set flow 6 1
+call pbvcoeff 6 = 1e-08 1
+set setting 6 0
+set status 6 2
+set flow 6 10
+call pbvcoeff 6 = 1e-08 10
+set setting 6 0
+set status 6 3
+set flow 6 0.01
+call pbvcoeff 6 = 1000000 0.01
+set setting 6 0
+set status 6 3
+set flow 6 1
+call pbvcoeff 6 = 1000000 1
+set setting 6 0
+set status 6 3
+set flow 6 10
+call pbvcoeff 6 = 1000000 10
+set setting 6 5
+set status 6 2
+set flow 6 0.01
+call pbvcoeff 6 = 1e-08 0.01
+set setting 6 5
+set status 6 2
+set flow 6 1
+call pbvcoeff 6 = 1e-08 1
+set setting 6 5
+set status 6 2
+set flow 6 10
+call pbvcoeff 6 = 1e-08 10
+set setting 6 5
+set status 6 3
+set flow 6 0.01
+call pbvcoeff 6 = 100000000 500000000
+set setting 6 5
+set status 6 3
+set flow 6 1
+call pbvcoeff 6 = 100000000 500000000
+set setting 6 5
+set status 6 3
+set flow 6 10
+call pbvcoeff 6 = 100000000 500000000
+set setting 6 1e-06
+set status 6 2
+set flow 6 0.01
+call pbvcoeff 6 = 1e-08 0.01
+set setting 6 1e-06
+set status 6 2
+set flow 6 1
+call pbvcoeff 6 = 1e-08 1
+set setting 6 1e-06
+set status 6 2
+set flow 6 10
+call pbvcoeff 6 = 1e-08 10
+set setting 6 1e-06
+set status 6 3
+set flow 6 0.01
+call pbvcoeff 6 = 100000000 100
+set setting 6 1e-06
+set status 6 3
+set flow 6 1
+call pbvcoeff 6 = 100000000 100
+set setting 6 1e-06
+set status 6 3
+set flow 6 10
+call pbvcoeff 6 = 100000000 100
+net base
+set head 5 52
+set nodedemand 5 -1
+call tanktimestep 3600 = 0 3600
+set head 5 52
+set nodedemand 5 -1e-07
+call tanktimestep 3600 = 0 3600
+set head 5 52
+set nodedemand 5 1e-07
+call tanktimestep 3600 = 0 3600
+set head 5 52
+set nodedemand 5 1
+call tanktimestep 3600 = 0 3600
+set head 5 51.9
+set nodedemand 5 -1
+call tanktimestep 3600 = 0 3600
+set head 5 51.9
+set nodedemand 5 -1e-07
+call tanktimestep 3600 = 0 3600
+set head 5 51.9
+set nodedemand 5 1e-07
+call tanktimestep 3600 = 0 3600
+set head 5 51.9
+set nodedemand 5 1
+call tanktimestep 3600 = 0 3600
+set head 5 60
+set nodedemand 5 -1
+call tanktimestep 3600 = 0 3600
+set head 5 60
+set nodedemand 5 -1e-07
+call tanktimestep 3600 = 0 3600
+set head 5 60
+set nodedemand 5 1e-07
+call tanktimestep 3600 = 0 3600
+set head 5 60
+set nodedemand 5 1
+call tanktimestep 3600 = 0 3600
+set head 5 70
+set nodedemand 5 -1
+call tanktimestep 3600 = 0 3600
+set head 5 70
+set nodedemand 5 -1e-07
+call tanktimestep 3600 = 0 3600
+set head 5 70
+set nodedemand 5 1e-07
+call tanktimestep 3600 = 0 3600
+set head 5 70
+set nodedemand 5 1
+call tanktimestep 3600 = 0 3600
+set head 5 70.1
+set nodedemand 5 -1
+call tanktimestep 3600 = 0 3600
+set head 5 70.1
+set nodedemand 5 -1e-07
+call tanktimestep 3600 = 0 3600
+set head 5 70.1
+set nodedemand 5 1e-07
+call tanktimestep 3600 = 0 3600
+set head 5 70.1
+set nodedemand 5 1
+call tanktimestep 3600 = 0 3600
+set tankv 2 0
+set head 5 60
+set nodedemand 5 -1
+call tanktimestep 3600 = 0 3600
+set nodedemand 5 1
+call tanktimestep 3600 = 0 3600
+call tanktimestep 1 = 0 1
+set tankv 2 100
+set head 5 60
+set nodedemand 5 -1
+call tanktimestep 3600 = 0 3600
+set nodedemand 5 1
+call tanktimestep 3600 = 0 3600
+call tanktimestep 1 = 0 1
+set tankv 2 18000
+set head 5 60
+set nodedemand 5 -1
+call tanktimestep 3600 = 0 3600
+set nodedemand 5 1
+call tanktimestep 3600 = 0 3600
+call tanktimestep 1 = 0 1

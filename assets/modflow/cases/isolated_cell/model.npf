@@ -1,0 +1,10 @@
+BEGIN options
+  SAVE_FLOWS
+
+END options
+BEGIN griddata
+  ICELLTYPE
+    CONSTANT 0
+  K
+    CONSTANT 1.0
+END griddata

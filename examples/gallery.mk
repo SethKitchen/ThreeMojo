@@ -342,3 +342,9 @@ $(call gallery,ablation,ablation)
 # A synthetic vessel that winds through soft tissue: its projection with
 # the centered path, one axial slice, and the vessel straightened.
 $(call gallery,vessel,vessel)
+# The flow in a lid-driven cavity at a Reynolds number of 400: the speed,
+# and streamlines of the main vortex and the two corner vortices.
+$(call gallery,cavity-flow,cavity_flow)
+# Air between a hot wall and a cold wall at a Rayleigh number of 100000:
+# the temperature, and the streamlines of the natural convection.
+$(call gallery,buoyant-cavity,buoyant_cavity)

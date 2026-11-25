@@ -8,6 +8,11 @@
 A `StructuralModel` holds nodes, supports, frame members, three-node
 shells, loads and added masses. `StaticSolver` gives displacements,
 reactions, member end forces and shell resultants. `solve_modes` gives
-natural frequencies and mode shapes. See the wiki pages Frame analysis and
-Shell analysis.
+natural frequencies and mode shapes. `solve_load_history` and
+`solve_ground_motion` follow a model in time. `solve_buckling` gives the
+buckling factors of a load case and `solve_second_order` its P-Delta
+response. `load_step`, `displacement_step` and `dynamic_step` follow a
+truss whose bars yield. `solve_response_spectrum` combines the modes for a response
+spectrum. `moment_curvature` follows a fiber section of steel and
+concrete. See the wiki pages Frame analysis and Shell analysis.
 """

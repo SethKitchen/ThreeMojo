@@ -447,6 +447,46 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_cfd_boundary_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'BoundaryKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_cfd_convection_scheme_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 36,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ConvectionScheme'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_cfd_side_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Side'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_cfd_thermal_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 29,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ThermalKind'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_check_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -591,6 +631,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_combination_rule_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 33,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'CombinationRule'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_combine_is_not_a_bare_int.mojo": {
     "errors": [
@@ -2936,6 +2986,86 @@
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'MissileKind'"
     ]
+  },
+  "tests/compile_fail/a_modflow_boundary_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'BoundaryKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_modflow_cell_averaging_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'CellAveraging'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_modflow_inner_convergence_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 34,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'InnerConvergence'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_modflow_linear_acceleration_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 36,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LinearAcceleration'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_modflow_preconditioner_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 32,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Preconditioner'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_modflow_reordering_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Reordering'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_modflow_scaling_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Scaling'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_modflow_under_relaxation_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 33,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'UnderRelaxation'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_molecule_atom_id_is_not_a_bare_int.mojo": {
     "errors": [
@@ -6522,6 +6652,196 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/an_epanet_control_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 29,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ControlType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_curve_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'CurveType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_demand_model_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 29,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'DemandModel'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_flow_direction_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FlowDirection'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_flow_units_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FlowUnits'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_head_loss_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'HeadLossType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_link_index_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LinkIndex'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_link_property_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LinkProperty'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_link_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LinkType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_mix_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'MixType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_node_index_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'NodeIndex'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_node_property_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'NodeProperty'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_node_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'NodeType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_pressure_units_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'PressureUnits'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_pump_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'PumpType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_quality_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 29,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'QualityType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_source_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SourceType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_status_type_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'StatusType'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_epanet_unit_system_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'UnitSystem'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/an_errand_state_is_not_a_bare_int.mojo": {
     "errors": [

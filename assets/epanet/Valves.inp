@@ -1,0 +1,93 @@
+[TITLE]
+Valves: every valve type, a check valve and simple controls (GPM, H-W)
+
+[JUNCTIONS]
+;ID   Elev  Demand  Pattern
+ J1   100   0
+ J2   90    50      P1
+ J3   80    100     P1
+ J4   85    80      P1
+ J5   95    40      P1
+ J6   90    60
+ J7   85    30      P1
+ J8   80    50
+ J9   75    20      P1
+
+[RESERVOIRS]
+;ID   Head
+ R1   250
+
+[TANKS]
+;ID   Elev  Init  Min  Max  Diam  MinVol
+ T1   150   15    5    30   40    0
+
+[PIPES]
+;ID   N1   N2   Length  Diam  Rough  Minor  Status
+ P1   R1   J1   1000    16    120    0      Open
+ P2   J2   J3   800     10    110    0      Open
+ P3   J4   T1   1200    12    100    0      Open
+ P5   J5   J6   600     8     120    0      Open
+ P7   J7   J3   700     8     120    0.5    Open
+ P8   J8   J4   900     8     120    0      Open
+ P9   J3   J9   500     6     110    0      CV
+ P10  J9   J4   500     6     110    0      Open
+ P11  J1   J6   1500    6     120    0      Open
+
+[VALVES]
+;ID   N1   N2   Diam  Type  Setting  Minor  Curve
+ V1   J1   J2   12    PRV   60       0
+ V2   J3   J4   10    PSV   20       0
+ V3   J1   J5   8     FCV   300      0
+ V4   J6   J7   8     TCV   5        0
+ V5   J5   J8   8     PBV   5        0
+ V6   J6   J8   6     GPV   G1       0
+ V7   J2   J9   6     PCV   60       2      C1
+
+[CURVES]
+;ID   X     Y
+ G1   0     0
+ G1   100   5
+ G1   300   20
+ C1   0     0
+ C1   20    10
+ C1   60    40
+ C1   80    70
+
+[PATTERNS]
+ P1   0.6  0.8  1.0  1.3  1.5  1.2
+ P1   1.0  0.9  0.7  0.6  0.5  0.8
+
+[CONTROLS]
+ LINK V1 45 AT TIME 6
+ LINK V3 CLOSED IF NODE T1 ABOVE 25
+ LINK V3 OPEN IF NODE T1 BELOW 15
+ LINK V4 10 AT CLOCKTIME 3 PM
+ LINK P11 CLOSED AT TIME 8:30
+ LINK P11 OPEN AT CLOCKTIME 6:00 PM
+ LINK V7 30 IF NODE J3 BELOW 40
+
+[QUALITY]
+ R1   1.0
+
+[REACTIONS]
+ Order Bulk 1
+ Global Bulk -0.5
+ Global Wall -0.3
+
+[TIMES]
+ Duration           24:00
+ Hydraulic Timestep 1:00
+ Quality Timestep   0:05
+ Pattern Timestep   2:00
+ Report Timestep    1:00
+ Start ClockTime    12 AM
+
+[OPTIONS]
+ Units      GPM
+ Headloss   H-W
+ Quality    Chlorine mg/L
+ Trials     60
+ Accuracy   0.001
+ Unbalanced Continue 10
+
+[END]

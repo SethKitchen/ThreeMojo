@@ -11,6 +11,8 @@
 | `vector` | `zeros`, `dot`, `norm`, `axpy` and size and finiteness checks on `List[Float64]` |
 | `dense` | `DenseMatrix`, Gaussian elimination, `inverse`, Cholesky with `cholesky_solve` and `cholesky_inverse`, triangular solves, the Jacobi eigensolver and the Thomas algorithm |
 | `elementary` | `precise_exp`, `precise_power`, `precise_power10`, `precise_log2`, `logistic`, `logit`, `softplus`, `LN2`, `LN10` and `INVERSE_LN2` |
+| `libm` | `glibc_pow` and `glibc_log`, with the bits of glibc on x86-64 on every platform |
+| `libm_data` | The tables of `libm`, as the bits of each double |
 | `distributions` | The normal, t, F, beta, gamma and chi-square tails and quantiles, `inverse_erfc`, `wald_interval`, `ratio_interval`, `Z95`, `MAX_DEGREES`, `MAX_SHAPE` and `MAX_FREEDOM` |
 | `spread` | `PointSpread`, the weighted mean, covariance and principal axes of points, and `descending` |
 | `order` | `ascending_order`, `descending_order`, `sorted_values` and `order_by`, the stable order of values |
@@ -99,6 +101,14 @@ The Float64 `exp` of Mojo 1.2 is off by up to about 3e-11 near -70, and so is a 
 - `precise_power(x, p)` gives `x^p` for an x of 0 or more. At x = 0 it gives 0, 1 or infinity by the sign of p.
 - `precise_power10(x)` gives `10^x`, and `precise_log2(x)` gives `log(x) / ln 2`.
 - `logistic(x)` gives `1 / (1 + e^-x)`, and `logit(p)` gives `ln(p / (1 - p))`. `softplus(x)` gives `ln(1 + e^x)`. None of them overflows. The logistic models and the calibration of a risk model use them.
+
+## Match the C library of another program
+
+Use `glibc_pow(x, y)` and `glibc_log(x)` when a port must give the same doubles as a C or Fortran program that ran on Linux. The EPANET and MODFLOW ports use them, through `cpow` and `clog`.
+
+The C library of each platform rounds some powers and logarithms to the other neighbor of the true value. A solver can amplify that one bit. In one EPANET case, a link changes status, and the heads after it move by up to 11%. The two functions give the bits of glibc's `pow` and `log` on x86-64 on every platform. So a reference made on Linux holds on macOS too.
+
+The code is that of Arm's optimized routines, which glibc compiles. On a processor with fused multiply-add, glibc runs a build in which GCC fuses many products into sums. Mojo fuses products too, so `libm` writes each fused operation as `fma` and keeps each other product apart. `tests/test_numerics_libm.mojo` compares 8055 powers and 6014 logarithms with glibc 2.43, bit for bit. `assets/numerics/make_libm_cases.py` makes the cases on Linux x86-64.
 
 ## Use statistical distributions
 
@@ -216,3 +226,4 @@ Every function raises `Error` for input it cannot use. The table gives the cases
 - Teschner, Heidelberger, Müller, Pomeranets and Gross, "Optimized spatial hashing for collision detection of deformable objects", Vision, Modeling, and Visualization, 2003.
 - Felzenszwalb and Huttenlocher, "Distance transforms of sampled functions", Theory of Computing, 2012.
 - Box and Muller, "A note on the generation of random normal deviates", Annals of Mathematical Statistics, 1958.
+- Arm Limited, "Optimized Routines", `math/pow.c` and `math/log.c`, commit 9a0d5027, <https://github.com/ARM-software/optimized-routines>.

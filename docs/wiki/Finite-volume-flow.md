@@ -1,0 +1,170 @@
+# Finite-volume flow
+
+`extensions/cfd/` solves laminar incompressible flow on a block of cells in two dimensions. It advances the Navier-Stokes equations in time with the PISO algorithm, as the OpenFOAM solver icoFoam does. A checked result is a numerical result. It does not establish engineering validity.
+
+![The flow in a lid-driven cavity at a Reynolds number of 400: the speed, and streamlines of the main vortex and the two corner vortices](out/cavity-flow.png)
+
+`examples/cavity_flow.mojo` makes this picture. The lid of a 1 m cavity moves to the right at 1 m/s, and the Reynolds number is 400. The grid has 48 by 48 cells. The color is the speed, and the white lines are streamlines.
+
+## Modules
+
+| Module | What it gives |
+|---|---|
+| `kinds` | `Side` with `WEST`, `EAST`, `SOUTH` and `NORTH`. `BoundaryKind` with `FIXED_VELOCITY` and `FIXED_PRESSURE`. `ConvectionScheme` with `UPWIND` and `CENTRAL`. `ThermalKind` with `FIXED_TEMPERATURE` and `INSULATED`. |
+| `quantities` | `DynamicViscosity64`, `KinematicViscosity64`, `ThermalDiffusivity64` and their units `PASCAL_SECOND`, `CENTIPOISE`, `SQUARE_METER_PER_SECOND` and `CENTISTOKES` |
+| `flow` | `Grid`, `Boundary`, `FlowCase`, `FlowOptions` and `FlowSolver` |
+| `heat` | `BuoyantCase`, `BuoyantSolver`, `ThermalBoundary`, `fixed_temperature` and `insulated` |
+
+## Set up a case
+
+A `Grid` is a block of equal rectangles. Cell (i, j) is column i from the west and row j from the south. A `FlowCase` holds the grid, the density and the dynamic viscosity of the fluid, and one boundary for each side. A new case has a wall on each side.
+
+```mojo
+var grid = Grid(32, 32, Length64(1, METER), Length64(1, METER))
+var flow = FlowCase(grid, Density64(1, KILOGRAM_PER_CUBIC_METER), DynamicViscosity64(0.01, PASCAL_SECOND))
+flow.set_boundary(NORTH, fixed_velocity(Velocity64(1, METER_PER_SECOND), Velocity64(0, METER_PER_SECOND)))
+```
+
+| Boundary | Meaning |
+|---|---|
+| `wall()` | The velocity is zero. |
+| `fixed_velocity(u, v)` | The velocity is fixed. An inlet has a velocity through the side. A moving wall has a velocity along it. The pressure has no gradient along the normal. |
+| `fixed_pressure(p)` | The pressure is fixed. The velocity has no gradient along the normal, so the fluid can leave or enter. |
+
+`set_scheme(UPWIND)` selects the upwind convection scheme. The default is `CENTRAL`. The central scheme is second order. The upwind scheme is first order, and it stays bounded on a coarse grid at a high Reynolds number.
+
+## Run the flow
+
+`FlowSolver(flow, options)` starts with the fluid at rest. `step(dt)` advances one time step. `run(dt, steps)` advances several. `run_to_steady(dt, tolerance, budget)` advances until the largest change of a velocity in one step is below the tolerance. It returns the number of steps.
+
+```mojo
+var solver = FlowSolver(flow^, default_options())
+var steps = solver.run_to_steady(Duration64(0.1, SECOND), Velocity64(1e-5, METER_PER_SECOND), 2000)
+var speed = solver.velocity_x(16, 16)
+var push = solver.pressure(16, 16)
+```
+
+| Result | Holds |
+|---|---|
+| `velocity_x(i, j)`, `velocity_y(i, j)` | The velocity at the center of a cell |
+| `pressure(i, j)` | The pressure at the center of a cell |
+| `elapsed()`, `change()` | The time, and the largest change of a velocity in the last step |
+| `imbalance()` | The largest net flux that leaves a cell, for a block one meter thick |
+| `u`, `v`, `p`, `flux_x`, `flux_y` | The raw fields. `p` is the pressure over the density. |
+
+If no side has a fixed pressure, the pressure is free by a constant. The solver then holds it near zero in the cell at the south-west corner.
+
+The time step is implicit. For a transient result, keep the Courant number u Δt / Δx near one or below. For a steady result, a Courant number of 5 gives the same flow in fewer steps.
+
+`FlowOptions(correctors, sweeps, pressure_tolerance, pressure_iterations)` sets the inner iterations. `default_options()` gives 2 correctors, 50 sweeps, a tolerance of 1e-8 and a budget of 10000 iterations.
+
+## Carry heat
+
+![Air between a hot wall and a cold wall at a Rayleigh number of 100000: the temperature, and the streamlines of the convection](out/buoyant-cavity.png)
+
+`examples/buoyant_cavity.mojo` makes this picture. The left wall is hot and the right wall is cold. The grid has 40 by 40 cells. The Nusselt number of the hot wall is 4.617. The benchmark of de Vahl Davis gives 4.519.
+
+`extensions/cfd/heat.mojo` adds a temperature that the flow carries, and the buoyancy that the temperature gives. A `BuoyantCase` holds a `FlowCase` and the thermal properties of the fluid. A new case has every side insulated.
+
+```mojo
+var buoyant = BuoyantCase(flow^, ThermalDiffusivity64(2.2e-5, SQUARE_METER_PER_SECOND), ThermalExpansion64(3.4e-3, PER_KELVIN), Acceleration64(9.80665, METER_PER_SECOND_SQUARED), Temperature64(293.15, KELVIN))
+buoyant.set_thermal_boundary(WEST, fixed_temperature(Temperature64(303.15, KELVIN)))
+buoyant.set_thermal_boundary(EAST, fixed_temperature(Temperature64(283.15, KELVIN)))
+var solver = BuoyantSolver(buoyant^, default_options())
+var steps = solver.run_to_steady(Duration64(0.1, SECOND), TemperatureDifference64(1e-5, KELVIN_DIFFERENCE), 5000)
+var warm = solver.temperature(3, 8)
+```
+
+| Thermal boundary | Meaning |
+|---|---|
+| `fixed_temperature(t)` | The side has a fixed temperature. |
+| `insulated()` | No heat crosses the side by conduction. Fluid that enters through it has the temperature of the cell beside it. |
+
+The model is the approximation of Boussinesq. The fluid has one density in every term but the weight. A cell at a temperature T has an upward acceleration of g β (T - T₀). Here β is the expansion coefficient and T₀ is the reference temperature. The gravity acts along -y. The approximation holds for a small temperature range.
+
+Each time step has three parts. First the solver sets the buoyancy of each cell from its temperature. Then `FlowSolver` advances the flow by one PISO step. Last the solver advances the temperature with the new face fluxes, implicit in time.
+
+`BuoyantSolver` has `step`, `run_to_steady`, `temperature(i, j)` and `change()`. Its field `flow` is the `FlowSolver`, with the velocities and the pressure. `wall_gradient(side)` gives the mean temperature gradient at a side of fixed temperature. The Nusselt number of a wall is this gradient times a length over a temperature difference.
+
+`FlowSolver` has a body acceleration per cell in its fields `force_x` and `force_y`. They are zero unless a caller sets them. The solver takes the force at each face, next to the pressure gradient, so the two can balance there. At a wall the pressure gradient along the normal equals the force. So a fluid in stable layers stays at rest, and its pressure is hydrostatic. OpenFOAM gets the same balance with its pressure p_rgh.
+
+The model follows the OpenFOAM solver buoyantBoussinesqPimpleFoam. The code is original.
+
+## The method
+
+The cells hold the velocity and the pressure at their centers. The faces hold the volume flux. Each time step has these parts:
+
+1. The momentum predictor. It is implicit Euler in time, with the old face fluxes and the old pressure gradient. Gauss-Seidel sweeps solve it.
+2. The pressure correctors. Each corrector writes the velocity as H / A - (1 / A) ∇p. It takes the face fluxes from H / A. It solves the pressure equation ∇·((1 / A) ∇p) = ∇·(H / A) by conjugate gradients. Then it corrects the fluxes and the velocity.
+
+The face flux comes from H / A and the pressure difference between the two cells of the face. It does not come from an interpolated velocity. This is the method of Rhie and Chow. It keeps the pressure free of the checkerboard mode on a grid that holds both variables at the cell centers.
+
+The diffusion term uses the difference of the two cell values over their distance. At a side of fixed velocity it uses the half distance to the face.
+
+The equations, the PISO loop and the names H and A follow icoFoam. The code is original and shares no source with OpenFOAM.
+
+## Validation
+
+Each row is a test in `tests/test_cfd_flow.mojo` or `tests/test_cfd_heat.mojo`.
+
+| Case | Reference | Result |
+|---|---|---|
+| Channel between two walls, 3 by 6 cells, pressure drop along it | The exact solution of the finite-volume equations: G y (H - y) / (2 μ) + G Δy² / (8 μ) | Below 1e-8 m/s, with both schemes |
+| The same channel, pressure | Linear along the channel | Below 1e-8 Pa |
+| The same channel, flow rate | G H³ / (12 μ) times 1 + 2 / n² for n cells across | Below 1e-7 |
+| Lid-driven cavity, Reynolds number 100, 8 cells a side | Ghia, Ghia and Shin, tables I and II, 12 values | 0.19 of the lid speed |
+| The same cavity, 16 cells a side | The same 12 values | 0.029 of the lid speed |
+| The same cavity, 8 and 16 cells a side | OpenFOAM icoFoam on the same grid, scheme and time step, each cell | 0.019 and 0.009 of the lid speed |
+| Duct with an inlet and an outlet, upwind scheme | Outlet flux equals inlet flux | Below 1e-8 m²/s |
+| Fluid at rest | Stays at rest | Exact |
+| Cavity with a hot and a cold wall, no gravity | A linear temperature and a Nusselt number of one | Below 1e-7 |
+| The same cavity at a Rayleigh number of 1000, 12 cells a side | de Vahl Davis: a Nusselt number of 1.118, and peak velocities of 3.649 and 3.697 | 0.9%, 1.3% and 2.5% |
+| The same case | OpenFOAM buoyantBoussinesqPimpleFoam on the same grid, scheme and time step, each cell | 0.0013 K, 0.15% in the Nusselt number, 0.09 m/s |
+| The same cavity at a Rayleigh number of 10000, 12 cells, upwind scheme | de Vahl Davis: a Nusselt number of 2.243 | Below 12% |
+| The same case | buoyantBoussinesqPimpleFoam with the upwind scheme, each cell | 0.0024 K, 0.5% in the Nusselt number, 0.62 m/s |
+| Warm fluid above cold fluid, with gravity | At rest, with a linear temperature | Velocities below 1e-6 m/s |
+| Duct with a warm inlet and insulated walls | The inlet temperature in every cell | Below 1e-6 K |
+
+`assets/cfd/make_cavity_reference.py` and `assets/cfd/make_convection_reference.py` run OpenFOAM 2406 in Docker and write the OpenFOAM rows. They use the same grid, scheme and time step as the tests.
+
+The time step matters. From a Courant number of 0.5 to 0.1, the steady flow of icoFoam changes by 0.027 of the lid speed. Its face flux correction depends on the time step. The port has no such term. The largest differences are in the cells at the corners. There OpenFOAM balances the buoyancy with the pressure at the faces, and the port adds it in the cells.
+
+At a Rayleigh number of 10000 with the central scheme, the Nusselt number is 2.325 with 16 cells a side and 2.280 with 24. The benchmark value is 2.243. These grids are too slow for a test under coverage, so no test holds these values.
+
+With 32 cells a side, the cavity has u = -0.2064 at y = 0.484 on the vertical center line. Ghia, Ghia and Shin give -0.2058 at y = 0.5. That grid is too slow for a test under coverage too.
+
+## Errors
+
+Every function raises `Error` for input it cannot use.
+
+| Case | Functions |
+|---|---|
+| A cell count is not positive, the grid has more than 1048576 cells, or a size is not positive and finite | `Grid` |
+| A cell is out of range | `Grid.cell`, the result accessors |
+| A density or a viscosity is not positive and finite | `FlowCase` |
+| A side, a boundary or a scheme is not valid | `set_boundary`, `set_scheme`, `FlowSolver` |
+| A count or a tolerance of the options is not positive | `FlowOptions` |
+| A time step is not positive and finite | `step`, `run`, `run_to_steady` |
+| A diffusivity is not positive, or a thermal property or a thermal boundary is not valid | `BuoyantCase`, `set_thermal_boundary`, `BuoyantSolver` |
+| A wall gradient is asked of an insulated side | `wall_gradient` |
+| The pressure solution does not converge within its budget | `step`, `run`, `run_to_steady` |
+| The flow is not steady within the step budget | `run_to_steady` |
+
+## Limits
+
+- The grid is one block of equal rectangles in two dimensions. It has no grading and no obstacles.
+- The flow is laminar and incompressible, with constant properties. It has no turbulence model. The buoyancy is the approximation of Boussinesq, with the gravity along -y.
+- The buoyancy of a step comes from the temperature at its start. Keep the time step below the period of the buoyancy oscillation, 1 / sqrt(g β dT/dy).
+- Each side has one boundary along its whole length.
+- A side of fixed pressure takes the velocity of the cell beside it. So an inflow through it has no fixed direction.
+- The time scheme is implicit Euler, which is first order.
+
+## References
+
+- Issa, "Solution of the implicitly discretised fluid flow equations by operator-splitting", Journal of Computational Physics 62, 1986: the PISO algorithm.
+- Rhie and Chow, "Numerical study of the turbulent flow past an airfoil with trailing edge separation", AIAA Journal 21, 1983: the face flux.
+- Jasak, "Error analysis and estimation for the finite volume method with applications to fluid flows", PhD thesis, Imperial College, 1996: the OpenFOAM discretization.
+- Ferziger and Peric, "Computational Methods for Fluid Dynamics", 3rd edition, 2002: chapters 7 and 8.
+- de Vahl Davis, "Natural convection of air in a square cavity: a bench mark numerical solution", Int. J. Numer. Methods Fluids 3, 1983.
+- Ghia, Ghia and Shin, "High-Re solutions for incompressible flow using the Navier-Stokes equations and a multigrid method", Journal of Computational Physics 48, 1982.
+- White, "Viscous Fluid Flow", 3rd edition, 2006: plane Poiseuille flow.

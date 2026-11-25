@@ -1,0 +1,21 @@
+BEGIN options
+  LENGTH_UNITS METERS
+END options
+BEGIN dimensions
+  NLAY 4
+  NROW 8
+  NCOL 8
+END dimensions
+BEGIN griddata
+  DELR
+    CONSTANT 40.0
+  DELC
+    CONSTANT 40.0
+  TOP
+    CONSTANT 40.0
+  BOTM LAYERED
+    CONSTANT 30.0
+    CONSTANT 20.0
+    CONSTANT 10.0
+    CONSTANT 0.0
+END griddata

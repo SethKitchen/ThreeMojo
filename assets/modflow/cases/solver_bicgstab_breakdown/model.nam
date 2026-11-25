@@ -1,0 +1,11 @@
+BEGIN options
+  NEWTON UNDER_RELAXATION
+END options
+BEGIN packages
+  DIS6 model.dis dis
+  IC6 model.ic ic
+  NPF6 model.npf npf
+  OC6 model.oc oc
+  WEL6 model.wel1 wel_1
+  RCH6 model.rch2 rch_2
+END packages

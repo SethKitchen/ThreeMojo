@@ -727,6 +727,46 @@ SOFTWARE.
 
 ---
 
+## Arm Optimized Routines
+
+<https://github.com/ARM-software/optimized-routines>
+
+`extensions/numerics/libm.mojo` ports `math/pow.c` and `math/log.c` of
+Arm's optimized routines, commit 9a0d5027, which glibc compiles as its
+`pow` and `log`. `extensions/numerics/libm_data.mojo` holds the values of
+`math/pow_log_data.c`, `math/exp_data.c` and `math/log_data.c`. The port
+follows the build of glibc with fused multiply-add. These files carry this
+notice:
+
+```
+Copyright (c) 2018, Arm Limited.
+SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
+```
+
+The project uses them under the MIT License:
+
+```
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
 ## SculptGL
 
 <https://github.com/stephomi/sculptgl>
@@ -1215,4 +1255,146 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+---
+
+## EPANET
+
+<https://github.com/OpenWaterAnalytics/EPANET>
+
+`extensions/epanet/` ports the hydraulic and water quality engine of OWA
+EPANET 2.3.6, commit 57d8bd8ad60e89b57f2a1ac591f05c8e13589866.
+`assets/epanet/Net1.inp`, `Net2.inp` and `Net3.inp` are the example
+networks of that release. The `.expected` files in `assets/epanet/` are
+outputs of the program, and `epanet_units.c` calls its functions. EPANET is
+distributed under the MIT License, reproduced below with its list of
+authors.
+
+```
+MIT License
+
+Copyright (c) 2019 (See AUTHORS)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice, list of authors, and this permission notice shall
+be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+```
+# Authors ordered alphabetically.
+
+Authors with Contributions in the Public Domain:
+Lewis Rossman <LRossman@cinci.rr.com>
+Michael Tryby <tryby.michael@epa.gov>
+
+Version 2.0
+Lewis Rossman <LRossman@cinci.rr.com>
+
+Authors with Contributions Subject to Copyright (see LICENSE):
+Except where noted.
+
+Version 2.1
+Jinduan Chen <jinduan.uc@gmail.com>
+Maurizio Cingi <mrzcng2@gmail.com>
+Demetrios Eliades <eldemet@gmail.com>
+Will Furnass <will@thearete.co.uk>
+Milad Ghiami <milad.ghiami67@gmail.com>
+Sam Hatchett <samhatchett@gmail.com>
+Mike Kane <muke195@gmail.com>
+Marios Kyriakou <mariosmsk@gmail.com>
+Steffen Macke <sdteffen@sdteffen.de>
+Angela Marchi <angela.marchi@adelaide.edu.au>
+Bryant McDonnell <bemcdonnell@gmail.com>
+Lew Rossman <LRossman@cinci.rr.com>
+Elad Salomons <selad@optiwater.com>
+Feng Shang <fengshang72@gmail.com>
+Yunier Soad <yunier.soad@gmail.com>
+Tom Taxon <tntaxon@anl.gov>
+Michael Tryby <tryby.michael@epa.gov> (Contributions in the Public Domain)
+James Uber <jim@citilogics.com>
+Hyoungmin Woo <hyoungmin.woo@gmail.com>
+
+Version 2.2
+Demetrios Eliades <eldemet@gmail.com>
+Sam Hatchett <samhatchett@gmail.com>
+Abel Heinsbroek <mail@abelheinsbroek.nl>
+Marios Kyriakou <mariosmsk@gmail.com>
+Lewis Rossman <LRossman@cinci.rr.com>
+Elad Salomons <selad@optiwater.com>
+Markus Sunela <markus.sunela@fluidit.fi>
+Michael Tryby <tryby.michael@epa.gov> (Contributions in the Public Domain)
+
+Version 2.3
+Luke Butler <lukepbutler@gmail.com>
+Demetrios Eliades <eldemet@gmail.com>
+Sam Hatchett <samhatchett@gmail.com>
+Abel Heinsbroek <mail@abelheinsbroek.nl>
+Robert Janke <janke.robert@epa.gov>
+Marios Kyriakou <mariosmsk@gmail.com>
+Corey McNeish
+0tkl <tkl.zhaoqing@gmail.com>
+Lewis Rossman <LRossman@cinci.rr.com>
+Elad Salomons <selad@optiwater.com>
+Alex Sinske
+Sahand Tashak
+Yu Chun Tsao
+James Uber <jim@citilogics.com>
+Oscar Vegas Niño <ovegas141279@gmail.com>
+Dennis Zanutto <dennis.zanutto@kwrwater.nl>
+```
+
+## MODFLOW 6
+
+<https://github.com/MODFLOW-ORG/modflow6>
+
+`extensions/groundwater/` ports the groundwater flow (GWF) model and the
+IMS solver of MODFLOW 6.9.0.dev0, commit 59d89e9f. The `expected.txt` files
+in `assets/modflow/cases/` are outputs of that program. MODFLOW 6 is in the
+public domain in the United States, and its authors waive copyright
+worldwide through CC0 1.0 Universal. Its license and disclaimer follow.
+
+The source of MODFLOW 6 bundles some libraries under other licenses, such as
+BLAS, SPARSKIT and the reverse Cuthill-McKee ordering. The port copies no
+code from them. Where the port needs one of their methods, it implements the
+published algorithm.
+
+```
+License
+=======
+
+Unless otherwise noted, This project is in the public domain in the United
+States because it contains materials that originally came from the United
+States Geological Survey, an agency of the United States Department of
+Interior. For more information, see the official USGS copyright policy at
+https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+
+Additionally, we waive copyright and related rights in the work
+worldwide through the CC0 1.0 Universal public domain dedication.
+
+Disclaimer
+----------
+
+This software is preliminary or provisional and is subject to revision. It is
+being provided to meet the need for timely best science. The software has not
+received final approval by the U.S. Geological Survey (USGS). No warranty,
+expressed or implied, is made by the USGS or the U.S. Government as to the
+functionality of the software and related material nor shall the fact of release
+constitute any such warranty. The software is provided on the condition that
+neither the USGS nor the U.S. Government shall be held liable for any damages
+resulting from the authorized or unauthorized use of the software.
 ```
