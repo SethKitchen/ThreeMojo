@@ -110,6 +110,10 @@ Each row is a test suite. Each reference comes from the real EPANET 2.3.6, built
 | `tests/test_epanet_genmmd.mojo` | The ordering of the C routine `genmmd` on 291 graphs: paths, stars, grids, cubes, trees, random graphs and graphs in parts. From `assets/epanet/make_epanet_genmmd.py`. | Each value |
 | `tests/test_epanet.mojo` | The order of the toolkit calls, and their errors | The EPANET error codes |
 
+The references come from EPANET on Linux x86-64 with the GNU C library. The port calls the C library for `pow` and `log`, as EPANET does. On another platform the C library can round one of them differently in the last bit. A case whose links change status can amplify that.
+
+On macOS one case moves by 4.4e-7 of a value. So on a platform other than Linux x86-64, the whole-run suites allow 1e-6 of a value. EPANET itself stops at a relative flow change of 1e-3.
+
 To make a reference again, build EPANET as the docstring of `make_epanet.py` says. Then run the script that the suite names.
 
 ## References

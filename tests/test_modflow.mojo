@@ -11,6 +11,7 @@ Each folder under `assets/modflow/cases/` is a simulation.
 step in `expected.txt`. The port must give the same doubles.
 """
 
+from std.sys import CompilationTarget
 from std.testing import TestSuite, assert_equal, assert_true
 
 from extensions.groundwater.cmath import cstrtod
@@ -36,8 +37,21 @@ def _number(text: String) raises -> Float64:
     return v
 
 
+# MODFLOW 6 made the references on Linux x86-64 with the GNU C library.
+# The port calls the C library for log and pow, as gfortran does. Another
+# C library can round one of them differently in the last bit: on macOS,
+# the logarithmic mean moves a head by three units in the last place. So
+# a platform other than that of the references allows 1e-12 of a value.
+comptime REFERENCE_PLATFORM = (
+    CompilationTarget.is_linux() and CompilationTarget.is_x86()
+)
+
+
 def _same(got: Float64, want: Float64, what: String) raises:
     """Check that two doubles are the same.
+
+    On a platform other than that of the references, they must agree to
+    1e-12 of the value.
 
     Args:
         got: The value of the port.
@@ -47,6 +61,9 @@ def _same(got: Float64, want: Float64, what: String) raises:
     Raises:
         Error: The values differ.
     """
+    comptime if not REFERENCE_PLATFORM:
+        if abs(got - want) <= 1e-12 * max(1.0, abs(want)):
+            return
     if got != want:
         raise Error(
             String(what, ": port ", repr(got), ", MODFLOW 6 ", repr(want))

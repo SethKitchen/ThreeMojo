@@ -12,6 +12,7 @@ the real EPANET failed at that call with that code: the port must raise
 the same code there.
 """
 
+from std.sys import CompilationTarget
 from std.testing import assert_equal, assert_true
 
 from extensions.epanet.kinds import (
@@ -33,6 +34,17 @@ from extensions.epanet.project import EpanetProject
 
 # Ten significant digits round a value by at most 5e-10 of itself.
 comptime TOLERANCE = 1.0e-9
+# EPANET made the references on Linux x86-64 with the GNU C library. The
+# port calls the C library for pow and log, as EPANET does. Another C
+# library can round one of them differently in the last bit, and a case
+# whose links change status amplifies that: on macOS, a case with a check
+# valve, three control valves and a pump moves by 4.4e-7 of a value.
+# EPANET itself stops at a relative flow change of 1e-3. So a platform
+# other than that of the references allows 1e-6 of a value.
+comptime OTHER_PLATFORM_TOLERANCE = 1.0e-6
+comptime REFERENCE_PLATFORM = (
+    CompilationTarget.is_linux() and CompilationTarget.is_x86()
+)
 
 
 struct Expected(Movable):
@@ -109,6 +121,8 @@ def error_code(message: String) raises -> Int:
 
 def _close(got: Float64, expected: Float64, what: String) raises:
     var limit = TOLERANCE * max(1.0, abs(expected))
+    comptime if not REFERENCE_PLATFORM:
+        limit = OTHER_PLATFORM_TOLERANCE * max(1.0, abs(expected))
     assert_true(
         abs(got - expected) <= limit,
         String(what, ": got ", got, ", expected ", expected),
