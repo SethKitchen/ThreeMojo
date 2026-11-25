@@ -92,6 +92,7 @@ comptime ALLOWED_EXTENSION_EDGES = [
     "design:structure",
     "energy:building",
     "energy:numerics",
+    "epanet:numerics",
     "fem:imaging",
     "fem:numerics",
     "fem:sdf",

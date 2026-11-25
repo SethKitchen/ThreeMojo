@@ -58,8 +58,6 @@ The port raises an `Error` for each of these:
 
 `assets/modflow/make_modflow_cases.py` writes 58 simulations to `assets/modflow/cases/`. It runs MODFLOW 6.9.0.dev0, commit 59d89e9f, on each. It stores the heads and the budget of each time step in `expected.txt`. It also stores whether each step converged, from `mfsim.lst`. `tests/test_modflow.mojo` runs the port on each simulation. Each double must be the same, and each step must converge or fail as it does in MODFLOW 6.
 
-The references come from Linux x86-64 with the GNU C library. The port calls the C library for `log` and `pow`, as gfortran does. On macOS, the C library rounds one logarithm differently in the last bit. A head of the `average_logarithmic` case then moves by three units in the last place. So on a platform other than Linux x86-64, each double must agree to 1e-12 of its value.
-
 | Case | What it tests |
 |---|---|
 | `confined_steady` | A confined layer between two constant heads, with a well |
