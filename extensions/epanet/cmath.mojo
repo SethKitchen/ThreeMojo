@@ -6,36 +6,41 @@
 """The C arithmetic of the EPANET port: `pow`, `log` and unfused products.
 
 EPANET raises numbers to real powers and takes logarithms with the C library. The
-`**` operator and `log` of Mojo can round differently in the last digits. Those
-digits change the iterations of the solver, so the port calls C.
+`**` operator and `log` of Mojo can round differently in the last digits, and so
+can the C library of a platform other than Linux. Those digits change the
+iterations of the solver. So the port calls `glibc_pow` and `glibc_log` of
+`extensions/numerics/libm.mojo`, which give the bits of glibc on x86-64, where
+the references were made, on every platform.
 """
 
 from std.ffi import external_call
 
+from extensions.numerics.libm import glibc_log, glibc_pow
+
 
 def cpow(x: Float64, y: Float64) -> Float64:
-    """Return x to the power y, with `pow` of the C library.
+    """Return x to the power y, with the bits of glibc's `pow`.
 
     Args:
         x: The base.
         y: The exponent.
 
     Returns:
-        The power, as C computes it.
+        The power, as glibc computes it on x86-64.
     """
-    return external_call["pow", Float64](x, y)
+    return glibc_pow(x, y)
 
 
 def clog(x: Float64) -> Float64:
-    """Return the natural logarithm of x, with `log` of the C library.
+    """Return the natural logarithm of x, with the bits of glibc's `log`.
 
     Args:
         x: The number.
 
     Returns:
-        The logarithm, as C computes it.
+        The logarithm, as glibc computes it on x86-64.
     """
-    return external_call["log", Float64](x)
+    return glibc_log(x)
 
 
 @no_inline

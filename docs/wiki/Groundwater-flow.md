@@ -58,6 +58,8 @@ The port raises an `Error` for each of these:
 
 `assets/modflow/make_modflow_cases.py` writes 58 simulations to `assets/modflow/cases/`. It runs MODFLOW 6.9.0.dev0, commit 59d89e9f, on each. It stores the heads and the budget of each time step in `expected.txt`. It also stores whether each step converged, from `mfsim.lst`. `tests/test_modflow.mojo` runs the port on each simulation. Each double must be the same, and each step must converge or fail as it does in MODFLOW 6.
 
+The references come from Linux x86-64. The port takes each power and logarithm from `glibc_pow` and `glibc_log` of [Numerics](Numerics.md), so the same doubles hold on macOS.
+
 | Case | What it tests |
 |---|---|
 | `confined_steady` | A confined layer between two constant heads, with a well |
