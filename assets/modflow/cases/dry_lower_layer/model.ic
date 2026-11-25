@@ -1,0 +1,5 @@
+BEGIN griddata
+  STRT LAYERED
+    CONSTANT 15.0
+    CONSTANT -1.0
+END griddata

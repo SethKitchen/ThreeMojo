@@ -1,0 +1,14 @@
+BEGIN options
+
+END options
+BEGIN packages
+  DIS6 model.dis dis
+  IC6 model.ic ic
+  NPF6 model.npf npf
+  OC6 model.oc oc
+  CHD6 model.chd1 chd_1
+  RCH6 model.rch2 rch_2
+  EVT6 model.evt3 evt_3
+  EVT6 model.evt4 evt_4
+  EVT6 model.evt5 evt_5
+END packages

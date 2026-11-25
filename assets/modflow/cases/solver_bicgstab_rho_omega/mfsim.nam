@@ -1,0 +1,14 @@
+BEGIN options
+  CONTINUE
+END options
+BEGIN timing
+  TDIS6 model.tdis
+END timing
+BEGIN models
+  gwf6 model.nam model
+END models
+BEGIN exchanges
+END exchanges
+BEGIN solutiongroup 1
+  ims6 model.ims model
+END solutiongroup

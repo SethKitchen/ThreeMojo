@@ -1,0 +1,9 @@
+BEGIN options
+  TIME_UNITS SECONDS
+END options
+BEGIN dimensions
+  NPER 1
+END dimensions
+BEGIN perioddata
+  86400.0 4 1.5
+END perioddata

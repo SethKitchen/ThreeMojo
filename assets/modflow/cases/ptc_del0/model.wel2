@@ -1,0 +1,14 @@
+BEGIN options
+  SAVE_FLOWS
+END options
+BEGIN dimensions
+  MAXBOUND 2
+END dimensions
+BEGIN period 1
+  1 4 6 -400.0
+  1 6 3 -250.0
+END period
+BEGIN period 2
+  1 4 6 -700.0
+  1 6 3 -250.0
+END period

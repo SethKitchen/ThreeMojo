@@ -1,0 +1,4 @@
+BEGIN griddata
+  STRT
+    CONSTANT 5.0
+END griddata

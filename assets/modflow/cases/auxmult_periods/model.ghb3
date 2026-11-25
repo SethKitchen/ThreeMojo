@@ -1,0 +1,11 @@
+BEGIN options
+  AUXILIARY mult other
+  AUXMULTNAME mult
+  SAVE_FLOWS
+END options
+BEGIN dimensions
+  MAXBOUND 1
+END dimensions
+BEGIN period 1
+  1 1 8 22.0 30.0 2.0 0.0
+END period

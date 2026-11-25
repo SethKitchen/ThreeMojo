@@ -1,0 +1,13 @@
+BEGIN options
+  SAVE_FLOWS
+
+END options
+BEGIN griddata
+  ICELLTYPE LAYERED
+    CONSTANT 1
+    CONSTANT 0
+  K
+    CONSTANT 2.0
+  K33
+    CONSTANT 0.5
+END griddata
