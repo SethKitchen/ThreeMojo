@@ -10,10 +10,12 @@ air in a square cavity: a bench mark numerical solution", International
 Journal for Numerical Methods in Fluids 3, 1983: a square cavity with a
 hot wall and a cold wall, insulated above and below, at a Prandtl number
 of 0.71. Its table of results gives the mean Nusselt number and the peak
-velocities on the two center lines.
+velocities on the two center lines. The two convection cases are also
+checked cell by cell against OpenFOAM buoyantBoussinesqPimpleFoam 2406.
 """
 
 from std.math import inf, nan
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -132,6 +134,46 @@ def _peak_on_center_lines(
     return (u, v)
 
 
+def _foam_difference(
+    solver: BuoyantSolver, name: String
+) raises -> Tuple[Float64, Float64, Float64]:
+    """Compare a 12-cell cavity with buoyantBoussinesqPimpleFoam.
+
+    Args:
+        solver: The cavity at steady state.
+        name: The case of `assets/cfd/make_convection_reference.py`.
+
+    Returns:
+        The largest difference of u or v in m/s, the largest difference
+        of the temperature in kelvins, and the mean temperature gradient
+        of OpenFOAM at the hot wall, by the formula of `wall_gradient`.
+
+    Raises:
+        Error: The reference file is missing or does not hold each cell.
+    """
+    var text = Path(String("assets/cfd/convection_", name, ".txt")).read_text()
+    var velocity = Float64(0)
+    var heat = Float64(0)
+    var gradient = Float64(0)
+    var count = 0
+    for line in text.splitlines():
+        if line.startswith("#"):
+            continue
+        var words = line.split()
+        var i = Int(words[0])
+        var k = Int(words[1])
+        var n = i + 12 * k
+        velocity = max(velocity, abs(solver.flow.u[n] - Float64(words[2])))
+        velocity = max(velocity, abs(solver.flow.v[n] - Float64(words[3])))
+        var t = Float64(words[4])
+        heat = max(heat, abs(solver.temperature(i, k).to(KELVIN) - t))
+        if i == 0:
+            gradient += (300.5 - t) / (0.5 / 12) / 12
+        count += 1
+    assert_equal(count, 144)
+    return (velocity, heat, gradient)
+
+
 def test_conduction_with_no_gravity() raises:
     """The cavity with no gravity: the heat crosses by conduction alone.
 
@@ -160,11 +202,22 @@ def test_natural_convection_at_a_rayleigh_number_of_1000() raises:
     vertical center line and a peak v of 3.697 on the horizontal one.
     The coarse grid is within 1.5%, 3% and 3%. The hot wall gives the
     heat that the cold wall takes.
+
+    Second reference: buoyantBoussinesqPimpleFoam 2406 on the same grid,
+    scheme and time step. The temperatures differ by at most 0.0013 K,
+    the hot-wall gradients by 0.15%, and the velocities by 0.09 m/s, 2.5%
+    of the peak. The largest velocity difference is in the cells at the
+    corners, where OpenFOAM balances the buoyancy with the pressure at
+    the faces. The check allows 0.002 K, 0.5% and 0.12 m/s.
     """
     var solver = BuoyantSolver(_cavity(12, 1000), default_options())
     _ = solver.run_to_steady(_s(0.02), _within(1e-5), 400)
     var hot = solver.wall_gradient(WEST)
     var cold = -solver.wall_gradient(EAST)
+    var foam = _foam_difference(solver, "ra1000")
+    assert_true(foam[0] < 0.12, String(foam[0]))
+    assert_true(foam[1] < 0.002, String(foam[1]))
+    assert_true(abs(hot / foam[2] - 1) < 0.005, String(hot, " ", foam[2]))
     assert_true(abs(hot / 1.118 - 1) < 0.015, String(hot))
     assert_almost_equal(cold, hot, atol=1e-3)
     var peaks = _peak_on_center_lines(solver, 12)
@@ -181,12 +234,22 @@ def test_natural_convection_at_a_rayleigh_number_of_10000() raises:
     Reference: a mean Nusselt number of 2.243. Twelve cells a side with
     the first-order scheme are within 12%, and the heat flow is above
     that of Ra = 1000.
+
+    Second reference: buoyantBoussinesqPimpleFoam 2406 with the upwind
+    scheme on the same grid and time step. The temperatures differ by at
+    most 0.0024 K, the hot-wall gradients by 0.5%, and the velocities by
+    0.62 m/s, 3.4% of the peak, again in the corner cells. The check
+    allows 0.004 K, 1% and 0.8 m/s.
     """
     var buoyant = _cavity(12, 10000)
     buoyant.flow.set_scheme(UPWIND)
     var solver = BuoyantSolver(buoyant^, default_options())
     _ = solver.run_to_steady(_s(0.005), _within(1e-4), 600)
     var hot = solver.wall_gradient(WEST)
+    var foam = _foam_difference(solver, "ra10000")
+    assert_true(foam[0] < 0.8, String(foam[0]))
+    assert_true(foam[1] < 0.004, String(foam[1]))
+    assert_true(abs(hot / foam[2] - 1) < 0.01, String(hot, " ", foam[2]))
     assert_true(abs(hot / 2.243 - 1) < 0.12, String(hot))
     assert_true(hot > 1.5)
 

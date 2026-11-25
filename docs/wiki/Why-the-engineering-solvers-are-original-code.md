@@ -54,9 +54,23 @@ A page that says that a solver follows a program makes three claims:
 
 The page does not claim these things:
 
-- It does not claim the same numbers as the program. No test runs OpenSees, CalculiX, OpenFOAM or HEC-RAS. Where a formula differs, the page says so. The [Open channels](Open-channels#differences-from-hec-ras) page has a section on the differences. EPANET and MODFLOW are the exceptions. Their tests compare each translation with the real program. [Pipe networks](Pipe-networks#validation) and [Groundwater flow](Groundwater-flow#validation) list them.
+- It does not claim the same numbers as the program in every case. Some tests compare a solver with the outputs of the real program, which a script in `assets/` makes. Where a formula differs, the page says so. The [Open channels](Open-channels#differences-from-hec-ras) page has a section on the differences. EPANET and MODFLOW are the exceptions. Their tests compare each translation with the real program. [Pipe networks](Pipe-networks#validation) and [Groundwater flow](Groundwater-flow#validation) list them.
 - It does not claim the scope of the program. Each solver covers a small part. The Limits section of each page says what is missing.
 - It does not claim engineering validity. A checked box in the README records implemented scope. A design needs the review of an engineer.
+
+## Which tests use the real programs
+
+The scripts run each program on the models of the tests and store the results. The tests do not run the programs.
+
+| Program | Script | Test | Result |
+|---|---|---|---|
+| EPANET 2.3.6 | `assets/epanet/make_epanet_cases.py` and others | `tests/test_epanet_*.mojo` | The same doubles |
+| MODFLOW 6 | `assets/modflow/make_modflow_cases.py` | `tests/test_modflow.mojo` | The same doubles |
+| CalculiX 2.21 | `assets/calculix/make_calculix_reference.py` | `tests/test_fem_calculix.mojo` | The seven printed digits |
+| OpenSees 3.8 | `assets/opensees/make_opensees_reference.py` | `tests/test_structure_opensees.mojo` | Ten digits for trusses, time histories and steel sections. 0.1% for concrete after the steel yields, because `Concrete01` unloads along a line |
+| OpenFOAM 2406 | `assets/cfd/make_cavity_reference.py` and `make_convection_reference.py` | `tests/test_cfd_flow.mojo` and `tests/test_cfd_heat.mojo` | 1% of the lid speed, and 0.2% of the temperature difference |
+
+No test uses HEC-RAS, which has no steady-flow program for Linux. The frame elements of OpenSees have a consistent mass with no rotary inertia, so the modal and the spectrum tests use closed forms.
 
 ## How to compare with the program
 

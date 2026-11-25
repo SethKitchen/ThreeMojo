@@ -10,10 +10,12 @@ Fluid Flow", 3rd edition, and the solution of its finite-volume
 equations. The cavity reference is tables I and II of
 Ghia, Ghia and Shin, "High-Re solutions for incompressible flow using
 the Navier-Stokes equations and a multigrid method", Journal of
-Computational Physics 48, 1982, at a Reynolds number of 100.
+Computational Physics 48, 1982, at a Reynolds number of 100. The
+cavity is also checked cell by cell against OpenFOAM icoFoam 2406.
 """
 
 from std.math import inf, nan
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -264,9 +266,47 @@ def _along(values: List[Float64], cells: Int, position: Float64) -> Float64:
     return values[low] + t * (values[low + 1] - values[low])
 
 
-def _cavity_error(cells: Int) raises -> Float64:
-    """Return the largest difference from twelve values of Ghia."""
-    var solver = _cavity(cells)
+def _foam_difference(solver: FlowSolver, cells: Int) raises -> Float64:
+    """Return the largest difference from the cell velocities of icoFoam.
+
+    Args:
+        solver: The cavity at steady state.
+        cells: The number of cells on a side.
+
+    Returns:
+        The largest difference of u or v over all cells, in m/s.
+
+    Raises:
+        Error: The reference file is missing or does not hold each cell.
+    """
+    var text = Path(String("assets/cfd/cavity_", cells, ".txt")).read_text()
+    var worst = Float64(0)
+    var count = 0
+    for line in text.splitlines():
+        if line.startswith("#"):
+            continue
+        var words = line.split()
+        var n = Int(words[0]) + cells * Int(words[1])
+        worst = max(worst, abs(solver.u[n] - Float64(words[2])))
+        worst = max(worst, abs(solver.v[n] - Float64(words[3])))
+        count += 1
+    assert_equal(count, cells * cells)
+    return worst
+
+
+def _cavity_error(solver: FlowSolver, cells: Int) raises -> Float64:
+    """Return the largest difference from twelve values of Ghia.
+
+    Args:
+        solver: The cavity at steady state.
+        cells: The number of cells on a side.
+
+    Returns:
+        The largest difference of u or v, in m/s.
+
+    Raises:
+        Error: The flow does not balance.
+    """
     var half = cells // 2
     # u on the vertical line and v on the horizontal line through the
     # center, each as the mean of the two cells beside the line.
@@ -313,19 +353,32 @@ def _cavity_error(cells: Int) raises -> Float64:
     return worst
 
 
-def test_cavity_meets_ghia() raises:
+def test_cavity_meets_ghia_and_icofoam() raises:
     """A lid-driven cavity at a Reynolds number of 100.
 
-    Reference: Ghia, Ghia and Shin, tables I and II: nine values of u on
-    the vertical center line and three of v on the horizontal one. The
-    largest difference is 0.19 of the lid speed with 8 cells a side and
-    0.029 with 16. The check allows 0.25 and 0.04.
+    Reference 1: Ghia, Ghia and Shin, tables I and II: nine values of u
+    on the vertical center line and three of v on the horizontal one.
+    The largest difference is 0.19 of the lid speed with 8 cells a side
+    and 0.029 with 16. The check allows 0.25 and 0.04.
+
+    Reference 2: OpenFOAM icoFoam on the same grid, scheme and time step,
+    from `assets/cfd/make_cavity_reference.py`. The largest difference
+    over all cells is 0.019 with 8 cells and 0.009 with 16. The two
+    programs differ at the lid corners, where icoFoam adds a flux
+    correction that depends on the time step. The check allows 0.025 and
+    0.012.
     """
-    var coarse = _cavity_error(8)
-    var fine = _cavity_error(16)
+    var coarse_solver = _cavity(8)
+    var fine_solver = _cavity(16)
+    var coarse = _cavity_error(coarse_solver, 8)
+    var fine = _cavity_error(fine_solver, 16)
     assert_true(coarse < 0.25, String(coarse))
     assert_true(fine < 0.04, String(fine))
     assert_true(fine < 0.25 * coarse, String(coarse, " ", fine))
+    var coarse_foam = _foam_difference(coarse_solver, 8)
+    var fine_foam = _foam_difference(fine_solver, 16)
+    assert_true(coarse_foam < 0.025, String(coarse_foam))
+    assert_true(fine_foam < 0.012, String(fine_foam))
 
 
 def test_fluid_at_rest_stays_at_rest() raises:

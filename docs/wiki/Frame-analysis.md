@@ -378,7 +378,7 @@ The live loads are typical values from ASCE/SEI 7-16, table 4.3-1. They are not 
 
 ## Validation
 
-Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo`, `tests/test_structure_nonlinear.mojo`, `tests/test_structure_transient.mojo`, `tests/test_structure_spectrum.mojo`, `tests/test_structure_section.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
+Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_modal.mojo`, `tests/test_structure_dynamic.mojo`, `tests/test_structure_buckling.mojo`, `tests/test_structure_nonlinear.mojo`, `tests/test_structure_transient.mojo`, `tests/test_structure_spectrum.mojo`, `tests/test_structure_section.mojo`, `tests/test_structure_opensees.mojo` or `tests/test_structural_view.mojo`. The error is the measured relative difference from the reference.
 
 | Case | Reference | Error |
 |---|---|---|
@@ -408,6 +408,12 @@ Each row is a test in `tests/test_structure_frame.mojo`, `tests/test_structure_m
 | Elastoplastic system on ground that accelerates | The same system under the force -m a | Below 1e-12 |
 | Shallow two-bar truss of von Mises, corotational, 50 steps of 10 mm | The closed form of the load at each sag, through the flat state and the mirror state | Below 0.01 N of a limit load of 76 kN |
 | The same truss, load control to 0.8 of the limit | The closed-form sag | Below 1e-4 N |
+| Three-bar truss with 1% hardening, 34 steps down, up and down again | OpenSees Truss elements of Steel01 under DisplacementControl | Below 1e-9 of 1 MN |
+| Shallow corotational truss, 50 steps through the snap | OpenSees corotTruss | Below 1e-9 |
+| Elastoplastic oscillator under a harmonic force, 300 steps | OpenSees Newmark and Steel01 | Below 1e-9 |
+| Two yielding bars and two masses under a ground acceleration, 300 steps | OpenSees UniformExcitation, with Rayleigh damping of the mass and the initial stiffness | Below 1e-9 m |
+| Steel rectangle at 0.4 of its squash load, 80 steps | An OpenSees fiber section of Steel01 in a zeroLengthSection | Below 1e-9 |
+| Reinforced concrete beam, 120 steps | An OpenSees fiber section of Concrete01 and Steel01 | Below 1e-9 up to the yield of the steel. Then 0.10% in the moment and 0.58% in the axial strain |
 | The same truss with small displacements | The linear stiffness 2 E A h² / L³ | Below 1e-12 m |
 | One floor on one column, flat spectrum | S_a / ω² and m S_a | Below 0.05% |
 | Shear building of two equal storeys, SRSS | Effective masses of 1.8944 m and 0.1056 m, and the base shear and roof sway from them | Below 0.2% |

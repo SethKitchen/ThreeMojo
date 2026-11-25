@@ -114,13 +114,20 @@ Each row is a test in `tests/test_cfd_flow.mojo` or `tests/test_cfd_heat.mojo`.
 | The same channel, flow rate | G H³ / (12 μ) times 1 + 2 / n² for n cells across | Below 1e-7 |
 | Lid-driven cavity, Reynolds number 100, 8 cells a side | Ghia, Ghia and Shin, tables I and II, 12 values | 0.19 of the lid speed |
 | The same cavity, 16 cells a side | The same 12 values | 0.029 of the lid speed |
+| The same cavity, 8 and 16 cells a side | OpenFOAM icoFoam on the same grid, scheme and time step, each cell | 0.019 and 0.009 of the lid speed |
 | Duct with an inlet and an outlet, upwind scheme | Outlet flux equals inlet flux | Below 1e-8 m²/s |
 | Fluid at rest | Stays at rest | Exact |
 | Cavity with a hot and a cold wall, no gravity | A linear temperature and a Nusselt number of one | Below 1e-7 |
 | The same cavity at a Rayleigh number of 1000, 12 cells a side | de Vahl Davis: a Nusselt number of 1.118, and peak velocities of 3.649 and 3.697 | 0.9%, 1.3% and 2.5% |
+| The same case | OpenFOAM buoyantBoussinesqPimpleFoam on the same grid, scheme and time step, each cell | 0.0013 K, 0.15% in the Nusselt number, 0.09 m/s |
 | The same cavity at a Rayleigh number of 10000, 12 cells, upwind scheme | de Vahl Davis: a Nusselt number of 2.243 | Below 12% |
+| The same case | buoyantBoussinesqPimpleFoam with the upwind scheme, each cell | 0.0024 K, 0.5% in the Nusselt number, 0.62 m/s |
 | Warm fluid above cold fluid, with gravity | At rest, with a linear temperature | Velocities below 1e-6 m/s |
 | Duct with a warm inlet and insulated walls | The inlet temperature in every cell | Below 1e-6 K |
+
+`assets/cfd/make_cavity_reference.py` and `assets/cfd/make_convection_reference.py` run OpenFOAM 2406 in Docker and write the OpenFOAM rows. They use the same grid, scheme and time step as the tests.
+
+The time step matters. From a Courant number of 0.5 to 0.1, the steady flow of icoFoam changes by 0.027 of the lid speed. Its face flux correction depends on the time step. The port has no such term. The largest differences are in the cells at the corners. There OpenFOAM balances the buoyancy with the pressure at the faces, and the port adds it in the cells.
 
 At a Rayleigh number of 10000 with the central scheme, the Nusselt number is 2.325 with 16 cells a side and 2.280 with 24. The benchmark value is 2.243. These grids are too slow for a test under coverage, so no test holds these values.
 

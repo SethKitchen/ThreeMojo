@@ -516,7 +516,9 @@ An element with a negative volume is turned, with its edge nodes. The edge nodes
 
 `deck_text` writes SI units. Each force of the problem becomes a `*CLOAD` line. So a pressure and a weight keep their consistent nodal forces. A number has the 16 digits that `String` gives, so a round trip changes a displacement by about 1e-12 of its size. `deck_text` raises an error for a problem with a thermal strain.
 
-No test runs CalculiX. The deck that `deck_text` writes follows the published format, and the tests read it back.
+`tests/test_fem_calculix.mojo` compares the solver with CalculiX CrunchiX 2.21. `assets/calculix/make_calculix_reference.py` writes two decks of a steel cantilever and runs ccx on each.
+
+The first has four-node elements, a tip load and gravity. The second has ten-node elements, a face pressure and a side load. The port reads each deck and solves it. Each displacement agrees with ccx to 1e-6 of the largest one, which is the seven digits that ccx prints. The measured differences are 7e-8 and 2.5e-7.
 
 ## Verification
 
